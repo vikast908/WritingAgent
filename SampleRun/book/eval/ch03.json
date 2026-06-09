@@ -1,0 +1,58 @@
+{
+  "chapter_id": 3,
+  "attempt": 1,
+  "verdict": "revise",
+  "confidence": 0.95,
+  "blocking": [
+    {
+      "type": "continuity",
+      "where": "Opening: 'only weeks ago, she’d delivered envelopes stamped with other people’s certainties'",
+      "detail": "The timeline is inconsistent. Chapter 1 and 2 cover only a few days; Lena has been a carrier for 11 weeks, but the phrase 'only weeks ago' suggests a longer gap. The chapter should be set immediately after Chapter 2, not weeks later.",
+      "fix": "Change 'only weeks ago' to 'only days ago' or remove the temporal reference to match the established timeline."
+    },
+    {
+      "type": "character_integrity",
+      "where": "Lena's decision to sabotage the reprint machine",
+      "detail": "Lena's sudden, decisive action to snatch the blank slip and trigger the jam contradicts her established character as a by-the-book, cautious rookie who has only just begun to question the system. She has no prior training or inclination for sabotage, and the leap from passive observer to active saboteur is unearned without internal buildup or a triggering realization.",
+      "fix": "Add a brief internal monologue or flash of memory (e.g., recalling the safety poster, or Kole's words) that justifies her impulsive act. Show her hesitation and the moment of decision more clearly."
+    },
+    {
+      "type": "plot_progress",
+      "where": "Marchetti's accusation and the reprint order",
+      "detail": "The reprint order is triggered by Lena's locator signature being linked to Kole's jammer. However, in Chapter 2, Lena's locator was not jammed during her meeting with Kole; Kole's jammer was used by his network, not by Lena. The Bureau's ability to detect a 'gap in the signal matrix' from a single meeting is not established and feels like a plot convenience.",
+      "fix": "Provide a plausible explanation: e.g., Kole's jammer was later recovered and its signal pattern matched a brief disruption near Lena's locator, or Marchetti had her under surveillance and observed the meeting directly."
+    },
+    {
+      "type": "plan/canon_violation",
+      "where": "The reprint process and the machine's behavior",
+      "detail": "The blueprint states that the reprint process assigns a new death-date, rendering the person mortal again. The chapter shows the machine printing a slip with a date (e.g., 72:00:00) and the subject being led away to detention. However, the canon establishes that reprinting makes the person mortal and they can then be eliminated. The chapter implies the date itself causes death (cardiac infarction at 72 hours), which contradicts the rule that the Bureau's predictions are never wrong but are not causal—they predict, not cause. The machine should assign a date, not a countdown to a specific cause.",
+      "fix": "Revise the reprint output to show a standard ten-digit date (e.g., 2072-03-15) rather than a countdown. Remove the cause of death (cardiac infarction) from Marchetti's dialogue; the Bureau does not specify cause, only date."
+    },
+    {
+      "type": "continuity",
+      "where": "Lena's blank slip in evidence sleeve",
+      "detail": "In Chapter 1, Lena's blank slip was seized by Internal Affairs and sealed in an evidence bag. Marchetti now has it in a clear evidence sleeve. This is consistent. However, at the end of the chapter, Lena sees Marchetti holding the slip again after the escape, which is fine. But the slip's presence in the reprint chamber is unexplained—why would Marchetti bring it there?",
+      "fix": "Add a line explaining that Marchetti brought it as a symbolic prop to pressure Lena, or have him retrieve it from a nearby evidence locker."
+    },
+    {
+      "type": "character_integrity",
+      "where": "Marchetti's behavior",
+      "detail": "Marchetti is described as having a face like a locked file cabinet and being a tireless investigator. In this chapter, he personally oversees the reprint and offers Lena a conditional stay. This is plausible, but his willingness to show Lena the Commissioner's order and his detailed explanation of the reprint process feel out of character—he is usually more terse and procedural. He should be more reluctant to share information.",
+      "fix": "Reduce Marchetti's exposition. Have him simply state the order and the choice without showing the document unless Lena demands it, and even then, have him hesitate more."
+    },
+    {
+      "type": "plot_progress",
+      "where": "Escape of the two misprints",
+      "detail": "The thin man and shaved-head woman are freed and escape with Lena. This is a significant plot development, but the blueprint specifies that only 'some misprints escape' and that Oscar is captured. The chapter has Kole captured, which matches, but the escape of two other misprints is not mentioned in the blueprint and may need to be accounted for in future chapters. This is not a blocking issue per se, but it is a deviation from the blueprint's payoff.",
+      "fix": "Either ensure these characters are referenced in future chapters or adjust the blueprint to include them. For now, it is acceptable as a minor expansion."
+    }
+  ],
+  "nits": [
+    "The phrase 'the half-buttoned collar felt suddenly like a noose' is a bit clichéd; consider a fresher metaphor.",
+    "'The air tasted of recycled dust and old paper' is evocative but slightly overused in noir; consider a more specific sensory detail.",
+    "'She filed the information without breaking stride, the way a carrier memorizes a route hazard' is a good character beat, but the safety poster's details are very specific—ensure they are not forgotten later.",
+    "The line 'She’d learned that silence was a weapon when you had nothing left to barter' is strong but could be shown rather than told.",
+    "The train escape sequence is exciting but relies on Lena knowing the emergency override button exists; the orientation film mention is a bit convenient. Consider adding a line earlier in the chapter where Lena notices a similar control panel or recalls a training manual.",
+    "The final line 'the blank inside her felt less like an error than a place to start' is a good thematic cap, but it may be too on-the-nose; consider a more subtle image."
+  ]
+}

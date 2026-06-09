@@ -1,0 +1,7 @@
+# Avoid list (watch-list)
+
+- Contrived regulation introduced solely to trigger the inciting incident (e.g., 'fiscal quarter re-verification' not mentioned in plan). — Weakens the setup's believability and feels like a patch; the world's existing rules should create the plot trigger organically.
+- Protagonist's passive-to-active leap without internal buildup (e.g., snatching a slip or sabotaging equipment without prior hint of rebellion or panic). — Undermines character integrity; the by-the-book rookie's first act of defiance should be a terrified reaction, not a calculated move.
+- Plot convenience where a single meeting or object creates a detectable anomaly without established Bureau capability (e.g., linking Lena's locator to Kole's jammer). — Feels like a cheat; must foreshadow or explain the Bureau's detection methods earlier, or use a different plausible trigger.
+- Auditor or antagonist sharing detailed procedural explanations when their established character is terse and secretive. — Breaks character integrity; the information should be revealed through action or other characters, or the Auditor should be forced to reveal it reluctantly.
+- Escape of named minor characters not accounted for in blueprint payoff, without clear plan for their future role. — Creates loose ends that may bog down later chapters; either stick to blueprint or update plan to track these characters.

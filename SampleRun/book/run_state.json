@@ -1,0 +1,17 @@
+{
+  "uid": "default",
+  "book_id": "deathdates",
+  "abstract": "In a town where every citizen receives a sealed envelope at birth naming the exact date they will die, a young postal carrier finds a misprinted envelope addressed to herself — and sets out to discover who writes the dates, and whether hers can be unwritten.",
+  "phase": "done",
+  "num_chapters": 3,
+  "max_revisions": 1,
+  "consolidate_every": 5,
+  "current_chapter": 4,
+  "committed": 3,
+  "pending_review": false,
+  "use_researcher": false,
+  "autonomous": true,
+  "escalate_below_confidence": 0.0,
+  "escalate_on_contradiction": false,
+  "skip_next_consolidation": false
+}

@@ -1,0 +1,44 @@
+{
+  "chapter_id": 1,
+  "attempt": 1,
+  "verdict": "revise",
+  "confidence": 0.95,
+  "blocking": [
+    {
+      "type": "continuity",
+      "where": "Lena's discovery of her blank envelope",
+      "detail": "The chapter shows Lena requesting her own birth envelope voluntarily after Olds mentions mandatory verification. However, the blueprint states the inciting incident is Lena finding her own envelope is blank, and the setup says she has never opened it. The draft has her proactively retrieving it, which is consistent, but the blueprint's 'payoff' says she is drafted by Director Wen into the hunter program. In the draft, Wen offers her a choice, and Lena accepts. This is fine, but the blueprint implies Wen drafts her immediately after discovery; here there is a brief interrogation and offer. This is a minor deviation but not a blocking issue. However, there is a blocking issue: the blueprint says 'Lena's blank envelope is revealed, and she is drafted by Director Wen into the hunter program.' The draft has Wen offering a choice (join or be reprinted), which is a negotiation, not a draft. The blueprint implies a more coercive draft. This is a plan violation.",
+      "fix": "Adjust Wen's dialogue to be more of a direct draft, not a choice. For example, Wen could say 'You are now a hunter. Report to Processing.' Remove the explicit choice or make it clear that refusal is not a real option."
+    },
+    {
+      "type": "character_integrity",
+      "where": "Lena's decision to join",
+      "detail": "Lena is described as 'by-the-book' and has never opened her envelope. She is shocked and passive. Her decision to join the hunters is made in one minute, which is plausible given the pressure, but the draft shows her thinking about the man with the infant and the woman counting days. This is a bit too sentimental for a by-the-book character who has avoided her own date. The blueprint's emotional role is 'mundane dread and personal horror,' but Lena's internal monologue is more reflective than horrified. She should be more terrified and less philosophical.",
+      "fix": "Rewrite Lena's internal reaction to emphasize shock, fear, and the violation of her trust in the system, rather than poetic reflections. Keep her decision as a desperate, panicked choice, not a calm acceptance."
+    },
+    {
+      "type": "plot_progress",
+      "where": "End of chapter",
+      "detail": "The chapter ends with Lena following Marchetti. The blueprint says the payoff is 'Lena's blank envelope is revealed, and she is drafted by Director Wen into the hunter program.' The draft achieves this, but the chapter does not show her actually being processed or starting the hunter role. It ends with her being escorted home. This is acceptable for a first chapter, but the blueprint implies a more immediate transition. However, this is not a blocking issue, just a minor pacing concern. But there is a blocking issue: the blueprint says 'Drafted by Director Wen into the hunter program.' The draft has Wen offering a choice, which is not a draft. See first issue.",
+      "fix": "Combine with first fix: make Wen's recruitment a direct order, not a choice."
+    },
+    {
+      "type": "canon_violation",
+      "where": "Misprint Alert tone",
+      "detail": "The draft describes a 'Misprint Alert' tone that Lena recognizes from training videos. The world rules state that 'any deviation is treated as a misprint and must be corrected by the Misprint Division.' However, the existence of a public alert tone for misprints contradicts the world rule that 'the public believes the Bureau provides a service of certainty; questioning it is social heresy.' If there is a loud alarm for misprints, it would draw attention and undermine the public's trust. The Bureau would likely handle misprints quietly. This is a blocking issue.",
+      "fix": "Remove the public alert tone. Instead, have the clerk's terminal silently notify security, or have the clerk use a discreet signal. The alarm should be internal, not broadcast."
+    },
+    {
+      "type": "setup/payoff",
+      "where": "Olds' mention of mandatory verification",
+      "detail": "Olds mentions that carriers must re-verify their death-date registrations every fiscal quarter. This is a setup that leads Lena to request her file. However, this is a new regulation that seems to be introduced just for this plot point. The blueprint does not mention this, and it feels like a contrivance. It is not a blocking issue, but it is a weak setup. However, it does not violate the plan.",
+      "fix": "Consider a more organic reason for Lena to request her file, such as a routine audit or a mistake in her delivery log that requires her to verify her identity. Or keep it but make it less coincidental."
+    }
+  ],
+  "nits": [
+    "The line 'the public loved the system' is a bit too direct; consider showing this through actions rather than stating it.",
+    "The description of the reading room walls leaning inward is a nice touch, but the 'box of tissues' is odd—why would tissues be there? Consider removing or explaining.",
+    "The phrase 'the weight of a new truth pressing against her ribs' is a bit cliché; consider a fresher image.",
+    "The Auditor's description as 'a face like a locked file cabinet' is good, but 'tired and exact' voice is a bit vague; give him a more distinctive tone."
+  ]
+}

@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+venv/
+.index/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+*.log
+brain/
+config/settings.yaml
+test_diagram.svg
+reseed.py

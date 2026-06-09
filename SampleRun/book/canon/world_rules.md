@@ -1,0 +1,44 @@
+# World rules
+
+- Every citizen receives a death-date envelope at birth, sealed with wax, containing a slip with a ten-digit date (the terminus).
+- The death-date is determined by the Algorithm, which is never wrong.
+- The envelope requires the recipient's thumbprint for verification.
+- The date on the slip is embedded into the paper fiber at manufacture and cannot fade, be removed, or altered.
+- Citizens can request a sealed copy of their envelope at any time.
+- The Bureau permits citizens to see their own date at age sixteen via Form 12-A with a processing fee.
+- Look-ahead petitions (parents seeking their child's date) exist but are granted less than two percent of the time, requiring psychological evaluations and forms (11-C, 11-D, supplemental attachment).
+- A citizen's date determines loan eligibility, insurance premiums, career track, ability to emigrate, reproduce, or serve on a jury.
+- Citizens with an early date (before fifty-five) are considered 'short-term resources' assigned to high-risk, high-output labor.
+- Citizens with a date past eighty are 'long-term investments' entitled to advanced education, deferred compensation, and positions of authority.
+- Envelopes are small (barely larger than a thank-you card) because the message inside requires only ten digits.
+- Carriers must follow the Fatal Affairs Postal Codex; misdelivery is a misdemeanor.
+- Death-date registration re-verification is required every fiscal quarter (new regulation).
+- Master files are normally sealed but the Bureau can examine them for quality assurance.
+- A misprint is when the Algorithm produces a null output (no death-date).
+- A misprint is technically outside the system: cannot die of natural causes, cannot be killed by conventional means, and the Bureau has no record of how their timeline ends.
+- The Misprint Division exists to repair errors in the Algorithm's output.
+- The standard correction for a blank date is 'reprinting'—assigning a new death-date, rendering the person mortal again.
+- The Misprint Division also has a program to use misprints as hunters to locate and retrieve other misprints (called 'broken daters') who are immune to death and defect from the system.
+- A misprint who joins the Misprint Division retains their blank date and lives indefinitely so long as they serve.
+- A misprint who refuses is reprinted with a date (within the year) and their file is closed.
+- The 'Misprint Alert' is a low electronic tone (three ascending notes, repeating) that sounds when an error in the Algorithm's output is detected.
+- Internal Affairs uniforms are gray-and-black.
+- The Bureau's wellness division issues nutritionally balanced meal bars.
+- The Bureau's emblem: an envelope bisected by a single vertical line (symbol for certainty).
+- The Misprint Division's symbol: an envelope with the vertical line broken/split in half.
+- The Bureau issues locators that sync with the Bureau's postal-intelligence matrix; locators can be jammed by misprints using a crude jammer.
+- Misprints leave trails via forwarding addresses, utility payments, flagged letters (where recipient's death-date predates postmark).
+- Misprint retrieval protocol: hunter does not fight; they find, confirm, and contain; if subject resists, call containment team.
+- The Bureau can issue a 'recall for reprinting' for a misprint; if the misprint flees, a death certificate is released to next of kin as 'standard procedure for maintaining public certainty'.
+- The Bureau's locators require a thumbprint to sync.
+- The Bureau's orientation film explains that misprints are 'statistical anomalies that, left uncorrected, erode the public's faith in the Algorithm'.
+- The Bureau uses carrier credentials as cover for misprint hunters conducting 'routine re-verification of death-date registrations'.
+- The Reprint Press Model 4-C has specific components: feed tray, embossing die, thumb-plate reader, restraint chair, holding pod interface. Emergency protocol: in event of paper jam or feed failure, all restraints disengage and pod doors unlock; authorized technicians only.
+- The Bureau can issue a reprint order signed by the Commissioner and the Office of Temporal Compliance, bypassing the Misprint Division Director.
+- A misprint can be forced to reprint another misprint as a test of loyalty; refusing leads to the acting misprint's own reprint.
+- The locator signature can be linked to a jammer; even jamming may leave a detectable gap in the signal matrix.
+- Reprints can be performed on subjects who were born null but never ran (i.e., they lived outside the system). The Bureau assigns a new terminus (e.g., cardiac infarction, pulmonary failure) with a specific countdown (e.g., 72 hours, one week).
+- After reprinting, the subject is detained in a cell for the duration of the countdown (no immediate execution).
+- The reprint machine requires a supervisor's thumbprint override (Marchetti did this) and a user's thumbprint authorisation to initiate.
+- A blank slip from the feed tray can be physically removed, causing a jam and triggering emergency maintenance mode (all restraints disengage, pod doors unlock).
+- Bureau transit can be manually launched via a crew-only button under an emergency door override lever.

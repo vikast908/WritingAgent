@@ -1,0 +1,3 @@
+# Acknowledgments
+
+The author extends their gratitude to the Bureau of Editorial Compliance for enforcing the strict protocols without which this manuscript would have unraveled. Special thanks to [EDITOR NAME] for their methodical audits and for refusing to let any broken sentences slip through. To [AGENT NAME], who rerouted this project from the dead-letter office and onto a viable track. My family—[FAMILY NAMES]—endured endless late-night rewrites with the patience of those who know the system is watching; their support made the deadline bearable. Any remaining misprints are entirely my own, or perhaps, as Lena Voss would say, the algorithm’s blind spot.

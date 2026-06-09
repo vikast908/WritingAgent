@@ -1,0 +1,24 @@
+# Per-node model routing via OpenRouter (OpenAI-compatible). Set OPENROUTER_API_KEY.
+# "Pro" = high tier (planner/writer/consolidation); "Flash" = everything else.
+# DeepSeek accepts temperature; the map below applies to any node that sets one.
+default: deepseek/deepseek-v4-pro
+
+nodes:
+  planner:       deepseek/deepseek-v4-pro      # sets the book's DNA
+  writer:        deepseek/deepseek-v4-pro      # prose quality
+  consolidation: deepseek/deepseek-v4-pro      # global reasoning across the whole book
+  toc:           deepseek/deepseek-v4-flash
+  critic:        deepseek/deepseek-v4-flash    # independent judge — a different model than the writer
+  summarizer:    deepseek/deepseek-v4-flash    # chapter summaries + canon extraction
+  production:    deepseek/deepseek-v4-flash    # front/back matter + assembly
+  learner:       deepseek/deepseek-v4-flash    # distill skills from a finished book
+  researcher:    deepseek/deepseek-v4-flash    # optional shallow research brief (off by default)
+  humanizer:     deepseek/deepseek-v4-flash    # strip AI tells from committed prose
+  chat:          deepseek/deepseek-v4-flash    # TUI conversational assistant
+  diagram:       deepseek/deepseek-v4-flash    # SVG diagram generation (no reasoning needed)
+
+temperature:
+  toc:        0.4
+  critic:     0.2
+  summarizer: 0.0
+  humanizer:  0.7

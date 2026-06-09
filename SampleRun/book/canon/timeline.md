@@ -1,0 +1,32 @@
+# Timeline
+
+- ch01: After 62 minutes, Lena opens her birth envelope in the reading room and finds the slip blank.
+- ch01: Director Wen explains Lena's status as a misprint and gives her a one-minute ultimatum: join the Misprint Division as a hunter or be reprinted with a death-date.
+- ch01: Director Wen stamps Lena's file with the broken-envelope mark; Auditor Marchetti escorts Lena home to secure her quarters.
+- ch01: Lena Voss delivers death-date envelopes on Hamlin Terrace, including to a man with an infant at 47 Hamlin Terrace.
+- ch01: Lena accepts the offer to join the Misprint Division.
+- ch01: Lena goes to the Records office and requests her own master file/birth envelope for proactive verification.
+- ch01: Lena returns to the distribution hub, clocks out, and learns from Olds about mandatory death-date re-verification.
+- ch01: The Misprint Alert sounds; the clerk leaves to get help; Internal Affairs officers arrive, seal the slip, and escort Lena to the Misprint Division Director's Office.
+- ch02: By 0830, Lena is seated with analyst S. Voss; receives file on Elias Sander.
+- ch02: Containment team arrives; Marchetti arrives and interviews Lena; Lena lies about Kole's offer.
+- ch02: Later that night, Lena pulls out Kole's card in her apartment; decides not to call nor burn it; places it in nightstand drawer.
+- ch02: Lena arrives at Processing at 0600; meets handler Pryce; receives equipment (locator, injector, emergency codes card).
+- ch02: Lena enters tunnel, encounters Elias Sander but loses him; then meets Oscar Kole.
+- ch02: Lena finds half-burned envelope with subway access code; calls analyst; authorized to proceed to tunnel entrance.
+- ch02: Lena rides public transport to River District and visits Mrs. Halstrom's apartment.
+- ch02: Lena watches 90-minute orientation film.
+- ch02: Three hours later, locator pulses; a message found at laundromat; Lena goes to tenement on Meridian Row.
+- ch03: First demonstration reprint: a woman in her 50s, assigned cardiac infarction within 72 hours, led to detention cell.
+- ch03: Kole is brought to the restraint chair; Lena places thumb on reader; instead of initiating reprint, she snatches a blank slip, causing jam and emergency mode.
+- ch03: Kole is left behind (subdued). Marchetti seen at platform holding Lena's blank slip.
+- ch03: Kole is subdued by a baton strike; Lena, thin man, and shaved-head woman descend staircase to maintenance spur, board train, and press manual launch button; train departs.
+- ch03: Lena demands to see the order and signature; Marchetti shows it.
+- ch03: Lena is driven 40 minutes in a windowless van to Bureau Corrections Annex – Sector 7.
+- ch03: Lena is taken to the reprint chamber in the basement.
+- ch03: Lena waits 23 minutes in a bolted-down chair in a waiting room.
+- ch03: Marchetti enters, shows Lena her birth slip, and explains the reprint order (issued at 0400 that morning).
+- ch03: Marchetti gives Lena the choice: reprint Kole or be reprinted within the hour.
+- ch03: Restraints disengage, pod door opens; thin man and shaved-head woman escape; Kole attacks Marchetti; Lena flees through technician access hatch.
+- ch03: Second demonstration reprint: a young man, assigned pulmonary failure within one week.
+- ch03: Two Internal Affairs officers collect Lena at her door ten minutes before dawn.

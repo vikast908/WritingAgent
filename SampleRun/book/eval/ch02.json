@@ -1,0 +1,12 @@
+{
+  "chapter_id": 2,
+  "attempt": 1,
+  "verdict": "approve",
+  "confidence": 0.95,
+  "blocking": [],
+  "nits": [
+    "The transition from the orientation film to the operations cell at 0830 is slightly abrupt but acceptable given pacing.",
+    "The phrase 'her reflection in the blank screen looked hollow' is a bit on-the-nose but fits the tone.",
+    "Marchetti's acceptance of Lena's lie about the card may feel too trusting for a zealous auditor, but it is ambiguous and could be interpreted as a test."
+  ]
+}

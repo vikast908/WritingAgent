@@ -1,0 +1,104 @@
+"""Wikimedia Commons image fetch (plan §2 — illustrated/technical books).
+
+Queries the Wikimedia Commons API, filters for CC/PD licenses, and returns structured
+results with URL + full attribution ready for markdown embedding.
+
+Only used when `use_images=True` in settings (default off — fiction rarely needs it).
+No extra deps: uses stdlib urllib only.
+"""
+from __future__ import annotations
+
+import json
+import re
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+
+_API = "https://commons.wikimedia.org/w/api.php"
+_FREE_LICENSE = re.compile(r"cc[-_ ]?by|cc0|public.?domain|pd[-_ ]", re.IGNORECASE)
+_TAG = re.compile(r"<[^>]+>")
+_IMG_EXT = re.compile(r"\.(jpe?g|png|gif|svg|webp)$", re.IGNORECASE)
+
+
+@dataclass
+class ImageResult:
+    url: str
+    title: str
+    author: str
+    license: str
+    license_url: str
+    description: str
+
+    def to_markdown(self, figure_label: str = "") -> str:
+        prefix = f"Figure {figure_label}: " if figure_label else ""
+        bare_title = self.title.removeprefix("File:")
+        return (
+            f"![{self.description}]({self.url})\n"
+            f'*{prefix}{self.description}. Source: "{bare_title}" by {self.author}, '
+            f"{self.license}, via Wikimedia Commons.*"
+        )
+
+
+def _call(params: dict) -> dict:
+    qs = urllib.parse.urlencode({"format": "json", "formatversion": "2", **params})
+    req = urllib.request.Request(
+        f"{_API}?{qs}",
+        headers={"User-Agent": "BookAgent/1.0 (open-source book writing tool)"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+
+
+def _search_titles(query: str, limit: int) -> list[str]:
+    data = _call({
+        "action": "query", "list": "search",
+        "srsearch": query, "srnamespace": "6",  # File namespace only
+        "srlimit": str(min(limit, 50)),
+    })
+    return [r["title"] for r in data.get("query", {}).get("search", [])]
+
+
+def _fetch_info(titles: list[str]) -> list[ImageResult]:
+    if not titles:
+        return []
+    data = _call({
+        "action": "query",
+        "titles": "|".join(titles[:10]),  # API batch limit
+        "prop": "imageinfo",
+        "iiprop": "url|extmetadata",
+        "iiextmetadatafilter": "LicenseShortName|Artist|ImageDescription|LicenseUrl",
+    })
+    results: list[ImageResult] = []
+    for page in (data.get("query") or {}).get("pages", {}).values():
+        ii = (page.get("imageinfo") or [{}])[0]
+        url = ii.get("url", "")
+        if not url or not _IMG_EXT.search(url):
+            continue
+        meta = ii.get("extmetadata", {})
+        lic = _TAG.sub("", (meta.get("LicenseShortName") or {}).get("value", "")).strip()
+        if not _FREE_LICENSE.search(lic):
+            continue
+        author = _TAG.sub("", (meta.get("Artist") or {}).get("value", "Unknown")).strip() or "Unknown"
+        desc_raw = _TAG.sub("", (meta.get("ImageDescription") or {}).get("value", "")).strip()
+        title = page.get("title", "")
+        desc = (desc_raw or title.removeprefix("File:"))[:120]
+        lic_url = _TAG.sub("", (meta.get("LicenseUrl") or {}).get("value", "")).strip()
+        results.append(ImageResult(
+            url=url, title=title, author=author,
+            license=lic, license_url=lic_url, description=desc,
+        ))
+    return results
+
+
+def search_wikimedia(query: str, max_results: int = 3) -> list[ImageResult]:
+    """Search Wikimedia Commons and return up to max_results freely-licensed images.
+
+    Returns an empty list (rather than raising) on any network error so the writer
+    can always proceed even if the fetch times out.
+    """
+    try:
+        titles = _search_titles(query, limit=max_results * 4)
+        results = _fetch_info(titles)
+        return results[:max_results]
+    except Exception:  # noqa: BLE001 — network errors are non-fatal
+        return []
