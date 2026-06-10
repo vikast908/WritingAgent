@@ -370,6 +370,7 @@ by similarity to the book's profile, so cross-book learning still accumulates.
 | Provider | **OpenRouter** via the OpenAI SDK (`OPENROUTER_API_KEY`) | any OpenAI-compatible host |
 | Models | DeepSeek **V4 Pro** (planner/writer/consolidation) + **V4 Flash** (rest) | per-node in §12.1 |
 | Language | Python (LangGraph-native) | same |
+| Platforms | **Linux · macOS · Windows** — CI runs the suite on all three × Python 3.10–3.13 | same |
 
 Caveat: the real engineering is the **memory schema + retrieval + state machine** — all
 framework-independent. Don't let LangGraph tempt nodes into being more agentic than they need.
@@ -468,6 +469,20 @@ The open items are now settled. All numeric thresholds are **tunable config**, n
 | **Consolidation cadence** | Fixed: every `N=5` committed chapters + mandatory before `BOOK_DONE` + manual `book consolidate`. (§9) |
 | **Skill efficacy metric** | Lift over baseline: promote at `applied≥5`, `p_skill≥p_base`, `target_failures=0`; retire on sustained under-performance. (§8) |
 | **Researcher depth** | Optional, off by default for fiction. When on: a short brief (key facts + style cues) from provided references/topic, feeding the Writer's slice. No web-crawl/multi-source pipeline in v1. |
+
+### 15.1 Reliability, performance & safety (2026-06-10 hardening)
+
+Durable decisions from the hardening pass. All thresholds are tunable config.
+
+| Area | Decision |
+|---|---|
+| **Context compression** | `headroom-ai` is **optional** (lazy import, silent fallback). Pinned to **0.10.17** (the last pure-Python release; ≥0.21 is a Rust/pyo3 ext with no Windows wheel), installed `--no-deps`. `_compress` always tells headroom a **tiktoken** model for counting — compression is model-agnostic, so DeepSeek runs still compress. |
+| **LLM call resilience** | We own retries: classified **exponential backoff + jitter**, honor `Retry-After`, **fail fast on 4xx**, per-request `request_timeout` (default 60s). Structured calls do a **repair retry** (feed the invalid output + error back). The OpenAI SDK's own retries are disabled. |
+| **Concurrency** | The chapter/section chain is **sequential by design** (continuity: each unit reads the previous summary). Only genuinely independent network steps overlap — research ∥ image/SVG within a unit, and production's front/back-matter components — via a small thread pool (`concurrency.gather`). The SQLite `Store` is only touched on the main thread. |
+| **Caching** | Web-search results (7-day TTL) and generated SVG diagrams are cached on disk under `.index/cache/` (best-effort; corrupt entries self-heal as misses). |
+| **State durability** | `run_state.json` (and all brain writes) are written **atomically** (temp file + `os.replace`); `read_json` tolerates a corrupt file (returns `None`). A crash between commit and the state advance is caught by a **resume guard** that skips already-committed units — no double-commit, no duplicate canon facts. |
+| **Safety** | The conversational assistant may **not** auto-execute `delete` / `/user` / `/set` (data-loss / tenant / config) — the human must type those. Project/user ids are validated (`is_safe_id`) and `delete_book` confines `rmtree` to the brain dir. Exported HTML is sanitized (no `<script>`/`<iframe>`/event handlers). |
+| **Telemetry** | Token usage is aggregated per run and surfaced (`[usage]` line + live in the run dashboard). |
 
 ### Still post-v1 (deliberately deferred)
 

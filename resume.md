@@ -9,22 +9,19 @@
 - **Agent name:** **WRITING AGENT** (was BOOKWRITER). CLI: `writing-agent` / `bookwriter` / `book` / `python book.py`.
 - **Article pipeline:** fully built and live-run — "How to think with AI without offloading your brain to AI" (6 sections, DOCX exported).
 - **Book pipeline:** fully built and live-run — *The Misprint File* (3 chapters, 9-page PDF).
-- **New this session (2026-06-09 session 4):**
-  - Agent renamed WRITING AGENT throughout (shell wordmark, tagline, llm.py `X-Title`, cli.py, pyproject.toml `writing-agent` entry point).
-  - `/update` slash command: describe changes → AI reads active project state + manuscript tail → review + advice.
-  - `_auto_or_pick_project()`: smart auto-selection (single match auto-picked, multiple → clean numbered picker, mode-filtered). Eliminates `--book-id` errors entirely in TUI.
-  - `parse_known_args` replaces `parse_args` everywhere — filler words like "run it" no longer crash.
-  - `autonomous` default in `cmd_new` fixed: reads from `settings.autonomous` not hardcoded `False`.
-  - `brain.read_json` uses `utf-8-sig` to strip PowerShell 5.1 BOM from JSON files.
-  - DOCX export: `---` → `* * *` before pandoc, explicit YAML front-matter block, `--syntax-highlighting=kate`.
-  - SVG fallback: LLM-generated `<svg>` saved to `images/` when Wikimedia returns nothing (both books and articles).
-  - 6 export formats: pdf · epub · html · docx · txt · md (interactive picker).
-  - `NO_SLOP` guardrails injected into all writer/humanizer/critic prompts.
-  - README.md and plan.md fully updated.
+- **New this session (2026-06-10 session 5 — reliability/UX/security hardening, branch `hardening-reliability-ux`):**
+  - **Headroom fixed:** pinned `headroom-ai==0.10.17` (last pure-Python release; ≥0.21 is a Rust/pyo3 ext with no Windows wheel), installed `--no-deps`; `_compress` counts tokens with a tiktoken model so compression actually runs on DeepSeek slugs.
+  - **Reliability:** classified retry + exponential backoff (honors Retry-After), fail-fast on 4xx, request timeout, real structured-output repair retry, token-usage telemetry; atomic `write_json`/`write_text` + corrupt-tolerant `read_json`; resume guards prevent double-commit / canon duplication.
+  - **Performance:** independent network steps overlap (research ∥ image/SVG; parallel front/back-matter) via `concurrency.py`; on-disk cache for web search + SVG diagrams (`cache.py`). Chapter chain stays sequential by design (continuity).
+  - **Security:** chat assistant can no longer auto-execute `delete` / `/user` / `/set`; path confinement + `is_safe_id` validation; export HTML sanitized; YAML-safe skill frontmatter; non-dict frontmatter guard; `Critique.confidence` clamped.
+  - **Richer TUI/CLI:** live `run` dashboard (elapsed + live tokens + stage + event log), arg/value autocomplete, persistent history, `new` spinners, Rich `status` (phase stepper + word count/reading time), Markdown `read`/`memory`, skills efficacy bars, clickable export paths, "did you mean?", `--plain`/`NO_COLOR`.
+  - Removed dead `run.py`/`slice.py`; new shared `ui.py` (palette + helpers). 44 tests (added `tests/test_hardening.py`, `tests/test_ui.py`).
 - **Source of truth:** `plan.md` (spec + implementation status); `README.md` = how to run.
 - **How to run:** `writing-agent` (after `pip install -e .`) or `python book.py` → interactive shell; `python book.py <cmd> ...` for one-shot. Needs `OPENROUTER_API_KEY` in `.env`.
 - **Next up (all optional):** (a) unit tests for article nodes; (b) more built-in craft skills for technical writing; (c) LangGraph wrapper; (d) multi-user / server mode.
 - **Stack:** Python; durable on-disk state machine; markdown brain + SQLite/FTS5; OpenRouter + DeepSeek V4 Pro/Flash per-node; Rich TUI + prompt_toolkit.
+- **Platforms:** **Linux · macOS · Windows** — all code is portable (pathlib, atomic `os.replace`, `Path.as_uri()` links, OS-aware optional headroom) and CI runs the suite on all three × Python 3.10–3.13.
+- **Open-source ready:** MIT `LICENSE`, full `pyproject` metadata (dist renamed `writing-agent`), `CONTRIBUTING.md` / `SECURITY.md` / `CODE_OF_CONDUCT.md` / `CHANGELOG.md`, GitHub Actions CI, issue/PR templates, ruff + pre-commit.
 - **Open product calls:** none blocking.
 
 ## How to use this file
@@ -36,6 +33,31 @@
   duplicate.
 
 ## Session log
+
+### 2026-06-10 — Reliability / performance / UX / security hardening (branch `hardening-reliability-ux`)
+
+Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f7ee` (richer TUI/CLI). 44 tests pass.
+
+**Headroom (context compression) fixed on Windows:**
+- `headroom-ai` ≥0.21 is a Rust/pyo3 extension with **no published Windows wheel**; the sdist build failed (no toolchain + Git-Bash `link.exe` shadowing MSVC). 0.10.17 is the **last pure-Python release**, but its compressor still needs a native `_core`, *and* it routes non-tiktoken models (DeepSeek) to a HuggingFace tokenizer that hard-imports `transformers` → silently no-ops.
+- Fix: install `headroom-ai==0.10.17 --no-deps` (skips `litellm`, whose deeply-nested paths break installs without Windows long-path support); `llm._compress` now passes a tiktoken model (`gpt-4o`) to headroom purely for token counting — compression is model-agnostic, so DeepSeek runs really compress (~97% on tool-output JSON). Declared `tiktoken` + `ebooklib`; added `requirements.lock.txt`. `headroom-ai` is now an optional extra in `pyproject.toml`, not a hard dep.
+
+**Reliability / performance (`llm.py`, `orchestrator.py`, new `concurrency.py` / `cache.py`):**
+- Classified retry with exponential backoff + jitter (honors `Retry-After`), fail-fast on 4xx, per-request `timeout` (new `request_timeout` setting), SDK retries disabled (we own them). Real structured-output **repair retry** (feeds the bad output + error back). Token-usage telemetry (`[usage]` line at run end + live in the dashboard).
+- Overlap independent network steps within a unit (research ∥ image/SVG) and parallelize production components via `concurrency.gather` (thread pool). **The chapter/section chain stays sequential** — each pulls the previous summary for continuity, so it can't be parallelized without breaking canon (correction to an earlier over-estimate).
+- On-disk cache (`cache.py`) for web search (7-day TTL) and generated SVG diagrams.
+
+**Durability / security:**
+- `brain.write_json`/`write_text` are atomic (temp + `os.replace`); `read_json` tolerates corrupt files (returns `None`) — `run_state.json` can no longer become unresumable. Resume guards in `_process_chapter`/`_process_article_section` skip already-committed units (no double-commit, no duplicate canon facts).
+- Chat assistant **cannot auto-execute** `delete` / `/user` / `/set` (data-loss / tenant / config). `is_safe_id` validation + `delete_book` path confinement. Export HTML sanitized (strip script/iframe/handlers/`javascript:`). `retrieval._parse_frontmatter` coerces non-dict → `{}`; `skills.write_skill` emits YAML-safe frontmatter + avoids slug collisions; `Critique.confidence` clamped to [0,1]; `load_config` falls back if `models.yaml` missing.
+
+**UX (`shell.py`, `cli.py`, new `ui.py`):**
+- Live `run` dashboard; arg/value autocomplete (`/use`,`/model`,`/set`,`/skill`,`/mode`,`export --format`); persistent `FileHistory`; spinners during `new`; Rich `status` (phase stepper + word count + reading time); Markdown-rendered `read` (paged) / `memory`; skills efficacy bars; clickable export paths + size; "did you mean?"; `--plain` + `NO_COLOR`; richer bottom toolbar.
+- `ui.py` centralizes the editorial palette + pure helpers; deleted dead `run.py`/`slice.py` (referenced removed `brain.ensure_book`).
+
+**Removed dead code:** vertical-slice prototype `run.py` + `src/book_agent/slice.py`.
+
+**Next:** push the branch + open PR when ready; the `--manuscript` path in `cmd_read` still uses `BookPaths` (won't find article manuscripts — pre-existing, low priority); consider article-node unit tests.
 
 ### 2026-06-09 — Bug fixes, headroom, SVG diagrams, colour update, push to GitHub
 
