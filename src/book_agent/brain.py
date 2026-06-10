@@ -98,6 +98,8 @@ class BookPaths:
     def run_state(self) -> Path: return self.root / "run_state.json"
     @property
     def directions(self) -> Path: return self.root / "directions.json"
+    @property
+    def sources_json(self) -> Path: return self.root / "sources.json"
     # dirs
     @property
     def chapters(self) -> Path: return self.root / "chapters"

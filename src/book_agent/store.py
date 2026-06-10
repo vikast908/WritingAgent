@@ -105,6 +105,49 @@ class Store:
             ).fetchall()
         return [(r[0], r[1]) for r in rows]
 
+    def search_excerpts(self, terms: list[str], limit: int = 2,
+                        exclude_refs: set[str] | None = None) -> list[tuple[str, str]]:
+        """Top FTS-matched chapter excerpts for a set of terms: [(ref, excerpt)].
+
+        Powers retrieval beyond dependency summaries - relevant passages from
+        *other* committed chapters (plan §2 context slice). Best-effort: returns
+        [] on any FTS error or when FTS is unavailable.
+        """
+        terms = [t.replace('"', "") for t in terms if t.strip()]
+        if not terms:
+            return []
+        exclude = exclude_refs or set()
+        c = self.conn
+        out: list[tuple[str, str]] = []
+        if self.fts:
+            match = " OR ".join(f'"{t}"' for t in terms[:8])
+            try:
+                rows = c.execute(
+                    "SELECT ref, kind, snippet(docs, 2, '', '', ' ... ', 32) "
+                    "FROM docs WHERE docs MATCH ? ORDER BY rank LIMIT ?",
+                    (match, limit + len(exclude) + 4),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                return []
+            for ref, kind, snip in rows:
+                if kind != "chapter" or ref in exclude:
+                    continue
+                out.append((ref, snip))
+                if len(out) >= limit:
+                    break
+            return out
+        rows = c.execute(
+            "SELECT ref, kind, substr(body, 1, 400) FROM docs WHERE body LIKE ? LIMIT ?",
+            (f"%{terms[0]}%", limit + len(exclude) + 4),
+        ).fetchall()
+        for ref, kind, snip in rows:
+            if kind != "chapter" or ref in exclude:
+                continue
+            out.append((ref, snip))
+            if len(out) >= limit:
+                break
+        return out
+
     # ── canon updates (from extraction on commit) ────────────────────────────
     def update_from_extraction(self, chapter: int, ex: ExtractionResult) -> None:
         c = self.conn
@@ -131,7 +174,9 @@ class Store:
         for rule in ex.world_rules:
             c.execute("INSERT OR IGNORE INTO world_rule VALUES (?)", (rule,))
         for ev in ex.timeline:
-            c.execute("INSERT OR IGNORE INTO timeline VALUES (?,?)", (ev.chapter, ev.event))
+            # Record under the chapter actually being committed - the LLM-reported
+            # chapter number is sometimes wrong and would mis-order the timeline.
+            c.execute("INSERT OR IGNORE INTO timeline VALUES (?,?)", (chapter, ev.event))
         for th in ex.threads_touched:
             c.execute("INSERT OR IGNORE INTO thread (name, status) VALUES (?, 'open')", (th,))
             self._edge(f"ch{chapter:02d}", "advances", th, chapter)

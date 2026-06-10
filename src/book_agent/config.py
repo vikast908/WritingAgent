@@ -58,6 +58,7 @@ class Settings:
     escalate_on_contradiction: bool = True   # consolidation contradictions -> review (plan §9)
     autonomous: bool = False                 # no human-in-the-loop: never pause, commit best draft
     humanize: bool = True                    # rewrite each chapter to strip AI tells (em-dashes...)
+    article_cohesion: bool = True            # whole-article smoothing pass before References
     use_images: bool = False                 # fetch Wikimedia Commons images (non-fiction/illustrated)
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
     use_headroom: bool = True               # context compression via headroom-ai (60-95% fewer tokens)

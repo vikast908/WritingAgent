@@ -45,19 +45,18 @@ def write_chapter(
     cfg: ModelConfig,
     plan: S.BookPlan,
     blueprint: S.ChapterBlueprint,
-    prior_summary: str | None = None,
     fix_notes: str | None = None,
     *,
     context: str | None = None,
     skills: list[str] | None = None,
     images: list[str] | None = None,
+    base_draft: str | None = None,
+    length_note: str | None = None,
 ) -> str:
     model = cfg.model_for("writer")
     parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
     if context:
         parts.append(f"Canonical context:\n{context}")
-    elif prior_summary:
-        parts.append(f"Previous chapter summary:\n{prior_summary}")
     if skills:
         parts.append("Relevant craft skills (apply where they fit):\n\n" + "\n\n---\n\n".join(skills))
     if images:
@@ -65,8 +64,12 @@ def write_chapter(
             "## Suggested images (embed where relevant; keep the attribution line verbatim):\n\n"
             + "\n\n".join(images)
         )
+    if base_draft:
+        parts.append("PRIOR DRAFT (revise this; keep what works):\n" + base_draft)
     if fix_notes:
         parts.append("Revision notes (address every point):\n" + fix_notes)
+    if length_note:
+        parts.append(length_note)
     parts.append(f'Write chapter {blueprint.number}: "{blueprint.title}".')
     return complete_text(model, P.WRITER_SYS, "\n\n".join(parts),
                          max_tokens=16000, thinking=True,
@@ -79,16 +82,22 @@ def critique_chapter(
     plan: S.BookPlan,
     blueprint: S.ChapterBlueprint,
     prose: str,
-    prior_summary: str | None = None,
     *,
     context: str | None = None,
+    watch_list: str | None = None,
+    skills: list[str] | None = None,
+    length_note: str | None = None,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
     if context:
         parts.append(f"Canonical context:\n{context}")
-    elif prior_summary:
-        parts.append(f"Previous chapter summary:\n{prior_summary}")
+    if watch_list:
+        parts.append(f"LEARNED WATCH-LIST (flag these patterns as blocking):\n{watch_list}")
+    if skills:
+        parts.append("Craft skills the writer was asked to apply:\n\n" + "\n\n---\n\n".join(skills))
+    if length_note:
+        parts.append(length_note)
     parts.append(f"Chapter draft:\n{prose}")
     return complete_structured(model, P.CRITIC_SYS, "\n\n".join(parts), S.Critique,
                                max_tokens=8000, temperature=cfg.temperature_for("critic"))
@@ -125,16 +134,20 @@ def consolidate(
 
 
 # ── Production (plan §16) ─────────────────────────────────────────────────────
-def plan_production(cfg: ModelConfig, plan: S.BookPlan) -> S.ProductionPlan:
+def plan_production(cfg: ModelConfig, plan: S.BookPlan, num_sources: int = 0) -> S.ProductionPlan:
     model = cfg.model_for("production")
     user = f"Book plan:\n{_ctx(plan)}\n\nDecide the front- and back-matter components."
+    if num_sources:
+        user += (f"\n\nNote: {num_sources} real web research source(s) were used while "
+                 "writing - include a references/bibliography back-matter component.")
     return complete_structured(model, P.PRODUCTION_PLAN_SYS, user, S.ProductionPlan,
                                max_tokens=4000)
 
 
 def generate_component(
     cfg: ModelConfig, plan: S.BookPlan, component: str, where: str,
-    author_meta: str | None, toc_md: str | None = None
+    author_meta: str | None, toc_md: str | None = None,
+    sources_md: str | None = None,
 ) -> str:
     model = cfg.model_for("production")
     parts = [f"Book plan:\n{_ctx(plan)}",
@@ -143,6 +156,9 @@ def generate_component(
         parts.append(f"Known author/publishing facts:\n{author_meta}")
     if component.lower().startswith("table of contents") and toc_md:
         parts.append(f"Use this table of contents:\n{toc_md}")
+    if sources_md:
+        parts.append("These are the ACTUAL research sources used while writing - list "
+                     f"exactly these (do not invent any others):\n{sources_md}")
     return complete_text(model, P.PRODUCTION_COMPONENT_SYS, "\n\n".join(parts),
                          max_tokens=4000)
 
@@ -170,7 +186,10 @@ def propose_search_queries(cfg: ModelConfig, topic: str, focus: str, n: int = 4)
     user = (f"Writing project:\n{topic}\n\nFocus for this part:\n{focus}\n\n"
             f"Propose {n} distinct, specific web search queries that together cover this "
             "from different angles.")
-    return complete_structured(model, P.QUERY_PLANNER_SYS, user, S.SearchQueries, max_tokens=1000)
+    out = complete_structured(model, P.QUERY_PLANNER_SYS, user, S.SearchQueries, max_tokens=1000)
+    # The schema doesn't bound the list - cap it so a chatty model can't trigger
+    # an unbounded search fan-out.
+    return S.SearchQueries(queries=list(out.queries)[:n])
 
 
 def deep_research(
@@ -240,6 +259,8 @@ def write_article_section(
     context: str | None = None,
     skills: list[str] | None = None,
     images: list[str] | None = None,
+    base_draft: str | None = None,
+    length_note: str | None = None,
 ) -> str:
     model = cfg.model_for("writer")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section to write:\n{_ctx(section)}"]
@@ -249,8 +270,12 @@ def write_article_section(
         parts.append("Relevant craft skills:\n\n" + "\n\n---\n\n".join(skills))
     if images:
         parts.append("## Suggested images (embed where relevant):\n\n" + "\n\n".join(images))
+    if base_draft:
+        parts.append("PRIOR DRAFT (revise this; keep what works):\n" + base_draft)
     if fix_notes:
         parts.append(f"Revision notes (address every point):\n{fix_notes}")
+    if length_note:
+        parts.append(length_note)
     parts.append(f'Write section {section.number}: "{section.heading}".')
     return complete_text(model, P.ARTICLE_WRITER_SYS, "\n\n".join(parts),
                          max_tokens=8000, temperature=cfg.temperature_for("writer"))
@@ -263,11 +288,17 @@ def critique_article_section(
     prose: str,
     *,
     context: str | None = None,
+    watch_list: str | None = None,
+    length_note: str | None = None,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section blueprint:\n{_ctx(section)}"]
     if context:
         parts.append(f"Prior context:\n{context}")
+    if watch_list:
+        parts.append(f"LEARNED WATCH-LIST (flag these patterns as blocking):\n{watch_list}")
+    if length_note:
+        parts.append(length_note)
     parts.append(f"Section draft:\n{prose}")
     return complete_structured(model, P.ARTICLE_CRITIC_SYS, "\n\n".join(parts), S.Critique,
                                max_tokens=4000, temperature=cfg.temperature_for("critic"))
@@ -293,6 +324,21 @@ def summarize_section(cfg: ModelConfig, section: S.ArticleSection, prose: str) -
     user = f"Section {section.number}: {section.heading}\n\n{prose}"
     return complete_text(model, P.SUMMARIZER_SYS, user,
                          max_tokens=600, temperature=cfg.temperature_for("summarizer"))
+
+
+def cohesion_edit(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str) -> str:
+    """Whole-article smoothing pass over the assembled section bodies (plan: article mode).
+
+    Smooths transitions, removes cross-section repetition, unifies terminology. The
+    caller guards the result (length ratio, headings survive) and falls back to the
+    original on any suspicion - this pass must never be able to lose content.
+    """
+    model = cfg.model_for("writer")
+    user = (f"Article outline (for the intended arc):\n{_ctx(outline)}\n\n"
+            f"Assembled article body:\n{body_md}\n\n"
+            "Return the cohesion-edited article body.")
+    return complete_text(model, P.COHESION_SYS, user,
+                         max_tokens=16000, temperature=cfg.temperature_for("writer"))
 
 
 def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "") -> str:

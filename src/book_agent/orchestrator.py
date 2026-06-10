@@ -10,6 +10,7 @@ Per chapter: write -> critique -> (approve→commit | revise<cap→rewrite | cap
 """
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 from . import brain, concurrency, humanizer, llm, nodes, render, retrieval
@@ -46,6 +47,76 @@ def _deep_docs(cfg, topic: str, focus: str, seed_query: str, log=print):
         "warm": lambda: search_mod.web_search(seed_query, max_results=5),
     })
     return dr.gather_documents((out.get("proposed") or []) + [seed_query], log=log)
+
+
+# ── Revision-loop helpers ─────────────────────────────────────────────────────
+def _merge_fix_notes(instruction: str | None, crit: S.Critique) -> str:
+    """Revision notes for the next attempt. The human instruction must survive every
+    round - it used to be overwritten by the first critique."""
+    notes = render.render_fix_notes(crit)
+    if instruction:
+        return (f"Human reviewer instruction (highest priority - always honor):\n"
+                f"{instruction}\n\nCritique notes:\n{notes}")
+    return notes
+
+
+def _crit_better(a: S.Critique, b: S.Critique) -> bool:
+    """True when critique a judges its draft better than b judges its own:
+    approve beats non-approve, then fewer blocking issues, then higher confidence."""
+    if (a.verdict == "approve") != (b.verdict == "approve"):
+        return a.verdict == "approve"
+    if len(a.blocking) != len(b.blocking):
+        return len(a.blocking) < len(b.blocking)
+    return a.confidence > b.confidence
+
+
+def _length_note(word_count: int, target: int) -> str | None:
+    """The word-count line the writer/critic prompts key off (None when no target)."""
+    if not target:
+        return None
+    if word_count:
+        return f"Draft word count: {word_count} words (target ~{target} words)."
+    return f"Target length: ~{target} words."
+
+
+# Genres where an auto-generated concept diagram is appropriate (book image fallback).
+_NONFICTION_RE = re.compile(
+    r"non-?fiction|technical|guide|how-?to|textbook|reference|tutorial|business|"
+    r"science|history|self-?help|essay|journalism|education|manual", re.IGNORECASE)
+
+
+# ── Source registry (stable citation numbering) ──────────────────────────────
+_CITE = re.compile(r"\[(\d+)\](?!\()")   # [3] but not a markdown link label [3](...)
+
+
+def _register_sources(registry: list[dict], sources) -> dict[int, int]:
+    """Add a unit's sources to the project-wide registry (deduped by URL, first-seen
+    order) and return {local_number: global_number}. Global number = 1-based position
+    in the registry, which is exactly the final References numbering - so in-text
+    citations rewritten with this map always match the reference list."""
+    by_url = {s.get("url"): i + 1 for i, s in enumerate(registry) if s.get("url")}
+    mapping: dict[int, int] = {}
+    for local, s in enumerate(sources, 1):
+        d = s if isinstance(s, dict) else s.model_dump()
+        url = (d.get("url") or "").strip()
+        if not url:
+            continue   # un-linkable source: leave its citations untouched
+        if url not in by_url:
+            registry.append(d)
+            by_url[url] = len(registry)
+        mapping[local] = by_url[url]
+    return mapping
+
+
+def _renumber_citations(text: str, mapping: dict[int, int]) -> str:
+    """Rewrite in-text [n] citations from per-unit numbering to registry numbering.
+    Two-phase (via placeholders) so swaps like {1->3, 3->1} can't collide."""
+    if not mapping or all(k == v for k, v in mapping.items()):
+        return text
+    def _sub(m):
+        n = int(m.group(1))
+        return f"[\x00{mapping[n]}\x00]" if n in mapping else m.group(0)
+    return _CITE.sub(_sub, text).replace("\x00", "")
 
 
 # ── Setup (human picks a direction, then autonomous) ─────────────────────────
@@ -219,8 +290,10 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
     blueprint = toc.chapters[n - 1]
 
     def _do_research():
+        """Returns (research_prefix_md, sources) - sources feed the book-level
+        registry so production can emit a real bibliography."""
         if not state.get("use_researcher"):
-            return None
+            return (None, [])
         from . import search as search_mod
         base_query = search_mod.build_query(plan, blueprint)
         if state.get("deep_research"):
@@ -235,15 +308,17 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
                      "### Comparisons", *(f"- {c}" for c in brief.comparisons)]
             if docs:
                 lines += ["### Sources", *(f"- [{d.title}]({d.url})" for d in docs)]
-            return "\n".join(lines) + "\n\n"
+            sources = [S.Source(title=d.title, url=d.url) for d in docs]
+            return ("\n".join(lines) + "\n\n", sources)
         results = search_mod.web_search(base_query, max_results=5)
         web_results = search_mod.format_results(results)
         if results:
             log(f"   fetched {len(results)} web result(s) for: {base_query[:60]}")
         brief = nodes.research(cfg, plan, blueprint, web_results=web_results or None)
-        return ("## Research brief\n" + "\n".join(
+        prefix = ("## Research brief\n" + "\n".join(
             ["### Facts", *(f"- {f}" for f in brief.facts),
              "### Style cues", *(f"- {s}" for s in brief.style_cues)]) + "\n\n")
+        return (prefix, [S.Source(title=r.title, url=r.url) for r in results])
 
     def _do_images():
         if not state.get("use_images"):
@@ -254,7 +329,10 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
         if fetched:
             log(f"   fetched {len(fetched)} image(s) from Wikimedia Commons")
             return [r.to_markdown(str(i + 1)) for i, r in enumerate(fetched)]
-        # No Wikimedia image - generate an SVG diagram instead
+        # No Wikimedia image: generate an SVG diagram - but only for non-fiction-ish
+        # genres. A "concept diagram" dropped into a novel chapter is always wrong.
+        if not _NONFICTION_RE.search(plan.genre or ""):
+            return None
         svg_text = nodes.generate_svg_diagram(cfg, blueprint.title, blueprint.purpose or "")
         svg_dir = paths.root / "images"
         svg_dir.mkdir(parents=True, exist_ok=True)
@@ -299,33 +377,45 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
             fetched = {}
     if not fetched:
         fetched = _chapter_fetch(cfg, paths, plan, toc, state, n, log)
-    research_prefix = fetched.get("research")
+    research_prefix, ch_sources = fetched.get("research") or (None, [])
     images: list[str] | None = fetched.get("images")
     context = (research_prefix + base_context) if research_prefix else base_context
 
     skill_pairs = fetched.get("skills") or []
     skill_names = [name for name, _ in skill_pairs]
     skill_bodies = [body for _, body in skill_pairs]
+    watch = brain.read_text(brain.watch_list(paths.uid))
 
     instruction = brain.read_text(paths.instruction_of(n))  # from a prior review, if any
     fix_notes = instruction
+    # After an escalation the human's instruction refers to the draft they reviewed -
+    # give the writer that draft as the revision base instead of starting from scratch.
+    base_draft = brain.read_text(paths.ch_draft(n)) if instruction else None
     max_rev = state["max_revisions"]
     threshold = state.get("escalate_below_confidence", 0.0)
     crit: S.Critique | None = None
     draft = ""
+    best: tuple[str, S.Critique] | None = None
     approved_attempt = -1
 
     log(f"\n== Chapter {n}: {blueprint.title} ==")
     for attempt in range(max_rev + 1):
         log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
         draft = nodes.write_chapter(cfg, plan, blueprint, fix_notes=fix_notes,
-                                    context=context, skills=skill_bodies, images=images)
+                                    context=context, skills=skill_bodies, images=images,
+                                    base_draft=base_draft,
+                                    length_note=_length_note(0, blueprint.target_words))
         log("   critiquing...")
-        crit = nodes.critique_chapter(cfg, plan, blueprint, draft, context=context)
+        crit = nodes.critique_chapter(
+            cfg, plan, blueprint, draft, context=context, watch_list=watch,
+            skills=skill_bodies,
+            length_note=_length_note(len(draft.split()), blueprint.target_words))
         brain.write_json(paths.eval_of(n),
                          {"chapter_id": n, "attempt": attempt, **crit.model_dump()})
         log(f"   verdict={crit.verdict} confidence={crit.confidence:.2f} "
             f"blocking={len(crit.blocking)} nits={len(crit.nits)}")
+        if best is None or _crit_better(crit, best[1]):
+            best = (draft, crit)
         low_conf = crit.confidence < threshold
         if crit.verdict == "approve" and not low_conf:
             approved_attempt = attempt
@@ -337,22 +427,26 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         if attempt == max_rev:
             log("   revision cap reached")
             break
-        fix_notes = render.render_fix_notes(crit)
+        fix_notes = _merge_fix_notes(instruction, crit)
+        base_draft = draft   # revise the latest attempt, not regenerate from notes alone
 
-    assert crit is not None
+    assert crit is not None and best is not None
     if approved_attempt >= 0 or state.get("autonomous"):
         if approved_attempt < 0:
-            log("   autonomous: committing best (unapproved) draft")
+            draft, crit = best   # commit the best-judged attempt, not the last one
+            log(f"   autonomous: committing best draft "
+                f"(blocking={len(crit.blocking)}, confidence={crit.confidence:.2f})")
         first_pass = approved_attempt == 0 and instruction is None
         _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass,
-                log, humanize=bool(state.get("humanize")))
+                log, humanize=bool(state.get("humanize")), sources=ch_sources)
+        paths.ch_draft(n).unlink(missing_ok=True)   # escalation draft resolved
         return "commit"
     _escalate(paths, n, crit, draft)
     return "escalate"
 
 
 def _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass, log,
-            *, humanize: bool = False) -> None:
+            *, humanize: bool = False, sources=()) -> None:
     # The humanizer rewrite, the summary, and the canon extraction all derive from the
     # same approved draft, so they run as one concurrent batch instead of three serial
     # LLM round-trips. Summary/extraction read the pre-humanized draft - the humanizer
@@ -375,6 +469,13 @@ def _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pas
     store.update_from_extraction(n, extraction)
     store.render_canon(paths, names=[ch.name for ch in extraction.characters])
     store.index_chapter(paths, n)
+
+    if sources:
+        # Book-level source registry (deduped by URL) - production turns this into a
+        # real bibliography instead of inventing one.
+        registry = brain.read_json(paths.sources_json) or []
+        _register_sources(registry, sources)
+        brain.write_json(paths.sources_json, registry)
 
     skills_mod.record_chapter(paths.uid, skill_names, first_pass)
     brain.append_text(paths.revision_log,
@@ -467,20 +568,32 @@ def _repair_contradictions(cfg, paths, plan, toc, store, report, *, humanize, lo
         log(f"   [repair] rewrote chapter {n} for {len(relevant)} contradiction(s)")
 
 
+_BIBLIO_RE = re.compile(r"bibliograph|reference|works.?cited|sources|further.?reading",
+                        re.IGNORECASE)
+
+
 def _production(cfg, paths, plan, store, *, log) -> None:
-    pplan = nodes.plan_production(cfg, plan)
+    sources = brain.read_json(paths.sources_json) or []
+    pplan = nodes.plan_production(cfg, plan, num_sources=len(sources))
     author_meta = brain.read_text(brain.user_profile(paths.uid))
     toc_md = brain.read_text(paths.toc)
+    sources_md = "\n".join(
+        f"{i}. {s.get('title', 'Source')} - {s.get('url', '')}"
+        for i, s in enumerate(sources, 1)) or None
 
     # Front/back-matter components are independent of one another - generate them
     # concurrently, then write in order. (Keyed by index to tolerate duplicate names.)
+    # Bibliography-style components get the ACTUAL research sources used during the
+    # run; without them the prompt (correctly) forbids inventing entries.
     tasks = {}
     for i, comp in enumerate(pplan.front_matter):
         tasks[f"front:{i}"] = (
             lambda c=comp: nodes.generate_component(cfg, plan, c, "front", author_meta, toc_md))
     for i, comp in enumerate(pplan.back_matter):
         tasks[f"back:{i}"] = (
-            lambda c=comp: nodes.generate_component(cfg, plan, c, "back", author_meta, toc_md))
+            lambda c=comp: nodes.generate_component(
+                cfg, plan, c, "back", author_meta, toc_md,
+                sources_md=sources_md if _BIBLIO_RE.search(c) else None))
     generated = concurrency.gather(tasks)
     for i, comp in enumerate(pplan.front_matter):
         content = generated.get(f"front:{i}")
@@ -645,7 +758,7 @@ def export_pdf(uid: str, book_id: str, *, log=print):
     if not md:
         raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
     out = root / "manuscript.pdf"
-    export.markdown_to_pdf(md, out, title=title)
+    export.markdown_to_pdf(md, out, title=title, base_dir=root)
     log(f"[OK] PDF -> {out}")
     return out
 
@@ -661,7 +774,7 @@ def export_epub(uid: str, book_id: str, *, log=print):
     m = _re.search(r"(?m)^name:\s*(.+)$", author_meta)
     author = m.group(1).strip() if m else uid
     out = root / "manuscript.epub"
-    export.markdown_to_epub(md, out, title=title, author=author)
+    export.markdown_to_epub(md, out, title=title, author=author, base_dir=root)
     log(f"[OK] EPUB -> {out}")
     return out
 
@@ -707,6 +820,7 @@ def start_article(
         "humanize": settings.humanize if humanize is None else humanize,
         "use_images": settings.use_images,
         "use_embeddings": settings.use_embeddings,
+        "article_cohesion": settings.article_cohesion,
         "escalate_below_confidence": 0.0 if autonomous else settings.escalate_below_confidence,
         "escalate_on_contradiction": False,
     }
@@ -755,6 +869,9 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log):
                 brain.write_json(paths.run_state, state)
             elif phase == "learn":
                 _learn_article(cfg, paths, outline, log=log)
+                # Clean up intermediates only AFTER learning - the learner reads the
+                # eval_*.json critic findings that cleanup deletes.
+                paths.cleanup_sections()
                 state["phase"] = "done"
                 brain.write_json(paths.run_state, state)
     finally:
@@ -868,13 +985,23 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     skill_pairs = out.get("skills") or []
     skill_names = [name for name, _ in skill_pairs]
     skill_bodies = [body for _, body in skill_pairs]
+    watch = brain.read_text(brain.watch_list(paths.uid))
+
+    # Per-section word target: the outline's per-section value, falling back to an
+    # even share of the article-wide target.
+    target = section.target_words or (
+        outline.target_word_count // max(1, len(outline.sections))
+        if outline.target_word_count else 0)
 
     instruction = brain.read_text(paths.instruction_of(n))
     fix_notes = instruction
+    # After an escalation, revise the draft the human actually reviewed.
+    base_draft = brain.read_text(paths.section_draft(n)) if instruction else None
     max_rev = state["max_revisions"]
     threshold = state.get("escalate_below_confidence", 0.0)
     crit: S.Critique | None = None
     draft = ""
+    best: tuple[str, S.Critique] | None = None
     approved_attempt = -1
 
     log(f"\n== Section {n}: {section.heading} ==")
@@ -882,14 +1009,19 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
         log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
         draft = nodes.write_article_section(cfg, outline, section,
                                             fix_notes=fix_notes, context=full_context,
-                                            skills=skill_bodies, images=images)
+                                            skills=skill_bodies, images=images,
+                                            base_draft=base_draft,
+                                            length_note=_length_note(0, target))
         log("   critiquing...")
-        crit = nodes.critique_article_section(cfg, outline, section, draft,
-                                               context=full_context)
+        crit = nodes.critique_article_section(
+            cfg, outline, section, draft, context=full_context, watch_list=watch,
+            length_note=_length_note(len(draft.split()), target))
         brain.write_json(paths.section_eval(n),
                          {"section": n, "attempt": attempt, **crit.model_dump()})
         log(f"   verdict={crit.verdict} confidence={crit.confidence:.2f} "
             f"blocking={len(crit.blocking)}")
+        if best is None or _crit_better(crit, best[1]):
+            best = (draft, crit)
         low_conf = crit.confidence < threshold
         if crit.verdict == "approve" and not low_conf:
             approved_attempt = attempt
@@ -899,33 +1031,45 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
         if attempt == max_rev:
             log("   revision cap reached")
             break
-        fix_notes = render.render_fix_notes(crit)
+        fix_notes = _merge_fix_notes(instruction, crit)
+        base_draft = draft
 
-    assert crit is not None
-    will_commit = approved_attempt >= 0 or state.get("autonomous")
-    if will_commit and state.get("humanize"):
-        log("   humanizing...")
-        draft = humanizer.humanize(cfg, draft)
-    if approved_attempt >= 0:
+    assert crit is not None and best is not None
+    if approved_attempt >= 0 or state.get("autonomous"):
+        if approved_attempt < 0:
+            draft, crit = best
+            log(f"   autonomous: committing best draft "
+                f"(blocking={len(crit.blocking)}, confidence={crit.confidence:.2f})")
         first_pass = approved_attempt == 0 and instruction is None
-        _commit_section(paths, n, draft, skill_names, sources, first_pass, log)
-        return "commit"
-    if state.get("autonomous"):
-        log("   autonomous: committing best draft")
-        _commit_section(paths, n, draft, skill_names, sources, False, log)
+        _commit_section(cfg, paths, section, n, draft, skill_names, sources, first_pass,
+                        log, humanize=bool(state.get("humanize")))
+        paths.section_draft(n).unlink(missing_ok=True)
         return "commit"
     _escalate(paths, n, crit, draft)
     return "escalate"
 
 
-def _commit_section(paths: ArticlePaths, n, draft, skill_names, sources, first_pass, log) -> None:
-    brain.write_text(paths.section(n), draft)
-    summary = draft[:800]
-    brain.write_text(paths.section_summary(n), summary)
+def _commit_section(cfg, paths: ArticlePaths, section, n, draft, skill_names, sources,
+                    first_pass, log, *, humanize: bool = False) -> None:
+    # 1. Renumber in-text [N] citations from this section's local source numbering to
+    #    the article-wide registry numbering, so they match the final References list.
+    registry = brain.read_json(paths.sources_json) or []
+    mapping = _register_sources(registry, sources)
+    draft = _renumber_citations(draft, mapping)
+    brain.write_json(paths.sources_json, registry)
 
-    existing = brain.read_json(paths.sources_json) or []
-    existing.extend([s.model_dump() if hasattr(s, "model_dump") else s for s in sources])
-    brain.write_json(paths.sources_json, existing)
+    # 2. Humanize and summarize concurrently (both derive from the same approved text;
+    #    the humanizer preserves content). A real summary, not draft[:800] - the next
+    #    sections' continuity context must reflect what this section said, not how it
+    #    opened.
+    tasks = {"summary": lambda: nodes.summarize_section(cfg, section, draft)}
+    if humanize:
+        log("   humanizing...")
+        tasks["humanized"] = lambda: humanizer.humanize(cfg, draft)
+    out = concurrency.gather(tasks, strict=True)
+
+    brain.write_text(paths.section(n), out.get("humanized") or draft)
+    brain.write_text(paths.section_summary(n), out["summary"])
 
     skills_mod.record_chapter(paths.uid, skill_names, first_pass)
     brain.append_text(paths.revision_log,
@@ -951,7 +1095,15 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
         if not p.name.endswith(".summary.md"):
             sections_md.append(p.read_text(encoding="utf-8"))
 
-    # De-duplicate sources by URL
+    # Resume guard: if a crash landed between section cleanup and the phase advance,
+    # re-entering produce with no section files must NOT overwrite the assembled
+    # manuscript with an empty one.
+    if not sections_md and brain.read_text(paths.manuscript):
+        log("   [resume] manuscript already assembled - skipping production")
+        return
+
+    # De-duplicate sources by URL. Commit-time _register_sources already dedupes, so
+    # this is a safety net; order (= citation numbering) is first-seen and stable.
     raw_sources = brain.read_json(paths.sources_json) or []
     seen_urls: set = set()
     unique: list = []
@@ -960,6 +1112,23 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
         if url and url not in seen_urls:
             seen_urls.add(url)
             unique.append(s if isinstance(s, dict) else s.model_dump())
+
+    # Whole-article cohesion pass: smooth transitions and cross-section repetition.
+    # Guarded - if the edit loses headings or shrinks the body too much, keep the
+    # original (this pass must never be able to lose content).
+    body = "\n\n---\n\n".join(sections_md)
+    if sections_md and state.get("article_cohesion"):
+        log("   cohesion pass over the assembled article...")
+        try:
+            edited = nodes.cohesion_edit(cfg, outline, body)
+        except Exception:  # noqa: BLE001 - cohesion is best-effort polish
+            edited = ""
+        if (edited
+                and len(edited.split()) >= 0.6 * len(body.split())
+                and edited.count("## ") >= body.count("## ") * 0.8):
+            body = edited
+        else:
+            log("   cohesion edit rejected by guard - keeping original sections")
 
     # Build references section
     refs_md = ""
@@ -976,7 +1145,7 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
         refs_md = "\n".join(lines)
 
     # Header block
-    total_words = sum(len(sec.split()) for sec in sections_md)
+    total_words = len(body.split())
     read_time = max(1, round(total_words / 200))
     header = "\n".join([
         f"# {outline.title}", "",
@@ -986,12 +1155,12 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
         "---", "",
     ])
 
-    parts = [header] + sections_md
+    parts = [header, body]
     if refs_md:
         parts.append("\n---\n\n" + refs_md)
     brain.write_text(paths.manuscript, "\n\n---\n\n".join(parts))
-    # Clean up intermediate section files - keep only manuscript + images + metadata
-    paths.cleanup_sections()
+    # NOTE: intermediate section/eval files are cleaned up after the LEARN phase -
+    # the learner needs the eval_*.json critic findings (cleaning here starved it).
     log(f"   [production] {len(sections_md)} sections, {len(unique)} sources -> {paths.manuscript}")
 
 
@@ -1028,7 +1197,7 @@ def export_html(uid: str, book_id: str, *, log=print):
     if not md:
         raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
     out = root / "manuscript.html"
-    export.markdown_to_html(md, out, title=title)
+    export.markdown_to_html(md, out, title=title, base_dir=root)
     log(f"[OK] HTML -> {out}")
     return out
 
@@ -1040,7 +1209,7 @@ def export_docx(uid: str, book_id: str, *, log=print):
     if not md:
         raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
     out = root / "manuscript.docx"
-    export.markdown_to_docx(md, out, title=title)
+    export.markdown_to_docx(md, out, title=title, base_dir=root)
     log(f"[OK] DOCX -> {out}")
     return out
 

@@ -1,9 +1,58 @@
 """Manuscript export: PDF (xhtml2pdf) and EPUB (ebooklib)."""
 from __future__ import annotations
 
+import base64
+import mimetypes
 import re
 from html import escape as _esc
 from pathlib import Path
+
+# Manuscripts reference images relatively (images/...). Exporters must resolve them
+# against the project root (base_dir) and package/inline them - a bare relative path
+# resolves against the process CWD (PDF), a temp dir (DOCX via pandoc), or nothing
+# at all (EPUB), silently dropping every figure.
+_IMG_TAG = re.compile(r'<img\b[^>]*?src="([^"]+)"[^>]*/?>', re.IGNORECASE)
+
+
+def _resolve_local(src: str, base_dir: Path | None) -> Path | None:
+    """Local file for a relative img src, or None (absolute URLs, missing files)."""
+    if not base_dir or re.match(r"^[a-z][a-z0-9+.-]*:", src):
+        return None
+    p = base_dir / src
+    return p if p.is_file() else None
+
+
+def _inline_images(html_body: str, base_dir: Path | None) -> str:
+    """Rewrite local <img> srcs to data URIs so the HTML file is self-contained."""
+    def repl(m):
+        p = _resolve_local(m.group(1), base_dir)
+        if p is None:
+            return m.group(0)
+        media = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
+        b64 = base64.b64encode(p.read_bytes()).decode()
+        return m.group(0).replace(m.group(1), f"data:{media};base64,{b64}")
+    return _IMG_TAG.sub(repl, html_body)
+
+
+def _pdf_prepare_images(html_body: str, base_dir: Path | None) -> str:
+    """Make images renderable by xhtml2pdf: local paths become absolute; SVGs are
+    rasterized via cairosvg when installed, else the <img> is dropped (xhtml2pdf
+    cannot render SVG) and the figure caption text survives on its own."""
+    def repl(m):
+        src = m.group(1)
+        p = _resolve_local(src, base_dir)
+        if p is None:
+            return "" if src.lower().endswith(".svg") else m.group(0)
+        if p.suffix.lower() == ".svg":
+            try:
+                import cairosvg
+                png = cairosvg.svg2png(url=str(p), output_width=860)
+                uri = "data:image/png;base64," + base64.b64encode(png).decode()
+                return m.group(0).replace(src, uri)
+            except Exception:  # noqa: BLE001 - cairosvg absent or bad SVG
+                return ""
+        return m.group(0).replace(src, str(p))
+    return _IMG_TAG.sub(repl, html_body)
 
 
 def _slug_id(title: str) -> str:
@@ -56,12 +105,13 @@ em { font-style: italic; }
 
 
 # ── PDF ───────────────────────────────────────────────────────────────────────
-def markdown_to_pdf(md_text: str, out_path, title: str = "Manuscript"):
+def markdown_to_pdf(md_text: str, out_path, title: str = "Manuscript", base_dir=None):
     """Render Markdown to a paginated PDF. New page per chapter (## heading)."""
     import markdown
     from xhtml2pdf import pisa
 
     html_body = _sanitize_html(markdown.markdown(md_text, extensions=["extra", "sane_lists"]))
+    html_body = _pdf_prepare_images(html_body, Path(base_dir) if base_dir else None)
     html = (f"<html><head><meta charset='utf-8'><title>{_esc(title)}</title>"
             f"<style>{_PDF_CSS}</style></head><body>{html_body}</body></html>")
     out_path = Path(out_path)
@@ -79,6 +129,7 @@ def markdown_to_epub(
     title: str = "Manuscript",
     author: str = "Unknown",
     language: str = "en",
+    base_dir=None,
 ) -> Path:
     """Convert assembled manuscript Markdown to an EPUB file.
 
@@ -107,9 +158,24 @@ def markdown_to_epub(
 
     spine_items = []
     toc_links = []
+    base = Path(base_dir) if base_dir else None
+    packaged: set[str] = set()   # image srcs already added as EPUB items
 
     for i, section in enumerate(raw_sections):
         html_body = _sanitize_html(md_lib.markdown(section, extensions=["extra", "sane_lists"]))
+
+        # Package referenced local images into the EPUB - an unpackaged relative src
+        # renders as a broken image in every reader.
+        for m in _IMG_TAG.finditer(html_body):
+            src = m.group(1)
+            p = _resolve_local(src, base)
+            if p is None or src in packaged:
+                continue
+            packaged.add(src)
+            book.add_item(epub.EpubItem(
+                uid=f"img-{len(packaged)}", file_name=src.replace("\\", "/"),
+                media_type=mimetypes.guess_type(p.name)[0] or "application/octet-stream",
+                content=p.read_bytes()))
 
         # Derive a title from the first heading line
         first = section.splitlines()[0] if section else ""
@@ -168,8 +234,8 @@ li { margin-bottom: 0.4em; }
 """
 
 
-def markdown_to_html(md_text: str, out_path, title: str = "Article") -> Path:
-    """Render Markdown to a self-contained HTML file with embedded CSS."""
+def markdown_to_html(md_text: str, out_path, title: str = "Article", base_dir=None) -> Path:
+    """Render Markdown to a self-contained HTML file with embedded CSS + inlined images."""
     import markdown
 
     try:
@@ -179,6 +245,7 @@ def markdown_to_html(md_text: str, out_path, title: str = "Article") -> Path:
     except Exception:
         html_body = markdown.markdown(md_text, extensions=["extra", "sane_lists"])
     html_body = _sanitize_html(html_body)
+    html_body = _inline_images(html_body, Path(base_dir) if base_dir else None)
     html = (
         "<!DOCTYPE html>\n"
         f'<html lang="en"><head><meta charset="utf-8">'
@@ -193,7 +260,7 @@ def markdown_to_html(md_text: str, out_path, title: str = "Article") -> Path:
 
 
 # ── DOCX ─────────────────────────────────────────────────────────────────────
-def markdown_to_docx(md_text: str, out_path, title: str = "Article") -> Path:
+def markdown_to_docx(md_text: str, out_path, title: str = "Article", base_dir=None) -> Path:
     """Convert Markdown to .docx via pandoc (must be on PATH)."""
     import subprocess
     import tempfile
@@ -210,15 +277,17 @@ def markdown_to_docx(md_text: str, out_path, title: str = "Article") -> Path:
         tmp.write(f"---\ntitle: \"{title.replace(chr(34), chr(39))}\"\n---\n\n" + safe_md)
         tmp_path = tmp.name
 
+    cmd = ["pandoc", tmp_path, "-o", str(out),
+           "--from", "markdown-yaml_metadata_block+yaml_metadata_block",
+           "--to", "docx",
+           "--syntax-highlighting=kate",
+           "-V", "geometry:margin=1in"]
+    if base_dir:
+        # The source md is a temp file in another directory - without a resource
+        # path, every relative image reference fails to resolve.
+        cmd.append(f"--resource-path={base_dir}")
     try:
-        result = subprocess.run(
-            ["pandoc", tmp_path, "-o", str(out),
-             "--from", "markdown-yaml_metadata_block+yaml_metadata_block",
-             "--to", "docx",
-             "--syntax-highlighting=kate",
-             "-V", "geometry:margin=1in"],
-            capture_output=True, text=True,
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True)
     except FileNotFoundError:
         raise RuntimeError("pandoc not found on PATH - install pandoc to export .docx") from None
     finally:
@@ -257,7 +326,10 @@ def markdown_to_txt(md_text: str, out_path, title: str = "Article") -> Path:
 
 # ── Markdown passthrough ──────────────────────────────────────────────────────
 def markdown_to_md(md_text: str, out_path, title: str = "Article") -> Path:
-    """Save the raw Markdown manuscript (with a title header prepended)."""
+    """Save the raw Markdown manuscript (title header only if it doesn't have one)."""
+    first = next((ln for ln in md_text.splitlines() if ln.strip()), "")
+    if not first.startswith("# "):
+        md_text = f"# {title}\n\n" + md_text
     out = Path(out_path)
-    out.write_text(f"# {title}\n\n" + md_text, encoding="utf-8")
+    out.write_text(md_text, encoding="utf-8")
     return out

@@ -377,6 +377,8 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
                   "semantic skill retrieval (all-MiniLM-L6-v2, local)"),
         _feat_row("images     ", settings.use_images,
                   "Wikimedia Commons images for illustrated/technical content"),
+        _feat_row("cohesion   ", settings.article_cohesion,
+                  "whole-article smoothing pass before References (articles)"),
         ("", ""),
         ("/set <key> true/false", "toggle any feature above and save instantly"),
     ])

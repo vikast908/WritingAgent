@@ -86,6 +86,75 @@ def test_article_references_dedup_by_url(tmp_brain, fake_llm):
     assert "https://y.org/b" in ms
 
 
+def test_article_learner_receives_critic_findings(tmp_brain, fake_llm, monkeypatch):
+    """eval_*.json files must survive until the learn phase reads them (they used to
+    be deleted by production's cleanup, silently starving the article learner)."""
+    from book_agent import nodes
+    seen = {}
+    real_learn = nodes.learn
+
+    def spy(cfg, plan, instructions, critic_findings, existing):
+        seen["findings"] = critic_findings
+        return real_learn(cfg, plan, instructions, critic_findings, existing)
+    monkeypatch.setattr(nodes, "learn", spy)
+
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "learnart", 1, 1, autonomous=True)
+    state = orchestrator.run(cfg, "u", aid, log=_silent)
+    assert state["phase"] == "done"
+    # Fake critiques carry one blocking issue each -> findings must be non-empty.
+    assert seen["findings"].strip()
+    # Cleanup still happens - just after learn, not before.
+    assert not list(ArticlePaths(aid, "u").root.glob("eval_*.json"))
+
+
+def test_produce_guard_preserves_manuscript(tmp_brain, fake_llm):
+    """Re-entering produce after cleanup (crash window) must not overwrite the
+    assembled manuscript with an empty one."""
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "guard", 1, 1, autonomous=True)
+    paths = ArticlePaths(aid, "u")
+    brain.write_text(paths.manuscript, "# Real manuscript\n\nfull body text")
+    outline = S.ArticleOutline(**brain.read_json(paths.outline_json))
+    state = brain.read_json(paths.run_state)
+    # No section_*.md files on disk - the guard must keep the manuscript intact.
+    orchestrator._produce_article(cfg, paths, outline, state, log=_silent)
+    assert "full body text" in brain.read_text(paths.manuscript)
+
+
+def test_register_sources_and_renumber_citations():
+    registry = [{"title": "Existing", "url": "https://a.org/1"}]
+    sources = [S.Source(title="New", url="https://b.org/2"),      # local [1] -> global 2
+               S.Source(title="Existing", url="https://a.org/1"),  # local [2] -> global 1
+               S.Source(title="No URL", url="")]                   # unmapped
+    mapping = orchestrator._register_sources(registry, sources)
+    assert mapping == {1: 2, 2: 1}
+    assert [s["url"] for s in registry] == ["https://a.org/1", "https://b.org/2"]
+
+    text = "Fact [1] and fact [2], unknown [9], a [link](https://x) and [3](y)."
+    out = orchestrator._renumber_citations(text, mapping)
+    assert "Fact [2] and fact [1]" in out                # swapped without collision
+    assert "[9]" in out                                  # unmapped citation untouched
+    assert "[link](https://x)" in out and "[3](y)" in out  # markdown links untouched
+
+
+def test_commit_section_writes_real_summary_and_registry(tmp_brain, fake_llm):
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "commitsec", 1, 1, autonomous=True)
+    paths = ArticlePaths(aid, "u")
+    outline = S.ArticleOutline(**brain.read_json(paths.outline_json))
+    section = outline.sections[0]
+    sources = [S.Source(title="Src", url="https://s.org/x")]
+    orchestrator._commit_section(cfg, paths, section, 1, "## Heading\n\nBody [1].",
+                                 [], sources, True, _silent, humanize=False)
+    assert (brain.read_json(paths.sources_json) or [])[0]["url"] == "https://s.org/x"
+    # A real (LLM) summary is written - not the draft's first 800 chars.
+    assert brain.read_text(paths.section_summary(1)).strip()
+
+
 # ── cmd_read article fix (Item 1) ───────────────────────────────────────────────
 def test_paths_for_resolves_article_vs_book(tmp_brain, fake_llm):
     from book_agent import cli

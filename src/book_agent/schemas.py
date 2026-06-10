@@ -42,6 +42,7 @@ class ChapterBlueprint(BaseModel):
     setup: str
     payoff: str
     depends_on: list[int]
+    target_words: int = 0    # 0 = unspecified (pre-existing TOCs); planner sets per-chapter
 
 
 class TOC(BaseModel):
@@ -165,6 +166,7 @@ class ArticleSection(BaseModel):
     include_code: bool
     include_image: bool
     search_query: str = ""   # pre-built query for the researcher node
+    target_words: int = 0    # 0 = unspecified; falls back to an even share of the outline total
 
 
 class ArticleOutline(BaseModel):

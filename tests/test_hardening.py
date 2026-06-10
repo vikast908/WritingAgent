@@ -31,6 +31,48 @@ def test_gather_actually_overlaps():
     assert time.time() - start < 0.5
 
 
+def test_merge_fix_notes_keeps_instruction():
+    """The human instruction must survive every revision round (it used to be
+    overwritten by the first critique's notes)."""
+    from book_agent import schemas as S
+    from book_agent.orchestrator import _merge_fix_notes
+    crit = S.Critique(verdict="revise", confidence=0.7, blocking=[], nits=["tighten"])
+    out = _merge_fix_notes("keep the ending exactly as is", crit)
+    assert "keep the ending exactly as is" in out
+    assert "tighten" in out
+    assert "tighten" in _merge_fix_notes(None, crit)
+
+
+def test_crit_better_ordering():
+    from book_agent import schemas as S
+    from book_agent.orchestrator import _crit_better
+    def c(verdict, conf, nblock):
+        blocking = [S.BlockingIssue(type="style", where="w", detail="d", fix="f")] * nblock
+        return S.Critique(verdict=verdict, confidence=conf, blocking=blocking, nits=[])
+    assert _crit_better(c("approve", 0.5, 0), c("revise", 0.9, 0))   # approve wins
+    assert _crit_better(c("revise", 0.5, 1), c("revise", 0.9, 3))    # fewer blocking wins
+    assert _crit_better(c("revise", 0.9, 2), c("revise", 0.5, 2))    # then confidence
+
+
+def test_export_md_no_duplicate_title(tmp_path):
+    from book_agent.export import markdown_to_md
+    out = markdown_to_md("# Already Titled\n\nbody", tmp_path / "a.md", title="Other")
+    text = out.read_text(encoding="utf-8")
+    assert text.count("# Already Titled") == 1 and "# Other" not in text
+    out2 = markdown_to_md("no heading body", tmp_path / "b.md", title="Added")
+    assert out2.read_text(encoding="utf-8").startswith("# Added")
+
+
+def test_export_inline_images_data_uri(tmp_path):
+    from book_agent.export import _inline_images
+    (tmp_path / "images").mkdir()
+    (tmp_path / "images" / "x.png").write_bytes(b"\x89PNG fake")
+    html = '<p><img src="images/x.png"/> and <img src="https://remote/x.png"/></p>'
+    out = _inline_images(html, tmp_path)
+    assert "data:image/png;base64," in out
+    assert 'src="https://remote/x.png"' in out            # remote srcs untouched
+
+
 def test_gather_strict_reraises_failure():
     # strict=True: commit-critical batches (summary/extraction) must not silently
     # degrade to None - the failure propagates after all tasks finish.

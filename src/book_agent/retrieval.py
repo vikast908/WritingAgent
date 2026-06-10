@@ -29,7 +29,12 @@ def _tokens(text: str) -> set[str]:
 
 
 def assemble_context(store: Store, paths: BookPaths, blueprint: ChapterBlueprint) -> str:
-    """Canon + the summaries of the chapters this one depends on (and the previous one)."""
+    """Canon + dependency-chapter summaries + relevant excerpts from other chapters.
+
+    The excerpt block queries the per-book FTS index with the blueprint's key terms,
+    pulling passages from committed chapters *outside* the dependency set - the long-
+    range recall that summaries of only the last/dependent chapters can't provide.
+    """
     parts = [store.canon_context(max_facts_per_char=MAX_CANON_FACTS_PER_CHAR)]
     dep_chapters = sorted(set(blueprint.depends_on) | ({blueprint.number - 1}
                           if blueprint.number > 1 else set()))
@@ -42,6 +47,15 @@ def assemble_context(store: Store, paths: BookPaths, blueprint: ChapterBlueprint
             summaries.append(f"### Summary of chapter {n}\n{s}")
     if summaries:
         parts.append("## Prior chapter summaries\n" + "\n\n".join(summaries))
+
+    covered = {f"ch{n:02d}" for n in dep_chapters if n >= 1}
+    covered.add(f"ch{blueprint.number:02d}")
+    terms = sorted(_tokens(f"{blueprint.title} {blueprint.purpose} {blueprint.setup} "
+                           f"{blueprint.payoff}"))
+    excerpts = store.search_excerpts(terms, limit=2, exclude_refs=covered)
+    if excerpts:
+        parts.append("## Relevant excerpts from earlier chapters\n" + "\n\n".join(
+            f"### From {ref}\n...{snip}..." for ref, snip in excerpts))
     return "\n\n".join(p for p in parts if p.strip())
 
 

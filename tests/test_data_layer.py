@@ -61,6 +61,32 @@ def test_index_chapter_is_incremental(tmp_brain):
     st.close()
 
 
+def test_timeline_uses_committing_chapter(tmp_brain):
+    """The LLM-reported event chapter is overridden by the actual commit chapter."""
+    paths = BookPaths("b", "u").ensure()
+    st = Store.open(paths)
+    st.update_from_extraction(2, S.ExtractionResult(
+        characters=[], locations=[], world_rules=[],
+        timeline=[S.TimelineEvent(chapter=99, event="storm hits")], threads_touched=[]))
+    rows = st.conn.execute("SELECT chapter, event FROM timeline").fetchall()
+    st.close()
+    assert rows == [(2, "storm hits")]
+
+
+def test_search_excerpts_excludes_refs_and_summaries(tmp_brain):
+    paths = BookPaths("b", "u").ensure()
+    brain.write_text(paths.ch(1), "The lighthouse keeper counted the boats at dawn.")
+    brain.write_text(paths.ch_summary(1), "lighthouse summary")
+    brain.write_text(paths.ch(2), "Maya walked through the fog to the harbour.")
+    st = Store.open(paths)
+    st.index_documents(paths)
+    hits = st.search_excerpts(["lighthouse", "boats"], limit=2)
+    assert hits and hits[0][0] == "ch01"
+    assert all(ref != "ch01.summary" for ref, _ in hits)   # chapters only, no summaries
+    assert st.search_excerpts(["lighthouse"], limit=2, exclude_refs={"ch01"}) == []
+    st.close()
+
+
 def test_context_slice(tmp_brain):
     paths = BookPaths("b", "u").ensure()
     brain.write_text(paths.ch_summary(1), "Maya arrives at the lighthouse.")

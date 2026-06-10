@@ -39,6 +39,47 @@
 
 ## Session log
 
+### 2026-06-11 (2) - Logic-review fixes: revision loop, learning loop, citations, length, cohesion, exports
+
+Full-project logic review found 14 gaps; all fixed. **81 tests pass** (+10); ruff clean. Spec rows
+added to plan §15.
+
+**Silently-broken loops fixed:**
+- Article learner ran AFTER production's cleanup deleted `eval_*.json` -> always saw zero critic
+  findings. Cleanup now runs after learn. Plus a produce resume-guard: re-entering production with
+  no section files no longer overwrites the manuscript with an empty one.
+- Learner watch-list was write-only - now injected into every critic call (books + articles);
+  applied skills also shown to the critic.
+- Human review instruction was overwritten by the first critique's notes (`_merge_fix_notes`
+  keeps it ahead of critique notes every round). Escalation resume now passes the reviewed
+  `.draft.md` as the revision base; every revision attempt passes the previous draft (the writer
+  was regenerating from notes about text it couldn't see). Draft file deleted on commit.
+- Autonomous mode committed the LAST attempt; now commits the best-judged one (`_crit_better`:
+  approve > fewer blocking > confidence).
+- Article "summaries" were `draft[:800]` - now real `summarize_section` calls (parallel with
+  humanize at commit, strict gather).
+
+**Correctness of output:**
+- Citations: per-article source registry (`sources.json`, URL-deduped, first-seen order); in-text
+  `[N]` renumbered at commit (`_renumber_citations`, two-phase, link-label-safe) so they match the
+  final References. Books persist sources too -> production feeds real sources to bibliography
+  components (`_BIBLIO_RE`); planner told how many sources exist.
+- Timeline events recorded under the actual committing chapter (LLM numbers were unreliable).
+- Exports package images: PDF base_dir + cairosvg-or-drop for SVG, EPUB items, pandoc
+  `--resource-path`, HTML data-URI inlining; `md` export no longer duplicates the H1.
+
+**Quality additions:**
+- `target_words` per chapter/section (planner prompts updated; writer gets target note, critic
+  gets actual count, ±40% miss = blocking).
+- `article_cohesion` setting (default on): whole-article smoothing pass before References,
+  guarded (≥60% length, headings survive) so it can never lose content.
+- FTS index finally used: `store.search_excerpts` + `assemble_context` pulls relevant excerpts
+  from non-dependency chapters. SVG-diagram fallback gated to non-fiction genres.
+- `propose_search_queries` capped at n.
+
+**Next:** live (non-fake) run of an article with researcher on to sight-check citation numbering
+and the cohesion pass; consider apportioning targets when outline omits per-section values.
+
 ### 2026-06-11 - Performance pass: prefetch pipeline, parallel commit batch, canon cap
 
 Wall-clock optimisation sweep after a full code review. **71 tests pass** (was 67; +strict-gather,
