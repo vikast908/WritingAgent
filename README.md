@@ -337,6 +337,58 @@ When `use_images` is on, every section/chapter gets a generated diagram saved to
 
 ## Architecture
 
+### System overview
+
+```mermaid
+flowchart TB
+    subgraph IFACE["Interfaces"]
+        TUI["shell.py<br/>interactive TUI (Rich + prompt_toolkit)"]
+        CLI["cli.py / book.py<br/>one-shot CLI"]
+    end
+
+    ORCH["orchestrator.py - durable on-disk state machine<br/>chapters/sections -> consolidate -> production -> learn<br/>prefetches unit n+1's inputs - parallel commit batch"]
+
+    subgraph LLML["LLM layer"]
+        NODES["nodes.py<br/>planner - writer - critic - summarizer - extractor<br/>humanizer - researcher - learner - diagram"]
+        WRAP["llm.py<br/>retry/backoff - JSON repair retry - token telemetry - headroom"]
+        ORTR["OpenRouter<br/>DeepSeek V4 Pro / Flash<br/>per-node routing (models.yaml)"]
+    end
+
+    subgraph RES["Research (opt-in)"]
+        SRCH["search.py<br/>DuckDuckGo snippets"]
+        DEEP["deep_research.py<br/>multi-query fan-out + full-page fetch<br/>(Scrapo, stdlib fallback)"]
+        IMGS["images.py<br/>Wikimedia Commons + SVG diagrams"]
+        CCH["cache.py<br/>7-day disk cache"]
+    end
+
+    subgraph BRN["The brain on disk - source of truth"]
+        MDF["brain/ markdown<br/>chapters - summaries - canon - skills - prefs"]
+        RST["run_state.json<br/>atomic writes - resume guard"]
+        FTS["store.py<br/>SQLite FTS5 index + entity graph"]
+    end
+
+    EXP["export.py<br/>PDF - EPUB - DOCX - HTML - TXT - MD"]
+
+    TUI --> ORCH
+    CLI --> ORCH
+    ORCH --> NODES
+    NODES --> WRAP
+    WRAP --> ORTR
+    ORCH --> RES
+    SRCH --> CCH
+    DEEP --> CCH
+    ORCH <--> BRN
+    MDF --> EXP
+```
+
+Every step persists to the brain before the state machine advances, so a run can be
+killed at any point and `run` resumes exactly where it left off. The unit chain
+(chapters/sections) is sequential by design - each unit reads the previous summary for
+continuity - while everything independent of prose (research, images, skills, the
+humanize/summarize/extract commit batch) runs concurrently.
+
+### Layout on disk
+
 ```
 brain/users/<user>/
   profile.md  prefs/  skills/
@@ -429,6 +481,7 @@ Per-OS install, activation, and offline-demo commands are in [Setup](#setup) and
 - **Garbled box-drawing / colors** → run with `--plain` or set `NO_COLOR=1`; on Windows use Windows Terminal for best results.
 - **`401 Unauthorized` on a real run** → check `OPENROUTER_API_KEY` in `.env`. To verify everything else without a key, use [fake mode](#try-it-offline-first--no-api-key-fake-mode).
 - **A run was interrupted** → just run again; state is written atomically and resumes where it left off (no double-committed chapters).
+- **Repo lives in OneDrive/Dropbox and writes feel slow (or fail with `PermissionError`)** → set `BOOK_AGENT_HOME` to a non-synced folder (e.g. `$env:BOOK_AGENT_HOME = "$env:LOCALAPPDATA\writing-agent"`). The brain and derived index are then written there instead of inside the repo; sync clients add latency to every save and their file locks can break atomic replaces.
 
 ---
 
