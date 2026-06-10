@@ -1,7 +1,36 @@
 """Manuscript export: PDF (xhtml2pdf) and EPUB (ebooklib)."""
 from __future__ import annotations
 
+import re
+from html import escape as _esc
 from pathlib import Path
+
+
+def _slug_id(title: str) -> str:
+    """A stable, ASCII-safe identifier for the EPUB (no spaces/punctuation)."""
+    s = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    return f"bookwriter-{s or 'book'}"
+
+
+# Manuscript markdown can carry raw HTML straight from an LLM (python-markdown
+# passes it through unescaped). Strip active content so exported HTML/EPUB can't
+# execute script when opened with file:// privileges. Conservative denylist —
+# not a full sanitizer, but it neutralizes the realistic injection vectors here.
+_DANGER_TAGS = "script|iframe|object|embed|link|meta|base|form|svg|math"
+_STRIP_BLOCK = re.compile(rf"<\s*({_DANGER_TAGS})\b[^>]*>.*?<\s*/\s*\1\s*>",
+                          re.IGNORECASE | re.DOTALL)
+_STRIP_SELFCLOSE = re.compile(rf"<\s*({_DANGER_TAGS})\b[^>]*/?>", re.IGNORECASE)
+_STRIP_HANDLERS = re.compile(r"\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", re.IGNORECASE)
+_STRIP_JS_URL = re.compile(r"(href|src)\s*=\s*([\"']?)\s*javascript:[^\"'>]*\2",
+                           re.IGNORECASE)
+
+
+def _sanitize_html(html_body: str) -> str:
+    html_body = _STRIP_BLOCK.sub("", html_body)
+    html_body = _STRIP_SELFCLOSE.sub("", html_body)
+    html_body = _STRIP_HANDLERS.sub("", html_body)
+    html_body = _STRIP_JS_URL.sub(r'\1=\2#\2', html_body)
+    return html_body
 
 # ── Shared styles ─────────────────────────────────────────────────────────────
 _PDF_CSS = """
@@ -32,8 +61,8 @@ def markdown_to_pdf(md_text: str, out_path, title: str = "Manuscript"):
     import markdown
     from xhtml2pdf import pisa
 
-    html_body = markdown.markdown(md_text, extensions=["extra", "sane_lists"])
-    html = (f"<html><head><meta charset='utf-8'><title>{title}</title>"
+    html_body = _sanitize_html(markdown.markdown(md_text, extensions=["extra", "sane_lists"]))
+    html = (f"<html><head><meta charset='utf-8'><title>{_esc(title)}</title>"
             f"<style>{_PDF_CSS}</style></head><body>{html_body}</body></html>")
     out_path = Path(out_path)
     with open(out_path, "wb") as f:
@@ -64,7 +93,7 @@ def markdown_to_epub(
     book.set_title(title)
     book.add_author(author)
     book.set_language(language)
-    book.set_identifier(f"bookwriter-{title.lower().replace(' ', '-')}")
+    book.set_identifier(_slug_id(title))
 
     # Shared stylesheet
     css_item = epub.EpubItem(
@@ -80,7 +109,7 @@ def markdown_to_epub(
     toc_links = []
 
     for i, section in enumerate(raw_sections):
-        html_body = md_lib.markdown(section, extensions=["extra", "sane_lists"])
+        html_body = _sanitize_html(md_lib.markdown(section, extensions=["extra", "sane_lists"]))
 
         # Derive a title from the first heading line
         first = section.splitlines()[0] if section else ""
@@ -91,7 +120,7 @@ def markdown_to_epub(
         ch.content = (
             f'<?xml version="1.0" encoding="utf-8"?>'
             f'<html xmlns="http://www.w3.org/1999/xhtml"><head>'
-            f'<title>{sec_title}</title>'
+            f'<title>{_esc(sec_title)}</title>'   # EPUB XHTML must be well-formed XML
             f'<link rel="stylesheet" href="style/main.css" type="text/css"/>'
             f'</head><body>{html_body}</body></html>'
         ).encode()
@@ -149,11 +178,12 @@ def markdown_to_html(md_text: str, out_path, title: str = "Article") -> "Path":
         )
     except Exception:
         html_body = markdown.markdown(md_text, extensions=["extra", "sane_lists"])
+    html_body = _sanitize_html(html_body)
     html = (
         "<!DOCTYPE html>\n"
         f'<html lang="en"><head><meta charset="utf-8">'
         f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f'<title>{title}</title>'
+        f'<title>{_esc(title)}</title>'
         f"<style>{_HTML_CSS}</style>"
         f"</head><body>{html_body}</body></html>"
     )
@@ -180,15 +210,19 @@ def markdown_to_docx(md_text: str, out_path, title: str = "Article") -> "Path":
         tmp.write(f"---\ntitle: \"{title.replace(chr(34), chr(39))}\"\n---\n\n" + safe_md)
         tmp_path = tmp.name
 
-    result = subprocess.run(
-        ["pandoc", tmp_path, "-o", str(out),
-         "--from", "markdown-yaml_metadata_block+yaml_metadata_block",
-         "--to", "docx",
-         "--syntax-highlighting=kate",
-         "-V", "geometry:margin=1in"],
-        capture_output=True, text=True,
-    )
-    Path(tmp_path).unlink(missing_ok=True)
+    try:
+        result = subprocess.run(
+            ["pandoc", tmp_path, "-o", str(out),
+             "--from", "markdown-yaml_metadata_block+yaml_metadata_block",
+             "--to", "docx",
+             "--syntax-highlighting=kate",
+             "-V", "geometry:margin=1in"],
+            capture_output=True, text=True,
+        )
+    except FileNotFoundError:
+        raise RuntimeError("pandoc not found on PATH — install pandoc to export .docx") from None
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)   # never leak the temp file, even on error
     if result.returncode != 0:
         raise RuntimeError(f"pandoc failed: {result.stderr.strip()}")
     return out
@@ -199,6 +233,8 @@ def markdown_to_txt(md_text: str, out_path, title: str = "Article") -> "Path":
     """Strip Markdown to readable plain text."""
     import re
     text = f"{title}\n{'=' * len(title)}\n\n" + md_text
+    # fenced code blocks first, so their contents aren't mangled by the inline passes
+    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
     # headings
     text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
     # bold / italic
@@ -206,8 +242,6 @@ def markdown_to_txt(md_text: str, out_path, title: str = "Article") -> "Path":
     text = re.sub(r"_{1,2}([^_]+)_{1,2}", r"\1", text)
     # inline code
     text = re.sub(r"`([^`]+)`", r"\1", text)
-    # fenced code blocks
-    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
     # links → just the label
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     # images → empty

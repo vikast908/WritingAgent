@@ -71,10 +71,19 @@ class Store:
     def search(self, query: str, limit: int = 5) -> list[tuple[str, str]]:
         c = self.conn
         if self.fts:
-            rows = c.execute(
-                "SELECT ref, kind FROM docs WHERE docs MATCH ? LIMIT ?",
-                (query, limit),
-            ).fetchall()
+            # Wrap as a quoted FTS5 phrase so punctuation (", *, :, -, AND/OR) in the
+            # query can't trigger an fts5 syntax error; fall back to LIKE if it still does.
+            phrase = '"' + query.replace('"', '""') + '"'
+            try:
+                rows = c.execute(
+                    "SELECT ref, kind FROM docs WHERE docs MATCH ? LIMIT ?",
+                    (phrase, limit),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                rows = c.execute(
+                    "SELECT ref, kind FROM docs WHERE body LIKE ? LIMIT ?",
+                    (f"%{query}%", limit),
+                ).fetchall()
         else:
             rows = c.execute(
                 "SELECT ref, kind FROM docs WHERE body LIKE ? LIMIT ?",
@@ -179,7 +188,9 @@ class Store:
 
         rules = [r[0] for r in c.execute("SELECT rule FROM world_rule")]
         brain.write_text(paths.world_rules,
-                         "# World rules\n\n" + "\n".join(f"- {r}" for r in rules))
+                         "# World rules\n\n" + ("\n".join(f"- {r}" for r in rules)
+                                                or "_(none yet)_"))
         tl = c.execute("SELECT chapter, event FROM timeline ORDER BY chapter").fetchall()
         brain.write_text(paths.timeline,
-                         "# Timeline\n\n" + "\n".join(f"- ch{ch:02d}: {ev}" for ch, ev in tl))
+                         "# Timeline\n\n" + ("\n".join(f"- ch{ch:02d}: {ev}" for ch, ev in tl)
+                                             or "_(none yet)_"))

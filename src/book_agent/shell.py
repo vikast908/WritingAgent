@@ -259,6 +259,8 @@ def _book_status_rows(uid: str, projects: list[tuple[str, str]]) -> list[tuple[s
             rows.append((project_id, f"{label}{pending}"))
         except Exception:
             rows.append((project_id, "—"))
+    if len(projects) > 8:
+        rows.append(("", f"[dim]… +{len(projects) - 8} more (see /books)[/]"))
     return rows
 
 
@@ -435,7 +437,13 @@ def _cmd_set(console, settings: Settings, rest: list[str]) -> None:
     default = field_map[key].default
     try:
         if isinstance(default, bool):
-            val = raw.lower() in ("true", "1", "yes", "on")
+            truthy, falsy = {"true", "1", "yes", "on"}, {"false", "0", "no", "off"}
+            tok = raw.lower()
+            if tok not in truthy | falsy:
+                _out(console, f"[{ERR}]'{raw}' isn't a boolean[/] — use true/false "
+                              f"[dim](got treated as false otherwise)[/]")
+                return
+            val = tok in truthy
         elif isinstance(default, int):
             val = int(raw)
         elif isinstance(default, float):
@@ -477,6 +485,13 @@ def _print_skill(console, uid: str, rest: list[str]) -> None:
 
 _NEEDS_PROJECT = {"run", "status", "read", "export", "review", "memory",
                    "delete", "produce", "consolidate"}
+
+# The chat assistant must NOT silently auto-execute destructive or
+# config/tenant-changing commands — the human has to type these. (The model may
+# still mention them in prose.) `delete` = data loss; `/user` switches tenant;
+# `/set` can disable human-in-the-loop (autonomous) and reroute models.
+_CHAT_BLOCKED_CMDS = {"delete"}
+_CHAT_BLOCKED_SLASH = {"user", "set"}
 
 
 def _auto_or_pick_project(uid: str, settings: Settings, console, state: dict) -> str | None:
@@ -556,14 +571,25 @@ def _commands_in_response(text: str, known_commands: set) -> list[str]:
         if "\n" in block or not block:
             continue
         first = block.split()[0]
-        if first in known_commands or first.startswith("/"):
+        if first.startswith("/"):
+            if first.lstrip("/").lower() in _CHAT_BLOCKED_SLASH:
+                continue
+            cmds.append(block)
+        elif first in known_commands and first not in _CHAT_BLOCKED_CMDS:
             cmds.append(block)
     return cmds
 
 
 def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
-    """Execute one command string as if the user typed it at the prompt."""
+    """Execute one command string emitted by the chat assistant.
+
+    Destructive/config commands are refused here (defense in depth on top of the
+    filtering in `_commands_in_response`) — the human must type those directly.
+    """
     if cmd_line.startswith("/"):
+        if cmd_line.lstrip("/").split()[0].lower() in _CHAT_BLOCKED_SLASH:
+            _out(console, f"[dim](skipped /{cmd_line.lstrip('/').split()[0]} — type it yourself)[/]")
+            return
         _handle_slash(cmd_line, console, cfg, settings, state)
         return
     parser = state.get("_parser")
@@ -576,7 +602,9 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
     except ValueError:
         return
     first = argv[0] if argv else ""
-    if first not in known:
+    if first not in known or first in _CHAT_BLOCKED_CMDS:
+        if first in _CHAT_BLOCKED_CMDS:
+            _out(console, f"[dim](skipped '{first}' — run it yourself to confirm)[/]")
         return
 
     # Fix unquoted --abstract: `new --abstract can AGI...` → single value
@@ -691,7 +719,7 @@ def _cmd_run_rich(args, cfg, settings, uid: str, console) -> None:
             progress.print(Text(f"  {clean}", style=f"bold {ON_CLR}"))
         elif clean.startswith("[!]"):
             progress.print(Text(f"  {clean}", style=f"bold {ERR}"))
-        elif clean.startswith("[i]"):
+        elif clean.startswith("[i]") or clean.startswith("[usage]"):
             progress.print(Text(f"  {clean}", style=DIM))
         else:
             progress.update(task_id, description=f"  {clean}")
@@ -859,6 +887,8 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
             state["last_chat"] = message
             _trim_history(history, {"role": "user", "content": message},
                           {"role": "assistant", "content": full})
+        except KeyboardInterrupt:
+            print("\n(cancelled)\n")  # stop this response, stay in the shell
         except Exception as e:  # noqa: BLE001
             print(f"\n(unavailable: {e}) — try /help\n")
         return
@@ -892,6 +922,7 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
 
     chunks: list[str] = []
     error: str = ""
+    cancelled = False
     try:
         gen = stream_text(model, system, message,
                           history=history, max_tokens=400, temperature=0.7)
@@ -921,6 +952,9 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
                 # Final render without the streaming cursor
                 live.update(Padding(Markdown("".join(chunks)), pad=(0, 2)))
 
+    except KeyboardInterrupt:
+        cancelled = True  # stop streaming, keep partial text, stay in the shell
+        console.print(Text("  (cancelled)", style=DIM))
     except Exception as e:  # noqa: BLE001
         error = f"_(assistant unavailable: {e})_\n\nType `/help` to see all commands."
 
@@ -935,7 +969,8 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
                       {"role": "assistant", "content": full})
 
     # 6. Execute any commands the model included in code blocks
-    cmds = _commands_in_response(full, state.get("_known_commands", set())) if full else []
+    #    (skip when cancelled — a half-streamed response may carry a partial command)
+    cmds = _commands_in_response(full, state.get("_known_commands", set())) if full and not cancelled else []
     if cmds:
         console.print(Rule(Text(f"  {_FLEURON}  running", style=f"bold {GOLD}"), style=RULE))
         for cmd_line in cmds:
@@ -1001,12 +1036,24 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
         lines = [f"{p[0]}  [{p[1]}]" for p in projects]
         _out(console, "\n".join(lines) or "[dim](no projects yet)[/]")
     elif name == "use":
-        state["book"] = rest[0] if rest else state["book"]
-        _out(console, f"active book -> [{GOLD}]{state['book'] or '(none)'}[/]")
+        if rest:
+            target = rest[0]
+            valid = {p[0] for p in brain.list_projects(uid)}
+            if target in valid:
+                state["book"] = target
+                _out(console, f"active book -> [{GOLD}]{target}[/]")
+            else:
+                opts = ", ".join(sorted(valid)) or "(none yet)"
+                _out(console, f"[{ERR}]no project '{target}'[/] — available: [dim]{opts}[/]")
+        else:
+            _out(console, f"active book -> [{GOLD}]{state['book'] or '(none)'}[/]")
     elif name == "user":
         if rest:
-            state["uid"] = rest[0]
-            skills_mod.seed_builtin(rest[0])
+            if not brain.is_safe_id(rest[0]):
+                _out(console, f"[{ERR}]invalid user id '{rest[0]}'[/] (letters, digits, - . _)")
+            else:
+                state["uid"] = rest[0]
+                skills_mod.seed_builtin(rest[0])
         _out(console, f"user -> [{GOLD}]{state['uid']}[/]")
     elif name == "config":
         _out(console, brain.read_text(brain._ROOT / "config" / "models.yaml") or "")
@@ -1156,7 +1203,7 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
         model = cfg.model_for("writer").split("/")[-1]
         today = datetime.date.today().strftime("%Y-%m-%d")
         book_part = f"● {book}" if book else "no active book"
-        mode_part = f"[article]" if mode == "article" else "[book]"
+        mode_part = "[article]" if mode == "article" else "[book]"
         return f"  {model}  │  {mode_part}  │  {book_part}  │  {today}  "
 
     _DIM_HEX = "#6b6b6b"  # prompt_toolkit needs hex; Rich's "grey42" ≈ #6b6b6b

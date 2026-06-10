@@ -14,8 +14,19 @@ dependencies = [
   "pyfiglet>=1.0",
   "prompt_toolkit>=3.0",
   "ddgs>=0.1",
-  "headroom-ai",
+  "ebooklib>=0.18",
 ]
+
+# Context compression is optional (llm.py imports headroom lazily and degrades
+# gracefully if it is absent). It is NOT a hard dependency because headroom-ai
+# >=0.21 is a Rust/pyo3 extension with no published Windows wheel, and its
+# transitive `litellm` ships absurdly long nested paths that break installs on
+# Windows without long-path support. 0.10.17 is the last pure-Python release
+# whose compressor still works without the native `_core` module. Install it
+# WITHOUT its deps (we only need tiktoken, declared here):
+#   pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"
+[project.optional-dependencies]
+headroom = ["tiktoken>=0.5"]
 
 [project.scripts]
 writing-agent = "book_agent.cli:main"

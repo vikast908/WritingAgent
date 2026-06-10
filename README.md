@@ -49,8 +49,16 @@ python -m venv .venv
 .venv\Scripts\activate          # Windows
 # source .venv/bin/activate     # macOS / Linux
 
-# 3 — Install (headroom-ai included automatically)
+# 3 — Install
 pip install -e .
+
+# 3b — (optional) context compression via headroom
+#   headroom is optional and the app runs fine without it. Pin 0.10.17 (the last
+#   pure-Python release) and install WITHOUT deps — newer versions are a Rust
+#   extension with no Windows wheel, and headroom's `litellm` dep has paths long
+#   enough to break installs on Windows without long-path support.
+pip install -e ".[headroom]"
+pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"
 
 # 4 — API key
 copy .env.example .env          # Windows

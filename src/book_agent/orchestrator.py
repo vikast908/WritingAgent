@@ -10,7 +10,7 @@ Per chapter: write -> critique -> (approve→commit | revise<cap→rewrite | cap
 """
 from __future__ import annotations
 
-from . import brain, humanizer, nodes, render, retrieval
+from . import brain, concurrency, humanizer, llm, nodes, render, retrieval
 from . import schemas as S
 from . import skills as skills_mod
 from .brain import ArticlePaths, BookPaths
@@ -67,6 +67,7 @@ def _load(uid: str, book_id: str):
 
 # ── Main driver ──────────────────────────────────────────────────────────────
 def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=print) -> dict:
+    llm.reset_usage()
     # Detect whether this is a book or an article (check articles/ first, then books/)
     art_paths = ArticlePaths(book_id, uid)
     if art_paths.run_state.exists():
@@ -155,6 +156,9 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=pr
                 state["phase"] = "done"
                 brain.write_json(paths.run_state, state)
         log(f"[OK] Book '{book_id}' complete. Manuscript: {paths.manuscript}")
+        _summary = llm.usage_summary()
+        if _summary:
+            log("   " + _summary)
         return state
     finally:
         store.close()
@@ -163,8 +167,20 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=pr
 # ── Per-chapter loop ─────────────────────────────────────────────────────────
 def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
     blueprint = toc.chapters[n - 1]
-    context = retrieval.assemble_context(store, paths, blueprint)
-    if state.get("use_researcher"):
+    # Resume guard: if this chapter was already committed on a prior run but the
+    # state advance didn't land (crash between _commit and the run_state write),
+    # don't re-draft/re-extract — that would duplicate canon facts. Just advance.
+    if brain.read_text(paths.ch(n)) is not None:
+        log(f"\n== Chapter {n}: {blueprint.title} ==")
+        log(f"   [resume] already committed — advancing")
+        return "commit"
+    base_context = retrieval.assemble_context(store, paths, blueprint)
+
+    # Research and image-fetch are independent network-bound steps — run them
+    # concurrently (the chapter chain itself stays sequential for continuity).
+    def _do_research():
+        if not state.get("use_researcher"):
+            return None
         from . import search as search_mod
         query = search_mod.build_query(plan, blueprint)
         results = search_mod.web_search(query, max_results=5)
@@ -172,9 +188,34 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
         if results:
             log(f"   fetched {len(results)} web result(s) for: {query[:60]}")
         brief = nodes.research(cfg, plan, blueprint, web_results=web_results or None)
-        context = ("## Research brief\n" + "\n".join(
+        return ("## Research brief\n" + "\n".join(
             ["### Facts", *(f"- {f}" for f in brief.facts),
-             "### Style cues", *(f"- {s}" for s in brief.style_cues)]) + "\n\n" + context)
+             "### Style cues", *(f"- {s}" for s in brief.style_cues)]) + "\n\n")
+
+    def _do_images():
+        if not state.get("use_images"):
+            return None
+        from . import images as img_mod
+        query = f"{blueprint.title} {blueprint.purpose} {plan.genre}"
+        fetched = img_mod.search_wikimedia(query, max_results=2)
+        if fetched:
+            log(f"   fetched {len(fetched)} image(s) from Wikimedia Commons")
+            return [r.to_markdown(str(i + 1)) for i, r in enumerate(fetched)]
+        # No Wikimedia image — generate an SVG diagram instead
+        svg_text = nodes.generate_svg_diagram(cfg, blueprint.title, blueprint.purpose or "")
+        svg_dir = paths.root / "images"
+        svg_dir.mkdir(parents=True, exist_ok=True)
+        svg_path = svg_dir / f"ch{n:02d}_diagram.svg"
+        svg_path.write_text(svg_text, encoding="utf-8")
+        log(f"   generated SVG diagram -> {svg_path.name}")
+        return [f"![{blueprint.title} diagram](images/ch{n:02d}_diagram.svg)\n"
+                f"*Figure: {blueprint.title}*"]
+
+    fetched = concurrency.gather({"research": _do_research, "images": _do_images})
+    research_prefix = fetched.get("research")
+    images: list[str] | None = fetched.get("images")
+    context = (research_prefix + base_context) if research_prefix else base_context
+
     # Skill retrieval: semantic when enabled and sentence-transformers is installed.
     embed_cache = None
     if state.get("use_embeddings"):
@@ -186,26 +227,6 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
     )
     skill_names = [name for name, _ in skill_pairs]
     skill_bodies = [body for _, body in skill_pairs]
-
-    # Image fetch (Wikimedia Commons; non-fiction/illustrated books only).
-    images: list[str] | None = None
-    if state.get("use_images"):
-        from . import images as img_mod
-        query = f"{blueprint.title} {blueprint.purpose} {plan.genre}"
-        fetched = img_mod.search_wikimedia(query, max_results=2)
-        if fetched:
-            images = [r.to_markdown(str(i + 1)) for i, r in enumerate(fetched)]
-            log(f"   fetched {len(fetched)} image(s) from Wikimedia Commons")
-        else:
-            # No Wikimedia image — generate an SVG diagram instead
-            svg_text = nodes.generate_svg_diagram(cfg, blueprint.title, blueprint.purpose or "")
-            svg_dir = paths.root / "images"
-            svg_dir.mkdir(parents=True, exist_ok=True)
-            svg_path = svg_dir / f"ch{n:02d}_diagram.svg"
-            svg_path.write_text(svg_text, encoding="utf-8")
-            images = [f"![{blueprint.title} diagram](images/ch{n:02d}_diagram.svg)\n"
-                      f"*Figure: {blueprint.title}*"]
-            log(f"   generated SVG diagram -> {svg_path.name}")
 
     instruction = brain.read_text(paths.instruction_of(n))  # from a prior review, if any
     fix_notes = instruction
@@ -357,12 +378,24 @@ def _production(cfg, paths, plan, store, *, log) -> None:
     author_meta = brain.read_text(brain.user_profile(paths.uid))
     toc_md = brain.read_text(paths.toc)
 
-    for comp in pplan.front_matter:
-        content = nodes.generate_component(cfg, plan, comp, "front", author_meta, toc_md)
-        brain.write_text(paths.frontmatter / f"{brain.slugify(comp)}.md", content)
-    for comp in pplan.back_matter:
-        content = nodes.generate_component(cfg, plan, comp, "back", author_meta, toc_md)
-        brain.write_text(paths.backmatter / f"{brain.slugify(comp)}.md", content)
+    # Front/back-matter components are independent of one another — generate them
+    # concurrently, then write in order. (Keyed by index to tolerate duplicate names.)
+    tasks = {}
+    for i, comp in enumerate(pplan.front_matter):
+        tasks[f"front:{i}"] = (
+            lambda c=comp: nodes.generate_component(cfg, plan, c, "front", author_meta, toc_md))
+    for i, comp in enumerate(pplan.back_matter):
+        tasks[f"back:{i}"] = (
+            lambda c=comp: nodes.generate_component(cfg, plan, c, "back", author_meta, toc_md))
+    generated = concurrency.gather(tasks)
+    for i, comp in enumerate(pplan.front_matter):
+        content = generated.get(f"front:{i}")
+        if content:
+            brain.write_text(paths.frontmatter / f"{brain.slugify(comp)}.md", content)
+    for i, comp in enumerate(pplan.back_matter):
+        content = generated.get(f"back:{i}")
+        if content:
+            brain.write_text(paths.backmatter / f"{brain.slugify(comp)}.md", content)
 
     _assemble_manuscript(paths, plan, pplan)
     log(f"   [production] front={len(pplan.front_matter)} back={len(pplan.back_matter)} "
@@ -415,7 +448,17 @@ def delete_book(uid: str, book_id: str) -> None:
     """Permanently delete a project (book or article) and its index database."""
     import shutil
 
+    # Refuse traversal/absolute ids, and never rmtree a path outside the brain dir.
+    if not (brain.is_safe_id(uid) and brain.is_safe_id(book_id)):
+        raise ValueError(f"Refusing to delete: unsafe id '{book_id}'.")
+    _brain_root = brain.BRAIN.resolve()
+
+    def _confine(p):
+        if _brain_root not in p.resolve().parents:
+            raise ValueError(f"Refusing to delete a path outside the brain: {p}")
+
     def _rmtree(root):
+        _confine(root)
         try:
             shutil.rmtree(root)
         except PermissionError as e:
@@ -609,6 +652,9 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log):
             state["phase"] = "done"
             brain.write_json(paths.run_state, state)
     log(f"[OK] Article '{paths.article_id}' complete. Manuscript: {paths.manuscript}")
+    _summary = llm.usage_summary()
+    if _summary:
+        log("   " + _summary)
     return state
 
 
@@ -616,10 +662,17 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
     from types import SimpleNamespace
     section = outline.sections[n - 1]
 
-    # Research
-    sources: list = []
-    context_prefix = ""
-    if state.get("use_researcher"):
+    # Resume guard (see _process_chapter): committed section file present but state
+    # not advanced => crash window; don't reprocess.
+    if brain.read_text(paths.section(n)) is not None:
+        log(f"\n== Section {n}: {section.heading} ==")
+        log(f"   [resume] already committed — advancing")
+        return "commit"
+
+    # Research and image-fetch are independent network steps — run concurrently.
+    def _do_research():
+        if not state.get("use_researcher"):
+            return ("", [])
         from . import search as search_mod
         query = section.search_query or f"{outline.title} {section.heading}"
         results = search_mod.web_search(query, max_results=5)
@@ -627,12 +680,34 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
         if results:
             log(f"   fetched {len(results)} web result(s) for: {query[:60]}")
         brief = nodes.research_article(cfg, outline, section, web_results=web_results or None)
-        sources = brief.sources
-        context_prefix = ("## Research brief\n" + "\n".join([
+        prefix = ("## Research brief\n" + "\n".join([
             "### Facts", *(f"- {f}" for f in brief.facts),
             "### Style cues", *(f"- {s}" for s in brief.style_cues),
-            "### Sources", *(f"- [{s.title}]({s.url})" for s in sources),
+            "### Sources", *(f"- [{s.title}]({s.url})" for s in brief.sources),
         ]) + "\n\n")
+        return (prefix, brief.sources)
+
+    def _do_images():
+        if not (state.get("use_images") and section.include_image):
+            return None
+        from . import images as img_mod
+        got = img_mod.search_wikimedia(f"{section.heading} {outline.title}", max_results=2)
+        if got:
+            log(f"   fetched {len(got)} image(s) from Wikimedia Commons")
+            return [r.to_markdown(str(i + 1)) for i, r in enumerate(got)]
+        # No Wikimedia image — generate an SVG diagram instead
+        ctx = getattr(section, "purpose", "") or getattr(section, "heading", "")
+        svg_text = nodes.generate_svg_diagram(cfg, section.heading, ctx)
+        paths.images.mkdir(parents=True, exist_ok=True)
+        svg_path = paths.images / f"section_{n:02d}_diagram.svg"
+        svg_path.write_text(svg_text, encoding="utf-8")
+        log(f"   generated SVG diagram -> {svg_path.name}")
+        return [f"![{section.heading} diagram](images/section_{n:02d}_diagram.svg)\n"
+                f"*Figure: {section.heading}*"]
+
+    out = concurrency.gather({"research": _do_research, "images": _do_images})
+    context_prefix, sources = out.get("research") or ("", [])
+    images: list[str] | None = out.get("images")
 
     # Prior section summaries
     article_context = _assemble_article_context(paths, n)
@@ -650,25 +725,6 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
     )
     skill_names = [name for name, _ in skill_pairs]
     skill_bodies = [body for _, body in skill_pairs]
-
-    # Images
-    images: list[str] | None = None
-    if state.get("use_images") and section.include_image:
-        from . import images as img_mod
-        fetched = img_mod.search_wikimedia(f"{section.heading} {outline.title}", max_results=2)
-        if fetched:
-            images = [r.to_markdown(str(i + 1)) for i, r in enumerate(fetched)]
-            log(f"   fetched {len(fetched)} image(s) from Wikimedia Commons")
-        else:
-            # No Wikimedia image — generate an SVG diagram instead
-            context = getattr(section, "purpose", "") or getattr(section, "heading", "")
-            svg_text = nodes.generate_svg_diagram(cfg, section.heading, context)
-            paths.images.mkdir(parents=True, exist_ok=True)
-            svg_path = paths.images / f"section_{n:02d}_diagram.svg"
-            svg_path.write_text(svg_text, encoding="utf-8")
-            images = [f"![{section.heading} diagram](images/section_{n:02d}_diagram.svg)\n"
-                      f"*Figure: {section.heading}*"]
-            log(f"   generated SVG diagram -> {svg_path.name}")
 
     instruction = brain.read_text(paths.instruction_of(n))
     fix_notes = instruction

@@ -9,7 +9,11 @@ Set OPENROUTER_API_KEY. Models are configured per node in config/models.yaml.
 """
 from __future__ import annotations
 
+import logging
 import os
+import random
+import threading
+import time
 import types
 from typing import Literal, Type, TypeVar, Union, get_args, get_origin
 
@@ -18,8 +22,26 @@ from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
+_log = logging.getLogger(__name__)
+
 _BASE_URL = "https://openrouter.ai/api/v1"
 _client: OpenAI | None = None
+_client_lock = threading.Lock()
+
+# Retry/backoff knobs (network calls dominate runtime — a transient 429/5xx must
+# not kill a multi-hour book run, and a non-retryable 4xx must not waste attempts).
+_MAX_ATTEMPTS = 4
+_BACKOFF_BASE = 1.0   # seconds; doubles each attempt
+_BACKOFF_CAP = 30.0
+_request_timeout: float = 60.0   # per-request timeout (s); see configure_timeout
+
+
+def configure_timeout(seconds: float) -> None:
+    """Set the per-request network timeout (called at startup from settings)."""
+    global _request_timeout, _client
+    _request_timeout = seconds
+    _client = None  # force the client to be rebuilt with the new timeout
+
 
 # ── Headroom context compression (optional) ──────────────────────────────────
 _headroom_enabled: bool = False
@@ -29,6 +51,91 @@ def configure_headroom(enabled: bool) -> None:
     """Enable/disable headroom compression for all LLM calls (called at startup)."""
     global _headroom_enabled
     _headroom_enabled = enabled
+
+
+# ── Token-usage telemetry ─────────────────────────────────────────────────────
+# Aggregated across every call since the last reset; surfaced at the end of a run.
+_usage_lock = threading.Lock()
+_usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+
+def reset_usage() -> None:
+    with _usage_lock:
+        _usage.update(calls=0, prompt_tokens=0, completion_tokens=0, total_tokens=0)
+
+
+def _record_usage(resp) -> None:
+    u = getattr(resp, "usage", None)
+    if u is None:
+        return
+    with _usage_lock:
+        _usage["calls"] += 1
+        _usage["prompt_tokens"] += getattr(u, "prompt_tokens", 0) or 0
+        _usage["completion_tokens"] += getattr(u, "completion_tokens", 0) or 0
+        _usage["total_tokens"] += getattr(u, "total_tokens", 0) or 0
+
+
+def usage_summary() -> str | None:
+    """One-line tally of tokens spent since the last reset, or None if nothing ran."""
+    with _usage_lock:
+        if _usage["calls"] == 0:
+            return None
+        return (f"[usage] {_usage['calls']} LLM calls, "
+                f"{_usage['prompt_tokens']:,} prompt + "
+                f"{_usage['completion_tokens']:,} completion = "
+                f"{_usage['total_tokens']:,} tokens")
+
+
+# ── Retry classification + backoff ─────────────────────────────────────────────
+def _is_retryable(exc: Exception) -> bool:
+    """True for transient errors worth retrying (timeouts, connection drops, 429,
+    5xx). Auth/permission/bad-request (4xx) are fatal — retrying just wastes calls."""
+    from openai import (
+        APIConnectionError, APITimeoutError, InternalServerError, RateLimitError,
+    )
+    if isinstance(exc, (APITimeoutError, APIConnectionError, RateLimitError,
+                        InternalServerError)):
+        return True
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status == 429 or status >= 500
+    # Empty/truncated model output (raised by us below) is worth one more shot.
+    return isinstance(exc, (_EmptyResponse,))
+
+
+def _retry_after(exc: Exception) -> float | None:
+    """Honour a server-provided Retry-After header when present."""
+    resp = getattr(exc, "response", None)
+    headers = getattr(resp, "headers", None) or {}
+    val = headers.get("retry-after") if hasattr(headers, "get") else None
+    try:
+        return float(val) if val is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _backoff_sleep(attempt: int, exc: Exception) -> None:
+    """Exponential backoff with jitter; respects Retry-After if the server sent one."""
+    delay = _retry_after(exc)
+    if delay is None:
+        delay = min(_BACKOFF_CAP, _BACKOFF_BASE * (2 ** attempt))
+        delay += random.uniform(0, delay * 0.25)  # jitter to avoid thundering herd
+    _log.warning("LLM call failed (%s), retrying in %.1fs...", type(exc).__name__, delay)
+    time.sleep(delay)
+
+
+class _EmptyResponse(RuntimeError):
+    """Model returned no content (e.g. reasoning consumed the whole token budget)."""
+
+
+# headroom uses the model name only to select a tokenizer for tallying savings;
+# its compression transforms (SmartCrusher, ContentRouter, …) are model-agnostic.
+# headroom's non-tiktoken (HuggingFace) backends hard-import `transformers` and
+# raise instead of falling back to estimation, so any non-OpenAI slug — e.g. the
+# DeepSeek models we run on OpenRouter — makes compression silently no-op. We
+# therefore count with a tiktoken-native model; the tally is approximate but the
+# compressed output is identical.
+_HEADROOM_COUNT_MODEL = "gpt-4o"
 
 
 def _compress(messages: list[dict], model: str) -> list[dict]:
@@ -41,11 +148,10 @@ def _compress(messages: list[dict], model: str) -> list[dict]:
         return messages
     try:
         from headroom import compress as hr_compress
-        result = hr_compress(messages, model=model)
+        result = hr_compress(messages, model=_HEADROOM_COUNT_MODEL)
         if result.tokens_saved > 0:
-            import logging
-            logging.getLogger(__name__).info(
-                "headroom: %d → %d tokens (saved %d, %.0f%%)",
+            _log.info(
+                "headroom: %d -> %d tokens (saved %d, %.0f%%)",
                 result.tokens_before, result.tokens_after,
                 result.tokens_saved, result.compression_ratio * 100,
             )
@@ -56,12 +162,18 @@ def _compress(messages: list[dict], model: str) -> list[dict]:
 
 def _get_client() -> OpenAI:
     global _client
+    # Double-checked lock: concurrent first calls (parallel research/image fetch)
+    # must not each build a client.
     if _client is None:
-        _client = OpenAI(
-            base_url=os.getenv("OPENROUTER_BASE_URL", _BASE_URL),
-            api_key=os.environ["OPENROUTER_API_KEY"],
-            default_headers={"X-Title": "Writing Agent"},
-        )
+        with _client_lock:
+            if _client is None:
+                _client = OpenAI(
+                    base_url=os.getenv("OPENROUTER_BASE_URL", _BASE_URL),
+                    api_key=os.environ["OPENROUTER_API_KEY"],
+                    default_headers={"X-Title": "Writing Agent"},
+                    timeout=_request_timeout,   # a hung connection must not block forever
+                    max_retries=0,              # we own retries (classified backoff below)
+                )
     return _client
 
 
@@ -137,19 +249,25 @@ def complete_text(
         model,
     )
     last_err: Exception | None = None
-    for _ in range(3):  # reasoning models can return empty content on a truncated turn
+    for attempt in range(_MAX_ATTEMPTS):
         kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages}
         if temperature is not None:
             kwargs["temperature"] = temperature
         try:
             resp = _get_client().chat.completions.create(**kwargs)
+            _record_usage(resp)
             content = (resp.choices[0].message.content or "").strip()
             if content:
                 return content
-            last_err = RuntimeError(
+            # Empty content (reasoning ate the budget) — retryable.
+            raise _EmptyResponse(
                 f"empty response (finish_reason={resp.choices[0].finish_reason})")
         except Exception as e:  # noqa: BLE001
             last_err = e
+            if attempt < _MAX_ATTEMPTS - 1 and _is_retryable(e):
+                _backoff_sleep(attempt, e)
+                continue
+            break  # non-retryable (e.g. 401/400) or out of attempts — fail fast
     raise RuntimeError(f"Text completion failed for {model}: {last_err}")
 
 
@@ -226,19 +344,47 @@ def complete_structured(
         model,
     )
     last_err: Exception | None = None
-    for attempt in range(3):
+    use_response_format = True   # dropped if a model rejects it (BadRequest)
+    for attempt in range(_MAX_ATTEMPTS):
         kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages}
         if temperature is not None:
             kwargs["temperature"] = temperature
-        if attempt == 0:
-            kwargs["response_format"] = {"type": "json_object"}  # dropped on retry if unsupported
+        if use_response_format:
+            kwargs["response_format"] = {"type": "json_object"}
         try:
             resp = _get_client().chat.completions.create(**kwargs)
-            text = _extract_json(resp.choices[0].message.content or "")
-            if not text.strip():  # truncated/empty (e.g. reasoning ate the token budget)
-                raise ValueError(
+        except Exception as e:  # noqa: BLE001 — transport/API error
+            last_err = e
+            if attempt < _MAX_ATTEMPTS - 1:
+                if _is_retryable(e):
+                    _backoff_sleep(attempt, e)
+                    continue
+                if use_response_format and getattr(e, "status_code", None) == 400:
+                    # This model likely rejects json_object response_format — drop it.
+                    use_response_format = False
+                    _log.warning("structured: dropping response_format and retrying")
+                    continue
+            break  # non-retryable, out of attempts
+
+        _record_usage(resp)
+        raw = resp.choices[0].message.content or ""
+        text = _extract_json(raw)
+        try:
+            if not text.strip():
+                raise _EmptyResponse(
                     f"empty model output (finish_reason={resp.choices[0].finish_reason})")
             return schema.model_validate_json(text)
-        except Exception as e:  # noqa: BLE001 — parse error / empty / unsupported response_format
+        except Exception as e:  # noqa: BLE001 — parse/validation/empty
             last_err = e
+            if attempt < _MAX_ATTEMPTS - 1:
+                # Repair turn: show the model its own bad output + the error and ask
+                # for a correction (far more reliable than re-sending the same prompt).
+                messages = messages + [
+                    {"role": "assistant", "content": raw or "(empty response)"},
+                    {"role": "user", "content": (
+                        f"Your previous reply was not valid for the schema: {e}\n"
+                        "Return ONLY a single corrected JSON object — no prose, no code fences.")},
+                ]
+                continue
+            break
     raise RuntimeError(f"Structured parse failed for {schema.__name__}: {last_err}")

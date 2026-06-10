@@ -14,6 +14,8 @@ from .config import load_config, load_settings
 
 def _resolve_book(uid: str, book_id: str | None) -> str:
     if book_id:
+        if not brain.is_safe_id(book_id):
+            sys.exit(f"Invalid --book-id '{book_id}' (use letters, digits, - . _).")
         return book_id
     projects = brain.list_projects(uid)
     if len(projects) == 1:
@@ -262,6 +264,7 @@ def main() -> None:
     cfg = load_config()
     from . import llm as _llm
     _llm.configure_headroom(settings.use_headroom)
+    _llm.configure_timeout(settings.request_timeout)
     if len(sys.argv) == 1:  # bare `book` / `python book.py` -> interactive shell (TUI)
         from .shell import run_shell
         run_shell(build_parser(settings), _COMMANDS, cfg, settings)

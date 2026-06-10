@@ -45,9 +45,12 @@ def _parse_frontmatter(text: str) -> dict:
         end = text.find("---", 3)
         if end != -1:
             try:
-                return yaml.safe_load(text[3:end]) or {}
+                data = yaml.safe_load(text[3:end])
             except yaml.YAMLError:
                 return {}
+            # Malformed frontmatter can parse to a str/list; callers expect a dict
+            # and would AttributeError on .get(), so coerce non-dicts to {}.
+            return data if isinstance(data, dict) else {}
     return {}
 
 

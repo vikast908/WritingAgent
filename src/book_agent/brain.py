@@ -1,18 +1,50 @@
 """The brain: multi-tenant, markdown-first filesystem layout (plan.md §3, §11)."""
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
+import tempfile
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[2]
 BRAIN = _ROOT / "brain"
 INDEX_DIR = _ROOT / ".index"   # derived, gitignored
 
+_SAFE_ID = re.compile(r"[a-z0-9][a-z0-9._-]*\Z")
+
 
 def slugify(text: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-    return s or "untitled"
+    # Non-ASCII titles can collapse to empty; fall back to a short stable hash so
+    # two such projects don't all slug to "untitled" and overwrite each other.
+    if not s:
+        s = "untitled-" + hashlib.sha1(text.encode("utf-8")).hexdigest()[:6]
+    return s
+
+
+def is_safe_id(s: str) -> bool:
+    """A project/user id that stays within the brain dir (no traversal, no abs path)."""
+    return bool(s) and ".." not in s and _SAFE_ID.fullmatch(s) is not None
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """Write via a temp file + os.replace so a crash can't leave a truncated file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # suffix=".tmp" (not the real extension) so a leftover temp from a hard kill
+    # can't be picked up by "*.md"/"*.json" globs elsewhere.
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)   # atomic on POSIX and Windows
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 # ── User scope ───────────────────────────────────────────────────────────────
@@ -198,8 +230,7 @@ def list_projects(uid: str = "default") -> list[tuple[str, str]]:
 
 # ── IO helpers ───────────────────────────────────────────────────────────────
 def write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content.rstrip() + "\n", encoding="utf-8")
+    _atomic_write(path, content.rstrip() + "\n")
 
 
 def append_text(path: Path, content: str) -> None:
@@ -209,15 +240,19 @@ def append_text(path: Path, content: str) -> None:
 
 
 def write_json(path: Path, data) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    _atomic_write(path, json.dumps(data, indent=2, ensure_ascii=False))
 
 
 def read_json(path: Path):
     if not path.exists():
         return None
-    text = path.read_text(encoding="utf-8-sig")  # utf-8-sig strips BOM if present
-    return json.loads(text)
+    try:
+        text = path.read_text(encoding="utf-8-sig")  # utf-8-sig strips BOM if present
+        return json.loads(text)
+    except (json.JSONDecodeError, OSError, ValueError):
+        # A truncated/corrupt file (e.g. a crash mid-write before atomic writes
+        # existed) is treated as absent rather than crashing every caller.
+        return None
 
 
 def read_text(path: Path) -> str | None:
