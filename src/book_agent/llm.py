@@ -75,6 +75,12 @@ def _record_usage(resp) -> None:
         _usage["total_tokens"] += getattr(u, "total_tokens", 0) or 0
 
 
+def current_tokens() -> int:
+    """Live total-token tally since the last reset (for progress displays)."""
+    with _usage_lock:
+        return _usage["total_tokens"]
+
+
 def usage_summary() -> str | None:
     """One-line tally of tokens spent since the last reset, or None if nothing ran."""
     with _usage_lock:

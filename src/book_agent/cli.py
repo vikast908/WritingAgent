@@ -8,8 +8,44 @@ import sys
 
 from . import brain, nodes, orchestrator
 from . import skills as skills_mod
-from .brain import BookPaths
+from . import ui
+from .brain import ArticlePaths, BookPaths
 from .config import load_config, load_settings
+
+_CONSOLE = None
+_CONSOLE_INIT = False
+
+
+def _console():
+    """Shared Rich console (None if Rich is unavailable). Honors NO_COLOR / --plain."""
+    global _CONSOLE, _CONSOLE_INIT
+    if not _CONSOLE_INIT:
+        _CONSOLE = ui.make_console()
+        _CONSOLE_INIT = True
+    return _CONSOLE
+
+
+def _project_word_count(uid: str, book_id: str, mode: str) -> int:
+    """Word count from the assembled manuscript, falling back to committed parts."""
+    if mode == "article":
+        p = ArticlePaths(book_id, uid)
+        txt = brain.read_text(p.manuscript)
+        if txt:
+            return ui.word_count(txt)
+        if p.root.exists():
+            return sum(ui.word_count(f.read_text(encoding="utf-8"))
+                       for f in p.root.glob("section_*.md")
+                       if not f.name.endswith(".summary.md"))
+        return 0
+    p = BookPaths(book_id, uid)
+    txt = brain.read_text(p.manuscript)
+    if txt:
+        return ui.word_count(txt)
+    if p.chapters.exists():
+        return sum(ui.word_count(f.read_text(encoding="utf-8"))
+                   for f in p.chapters.glob("ch*.md")
+                   if not f.name.endswith((".draft.md", ".summary.md")))
+    return 0
 
 
 def _resolve_book(uid: str, book_id: str | None) -> str:
@@ -39,38 +75,46 @@ def cmd_new(args, cfg, settings, uid):
         _cmd_new_book(args, cfg, settings, uid, abstract)
 
 
+def _spin(label: str, fn):
+    """Run a slow LLM call under a spinner when a Rich console is available."""
+    console = _console()
+    if console:
+        with console.status(f"[{ui.GOLD}]{label}[/]", spinner="dots", spinner_style=ui.GOLD):
+            return fn()
+    print(f"\n== {label} ==")
+    return fn()
+
+
 def _cmd_new_book(args, cfg, settings, uid, abstract):
-    print("\n== Planning directions ==")
-    directions = nodes.planner_directions(cfg, abstract).directions
+    directions = _spin("planning directions", lambda: nodes.planner_directions(cfg, abstract)).directions
     for i, d in enumerate(directions, 1):
         print(f"\n[{i}] {d.title}\n    {d.premise}\n    tone: {d.tone} | hook: {d.hook}")
     idx = args.pick or int(input(f"\nPick a direction [1-{len(directions)}]: ").strip())
     chosen = directions[idx - 1]
     chapters = args.chapters or settings.num_chapters
     max_rev = args.max_revisions if args.max_revisions is not None else settings.max_revisions
-    print(f"\n-> {chosen.title}\n== Building plan + TOC ==")
-    book_id = orchestrator.start_book(cfg, settings, uid, abstract, chosen,
-                                      args.book_id, chapters, max_rev,
-                                      autonomous=getattr(args, "autonomous", settings.autonomous),
-                                      humanize=(False if getattr(args, "no_humanize", False) else None))
+    print(f"\n-> {chosen.title}")
+    book_id = _spin("building plan + TOC", lambda: orchestrator.start_book(
+        cfg, settings, uid, abstract, chosen, args.book_id, chapters, max_rev,
+        autonomous=getattr(args, "autonomous", settings.autonomous),
+        humanize=(False if getattr(args, "no_humanize", False) else None)))
     print(f"\n[OK] Created book '{book_id}'.")
     print(f"     Next: python book.py run --book-id {book_id}")
 
 
 def _cmd_new_article(args, cfg, settings, uid, abstract):
-    print("\n== Planning angles ==")
-    angles = nodes.plan_article_angles(cfg, abstract).angles
+    angles = _spin("planning angles", lambda: nodes.plan_article_angles(cfg, abstract)).angles
     for i, a in enumerate(angles, 1):
         print(f"\n[{i}] {a.title}\n    {a.angle}\n    audience: {a.audience} | hook: {a.hook}")
     idx = args.pick or int(input(f"\nPick an angle [1-{len(angles)}]: ").strip())
     chosen = angles[idx - 1]
     num_sections = args.chapters or settings.num_sections
     max_rev = args.max_revisions if args.max_revisions is not None else settings.max_revisions
-    print(f"\n-> {chosen.title}\n== Building outline ==")
-    article_id = orchestrator.start_article(cfg, settings, uid, abstract, chosen,
-                                            args.book_id, num_sections, max_rev,
-                                            autonomous=getattr(args, "autonomous", settings.autonomous),
-                                            humanize=(False if getattr(args, "no_humanize", False) else None))
+    print(f"\n-> {chosen.title}")
+    article_id = _spin("building outline", lambda: orchestrator.start_article(
+        cfg, settings, uid, abstract, chosen, args.book_id, num_sections, max_rev,
+        autonomous=getattr(args, "autonomous", settings.autonomous),
+        humanize=(False if getattr(args, "no_humanize", False) else None)))
     print(f"\n[OK] Created article '{article_id}'.")
     print(f"     Next: python book.py run --book-id {article_id}")
 
@@ -81,18 +125,48 @@ def cmd_run(args, cfg, settings, uid):
 
 
 def cmd_status(args, cfg, settings, uid):
-    st = orchestrator.status(uid, _resolve_book(uid, args.book_id))
+    book_id = _resolve_book(uid, args.book_id)
+    st = orchestrator.status(uid, book_id)
     mode = st.get("mode", "book")
-    print(f"mode: {mode}  |  phase: {st.get('phase')}")
-    if mode == "article":
-        print(f"section: {st.get('current_section')}/{st.get('num_sections')} "
-              f"(committed {st.get('committed')})")
-    else:
-        print(f"chapter: {st.get('current_chapter')}/{st.get('num_chapters')} "
-              f"(committed {st.get('committed')})")
-    print(f"pending_review: {st.get('pending_review')}")
-    if st.get("open_reviews"):
-        print("open reviews: " + ", ".join(st["open_reviews"]))
+    is_article = mode == "article"
+    cur_key, tot_key = (("current_section", "num_sections") if is_article
+                        else ("current_chapter", "num_chapters"))
+    words = _project_word_count(uid, book_id, mode)
+    console = _console()
+
+    if not console:
+        print(f"mode: {mode}  |  phase: {st.get('phase')}")
+        unit = "section" if is_article else "chapter"
+        print(f"{unit}: {st.get(cur_key)}/{st.get(tot_key)} (committed {st.get('committed')})")
+        if words:
+            print(f"words: {words} (~{ui.reading_time_min(words)} min read)")
+        print(f"pending_review: {st.get('pending_review')}")
+        if st.get("open_reviews"):
+            print("open reviews: " + ", ".join(st["open_reviews"]))
+        return
+
+    from rich.console import Group
+    from rich.panel import Panel
+    from rich.text import Text
+    phases = ui.PHASES_ARTICLE if is_article else ui.PHASES_BOOK
+    unit = "section" if is_article else "chapter"
+    cur, tot = st.get(cur_key, "?"), st.get(tot_key, "?")
+    if isinstance(cur, int) and isinstance(tot, int):
+        cur = min(cur, tot)   # current increments past total at completion — clamp for display
+    body = Text()
+    body.append(f"{unit} {cur}/{tot}", style=ui.PARCH)
+    body.append(f"   ·   committed {st.get('committed', 0)}", style=ui.DIM)
+    if words:
+        body.append(f"\n{words:,} words   ·   ~{ui.reading_time_min(words)} min read", style=ui.DIM)
+    if st.get("pending_review"):
+        body.append(f"\n⚠ review pending — resume:  review --chapter {st.get(cur_key)} "
+                    f'--instruction "..."', style=f"bold {ui.ERR}")
+    elif st.get("open_reviews"):
+        body.append("\nopen reviews: " + ", ".join(st["open_reviews"]), style=ui.DIM)
+    console.print(Panel(
+        Group(ui.phase_stepper(phases, st.get("phase", "")), Text(""), body),
+        title=f"[{ui.GOLD}]{book_id}[/]  [{ui.DIM}]{mode}[/]",
+        title_align="left", border_style=ui.RULE, padding=(1, 2)))
 
 
 def cmd_review(args, cfg, settings, uid):
@@ -113,11 +187,30 @@ def cmd_read(args, cfg, settings, uid):
     else:
         target = paths.ch(args.chapter or 1)
     text = brain.read_text(target)
-    print(text if text else f"(not found: {target})")
+    if not text:
+        print(f"(not found: {target})")
+        return
+    console = _console()
+    if not console:
+        print(text)
+        return
+    from rich.markdown import Markdown
+    md = Markdown(text)
+    if args.manuscript:                 # long — page through it
+        with console.pager(styles=True):
+            console.print(md)
+    else:
+        console.print(md)
 
 
 def cmd_memory(args, cfg, settings, uid):
-    print(orchestrator.memory_summary(uid, _resolve_book(uid, args.book_id)))
+    text = orchestrator.memory_summary(uid, _resolve_book(uid, args.book_id))
+    console = _console()
+    if console:
+        from rich.markdown import Markdown
+        console.print(Markdown(text))
+    else:
+        print(text)
 
 
 def cmd_produce(args, cfg, settings, uid):
@@ -133,19 +226,33 @@ def cmd_skills(args, cfg, settings, uid):
     if not rows:
         print(f"No skills for user '{uid}' yet.")
         return
+    console = _console()
+    if not console:
+        for r in rows:
+            print(f"- {r['name']:<28} {r['status']:<10} applied={r['applied']} "
+                  f"p_skill={r['p_skill']} p_base={r['p_base']}")
+        return
+    from rich.table import Table
+    t = Table(box=None, show_header=True, header_style=ui.DIM, padding=(0, 3, 0, 0))
+    t.add_column("skill", style=f"bold {ui.GOLD}", no_wrap=True)
+    t.add_column("status", style=ui.PARCH)
+    t.add_column("used", justify="right", style=ui.DIM)
+    t.add_column("efficacy  (vs baseline)", style=ui.PARCH)
     for r in rows:
-        print(f"- {r['name']:<28} {r['status']:<10} applied={r['applied']} "
-              f"p_skill={r['p_skill']} p_base={r['p_base']}")
+        t.add_row(r["name"], r["status"], str(r["applied"]),
+                  ui.efficacy_bar(r["p_skill"], r["p_base"]))
+    console.print(t)
 
 
 _EXPORT_FORMATS = ["pdf", "epub", "html", "docx", "txt", "md"]
+_QUIET = lambda *_a, **_k: None
 _EXPORT_FNS = {
-    "pdf":  lambda uid, bid: orchestrator.export_pdf(uid, bid),
-    "epub": lambda uid, bid: orchestrator.export_epub(uid, bid),
-    "html": lambda uid, bid: orchestrator.export_html(uid, bid),
-    "docx": lambda uid, bid: orchestrator.export_docx(uid, bid),
-    "txt":  lambda uid, bid: orchestrator.export_txt(uid, bid),
-    "md":   lambda uid, bid: orchestrator.export_md(uid, bid),
+    "pdf":  lambda uid, bid: orchestrator.export_pdf(uid, bid, log=_QUIET),
+    "epub": lambda uid, bid: orchestrator.export_epub(uid, bid, log=_QUIET),
+    "html": lambda uid, bid: orchestrator.export_html(uid, bid, log=_QUIET),
+    "docx": lambda uid, bid: orchestrator.export_docx(uid, bid, log=_QUIET),
+    "txt":  lambda uid, bid: orchestrator.export_txt(uid, bid, log=_QUIET),
+    "md":   lambda uid, bid: orchestrator.export_md(uid, bid, log=_QUIET),
 }
 
 
@@ -158,7 +265,15 @@ def cmd_export(args, cfg, settings, uid):
         fmt = input("Format [pdf]: ").strip().lower() or "pdf"
         if fmt not in _EXPORT_FORMATS:
             sys.exit(f"Unknown format '{fmt}'. Choose from: {', '.join(_EXPORT_FORMATS)}")
-    _EXPORT_FNS[fmt](uid, book_id)
+    out = _EXPORT_FNS[fmt](uid, book_id)
+    console = _console()
+    if console and out is not None:
+        kb = out.stat().st_size / 1024
+        # Rich renders an OSC-8 hyperlink in terminals that support it.
+        console.print(f"  [bold {ui.ON_CLR}]✓ {fmt}[/]  "
+                      f"[link=file://{out}]{out}[/]  [{ui.DIM}]({kb:.0f} KB)[/]")
+    else:
+        print(f"[OK] {fmt} -> {out}")
 
 
 def cmd_seed_skills(args, cfg, settings, uid):
@@ -207,6 +322,7 @@ def build_parser(settings):
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--user", default=settings.default_user)
     common.add_argument("--book-id")
+    common.add_argument("--plain", action="store_true", help="Disable colour/styling")
     sub = ap.add_subparsers(dest="command", required=True)
 
     p_new = sub.add_parser("new", parents=[common], help="Create a book (plan + TOC)")
@@ -270,6 +386,9 @@ def main() -> None:
         run_shell(build_parser(settings), _COMMANDS, cfg, settings)
         return
     args = build_parser(settings).parse_args()
+    ui.set_plain(getattr(args, "plain", False))
+    if not brain.is_safe_id(args.user):
+        sys.exit(f"Invalid --user '{args.user}' (use letters, digits, - . _).")
     _COMMANDS[args.command](args, cfg, settings, args.user)
 
 
