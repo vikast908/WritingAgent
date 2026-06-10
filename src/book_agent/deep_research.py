@@ -19,8 +19,10 @@ failure degrades to the stdlib path, a snippet, or an empty result, never an exc
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import re
+import threading
 import urllib.request
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -150,12 +152,30 @@ def _scrapo():
     return _scrapo_mod
 
 
+# All Scrapo coroutines run on one persistent background event loop. The previous
+# per-call asyncio.run spun up (and tore down) a fresh loop per URL on every worker
+# thread, which defeats any session/browser reuse inside Scrapo and adds loop-churn
+# for each of the ~6 concurrent fetches per research pass.
+_loop_lock = threading.Lock()
+_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _scrapo_loop() -> asyncio.AbstractEventLoop:
+    global _loop
+    with _loop_lock:
+        if _loop is None or _loop.is_closed():
+            loop = asyncio.new_event_loop()
+            threading.Thread(target=loop.run_forever, name="scrapo-loop",
+                             daemon=True).start()
+            _loop = loop
+        return _loop
+
+
 def _fetch_via_scrapo(url: str, *, max_chars: int, timeout: float = _SCRAPO_TIMEOUT) -> str:
     """Fetch page markdown via Scrapo. '' if Scrapo is unavailable or on any failure."""
     mod = _scrapo()
     if mod is None:
         return ""
-    import asyncio
 
     async def _run():
         res = await asyncio.wait_for(mod.scrape(url), timeout=timeout)
@@ -168,10 +188,11 @@ def _fetch_via_scrapo(url: str, *, max_chars: int, timeout: float = _SCRAPO_TIME
         return md or ""
 
     try:
-        # fetch_text runs on a concurrency.gather worker thread (or the synchronous
-        # orchestrator thread) - neither has a running event loop, so a fresh
-        # asyncio.run per call is safe.
-        text = asyncio.run(_run())
+        # Schedule on the shared loop; concurrent fetch_text worker threads each get a
+        # future and block only their own thread. The extra margin on .result() guards
+        # against a wedged loop (wait_for above is the real per-page timeout).
+        fut = asyncio.run_coroutine_threadsafe(_run(), _scrapo_loop())
+        text = fut.result(timeout=timeout + 10)
     except Exception:  # noqa: BLE001 - scrape failure is non-fatal; caller falls back to stdlib
         return ""
     return (text or "").strip()[:max_chars]

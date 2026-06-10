@@ -18,6 +18,11 @@ from .store import Store
 
 _WORD = re.compile(r"[a-z0-9]+")
 
+# Most-recent facts per character injected into the writer/critic prompt. Uncapped,
+# the canon block grows linearly with the book - late chapters pay maximum prompt
+# latency and token cost. Consolidation/extraction still see the full canon.
+MAX_CANON_FACTS_PER_CHAR = 12
+
 
 def _tokens(text: str) -> set[str]:
     return {w for w in _WORD.findall(text.lower()) if len(w) > 2}
@@ -25,7 +30,7 @@ def _tokens(text: str) -> set[str]:
 
 def assemble_context(store: Store, paths: BookPaths, blueprint: ChapterBlueprint) -> str:
     """Canon + the summaries of the chapters this one depends on (and the previous one)."""
-    parts = [store.canon_context()]
+    parts = [store.canon_context(max_facts_per_char=MAX_CANON_FACTS_PER_CHAR)]
     dep_chapters = sorted(set(blueprint.depends_on) | ({blueprint.number - 1}
                           if blueprint.number > 1 else set()))
     summaries = []

@@ -18,12 +18,15 @@ from typing import Any
 _log = logging.getLogger(__name__)
 
 
-def gather(tasks: dict[str, Callable[[], Any]], *, max_workers: int = 8) -> dict[str, Any]:
+def gather(tasks: dict[str, Callable[[], Any]], *, max_workers: int = 8,
+           strict: bool = False) -> dict[str, Any]:
     """Run each zero-arg thunk concurrently; return {name: result}.
 
-    A task that raises is logged and its result set to None - a failed image
-    fetch must never sink the whole chapter (mirrors the pipeline's existing
-    "network errors are non-fatal" contract).
+    By default a task that raises is logged and its result set to None - a failed
+    image fetch must never sink the whole chapter (mirrors the pipeline's existing
+    "network errors are non-fatal" contract). With strict=True the first failure is
+    re-raised after all tasks finish - for steps that must not silently degrade
+    (e.g. the commit-time summary/extraction calls).
     """
     if not tasks:
         return {}
@@ -32,16 +35,23 @@ def gather(tasks: dict[str, Callable[[], Any]], *, max_workers: int = 8) -> dict
         try:
             return {name: fn()}
         except Exception:  # noqa: BLE001
+            if strict:
+                raise
             _log.exception("parallel task %r failed", name)
             return {name: None}
 
     results: dict[str, Any] = {}
+    first_error: Exception | None = None
     with ThreadPoolExecutor(max_workers=min(max_workers, len(tasks))) as pool:
         futures = {pool.submit(fn): name for name, fn in tasks.items()}
         for fut, name in futures.items():
             try:
                 results[name] = fut.result()
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
                 _log.exception("parallel task %r failed", name)
                 results[name] = None
+                if first_error is None:
+                    first_error = e
+    if strict and first_error is not None:
+        raise first_error
     return results

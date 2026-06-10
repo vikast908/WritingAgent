@@ -8,6 +8,7 @@ Install: pip install duckduckgo-search  (already in requirements.txt)
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 
 
@@ -19,6 +20,26 @@ class SearchResult:
 
 
 _CACHE_TTL_S = 7 * 24 * 3600   # web results are stable enough to reuse for a week
+
+# One DDGS session per thread: the multi-query fan-out otherwise pays a fresh TLS
+# handshake per query. Thread-local (not shared) because DDGS isn't documented as
+# thread-safe. Reset on error so a broken session can't poison later searches.
+_tl = threading.local()
+
+
+def _ddgs():
+    inst = getattr(_tl, "ddgs", None)
+    if inst is None:
+        try:
+            # Try the new package name first (renamed from duckduckgo_search to ddgs)
+            from ddgs import DDGS
+        except ImportError:
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                from duckduckgo_search import DDGS
+        inst = _tl.ddgs = DDGS()
+    return inst
 
 
 def web_search(query: str, max_results: int = 5) -> list[SearchResult]:
@@ -36,18 +57,10 @@ def web_search(query: str, max_results: int = 5) -> list[SearchResult]:
         return [SearchResult(**r) for r in cached]
 
     try:
-        # Try the new package name first (renamed from duckduckgo_search to ddgs)
-        try:
-            from ddgs import DDGS
-        except ImportError:
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                from duckduckgo_search import DDGS
-        with DDGS() as ddgs:
-            raw = list(ddgs.text(query, max_results=max_results))
+        raw = list(_ddgs().text(query, max_results=max_results))
         results = [SearchResult(title=r["title"], url=r["href"], snippet=r["body"]) for r in raw]
     except Exception:  # noqa: BLE001 - network/rate-limit errors are non-fatal
+        _tl.ddgs = None   # drop a possibly-broken session; rebuild on next call
         return []
 
     if results:

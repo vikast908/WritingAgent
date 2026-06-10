@@ -9,6 +9,7 @@ Set OPENROUTER_API_KEY. Models are configured per node in config/models.yaml.
 """
 from __future__ import annotations
 
+import functools
 import logging
 import os
 import random
@@ -316,7 +317,10 @@ def stream_text(
         yield f"\n_(stream error: {e})_"
 
 
+@functools.cache
 def _json_instruction(schema: type[BaseModel]) -> str:
+    # Cached per schema class - model_json_schema() + dumps is pure CPU repeated on
+    # every structured call otherwise.
     import json
     return ("Respond with ONLY a single JSON object (no markdown, no prose) that conforms to this "
             "JSON Schema:\n" + json.dumps(schema.model_json_schema()))

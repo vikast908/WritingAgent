@@ -31,6 +31,17 @@ def test_gather_actually_overlaps():
     assert time.time() - start < 0.5
 
 
+def test_gather_strict_reraises_failure():
+    # strict=True: commit-critical batches (summary/extraction) must not silently
+    # degrade to None - the failure propagates after all tasks finish.
+    def boom():
+        raise RuntimeError("nope")
+    with pytest.raises(RuntimeError, match="nope"):
+        concurrency.gather({"ok": lambda: "fine", "bad": boom}, strict=True)
+    with pytest.raises(RuntimeError, match="nope"):
+        concurrency.gather({"bad": boom}, strict=True)   # single-task fast path too
+
+
 # ── cache ──────────────────────────────────────────────────────────────────────
 def test_cache_roundtrip(tmp_brain):
     assert cache.get("ns", ("k", 1)) is None

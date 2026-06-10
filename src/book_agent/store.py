@@ -57,6 +57,7 @@ class Store:
 
     # ── full-text index over committed chapters + summaries ──────────────────
     def index_documents(self, paths: BookPaths) -> None:
+        """Full rebuild of the FTS index (initial build / repair)."""
         c = self.conn
         c.execute("DELETE FROM docs")
         for p in sorted(paths.chapters.glob("ch*.md")):
@@ -65,6 +66,20 @@ class Store:
             kind = "summary" if p.name.endswith(".summary.md") else "chapter"
             c.execute("INSERT INTO docs (kind, ref, body) VALUES (?,?,?)",
                       (kind, p.stem, p.read_text(encoding="utf-8")))
+        c.commit()
+
+    def index_chapter(self, paths: BookPaths, n: int) -> None:
+        """Incrementally (re)index one chapter's text + summary.
+
+        Per-commit replacement for index_documents: re-reading and re-inserting
+        every chapter on every commit is O(n^2) over a run.
+        """
+        c = self.conn
+        for p, kind in ((paths.ch(n), "chapter"), (paths.ch_summary(n), "summary")):
+            c.execute("DELETE FROM docs WHERE ref=?", (p.stem,))
+            if p.exists():
+                c.execute("INSERT INTO docs (kind, ref, body) VALUES (?,?,?)",
+                          (kind, p.stem, p.read_text(encoding="utf-8")))
         c.commit()
 
     def search(self, query: str, limit: int = 5) -> list[tuple[str, str]]:
@@ -130,20 +145,30 @@ class Store:
                           (src, rel, dst, chapter))
 
     # ── reads ────────────────────────────────────────────────────────────────
-    def canon_context(self) -> str:
-        """Compact canonical context for the writer/critic (plan §2 context slice)."""
+    def canon_context(self, *, max_facts_per_char: int | None = None) -> str:
+        """Compact canonical context for the writer/critic (plan §2 context slice).
+
+        max_facts_per_char caps each character at their N most recent facts (by
+        chapter) - the writer/critic prompt would otherwise grow linearly with the
+        book and pay maximum latency/cost on late chapters. None = everything
+        (consolidation and extraction audit the full canon).
+        """
         c = self.conn
         out: list[str] = []
         chars = c.execute("SELECT name, status FROM character ORDER BY name").fetchall()
+        facts_by_char: dict[str, list[str]] = {}
+        for name, fact in c.execute(
+                "SELECT name, fact FROM character_fact ORDER BY name, chapter"):
+            facts_by_char.setdefault(name, []).append(fact)
         if chars:
             out.append("## Characters")
             for name, status in chars:
                 line = f"- **{name}**" + (f" ({status})" if status else "")
                 out.append(line)
-                facts = c.execute(
-                    "SELECT fact FROM character_fact WHERE name=? ORDER BY chapter", (name,)
-                ).fetchall()
-                for (fact,) in facts:
+                facts = facts_by_char.get(name, [])
+                if max_facts_per_char is not None and len(facts) > max_facts_per_char:
+                    facts = facts[-max_facts_per_char:]   # chapter-ordered: keep newest
+                for fact in facts:
                     out.append(f"  - {fact}")
         rules = c.execute("SELECT rule FROM world_rule").fetchall()
         if rules:
@@ -167,9 +192,16 @@ class Store:
         return header + "\n" + self.canon_context()
 
     # ── render canon to markdown pages (human-readable view) ──────────────────
-    def render_canon(self, paths: BookPaths) -> None:
+    def render_canon(self, paths: BookPaths, *, names: list[str] | None = None) -> None:
+        """Render canon pages. names limits the character pages rewritten (per-commit
+        only the characters the extraction touched can have changed)."""
         c = self.conn
-        for (name,) in c.execute("SELECT name FROM character ORDER BY name").fetchall():
+        if names is None:
+            rows = c.execute("SELECT name FROM character ORDER BY name").fetchall()
+        else:
+            rows = [(n,) for n in sorted(set(names))
+                    if c.execute("SELECT 1 FROM character WHERE name=?", (n,)).fetchone()]
+        for (name,) in rows:
             status = c.execute("SELECT status FROM character WHERE name=?", (name,)).fetchone()[0]
             facts = [r[0] for r in c.execute(
                 "SELECT fact FROM character_fact WHERE name=? ORDER BY chapter", (name,))]

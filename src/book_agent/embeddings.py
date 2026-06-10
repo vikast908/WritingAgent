@@ -12,27 +12,27 @@ Install:  pip install sentence-transformers
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
-
-try:
-    from sentence_transformers import SentenceTransformer as _ST
-    _HAS_ST = True
-except ImportError:
-    _HAS_ST = False
 
 _MODEL_NAME = "all-MiniLM-L6-v2"   # 80 MB; fast; strong for short genre/tag phrases
 _model = None                        # lazy-loaded on first embed call
 
 
 def available() -> bool:
-    """True when sentence-transformers is installed and embeddings can be computed."""
-    return _HAS_ST
+    """True when sentence-transformers is installed and embeddings can be computed.
+
+    Checked via find_spec - actually importing sentence-transformers pulls in torch
+    (multi-second); that cost is deferred to the first real embed call.
+    """
+    return importlib.util.find_spec("sentence_transformers") is not None
 
 
 def _get_model():
     global _model
     if _model is None:
+        from sentence_transformers import SentenceTransformer as _ST
         _model = _ST(_MODEL_NAME)
     return _model
 
@@ -46,7 +46,7 @@ def embed_texts(texts: list[str], cache_path: Path | None = None) -> list[list[f
 
     Raises ImportError if sentence-transformers is not installed.
     """
-    if not _HAS_ST:
+    if not available():
         raise ImportError(
             "sentence-transformers is not installed. "
             "Enable embeddings with: pip install sentence-transformers"
@@ -73,8 +73,14 @@ def embed_texts(texts: list[str], cache_path: Path | None = None) -> list[list[f
 
 
 def cosine(a: list[float], b: list[float]) -> float:
-    """Cosine similarity between two vectors."""
-    dot = sum(x * y for x, y in zip(a, b, strict=False))
-    na = sum(x * x for x in a) ** 0.5
-    nb = sum(x * x for x in b) ** 0.5
-    return dot / (na * nb) if na and nb else 0.0
+    """Cosine similarity between two vectors (numpy when available, else pure Python)."""
+    try:
+        import numpy as np
+        va, vb = np.asarray(a), np.asarray(b)
+        na, nb = float(np.linalg.norm(va)), float(np.linalg.norm(vb))
+        return float(va @ vb) / (na * nb) if na and nb else 0.0
+    except ImportError:
+        dot = sum(x * y for x, y in zip(a, b, strict=False))
+        na = sum(x * x for x in a) ** 0.5
+        nb = sum(x * x for x in b) ** 0.5
+        return dot / (na * nb) if na and nb else 0.0

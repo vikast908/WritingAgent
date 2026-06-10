@@ -30,6 +30,37 @@ def test_store_canon_and_search(tmp_brain):
     assert (paths.characters / "maya.md").exists()
 
 
+def test_canon_context_caps_facts_per_character(tmp_brain):
+    paths = BookPaths("b", "u").ensure()
+    st = Store.open(paths)
+    for ch in range(1, 6):
+        st.update_from_extraction(ch, S.ExtractionResult(
+            characters=[S.CharacterUpdate(name="Maya", status="",
+                        new_facts=[f"fact-{ch}"], voice_notes=[])],
+            locations=[], world_rules=[], timeline=[], threads_touched=[]))
+    full = st.canon_context()
+    capped = st.canon_context(max_facts_per_char=2)
+    st.close()
+    assert all(f"fact-{ch}" in full for ch in range(1, 6))
+    assert "fact-4" in capped and "fact-5" in capped   # newest kept
+    assert "fact-1" not in capped                      # oldest dropped
+
+
+def test_index_chapter_is_incremental(tmp_brain):
+    paths = BookPaths("b", "u").ensure()
+    brain.write_text(paths.ch(1), "Maya at the lighthouse.")
+    brain.write_text(paths.ch_summary(1), "Maya arrives.")
+    st = Store.open(paths)
+    st.index_chapter(paths, 1)
+    assert st.search("lighthouse")
+    # Re-indexing the same chapter replaces, not duplicates.
+    brain.write_text(paths.ch(1), "Maya at the harbour.")
+    st.index_chapter(paths, 1)
+    assert st.search("harbour")
+    assert not st.search("lighthouse")
+    st.close()
+
+
 def test_context_slice(tmp_brain):
     paths = BookPaths("b", "u").ensure()
     brain.write_text(paths.ch_summary(1), "Maya arrives at the lighthouse.")

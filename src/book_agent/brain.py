@@ -9,8 +9,13 @@ import tempfile
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[2]
-BRAIN = _ROOT / "brain"
-INDEX_DIR = _ROOT / ".index"   # derived, gitignored
+# BOOK_AGENT_HOME relocates the writable state (brain + derived index) away from the
+# repo - important when the repo lives in a synced folder (OneDrive/Dropbox): sync
+# adds latency to every atomic write and its file locks can make os.replace fail.
+_HOME = (Path(os.environ["BOOK_AGENT_HOME"]).expanduser()
+         if os.environ.get("BOOK_AGENT_HOME") else _ROOT)
+BRAIN = _HOME / "brain"
+INDEX_DIR = _HOME / ".index"   # derived, gitignored
 
 _SAFE_ID = re.compile(r"[a-z0-9][a-z0-9._-]*\Z")
 

@@ -10,6 +10,8 @@ Per chapter: write -> critique -> (approve→commit | revise<cap→rewrite | cap
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from . import brain, concurrency, humanizer, llm, nodes, render, retrieval
 from . import schemas as S
 from . import skills as skills_mod
@@ -30,6 +32,20 @@ def _research_queries(cfg, topic: str, focus: str, *seed_queries: str, log=print
     except Exception:  # noqa: BLE001 - query expansion is optional; seeds still work
         log("   [deep] query expansion failed; using seed queries")
     return proposed + [q for q in seed_queries if q]
+
+
+def _deep_docs(cfg, topic: str, focus: str, seed_query: str, log=print):
+    """Gather deep-research documents with the LLM query expansion overlapped with a
+    warm-up search for the deterministic seed query. Search results are disk-cached,
+    so the warmed seed search is a cache hit inside gather_documents - the seed's
+    network time hides behind the expansion LLM call instead of adding to it."""
+    from . import deep_research as dr
+    from . import search as search_mod
+    out = concurrency.gather({
+        "proposed": lambda: _research_queries(cfg, topic, focus, log=log),
+        "warm": lambda: search_mod.web_search(seed_query, max_results=5),
+    })
+    return dr.gather_documents((out.get("proposed") or []) + [seed_query], log=log)
 
 
 # ── Setup (human picks a direction, then autonomous) ─────────────────────────
@@ -114,6 +130,8 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=pr
             return state
 
     store = Store.open(paths)
+    prefetch: dict[int, object] = {}
+    pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="unit-prefetch")
     try:
         while state["phase"] != "done":
             phase = state["phase"]
@@ -123,7 +141,17 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=pr
                     state["phase"] = "consolidate"
                     brain.write_json(paths.run_state, state)
                     continue
-                outcome = _process_chapter(cfg, paths, plan, toc, store, state, n, log)
+                # Prefetch network inputs for this chapter and the next: chapter n+1's
+                # research/images/skills depend only on the plan/TOC, so they download
+                # while chapter n is being written and critiqued. Results are
+                # disk-cached, so prefetch work before an escalation isn't wasted.
+                for k in (n, n + 1):
+                    if (k <= state["num_chapters"] and k not in prefetch
+                            and brain.read_text(paths.ch(k)) is None):
+                        prefetch[k] = pool.submit(
+                            _chapter_fetch, cfg, paths, plan, toc, state, k, log)
+                outcome = _process_chapter(cfg, paths, plan, toc, store, state, n, log,
+                                           prefetched=prefetch.pop(n, None))
                 if outcome == "escalate":
                     state["pending_review"] = True
                     state["review_kind"] = "chapter"
@@ -176,23 +204,20 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=pr
             log("   " + _summary)
         return state
     finally:
+        pool.shutdown(wait=False, cancel_futures=True)
         store.close()
 
 
 # ── Per-chapter loop ─────────────────────────────────────────────────────────
-def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
-    blueprint = toc.chapters[n - 1]
-    # Resume guard: if this chapter was already committed on a prior run but the
-    # state advance didn't land (crash between _commit and the run_state write),
-    # don't re-draft/re-extract - that would duplicate canon facts. Just advance.
-    if brain.read_text(paths.ch(n)) is not None:
-        log(f"\n== Chapter {n}: {blueprint.title} ==")
-        log("   [resume] already committed - advancing")
-        return "commit"
-    base_context = retrieval.assemble_context(store, paths, blueprint)
+def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
+    """Network-bound inputs for chapter n: research brief, images, skill pages.
 
-    # Research and image-fetch are independent network-bound steps - run them
-    # concurrently (the chapter chain itself stays sequential for continuity).
+    None of this depends on any chapter's prose - only on the plan/TOC - so run()
+    prefetches it for chapter n+1 while chapter n is still being written/critiqued.
+    The prose chain itself stays sequential for continuity.
+    """
+    blueprint = toc.chapters[n - 1]
+
     def _do_research():
         if not state.get("use_researcher"):
             return None
@@ -200,10 +225,9 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
         base_query = search_mod.build_query(plan, blueprint)
         if state.get("deep_research"):
             from . import deep_research as dr
-            queries = _research_queries(
+            docs = _deep_docs(
                 cfg, f"{plan.genre}: {plan.title} - {plan.premise}",
                 f"{blueprint.title}. {blueprint.purpose}", base_query, log=log)
-            docs = dr.gather_documents(queries, log=log)
             brief = nodes.deep_research(cfg, plan, blueprint, dr.format_documents(docs) or None)
             lines = ["## Research brief",
                      "### Facts", *(f"- {f}" for f in brief.facts),
@@ -240,20 +264,46 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
         return [f"![{blueprint.title} diagram](images/ch{n:02d}_diagram.svg)\n"
                 f"*Figure: {blueprint.title}*"]
 
-    fetched = concurrency.gather({"research": _do_research, "images": _do_images})
+    def _do_skills():
+        # Semantic when enabled and sentence-transformers is installed. In the
+        # gather because the first embeddings call pays the model load (seconds).
+        embed_cache = None
+        if state.get("use_embeddings"):
+            embed_cache = brain.INDEX_DIR / "embed_cache.json"
+        return retrieval.relevant_skills(
+            paths.uid, plan,
+            use_embeddings=bool(state.get("use_embeddings")),
+            embed_cache=embed_cache,
+        )
+
+    return concurrency.gather(
+        {"research": _do_research, "images": _do_images, "skills": _do_skills})
+
+
+def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=None) -> str:
+    blueprint = toc.chapters[n - 1]
+    # Resume guard: if this chapter was already committed on a prior run but the
+    # state advance didn't land (crash between _commit and the run_state write),
+    # don't re-draft/re-extract - that would duplicate canon facts. Just advance.
+    if brain.read_text(paths.ch(n)) is not None:
+        log(f"\n== Chapter {n}: {blueprint.title} ==")
+        log("   [resume] already committed - advancing")
+        return "commit"
+    base_context = retrieval.assemble_context(store, paths, blueprint)
+
+    fetched: dict = {}
+    if prefetched is not None:
+        try:
+            fetched = prefetched.result()
+        except Exception:  # noqa: BLE001 - prefetch is an optimisation, never fatal
+            fetched = {}
+    if not fetched:
+        fetched = _chapter_fetch(cfg, paths, plan, toc, state, n, log)
     research_prefix = fetched.get("research")
     images: list[str] | None = fetched.get("images")
     context = (research_prefix + base_context) if research_prefix else base_context
 
-    # Skill retrieval: semantic when enabled and sentence-transformers is installed.
-    embed_cache = None
-    if state.get("use_embeddings"):
-        embed_cache = brain._ROOT / ".index" / "embed_cache.json"
-    skill_pairs = retrieval.relevant_skills(
-        paths.uid, plan,
-        use_embeddings=bool(state.get("use_embeddings")),
-        embed_cache=embed_cache,
-    )
+    skill_pairs = fetched.get("skills") or []
     skill_names = [name for name, _ in skill_pairs]
     skill_bodies = [body for _, body in skill_pairs]
 
@@ -290,32 +340,41 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
         fix_notes = render.render_fix_notes(crit)
 
     assert crit is not None
-    will_commit = approved_attempt >= 0 or state.get("autonomous")
-    if will_commit and state.get("humanize"):
-        log("   humanizing...")
-        draft = humanizer.humanize(cfg, draft)
-    if approved_attempt >= 0:
+    if approved_attempt >= 0 or state.get("autonomous"):
+        if approved_attempt < 0:
+            log("   autonomous: committing best (unapproved) draft")
         first_pass = approved_attempt == 0 and instruction is None
-        _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass, log)
-        return "commit"
-    if state.get("autonomous"):
-        log("   autonomous: committing best (unapproved) draft")
-        _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, False, log)
+        _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass,
+                log, humanize=bool(state.get("humanize")))
         return "commit"
     _escalate(paths, n, crit, draft)
     return "escalate"
 
 
-def _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass, log) -> None:
-    brain.write_text(paths.ch(n), draft)
-    summary = nodes.summarize_chapter(cfg, blueprint, draft)
-    brain.write_text(paths.ch_summary(n), summary)
-
+def _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass, log,
+            *, humanize: bool = False) -> None:
+    # The humanizer rewrite, the summary, and the canon extraction all derive from the
+    # same approved draft, so they run as one concurrent batch instead of three serial
+    # LLM round-trips. Summary/extraction read the pre-humanized draft - the humanizer
+    # preserves content, so the facts are identical. strict=True: a failed summary or
+    # extraction aborts the commit (nothing written -> the resume guard re-runs the
+    # chapter), exactly as the sequential version did.
     known = store.canon_context()
-    extraction = nodes.extract_canon(cfg, blueprint, draft, known)
+    tasks = {
+        "summary": lambda: nodes.summarize_chapter(cfg, blueprint, draft),
+        "extraction": lambda: nodes.extract_canon(cfg, blueprint, draft, known),
+    }
+    if humanize:
+        log("   humanizing...")
+        tasks["humanized"] = lambda: humanizer.humanize(cfg, draft)
+    out = concurrency.gather(tasks, strict=True)
+
+    brain.write_text(paths.ch(n), out.get("humanized") or draft)
+    brain.write_text(paths.ch_summary(n), out["summary"])
+    extraction = out["extraction"]
     store.update_from_extraction(n, extraction)
-    store.render_canon(paths)
-    store.index_documents(paths)
+    store.render_canon(paths, names=[ch.name for ch in extraction.characters])
+    store.index_chapter(paths, n)
 
     skills_mod.record_chapter(paths.uid, skill_names, first_pass)
     brain.append_text(paths.revision_log,
@@ -389,14 +448,20 @@ def _repair_contradictions(cfg, paths, plan, toc, store, report, *, humanize, lo
                  + "\n".join(f"- {c.detail} (fix: {c.fix})" for c in relevant))
         context = retrieval.assemble_context(store, paths, bp)
         draft = nodes.write_chapter(cfg, plan, bp, fix_notes=notes, context=context)
+        known = store.canon_context()   # main thread: sqlite conns are thread-bound
+        tasks = {
+            "summary": lambda b=bp, d=draft: nodes.summarize_chapter(cfg, b, d),
+            "extraction": lambda b=bp, d=draft, k=known: nodes.extract_canon(cfg, b, d, k),
+        }
         if humanize:
-            draft = humanizer.humanize(cfg, draft)
-        brain.write_text(paths.ch(n), draft)
-        brain.write_text(paths.ch_summary(n), nodes.summarize_chapter(cfg, bp, draft))
-        ex = nodes.extract_canon(cfg, bp, draft, store.canon_context())
+            tasks["humanized"] = lambda d=draft: humanizer.humanize(cfg, d)
+        out = concurrency.gather(tasks, strict=True)
+        brain.write_text(paths.ch(n), out.get("humanized") or draft)
+        brain.write_text(paths.ch_summary(n), out["summary"])
+        ex = out["extraction"]
         store.update_from_extraction(n, ex)
-        store.render_canon(paths)
-        store.index_documents(paths)
+        store.render_canon(paths, names=[c.name for c in ex.characters])
+        store.index_chapter(paths, n)
         brain.append_text(paths.revision_log,
                           f"## Chapter {n} repaired ({len(relevant)} contradiction(s))")
         log(f"   [repair] rewrote chapter {n} for {len(relevant)} contradiction(s)")
@@ -655,32 +720,45 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log):
             f"Run: review --chapter {state['current_section']} --instruction \"...\"")
         return state
 
-    while state["phase"] != "done":
-        phase = state["phase"]
-        if phase == "sections":
-            n = state["current_section"]
-            if n > state["num_sections"]:
-                state["phase"] = "produce"
+    prefetch: dict[int, object] = {}
+    pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="unit-prefetch")
+    try:
+        while state["phase"] != "done":
+            phase = state["phase"]
+            if phase == "sections":
+                n = state["current_section"]
+                if n > state["num_sections"]:
+                    state["phase"] = "produce"
+                    brain.write_json(paths.run_state, state)
+                    continue
+                # Prefetch section n+1's research/images/skills while section n is
+                # being written/critiqued (see the book loop in run()).
+                for k in (n, n + 1):
+                    if (k <= state["num_sections"] and k not in prefetch
+                            and brain.read_text(paths.section(k)) is None):
+                        prefetch[k] = pool.submit(
+                            _section_fetch, cfg, paths, outline, state, k, log)
+                outcome = _process_article_section(cfg, paths, outline, state, n, log,
+                                                   prefetched=prefetch.pop(n, None))
+                if outcome == "escalate":
+                    state["pending_review"] = True
+                    state["review_kind"] = "section"
+                    brain.write_json(paths.run_state, state)
+                    log(f"[!] Section {n} escalated. Resolve with `review` then `run`.")
+                    return state
+                state["committed"] += 1
+                state["current_section"] = n + 1
                 brain.write_json(paths.run_state, state)
-                continue
-            outcome = _process_article_section(cfg, paths, outline, state, n, log)
-            if outcome == "escalate":
-                state["pending_review"] = True
-                state["review_kind"] = "section"
+            elif phase == "produce":
+                _produce_article(cfg, paths, outline, state, log=log)
+                state["phase"] = "learn"
                 brain.write_json(paths.run_state, state)
-                log(f"[!] Section {n} escalated. Resolve with `review` then `run`.")
-                return state
-            state["committed"] += 1
-            state["current_section"] = n + 1
-            brain.write_json(paths.run_state, state)
-        elif phase == "produce":
-            _produce_article(cfg, paths, outline, state, log=log)
-            state["phase"] = "learn"
-            brain.write_json(paths.run_state, state)
-        elif phase == "learn":
-            _learn_article(cfg, paths, outline, log=log)
-            state["phase"] = "done"
-            brain.write_json(paths.run_state, state)
+            elif phase == "learn":
+                _learn_article(cfg, paths, outline, log=log)
+                state["phase"] = "done"
+                brain.write_json(paths.run_state, state)
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     log(f"[OK] Article '{paths.article_id}' complete. Manuscript: {paths.manuscript}")
     _summary = llm.usage_summary()
     if _summary:
@@ -688,18 +766,13 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log):
     return state
 
 
-def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -> str:
+def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
+    """Network-bound inputs for section n (research, images, skills) - independent of
+    any section's prose, so _run_article prefetches it for section n+1 (see
+    _chapter_fetch)."""
     from types import SimpleNamespace
     section = outline.sections[n - 1]
 
-    # Resume guard (see _process_chapter): committed section file present but state
-    # not advanced => crash window; don't reprocess.
-    if brain.read_text(paths.section(n)) is not None:
-        log(f"\n== Section {n}: {section.heading} ==")
-        log("   [resume] already committed - advancing")
-        return "commit"
-
-    # Research and image-fetch are independent network steps - run concurrently.
     def _do_research():
         if not state.get("use_researcher"):
             return ("", [])
@@ -707,10 +780,9 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
         base_query = section.search_query or f"{outline.title} {section.heading}"
         if state.get("deep_research"):
             from . import deep_research as dr
-            queries = _research_queries(
+            docs = _deep_docs(
                 cfg, f"{outline.title} ({outline.angle})",
                 f"{section.heading}. {section.purpose}", base_query, log=log)
-            docs = dr.gather_documents(queries, log=log)
             brief = nodes.deep_research_article(cfg, outline, section,
                                                 dr.format_documents(docs) or None)
             # Real fetched sources are more reliable than LLM-copied URLs; prefer them.
@@ -751,7 +823,41 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
         return [f"![{section.heading} diagram](images/section_{n:02d}_diagram.svg)\n"
                 f"*Figure: {section.heading}*"]
 
-    out = concurrency.gather({"research": _do_research, "images": _do_images})
+    def _do_skills():
+        # Skills - use angle as genre proxy
+        embed_cache = None
+        if state.get("use_embeddings"):
+            embed_cache = brain.INDEX_DIR / "embed_cache.json"
+        proxy = SimpleNamespace(genre=outline.angle, tone="informative",
+                                themes=[outline.title])
+        return retrieval.relevant_skills(
+            paths.uid, proxy,  # type: ignore[arg-type]
+            use_embeddings=bool(state.get("use_embeddings")), embed_cache=embed_cache,
+        )
+
+    return concurrency.gather(
+        {"research": _do_research, "images": _do_images, "skills": _do_skills})
+
+
+def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
+                             prefetched=None) -> str:
+    section = outline.sections[n - 1]
+
+    # Resume guard (see _process_chapter): committed section file present but state
+    # not advanced => crash window; don't reprocess.
+    if brain.read_text(paths.section(n)) is not None:
+        log(f"\n== Section {n}: {section.heading} ==")
+        log("   [resume] already committed - advancing")
+        return "commit"
+
+    out: dict = {}
+    if prefetched is not None:
+        try:
+            out = prefetched.result()
+        except Exception:  # noqa: BLE001 - prefetch is an optimisation, never fatal
+            out = {}
+    if not out:
+        out = _section_fetch(cfg, paths, outline, state, n, log)
     context_prefix, sources = out.get("research") or ("", [])
     images: list[str] | None = out.get("images")
 
@@ -759,16 +865,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
     article_context = _assemble_article_context(paths, n)
     full_context = (context_prefix + article_context).strip() or None
 
-    # Skills - use angle as genre proxy
-    embed_cache = None
-    if state.get("use_embeddings"):
-        embed_cache = brain._ROOT / ".index" / "embed_cache.json"
-    proxy = SimpleNamespace(genre=outline.angle, tone="informative",
-                            themes=[outline.title])
-    skill_pairs = retrieval.relevant_skills(
-        paths.uid, proxy,  # type: ignore[arg-type]
-        use_embeddings=bool(state.get("use_embeddings")), embed_cache=embed_cache,
-    )
+    skill_pairs = out.get("skills") or []
     skill_names = [name for name, _ in skill_pairs]
     skill_bodies = [body for _, body in skill_pairs]
 

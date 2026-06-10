@@ -39,6 +39,48 @@
 
 ## Session log
 
+### 2026-06-11 - Performance pass: prefetch pipeline, parallel commit batch, canon cap
+
+Wall-clock optimisation sweep after a full code review. **71 tests pass** (was 67; +strict-gather,
++canon-cap, +incremental-index tests); ruff clean. No behaviour changes to prose/continuity - the
+chapter chain stays sequential; only LLM-call *scheduling* changed.
+
+**Pipeline scheduling (`orchestrator.py`):**
+- **Unit prefetch:** research/images/skills for chapter (and article section) **n+1** are fetched on
+  a 2-worker pool while unit n is written/critiqued (`_chapter_fetch`/`_section_fetch`, prefetch loop
+  in `run()`/`_run_article`). They depend only on plan/TOC; results are disk-cached so an escalation
+  wastes nothing. Skill retrieval moved into the same gather (its first embeddings call pays the
+  model load).
+- **Parallel commit batch:** `_commit` (and `_repair_contradictions`) now run humanize ∥ summarize ∥
+  extract_canon concurrently via `concurrency.gather(strict=True)` - 3 serial LLM round-trips -> 1.
+  Summary/extraction read the pre-humanized draft (humanizer preserves content). strict=True keeps
+  the old failure semantics (failed summary/extraction aborts the commit; chapter file written only
+  after the batch, which *shrinks* the old partial-commit crash window).
+- **Deep research:** query-expansion LLM call now overlaps a warm-up search of the seed query
+  (`_deep_docs`); merged pass hits the search disk cache.
+
+**Token/prompt diet:** writer/critic canon block capped at the 12 most recent facts per character
+(`retrieval.MAX_CANON_FACTS_PER_CHAR` -> `store.canon_context(max_facts_per_char=...)`).
+Consolidation/extraction still see full canon. Also fixes late-chapter prompt growth (was linear).
+
+**Smaller fixes:** `store.index_chapter` (incremental FTS; per-commit full rebuild was O(n²)) +
+`render_canon(names=...)` (only touched characters rewritten); `canon_context` N+1 query -> grouped;
+Scrapo fetches share one persistent background event loop (was `asyncio.run` per URL per thread);
+per-thread DDGS session reuse in `search.py` (reset on error); embeddings import deferred
+(`find_spec` - top-level sentence-transformers import pulled torch); numpy cosine when available;
+`_json_instruction` cached per schema; embed-cache path now respects `brain.INDEX_DIR` (was
+hardcoded `_ROOT/.index`, bypassing redirects).
+
+**New: `BOOK_AGENT_HOME`** env var relocates brain + .index off synced folders (OneDrive sync adds
+latency to every atomic write and its locks can break `os.replace`). Documented in README
+troubleshooting + plan §15. **Recommended on this machine** (repo lives in OneDrive).
+
+**Stack decision (recorded):** stay on Python - workload is ~95% LLM network latency; threads
+release the GIL on socket waits. No asyncio rewrite, no LangGraph for perf. If server/multi-user
+mode lands, front this engine with FastAPI; don't rewrite it.
+
+**Next:** unchanged backlog (live deep-research e2e; LangGraph wrapper; multi-user; robots.txt).
+
 ### 2026-06-10 - Deep multi-source researcher + article tests + craft skills + read fix
 
 Worked four items off the backlog after fast-forwarding `master` to `origin/master` (the merged hardening branch). All offline; **62 tests pass** (was 44); ruff clean on `src` + `tests`.
