@@ -8,7 +8,6 @@ pages under canon/; full markdown-as-source-of-truth-with-sync is a later refine
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 
 from . import brain
 from .brain import BookPaths
@@ -35,7 +34,7 @@ class Store:
 
     # ── lifecycle ────────────────────────────────────────────────────────────
     @classmethod
-    def open(cls, paths: BookPaths) -> "Store":
+    def open(cls, paths: BookPaths) -> Store:
         paths.index_db.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(paths.index_db))
         conn.executescript(_SCHEMA)

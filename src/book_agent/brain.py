@@ -129,7 +129,7 @@ class BookPaths:
     def review_of(self, n: int) -> Path: return self.reviews / f"ch{n:02d}.md"
     def instruction_of(self, n: int) -> Path: return self.instructions / f"ch{n:02d}.md"
 
-    def ensure(self) -> "BookPaths":
+    def ensure(self) -> BookPaths:
         for d in (self.chapters, self.eval, self.reviews, self.instructions,
                   self.frontmatter, self.backmatter, self.characters,
                   self.consolidation):
@@ -190,7 +190,7 @@ class ArticlePaths:
     def index_db(self) -> Path:
         return INDEX_DIR / f"{self.uid}__{self.article_id}.db"
 
-    def ensure(self) -> "ArticlePaths":
+    def ensure(self) -> ArticlePaths:
         self.root.mkdir(parents=True, exist_ok=True)
         self.images.mkdir(parents=True, exist_ok=True)
         INDEX_DIR.mkdir(parents=True, exist_ok=True)

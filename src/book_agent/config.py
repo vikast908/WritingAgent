@@ -68,7 +68,7 @@ class Settings:
 def load_config() -> ModelConfig:
     if not _MODELS.exists():
         return ModelConfig({})   # sensible defaults; mirrors load_settings' guard
-    with open(_MODELS, "r", encoding="utf-8") as f:
+    with open(_MODELS, encoding="utf-8") as f:
         return ModelConfig(yaml.safe_load(f) or {})
 
 
@@ -87,7 +87,7 @@ def save_config(cfg: ModelConfig) -> None:
 def load_settings() -> Settings:
     if _SETTINGS.exists():
         import dataclasses
-        with open(_SETTINGS, "r", encoding="utf-8") as f:
+        with open(_SETTINGS, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
         valid = {f.name for f in dataclasses.fields(Settings)}
         return Settings(**{k: v for k, v in data.items() if k in valid})

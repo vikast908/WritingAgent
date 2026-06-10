@@ -16,9 +16,8 @@ import re
 import shlex
 import time
 
-from . import brain
+from . import brain, ui
 from . import skills as skills_mod
-from . import ui
 from .config import ModelConfig, Settings, save_config, save_settings
 from .ui import DIM, ERR, GOLD, GOLD_HI, INK, OFF_CLR, ON_CLR, PARCH, RULE  # palette
 
@@ -682,6 +681,7 @@ class _RunDashboard:
     def render(self):
         from rich.console import Group
         from rich.text import Text
+
         from . import llm
         head = Text()
         head.append(f"{_FLEURON} {self.book_id}", style=f"bold {GOLD}")
@@ -1229,6 +1229,7 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
     try:
         import dataclasses
         import datetime
+
         from prompt_toolkit import PromptSession
         from prompt_toolkit.completion import Completer, Completion
         from prompt_toolkit.history import FileHistory, InMemoryHistory

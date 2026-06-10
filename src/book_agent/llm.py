@@ -15,7 +15,7 @@ import random
 import threading
 import time
 import types
-from typing import Literal, Type, TypeVar, Union, get_args, get_origin
+from typing import Literal, TypeVar, Union, get_args, get_origin
 
 from openai import OpenAI
 from pydantic import BaseModel
@@ -97,7 +97,10 @@ def _is_retryable(exc: Exception) -> bool:
     """True for transient errors worth retrying (timeouts, connection drops, 429,
     5xx). Auth/permission/bad-request (4xx) are fatal — retrying just wastes calls."""
     from openai import (
-        APIConnectionError, APITimeoutError, InternalServerError, RateLimitError,
+        APIConnectionError,
+        APITimeoutError,
+        InternalServerError,
+        RateLimitError,
     )
     if isinstance(exc, (APITimeoutError, APIConnectionError, RateLimitError,
                         InternalServerError)):
@@ -234,7 +237,7 @@ def _fake_value(annotation, field_name: str = ""):
     return "placeholder"
 
 
-def _fake_instance(model: Type[T]) -> T:
+def _fake_instance(model: type[T]) -> T:
     return model(**{n: _fake_value(f.annotation, n) for n, f in model.model_fields.items()})
 
 
@@ -313,7 +316,7 @@ def stream_text(
         yield f"\n_(stream error: {e})_"
 
 
-def _json_instruction(schema: Type[BaseModel]) -> str:
+def _json_instruction(schema: type[BaseModel]) -> str:
     import json
     return ("Respond with ONLY a single JSON object (no markdown, no prose) that conforms to this "
             "JSON Schema:\n" + json.dumps(schema.model_json_schema()))
@@ -337,7 +340,7 @@ def complete_structured(
     model: str,
     system: str,
     user: str,
-    schema: Type[T],
+    schema: type[T],
     *,
     max_tokens: int = 8000,
     temperature: float | None = None,

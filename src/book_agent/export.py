@@ -168,7 +168,7 @@ li { margin-bottom: 0.4em; }
 """
 
 
-def markdown_to_html(md_text: str, out_path, title: str = "Article") -> "Path":
+def markdown_to_html(md_text: str, out_path, title: str = "Article") -> Path:
     """Render Markdown to a self-contained HTML file with embedded CSS."""
     import markdown
 
@@ -193,7 +193,7 @@ def markdown_to_html(md_text: str, out_path, title: str = "Article") -> "Path":
 
 
 # ── DOCX ─────────────────────────────────────────────────────────────────────
-def markdown_to_docx(md_text: str, out_path, title: str = "Article") -> "Path":
+def markdown_to_docx(md_text: str, out_path, title: str = "Article") -> Path:
     """Convert Markdown to .docx via pandoc (must be on PATH)."""
     import subprocess
     import tempfile
@@ -229,7 +229,7 @@ def markdown_to_docx(md_text: str, out_path, title: str = "Article") -> "Path":
 
 
 # ── Plain text ────────────────────────────────────────────────────────────────
-def markdown_to_txt(md_text: str, out_path, title: str = "Article") -> "Path":
+def markdown_to_txt(md_text: str, out_path, title: str = "Article") -> Path:
     """Strip Markdown to readable plain text."""
     import re
     text = f"{title}\n{'=' * len(title)}\n\n" + md_text
@@ -256,7 +256,7 @@ def markdown_to_txt(md_text: str, out_path, title: str = "Article") -> "Path":
 
 
 # ── Markdown passthrough ──────────────────────────────────────────────────────
-def markdown_to_md(md_text: str, out_path, title: str = "Article") -> "Path":
+def markdown_to_md(md_text: str, out_path, title: str = "Article") -> Path:
     """Save the raw Markdown manuscript (with a title header prepended)."""
     out = Path(out_path)
     out.write_text(f"# {title}\n\n" + md_text, encoding="utf-8")

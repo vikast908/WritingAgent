@@ -254,6 +254,7 @@ def test_is_safe_id():
 
 def test_delete_book_refuses_unsafe_id(tmp_brain):
     import pytest
+
     from book_agent import orchestrator
     with pytest.raises(ValueError):
         orchestrator.delete_book("default", "../evil")
@@ -270,7 +271,7 @@ def test_parse_frontmatter_coerces_non_dict():
 
 # ── skills frontmatter escaping + no clobber (#5, low) ──────────────────────────
 def test_write_skill_yaml_safe_roundtrip(tmp_brain):
-    from book_agent import skills, brain, retrieval
+    from book_agent import brain, retrieval, skills
     from book_agent.schemas import SkillProposal
     prop = SkillProposal(name="show: don't tell, really",
                          genre_tags=["a: b", "c, d", "e]f"],
@@ -283,7 +284,7 @@ def test_write_skill_yaml_safe_roundtrip(tmp_brain):
 
 
 def test_write_skill_does_not_clobber_distinct_name(tmp_brain):
-    from book_agent import skills, brain
+    from book_agent import brain, skills
     from book_agent.schemas import SkillProposal
     mk = lambda nm: SkillProposal(name=nm, genre_tags=["x"], when_to_apply="a",
                                   technique=["t"], anti_pattern="p")

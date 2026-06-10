@@ -11,8 +11,9 @@ the work blocks on sockets, so the GIL is released while waiting.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable
+from typing import Any
 
 _log = logging.getLogger(__name__)
 

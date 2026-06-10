@@ -6,9 +6,8 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import brain, nodes, orchestrator
+from . import brain, nodes, orchestrator, ui
 from . import skills as skills_mod
-from . import ui
 from .brain import ArticlePaths, BookPaths
 from .config import load_config, load_settings
 
@@ -245,7 +244,12 @@ def cmd_skills(args, cfg, settings, uid):
 
 
 _EXPORT_FORMATS = ["pdf", "epub", "html", "docx", "txt", "md"]
-_QUIET = lambda *_a, **_k: None
+
+
+def _QUIET(*_a, **_k):   # suppress the exporters' own log line; cmd_export prints its own
+    return None
+
+
 _EXPORT_FNS = {
     "pdf":  lambda uid, bid: orchestrator.export_pdf(uid, bid, log=_QUIET),
     "epub": lambda uid, bid: orchestrator.export_epub(uid, bid, log=_QUIET),
@@ -270,8 +274,13 @@ def cmd_export(args, cfg, settings, uid):
     if console and out is not None:
         kb = out.stat().st_size / 1024
         # Rich renders an OSC-8 hyperlink in terminals that support it.
+        # Path.as_uri() yields a valid file:// URI on Windows, macOS, and Linux.
+        try:
+            uri = out.resolve().as_uri()
+        except ValueError:
+            uri = str(out)
         console.print(f"  [bold {ui.ON_CLR}]✓ {fmt}[/]  "
-                      f"[link=file://{out}]{out}[/]  [{ui.DIM}]({kb:.0f} KB)[/]")
+                      f"[link={uri}]{out}[/]  [{ui.DIM}]({kb:.0f} KB)[/]")
     else:
         print(f"[OK] {fmt} -> {out}")
 

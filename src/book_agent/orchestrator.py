@@ -172,7 +172,7 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
     # don't re-draft/re-extract — that would duplicate canon facts. Just advance.
     if brain.read_text(paths.ch(n)) is not None:
         log(f"\n== Chapter {n}: {blueprint.title} ==")
-        log(f"   [resume] already committed — advancing")
+        log("   [resume] already committed — advancing")
         return "commit"
     base_context = retrieval.assemble_context(store, paths, blueprint)
 
@@ -666,7 +666,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
     # not advanced => crash window; don't reprocess.
     if brain.read_text(paths.section(n)) is not None:
         log(f"\n== Section {n}: {section.heading} ==")
-        log(f"   [resume] already committed — advancing")
+        log("   [resume] already committed — advancing")
         return "commit"
 
     # Research and image-fetch are independent network steps — run concurrently.
