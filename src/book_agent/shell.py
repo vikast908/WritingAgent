@@ -166,38 +166,61 @@ def _lerp(a: str, b: str, t: float) -> str:
     return f"#{r:02x}{g:02x}{bl:02x}"
 
 
-def _wordmark() -> str:
+def _trim_blank_edges(lines: list[str]) -> list[str]:
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return lines
+
+
+def _wordmark() -> list[str]:
+    """Block-letter wordmark as a list of lines. WRITING stacked over AGENT.
+
+    Prefers the clean 'ANSI Shadow' block font; falls back to plainer fonts and
+    finally to plain text so it never crashes on an exotic pyfiglet build.
+    """
     try:
         import pyfiglet
-        art = ""
-        for font in ("standard", "small"):
-            art = pyfiglet.figlet_format("Writing Agent", font=font).rstrip("\n")
-            if max((len(ln) for ln in art.splitlines()), default=0) <= 78:
-                return art
-        return art
+        for font in ("ansi_shadow", "big", "standard"):
+            try:
+                top = pyfiglet.figlet_format("WRITING", font=font)
+                bot = pyfiglet.figlet_format("AGENT", font=font)
+            except Exception:
+                continue
+            lines = (_trim_blank_edges(top.split("\n"))
+                     + [""] + _trim_blank_edges(bot.split("\n")))
+            if lines and max((len(ln) for ln in lines), default=0) <= 80:
+                return lines
     except Exception:
-        return "W R I T I N G  A G E N T"
+        pass
+    return ["W R I T I N G", "A G E N T"]
 
 
 def _banner(console) -> None:
-    art = _wordmark()
+    lines = _wordmark()
     if not console:
-        print(art)
+        print("\n".join(lines))
         print("an autonomous writing studio — books, articles & more")
         return
     from rich.align import Align
     from rich.rule import Rule
     from rich.text import Text
-    lines = art.splitlines()
+    width = max((len(ln) for ln in lines), default=1)
+    # Left-to-right warm gradient across the block letters (lit-from-the-left sheen).
     grad = Text()
-    n = max(len(lines) - 1, 1)
-    for i, ln in enumerate(lines):
-        grad.append(ln + "\n", style=f"bold {_lerp(GOLD_HI, GOLD, i / n)}")
+    for ln in lines:
+        for col, ch in enumerate(ln):
+            grad.append(ch, style=f"bold {_lerp(GOLD_HI, GOLD, col / max(width - 1, 1))}")
+        grad.append("\n")
     console.print()
     console.print(Rule(style=RULE))
+    console.print()
     console.print(Align.center(grad))
-    console.print(Align.center(Text("an autonomous writing studio — books, articles & more", style=f"italic {INK}")))
+    console.print(Align.center(Text("an autonomous writing studio — books, articles & more",
+                                    style=f"italic {INK}")))
     console.print(Align.center(Text(f"OpenRouter · DeepSeek · v{_VERSION}", style=DIM)))
+    console.print()
     console.print(Rule(style=RULE))
 
 
