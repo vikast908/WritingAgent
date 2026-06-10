@@ -1,0 +1,88 @@
+<svg viewBox="0 0 1280 320" width="1280" height="320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Writing Agent — a self-correcting, autonomous writing system that turns a topic into a publication-ready manuscript">
+  <title>Writing Agent</title>
+  <style>
+    .serif  { font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif; }
+    .mono   { font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, 'Liberation Mono', monospace; }
+
+    .strike  { stroke-dasharray: 300; stroke-dashoffset: 0; }
+    .insert  { opacity: 1; }
+    .stamp   { opacity: 1; }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .strike {
+        stroke-dashoffset: 300;
+        animation: draw 0.9s ease-out 1.1s forwards;
+      }
+      .insert {
+        opacity: 0;
+        animation: appear 0.6s ease-out 2.2s forwards;
+      }
+      .stamp {
+        opacity: 0;
+        animation: appear 0.6s ease-out 3.0s forwards;
+      }
+      @keyframes draw   { to { stroke-dashoffset: 0; } }
+      @keyframes appear { to { opacity: 1; } }
+    }
+  </style>
+
+  <!-- ========== desk ========== -->
+  <rect width="1280" height="320" rx="14" fill="#171210"/>
+
+  <!-- faint galley rules -->
+  <g stroke="#211a15" stroke-width="1">
+    <line x1="0" y1="64"  x2="1280" y2="64"/>
+    <line x1="0" y1="128" x2="1280" y2="128"/>
+    <line x1="0" y1="192" x2="1280" y2="192"/>
+    <line x1="0" y1="256" x2="1280" y2="256"/>
+  </g>
+  <!-- red margin rule -->
+  <line x1="72" y1="0" x2="72" y2="320" stroke="#e14b3b" stroke-width="1.5" opacity="0.32"/>
+
+  <!-- ========== left: identity ========== -->
+  <text class="mono" x="110" y="78" font-size="12" letter-spacing="3.5" fill="#9a8e7c">SELF-CORRECTING AUTONOMOUS WRITING SYSTEM</text>
+
+  <text class="serif" x="106" y="152" font-size="68" fill="#f1e9da">Writing Agent<tspan fill="#e14b3b">.</tspan></text>
+
+  <text class="serif" x="110" y="192" font-size="18" font-style="italic" fill="#b8ab95">Takes a topic. Returns a publication-ready manuscript.</text>
+
+  <!-- pipeline -->
+  <text class="mono" x="110" y="244" font-size="15" fill="#f1e9da">write <tspan fill="#e14b3b">→</tspan> critique <tspan fill="#e14b3b">→</tspan> revise <tspan fill="#e14b3b">→</tspan> humanise <tspan fill="#e14b3b">→</tspan> commit</text>
+
+  <!-- return loop -->
+  <path d="M 530 252 C 540 286, 150 290, 122 260" fill="none" stroke="#e14b3b" stroke-width="1.3" stroke-dasharray="4 5" opacity="0.75"/>
+  <path d="M 122 260 l -7 7 l 10 1 z" fill="#e14b3b" opacity="0.75"/>
+  <text class="mono" x="330" y="298" font-size="11.5" fill="#9a8e7c" text-anchor="middle">loops until it clears the bar</text>
+
+  <!-- bottom-right microcopy -->
+  <text class="mono" x="1216" y="306" font-size="12" fill="#8d8170" text-anchor="end">books · long-form articles · 60–95% fewer tokens via headroom</text>
+
+  <!-- ========== right: marked-up proof ========== -->
+  <g transform="translate(782,40) rotate(1.4 212 116)">
+    <!-- shadow + paper -->
+    <rect x="6" y="8" width="424" height="232" rx="6" fill="#000000" opacity="0.35"/>
+    <rect x="0" y="0" width="424" height="232" rx="6" fill="#f4eddf"/>
+
+    <!-- header -->
+    <text class="mono" x="24" y="32" font-size="11" letter-spacing="1" fill="#8a7b66">manuscript.md · draft 7</text>
+    <line x1="24" y1="42" x2="400" y2="42" stroke="#e0d3bc" stroke-width="1"/>
+
+    <!-- red insertion (the humanised line) -->
+    <text class="serif insert" x="38" y="74" font-size="15" font-style="italic" fill="#c2362a">The night the printers stopped,</text>
+    <path class="insert" d="M 30 86 l 6 -9 l 6 9" fill="none" stroke="#c2362a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- struck slop line -->
+    <text class="serif" x="24" y="104" font-size="17" fill="#2a2117">In today&#8217;s fast-paced digital age,</text>
+    <path class="strike" d="M 20 99 L 296 95" fill="none" stroke="#c2362a" stroke-width="2.4" stroke-linecap="round" pathLength="300"/>
+    <text class="serif insert" x="312" y="100" font-size="12.5" font-style="italic" fill="#c2362a">— slop</text>
+
+    <!-- rest of paragraph -->
+    <text class="serif" x="24" y="134" font-size="17" fill="#2a2117">the city had no shortage of stories</text>
+    <text class="serif" x="24" y="162" font-size="17" fill="#2a2117">waiting for the kind of teller that</text>
+    <text class="serif" x="24" y="190" font-size="17" fill="#2a2117">doesn&#8217;t flinch.</text>
+
+    <!-- footer -->
+    <line x1="24" y1="204" x2="400" y2="204" stroke="#e0d3bc" stroke-width="1"/>
+    <text class="mono" x="24" y="222" font-size="11" fill="#8a7b66">critique ✓&#160;&#160;&#160;humanise ✓&#160;&#160;&#160;<tspan class="stamp" fill="#c2362a">commit ✓</tspan></text>
+  </g>
+</svg>

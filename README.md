@@ -1,18 +1,6 @@
 <div align="center">
 
-<pre>
- _       ______  _______________   ________
-| |     / / __ \/  _/_  __/  _/ | / / ____/
-| | /| / / /_/ // /  / /  / //  |/ / / __
-| |/ |/ / _, _// /  / / _/ // /|  / /_/ /
-|__/|__/_/ |_/___/ /_/ /___/_/ |_/\____/
-
-    ___   _____________   ________
-   /   | / ____/ ____/ | / /_  __/
-  / /| |/ / __/ __/ /  |/ / / /
- / ___ / /_/ / /___/ /|  / / /
-/_/  |_\____/_____/_/ |_/ /_/
-</pre>
+<img src="assets/writing-agent-banner.svg" alt="Writing Agent - a self-correcting, autonomous writing system that turns a topic into a publication-ready manuscript" width="820">
 
 ### an autonomous writing studio - books, articles & more
 
