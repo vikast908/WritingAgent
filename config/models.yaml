@@ -8,7 +8,7 @@ nodes:
   writer:        deepseek/deepseek-v4-pro      # prose quality
   consolidation: deepseek/deepseek-v4-pro      # global reasoning across the whole book
   toc:           deepseek/deepseek-v4-flash
-  critic:        deepseek/deepseek-v4-flash    # independent judge — a different model than the writer
+  critic:        deepseek/deepseek-v4-flash    # independent judge - a different model than the writer
   summarizer:    deepseek/deepseek-v4-flash    # chapter summaries + canon extraction
   production:    deepseek/deepseek-v4-flash    # front/back matter + assembly
   learner:       deepseek/deepseek-v4-flash    # distill skills from a finished book

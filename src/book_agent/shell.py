@@ -1,6 +1,6 @@
 """Interactive REPL/TUI for WRITING AGENT (run `writing-agent` / `book` / `python book.py`).
 
-Aesthetic: editorial letterpress — an "ink & gilt" palette, a title-page masthead, fleuron
+Aesthetic: editorial letterpress - an "ink & gilt" palette, a title-page masthead, fleuron
 section markers, and clean borderless command tables.
 
 Lines starting with `/` are slash commands; recognised book-command words dispatch to the
@@ -38,7 +38,7 @@ _SLASH_HELP = [
     ("/seed-skills", "install the built-in craft skills"),
     ("/use <book> · /books", "set active book · list books"),
     ("/user <id> · /config", "switch user · show config"),
-    ("/update [changes]", "describe your changes — AI reviews and advises on next steps"),
+    ("/update [changes]", "describe your changes - AI reviews and advises on next steps"),
     ("/retry", "resend the last chat message"),
     ("/mode [book|article]", "show or set the project mode (default: book)"),
     ("/reset", "clear the assistant's conversation memory (fresh context)"),
@@ -51,17 +51,17 @@ _CODE_BLOCK_RE = re.compile(r"```[^\n`]*\n?(.*?)```", re.DOTALL)
 
 # ── chat system prompt ────────────────────────────────────────────────────────
 _CHAT_SYSTEM = """\
-You are the built-in assistant for WRITING AGENT — an autonomous book-writing studio.
+You are the built-in assistant for WRITING AGENT - an autonomous book-writing studio.
 Help users understand the system, figure out what to do next, and get unblocked.
-The current date is injected into your session context below — always use it when the user
+The current date is injected into your session context below - always use it when the user
 asks about timing, recency, or anything date-dependent (e.g. "today", "this week", "recently").
 
 WRITING AGENT writes complete books: give it an abstract, it plans, writes, critiques,
 revises, and assembles a finished manuscript (PDF or EPUB). It runs on OpenRouter + DeepSeek.
 
-COMMANDS  (type these directly in this shell — no 'book' prefix needed):
-  new --abstract "..."       Start a new project — book (default) or article (when mode=article)
-  run                        Write the book/article — drafts, critiques, humanises, commits
+COMMANDS  (type these directly in this shell - no 'book' prefix needed):
+  new --abstract "..."       Start a new project - book (default) or article (when mode=article)
+  run                        Write the book/article - drafts, critiques, humanises, commits
   status                     Where the project is (phase, chapter/section, pending reviews)
   review --chapter N \\
     --instruction "..."      Answer an escalation when the book gets stuck
@@ -75,13 +75,13 @@ COMMANDS  (type these directly in this shell — no 'book' prefix needed):
   delete [--yes]             Permanently delete a book/article (asks for confirmation)
 
 SLASH COMMANDS  (start with /):
-  /set <key> <value>         Change a setting live — use_researcher, use_images,
+  /set <key> <value>         Change a setting live - use_researcher, use_images,
                              use_embeddings, humanize, autonomous, num_chapters, etc.
   /model [agent] <slug>      Switch any model to any OpenRouter slug
   /use <book>                Set the active book (avoids typing --book-id every time)
   /books · /skills           List books · browse craft skills
   /retry                     Resend your last chat message
-  /mode [book|article]       Show or set mode — 'book' for novels/nonfiction, 'article' for single long-form articles
+  /mode [book|article]       Show or set mode - 'book' for novels/nonfiction, 'article' for single long-form articles
   /reset                     Clear assistant memory (fresh context)
   /compact                   Summarize memory to save context space
   /help                      Show all slash commands
@@ -101,11 +101,11 @@ WHEN TO EXECUTE (user wants action, not just advice):
 
 HOW TO TRIGGER EXECUTION:
 Put each command on its own line as a fenced code block. The shell will run them in order.
-Example — user says "continue with mybook":
+Example - user says "continue with mybook":
 ```/use mybook```
 ```run```
 
-Example — user says "turn on web search and start writing":
+Example - user says "turn on web search and start writing":
 ```/set use_researcher true```
 ```run```
 
@@ -115,11 +115,11 @@ The session context below always shows the ACTIVE PROJECT. Check it first.
   active project: (none)  →  NEVER run `run`/`status`/`read`/`export` bare.
                               Look at "all projects" in the context, pick the right one, and
                               ALWAYS emit `/use <exact-id>` BEFORE any project command.
-                              Example — user says "run it" and you see project my-article:
+                              Example - user says "run it" and you see project my-article:
                               ```/use my-article```
                               ```run```
 
-  active project: my-project  →  Safe to run commands directly — no /use needed.
+  active project: my-project  →  Safe to run commands directly - no /use needed.
 
   DO NOT ask "which project?" in text. Just pick the most recent/relevant one from context and use it.
   The shell auto-routes to the right project type for the current mode.
@@ -128,7 +128,7 @@ The session context below always shows the ACTIVE PROJECT. Check it first.
 - `new` picks an angle/direction automatically (auto-selects option 1).
   After it runs, the new project becomes active automatically.
 - If user says "run it" / "go ahead" AFTER a new project was created:
-  Just emit ```run``` — no /use needed because the project is already active.
+  Just emit ```run``` - no /use needed because the project is already active.
 - NEVER put `new` and `run` in the same response. Two separate turns:
   first turn: ```new --abstract "..."```  → project created + activated
   next turn (if user says "run it"): ```run```
@@ -139,7 +139,7 @@ The session context below always shows the ACTIVE PROJECT. Check it first.
 
 ONLY USE CODE BLOCKS FOR COMMANDS YOU WANT EXECUTED.
 Use plain text or inline `backticks` when explaining commands without running them.
-Never show fake/simulated output — the real output will appear automatically.
+Never show fake/simulated output - the real output will appear automatically.
 
 When the user is just asking a question (what does X do, how do I Y):
 - Answer in plain text. Do not include executable code blocks.
@@ -178,7 +178,7 @@ def _wordmark() -> list[str]:
     """Wordmark as a list of lines. WRITING stacked over AGENT.
 
     Uses pure line-art ASCII fonts (not block/box-drawing fonts) so the letters
-    render correctly in any terminal regardless of font or line spacing — block
+    render correctly in any terminal regardless of font or line spacing - block
     fonts like ANSI Shadow only tile cleanly in some terminals. Falls back to
     plain text so it never crashes on an exotic pyfiglet build.
     """
@@ -203,7 +203,7 @@ def _banner(console) -> None:
     lines = _wordmark()
     if not console:
         print("\n".join(lines))
-        print("an autonomous writing studio — books, articles & more")
+        print("an autonomous writing studio - books, articles & more")
         return
     from rich.align import Align
     from rich.rule import Rule
@@ -218,7 +218,7 @@ def _banner(console) -> None:
     console.print(Rule(style=RULE))
     console.print()
     console.print(Align.center(grad))
-    console.print(Align.center(Text("an autonomous writing studio — books, articles & more",
+    console.print(Align.center(Text("an autonomous writing studio - books, articles & more",
                                     style=f"italic {INK}")))
     console.print(Align.center(Text(f"OpenRouter · DeepSeek · v{_VERSION}", style=DIM)))
     console.print()
@@ -256,21 +256,21 @@ def _book_status_rows(uid: str, projects: list[tuple[str, str]]) -> list[tuple[s
             if ptype == "article":
                 paths = ArticlePaths(project_id, uid)
                 st = brain.read_json(paths.run_state) or {}
-                phase = st.get("phase", "—")
+                phase = st.get("phase", "-")
                 ch = st.get("current_section", "?")
                 total = st.get("num_sections", "?")
                 label = f"[dim]article[/]  {phase}  sec {ch}/{total}"
             else:
                 paths = BookPaths(project_id, uid)
                 st = brain.read_json(paths.run_state) or {}
-                phase = st.get("phase", "—")
+                phase = st.get("phase", "-")
                 ch = st.get("current_chapter", "?")
                 total = st.get("num_chapters", "?")
                 label = f"{phase}  ch {ch}/{total}"
             pending = "  [bold]⚠ review needed[/]" if st.get("pending_review") else ""
             rows.append((project_id, f"{label}{pending}"))
         except Exception:
-            rows.append((project_id, "—"))
+            rows.append((project_id, "-"))
     if len(projects) > 8:
         rows.append(("", f"[dim]… +{len(projects) - 8} more (see /books)[/]"))
     return rows
@@ -299,14 +299,14 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     # ── Commands ──────────────────────────────────────────────────────────────
     _section(console, "COMMANDS")
     if is_article:
-        new_desc = "start an article — topic → angles → outline + sections"
+        new_desc = "start an article - topic → angles → outline + sections"
     else:
-        new_desc = "start a book — idea → directions → plan + TOC"
+        new_desc = "start a book - idea → directions → plan + TOC"
     export_desc = "pdf · epub · html · docx · txt · md  (prompts if format omitted)"
     _cmd_table(console, [
         ("new --abstract \"...\"", new_desc),
-        ("run", "write it — draft · critique · humanise · commit per section" if is_article
-                else "write it — draft · critique · humanise · commit per chapter"),
+        ("run", "write it - draft · critique · humanise · commit per section" if is_article
+                else "write it - draft · critique · humanise · commit per chapter"),
         ("status · review", "where the project stands · answer escalations"),
         ("read", "section (--chapter N) · --summary · --manuscript" if is_article
                  else "chapter (--chapter N) · --summary · --manuscript"),
@@ -322,13 +322,13 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     _cmd_table(console, [
         ("/model [agent] <slug>", "switch any model to any OpenRouter slug"),
         ("/set <key> <value>", "change a setting live (e.g. /set use_researcher true)"),
-        ("/update [changes]", "describe your changes — AI reviews and advises"),
+        ("/update [changes]", "describe your changes - AI reviews and advises"),
         ("/use <project> · /books", "set active project · list projects"),
         ("/skills · /seed-skills", "browse skills · install built-ins"),
         ("/retry · /reset · /compact", "retry last message · clear memory · compress memory"),
         ("/help · /clear · /exit", "full slash list · clear · quit"),
         ("", ""),
-        ("💬 free chat", "type anything — the assistant will guide you"),
+        ("💬 free chat", "type anything - the assistant will guide you"),
     ])
 
     # ── Getting started (first time) OR book/article status ──────────────────
@@ -368,8 +368,8 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
         _feat_row("humanize   ", settings.humanize,
                   "strip AI tells from prose (em-dashes, AI phrasing)"),
         _feat_row("researcher ", settings.use_researcher,
-                  "web search per section — real facts + inline citations" if is_article
-                  else "DuckDuckGo web search per chapter — grounds facts"),
+                  "web search per section - real facts + inline citations" if is_article
+                  else "DuckDuckGo web search per chapter - grounds facts"),
         _feat_row("embeddings ", settings.use_embeddings,
                   "semantic skill retrieval (all-MiniLM-L6-v2, local)"),
         _feat_row("images     ", settings.use_images,
@@ -427,7 +427,7 @@ def _cmd_model(console, cfg: ModelConfig, rest: list[str]) -> None:
         return
     node, slug = rest[0], rest[1]
     if node != "default" and node not in _NODES:
-        _out(console, f"[{ERR}]unknown agent '{node}'[/] — agents: {', '.join(_NODES)}")
+        _out(console, f"[{ERR}]unknown agent '{node}'[/] - agents: {', '.join(_NODES)}")
         return
     cfg.set_default(slug) if node == "default" else cfg.set_node(node, slug)
     save_config(cfg)
@@ -452,7 +452,7 @@ def _cmd_set(console, settings: Settings, rest: list[str]) -> None:
             truthy, falsy = {"true", "1", "yes", "on"}, {"false", "0", "no", "off"}
             tok = raw.lower()
             if tok not in truthy | falsy:
-                _out(console, f"[{ERR}]'{raw}' isn't a boolean[/] — use true/false "
+                _out(console, f"[{ERR}]'{raw}' isn't a boolean[/] - use true/false "
                               f"[dim](got treated as false otherwise)[/]")
                 return
             val = tok in truthy
@@ -472,7 +472,7 @@ def _cmd_set(console, settings: Settings, rest: list[str]) -> None:
 def _print_skills(console, uid: str) -> None:
     rows = skills_mod.list_skills(uid)
     if not rows:
-        _out(console, "[dim](no skills yet — try /seed-skills)[/]")
+        _out(console, "[dim](no skills yet - try /seed-skills)[/]")
         return
     if console:
         from rich.table import Table
@@ -505,7 +505,7 @@ _NEEDS_PROJECT = {"run", "status", "read", "export", "review", "memory",
                    "delete", "produce", "consolidate"}
 
 # The chat assistant must NOT silently auto-execute destructive or
-# config/tenant-changing commands — the human has to type these. (The model may
+# config/tenant-changing commands - the human has to type these. (The model may
 # still mention them in prose.) `delete` = data loss; `/user` switches tenant;
 # `/set` can disable human-in-the-loop (autonomous) and reroute models.
 _CHAT_BLOCKED_CMDS = {"delete"}
@@ -541,7 +541,7 @@ def _auto_or_pick_project(uid: str, settings: Settings, console, state: dict) ->
         _out(console, f"[{DIM}]auto-selected → {pid}[/]")
         return pid
 
-    # Multiple — show picker
+    # Multiple - show picker
     _out(console, f"\n  [{GOLD}]Which project?[/]")
     for i, (pid, ptype) in enumerate(candidates, 1):
         ptype_tag = f"[{INK}]{ptype}[/]"
@@ -602,11 +602,11 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
     """Execute one command string emitted by the chat assistant.
 
     Destructive/config commands are refused here (defense in depth on top of the
-    filtering in `_commands_in_response`) — the human must type those directly.
+    filtering in `_commands_in_response`) - the human must type those directly.
     """
     if cmd_line.startswith("/"):
         if cmd_line.lstrip("/").split()[0].lower() in _CHAT_BLOCKED_SLASH:
-            _out(console, f"[dim](skipped /{cmd_line.lstrip('/').split()[0]} — type it yourself)[/]")
+            _out(console, f"[dim](skipped /{cmd_line.lstrip('/').split()[0]} - type it yourself)[/]")
             return
         _handle_slash(cmd_line, console, cfg, settings, state)
         return
@@ -622,13 +622,13 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
     first = argv[0] if argv else ""
     if first not in known or first in _CHAT_BLOCKED_CMDS:
         if first in _CHAT_BLOCKED_CMDS:
-            _out(console, f"[dim](skipped '{first}' — run it yourself to confirm)[/]")
+            _out(console, f"[dim](skipped '{first}' - run it yourself to confirm)[/]")
         return
 
     # Fix unquoted --abstract: `new --abstract can AGI...` → single value
     argv = _normalize_argv(argv)
 
-    # `new` is interactive (angle/direction picking) — inject --pick 1 if missing
+    # `new` is interactive (angle/direction picking) - inject --pick 1 if missing
     # so it doesn't block waiting for user input in the middle of a chat response.
     if first == "new" and "--pick" not in argv:
         argv += ["--pick", "1"]
@@ -640,7 +640,7 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
         console.print(f"  [{GOLD}]formats[/]  [dim]{choices_str}[/]")
         fmt = console.input(f"  [{INK}]format[/] [dim][pdf]:[/] ").strip().lower() or "pdf"
         if fmt not in _EXPORT_FORMATS:
-            _out(console, f"[{ERR}]unknown format '{fmt}'[/] — choose from: {choices_str}")
+            _out(console, f"[{ERR}]unknown format '{fmt}'[/] - choose from: {choices_str}")
             return
         argv += ["--format", fmt]
 
@@ -675,7 +675,7 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
                 state["book"] = new_projects[0]
                 _out(console, f"[dim]active project -> {new_projects[0]}[/]")
     except KeyboardInterrupt:
-        _out(console, f"\n[{ERR}]interrupted[/] [dim]— state saved. Run again to resume.[/]")
+        _out(console, f"\n[{ERR}]interrupted[/] [dim]- state saved. Run again to resume.[/]")
     except SystemExit:
         pass
     except Exception as e:  # noqa: BLE001
@@ -827,7 +827,7 @@ def _build_chat_system(settings: Settings, state: dict) -> str:
     # Tell the AI about article mode + how to handle project selection
     if settings.mode == "article":
         ctx += (
-            "\n\nMODE: ARTICLE — important rules:"
+            "\n\nMODE: ARTICLE - important rules:"
             "\n  • `new` creates an ARTICLE, not a book. Say 'article topic', never 'Book abstract'."
             "\n  • When user asks to write/run/continue something, check ACTIVE PROJECT above."
             "\n  • If ACTIVE PROJECT is set → just run: ```run```"
@@ -838,7 +838,7 @@ def _build_chat_system(settings: Settings, state: dict) -> str:
             "\n    'You are in article mode. Type `/mode book` to switch, or I can write an article instead.'"
         )
     elif not active:
-        # Book mode, no active project — instruct AI to set one
+        # Book mode, no active project - instruct AI to set one
         mode_filter = "book"
         matching = [p[0] for p in projects if p[1] == mode_filter]
         if matching:
@@ -872,13 +872,13 @@ def _next_hint(state: dict, settings=None) -> str:
         if st.get("phase") == "done":
             return "next:  export  (pdf · epub · html · docx · txt · md)"
         return "next:  run   (or: status  read  /help)"
-    # No active project — show actual names
+    # No active project - show actual names
     mode_filter = "article" if (settings.mode if settings else "book") == "article" else "book"
     matching = [p[0] for p in projects if p[1] == mode_filter]
     candidates = matching or [p[0] for p in projects]
     if len(candidates) == 1:
         return f"next:  /use {candidates[0]}   then  run"
-    return "next:  type  run  — it will ask you which project"
+    return "next:  type  run  - it will ask you which project"
 
 
 def _show_post_hint(console, state: dict, settings=None) -> None:
@@ -930,7 +930,7 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
     fake = os.getenv("BOOK_AGENT_FAKE", "").lower() in ("1", "true", "yes")
     history: list[dict] = state.setdefault("chat_history", [])
 
-    # ── Plain-text (no Rich) — stream chunks directly ─────────────────────────
+    # ── Plain-text (no Rich) - stream chunks directly ─────────────────────────
     if not console:
         print(f"\nyou > {message}")
         print(f"[{model_slug}]", end=" ", flush=True)
@@ -955,21 +955,21 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
         except KeyboardInterrupt:
             print("\n(cancelled)\n")  # stop this response, stay in the shell
         except Exception as e:  # noqa: BLE001
-            print(f"\n(unavailable: {e}) — try /help\n")
+            print(f"\n(unavailable: {e}) - try /help\n")
         return
 
-    # ── Rich TUI — spinner → streaming → Markdown render ─────────────────────
+    # ── Rich TUI - spinner → streaming → Markdown render ─────────────────────
     from rich.markdown import Markdown
     from rich.rule import Rule
     from rich.text import Text
 
-    # 1. Acknowledge immediately — separator + echo user message
+    # 1. Acknowledge immediately - separator + echo user message
     console.print(Rule(style=RULE))
     console.print(Text(f"  you  ›  {message}", style=f"italic {INK}"))
 
     if fake:
         response = (
-            "I'm **WRITING AGENT** — your autonomous book-writing studio.\n\n"
+            "I'm **WRITING AGENT** - your autonomous book-writing studio.\n\n"
             "**Get started:**  `new --abstract \"your idea\"`  →  `run`  →  `export --format epub`\n\n"
             "Type `/help` for all commands, or just describe what you want to write."
         )
@@ -999,7 +999,7 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
         ):
             for chunk in gen:
                 chunks.append(chunk)
-                break  # first chunk received — drop spinner
+                break  # first chunk received - drop spinner
 
         # 3. Stream remaining chunks with Rich Live (no manual ANSI cursor tricks)
         console.print(Rule(style=RULE))
@@ -1034,7 +1034,7 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
                       {"role": "assistant", "content": full})
 
     # 6. Execute any commands the model included in code blocks
-    #    (skip when cancelled — a half-streamed response may carry a partial command)
+    #    (skip when cancelled - a half-streamed response may carry a partial command)
     cmds = _commands_in_response(full, state.get("_known_commands", set())) if full and not cancelled else []
     if cmds:
         console.print(Rule(Text(f"  {_FLEURON}  running", style=f"bold {GOLD}"), style=RULE))
@@ -1163,7 +1163,7 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
                 art = ArticlePaths(active, state["uid"])
                 if art.run_state.exists():
                     st = brain.read_json(art.run_state) or {}
-                    ctx_lines.append(f"Active project: {active} [article] — phase: {st.get('phase')}, "
+                    ctx_lines.append(f"Active project: {active} [article] - phase: {st.get('phase')}, "
                                      f"sections committed: {st.get('committed')}/{st.get('num_sections')}")
                     ms = brain.read_text(art.manuscript)
                     if ms:
@@ -1171,10 +1171,10 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
                 else:
                     bk = BookPaths(active, state["uid"])
                     st = brain.read_json(bk.run_state) or {}
-                    ctx_lines.append(f"Active project: {active} [book] — phase: {st.get('phase')}, "
+                    ctx_lines.append(f"Active project: {active} [book] - phase: {st.get('phase')}, "
                                      f"chapters committed: {st.get('committed')}/{st.get('num_chapters')}")
             update_msg = (
-                "[UPDATE REQUEST — the user has made changes or wants a review]\n"
+                "[UPDATE REQUEST - the user has made changes or wants a review]\n"
                 + ("\n".join(ctx_lines) + "\n\n" if ctx_lines else "")
                 + f"User's update request: {msg}\n\n"
                 "Review the request in the context of the project above. "
@@ -1191,11 +1191,11 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
                 del hist[-2:]
             _chat_respond(last, console, cfg, settings, state)
         else:
-            _out(console, "[dim](nothing to retry — send a chat message first)[/]")
+            _out(console, "[dim](nothing to retry - send a chat message first)[/]")
     elif name == "reset":
         state["chat_history"] = []
         state["last_chat"] = None
-        _out(console, f"[{GOLD}]context cleared[/] [dim]— assistant memory reset[/]")
+        _out(console, f"[{GOLD}]context cleared[/] [dim]- assistant memory reset[/]")
     elif name == "compact":
         hist = state.get("chat_history", [])
         if not hist:
@@ -1211,9 +1211,9 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
         elif rest[0] in ("book", "article"):
             settings.mode = rest[0]
             save_settings(settings)
-            _out(console, f"mode -> [{GOLD}]{rest[0]}[/] [dim](saved — next `new` will use this mode)[/]")
+            _out(console, f"mode -> [{GOLD}]{rest[0]}[/] [dim](saved - next `new` will use this mode)[/]")
         else:
-            _out(console, f"[{ERR}]unknown mode '{rest[0]}'[/] — valid: book  article")
+            _out(console, f"[{ERR}]unknown mode '{rest[0]}'[/] - valid: book  article")
     else:
         sug = ui.did_you_mean(name, [s[0] for s in _SLASH_COMPLETIONS])
         hint = f"did you mean /{sug}?" if sug else "try /help"
@@ -1235,7 +1235,7 @@ _SLASH_COMPLETIONS = [
     ("books",       "list all projects"),
     ("user",        "switch user"),
     ("config",      "show model + settings config"),
-    ("update",      "describe changes — AI reviews and suggests next steps"),
+    ("update",      "describe changes - AI reviews and suggests next steps"),
     ("retry",       "resend last chat message"),
     ("mode",        "show / set mode  book | article"),
     ("reset",       "clear chat memory"),
@@ -1371,7 +1371,7 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
             enable_history_search=True,
         )
     except Exception:
-        # Not a real interactive terminal (piped, CI, etc.) — fall back to console.input
+        # Not a real interactive terminal (piped, CI, etc.) - fall back to console.input
         return None, None
     return session, _patch_stdout
 
@@ -1402,9 +1402,9 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
         status_sfx = _prompt_state(state) if book else ""
 
         # Build prompt string
-        global_mode = settings.mode   # "book" or "article" — the NEW-project default
+        global_mode = settings.mode   # "book" or "article" - the NEW-project default
         if pt_session:
-            # prompt_toolkit renders ANSI — use plain text with a trailing space
+            # prompt_toolkit renders ANSI - use plain text with a trailing space
             book_part = f" · {book}" if book else ""
             sfx_plain = ""
             if book:
@@ -1420,7 +1420,7 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
                 except Exception:
                     pass
             elif global_mode == "article":
-                sfx_plain = " [article]"  # no active book — show global mode
+                sfx_plain = " [article]"  # no active book - show global mode
             prompt_plain = f"\n❧ {slug}{book_part}{sfx_plain} "
         elif console:
             mode_tag = f" [{INK}]article[/]" if not book and global_mode == "article" else ""
@@ -1455,7 +1455,7 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
         try:
             argv = shlex.split(line)
         except ValueError:
-            # shlex failed (backslash at end, unmatched quote, etc.) — treat as chat
+            # shlex failed (backslash at end, unmatched quote, etc.) - treat as chat
             argv = []
 
         first = argv[0] if argv else ""
@@ -1504,7 +1504,7 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
                 _show_post_hint(console, state, settings)
             except KeyboardInterrupt:
                 _out(console,
-                     f"\n[{ERR}]interrupted[/] [dim]— state saved. Run again to resume.[/]")
+                     f"\n[{ERR}]interrupted[/] [dim]- state saved. Run again to resume.[/]")
             except SystemExit:
                 pass
             except Exception as e:  # noqa: BLE001

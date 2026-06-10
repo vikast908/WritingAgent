@@ -18,7 +18,7 @@ own machine. A few properties are worth understanding:
   The app reads it only to call OpenRouter.
 - **LLM-driven command execution:** the TUI's conversational assistant can propose
   commands that run automatically. Destructive/config commands (`delete`, `/user`,
-  `/set`) are **blocked** from auto-execution — the human must type them. Project/user
+  `/set`) are **blocked** from auto-execution - the human must type them. Project/user
   ids are validated and deletes are confined to the brain directory.
 - **Generated content:** manuscripts and SVG diagrams come from an LLM. Exported HTML is
   sanitized (script/iframe/event handlers stripped), but treat generated output as

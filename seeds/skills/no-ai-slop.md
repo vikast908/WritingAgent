@@ -45,7 +45,7 @@ furthermore, moreover, notwithstanding, "that being said", "at its core",
 - No performative urgency without a concrete consequence.
 - No research-process narration ("could not be located", "no record was found").
 - Vary sentence length. Avoid 3+ consecutive sentences of similar word count.
-- Every vague claim needs a specific fact, name, or date — or delete it.
+- Every vague claim needs a specific fact, name, or date - or delete it.
 - If a sentence could appear unchanged on any generic site, delete or make specific.
 
 ## Anti-pattern it replaces

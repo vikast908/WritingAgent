@@ -47,7 +47,7 @@ def web_search(query: str, max_results: int = 5) -> list[SearchResult]:
         with DDGS() as ddgs:
             raw = list(ddgs.text(query, max_results=max_results))
         results = [SearchResult(title=r["title"], url=r["href"], snippet=r["body"]) for r in raw]
-    except Exception:  # noqa: BLE001 — network/rate-limit errors are non-fatal
+    except Exception:  # noqa: BLE001 - network/rate-limit errors are non-fatal
         return []
 
     if results:

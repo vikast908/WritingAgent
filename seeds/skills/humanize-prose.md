@@ -29,4 +29,4 @@ All prose, as a craft default. Apply to every paragraph before committing.
 ## Anti-pattern it replaces
 Uniform sentence rhythm, em-dash overuse, inflated language, vague attributions,
 and generic phrasing that signals machine authorship. Human writing is intentional,
-specific, and pattern-breaking — not statistically average.
+specific, and pattern-breaking - not statistically average.

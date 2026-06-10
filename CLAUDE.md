@@ -5,8 +5,8 @@ A self-correcting, autonomous writing system (books, articles, and more). Intera
 
 ## Start every session here
 
-1. Read **`resume.md`** — the session log: what happened last time and the next step.
-2. Read **`plan.md`** — the authoritative spec (architecture, memory, nodes, state machine,
+1. Read **`resume.md`** - the session log: what happened last time and the next step.
+2. Read **`plan.md`** - the authoritative spec (architecture, memory, nodes, state machine,
    learning, production, model routing, CLI).
 
 ## End every session

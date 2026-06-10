@@ -17,7 +17,7 @@ immersion, psychic distance, and scene construction.
   the character's stated feelings. Use for action and dialogue.
 - **Far distance** (summary / panoramic): compress time, survey context. Use for
   transitions and setup. Keep brief.
-- Avoid mixing distances within a paragraph — the reader gets disoriented.
+- Avoid mixing distances within a paragraph - the reader gets disoriented.
 
 ### Sensory grounding
 - Anchor each scene in at least two concrete sensory details before moving into
@@ -37,7 +37,7 @@ immersion, psychic distance, and scene construction.
 
 ### Dialogue craft
 - Every line of dialogue either reveals character, advances plot, or creates/releases
-  tension — ideally two of the three.
+  tension - ideally two of the three.
 - People rarely say exactly what they mean. Subtext is the gap between what is said
   and what is meant.
 - Avoid "said-bookisms" (exclaimed, queried, opined). "Said" and "asked" are invisible.

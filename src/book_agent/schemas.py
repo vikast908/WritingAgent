@@ -29,7 +29,7 @@ class BookPlan(BaseModel):
     themes: list[str]
     constraints: list[str]
     world_rules: list[str]
-    main_characters: list[str]  # "Name — one-line role / voice"
+    main_characters: list[str]  # "Name - one-line role / voice"
 
 
 # ── TOC ──────────────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ class Critique(BaseModel):
 # ── Extraction (canon update on commit, plan §3.4) ───────────────────────────
 class CharacterUpdate(BaseModel):
     name: str
-    status: str          # e.g. "alive", "introduced", "dead" — "" if unchanged
+    status: str          # e.g. "alive", "introduced", "dead" - "" if unchanged
     new_facts: list[str]
     voice_notes: list[str]
 

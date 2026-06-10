@@ -264,7 +264,7 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "") -> s
 
     Returns raw SVG XML (starts with <svg ...). On failure returns a minimal placeholder SVG.
     """
-    model = cfg.model_for("diagram")  # Flash — reasoning model wastes tokens on thinking, not SVG
+    model = cfg.model_for("diagram")  # Flash - reasoning model wastes tokens on thinking, not SVG
     _diagram_key = (model, heading, context[:900])
     _fake = bool(os.getenv("BOOK_AGENT_FAKE"))
     if not _fake:
@@ -286,8 +286,8 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "") -> s
         "from this topic. Pick the diagram type that best fits: flowchart, concept map, two-column "
         "comparison, timeline, or process loop.\n\n"
         "CRITICAL:\n"
-        "- First character of your response must be '<' — no preamble, no fences, no explanation.\n"
-        "- Use the ACTUAL concepts from the topic as node/label text — not generic placeholders.\n"
+        "- First character of your response must be '<' - no preamble, no fences, no explanation.\n"
+        "- Use the ACTUAL concepts from the topic as node/label text - not generic placeholders.\n"
         "- Every node/box must have a readable text label.\n"
         "- Include connecting arrows (use the #arrow marker from <defs>).\n"
         "- Canvas: 860 × 520 px.\n"

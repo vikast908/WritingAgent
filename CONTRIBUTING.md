@@ -19,7 +19,7 @@ pip install -e ".[dev]"            # editable install + pytest + ruff
 
 ### Optional: context compression (headroom)
 
-Headroom is optional — the app runs fine without it.
+Headroom is optional - the app runs fine without it.
 
 - **Linux / macOS:** `pip install -e ".[headroom]"` (prebuilt Rust wheels).
 - **Windows:** there is no Windows wheel for current versions; install the last
@@ -36,7 +36,7 @@ cp .env.example .env               # Windows: copy .env.example .env
 # add your OPENROUTER_API_KEY
 ```
 
-You do **not** need a key to develop or run the tests — see fake mode below.
+You do **not** need a key to develop or run the tests - see fake mode below.
 
 ## Running tests
 
@@ -46,7 +46,7 @@ pytest
 
 The suite runs fully offline. Tests that exercise the pipeline use **fake mode**
 (`BOOK_AGENT_FAKE=1`), where every LLM node returns deterministic placeholder
-output — no network, no key. You can drive the whole app this way too:
+output - no network, no key. You can drive the whole app this way too:
 
 ```bash
 BOOK_AGENT_FAKE=1 python book.py new --abstract "test" --pick 1
@@ -62,17 +62,17 @@ ruff check .          # lint
 ruff format .         # format
 ```
 
-A `.pre-commit-config.yaml` is provided — run `pre-commit install` to lint on commit.
+A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on commit.
 
 ## Conventions
 
 - **`plan.md`** is the architecture/spec source of truth; **`resume.md`** is the running
   dev journal (newest entry on top). Durable decisions go in `plan.md`, not `resume.md`.
-- Keep nodes deterministic LLM calls — see `plan.md` §4. Don't add agentic behavior.
+- Keep nodes deterministic LLM calls - see `plan.md` §4. Don't add agentic behavior.
 - Network/IO is best-effort: degrade gracefully, never crash the pipeline on a fetch error.
 - All numeric thresholds are tunable config (`config/settings.yaml`), not hard-coded.
 - Cross-platform: use `pathlib`, avoid shelling out, and don't assume a POSIX or Windows path
-  layout. CI runs the suite on all three OSes — keep it green.
+  layout. CI runs the suite on all three OSes - keep it green.
 
 ## Submitting changes
 
@@ -85,9 +85,9 @@ A `.pre-commit-config.yaml` is provided — run `pre-commit install` to lint on 
 
 A 60-second map (full detail in `plan.md` and the README's Architecture section):
 
-- `src/book_agent/orchestrator.py` — durable on-disk state machine (the brain *is* the checkpoint).
-- `nodes.py` / `prompts.py` / `schemas.py` — the LLM nodes, their prompts, and structured outputs.
-- `llm.py` — OpenRouter wrapper (retry/backoff, timeout, repair, headroom compression).
-- `brain.py` / `store.py` — markdown filesystem layout + SQLite/FTS canon & graph.
-- `shell.py` / `cli.py` / `ui.py` — Rich TUI, one-shot CLI, shared UI helpers.
-- `export.py` — pdf · epub · html · docx · txt · md renderers.
+- `src/book_agent/orchestrator.py` - durable on-disk state machine (the brain *is* the checkpoint).
+- `nodes.py` / `prompts.py` / `schemas.py` - the LLM nodes, their prompts, and structured outputs.
+- `llm.py` - OpenRouter wrapper (retry/backoff, timeout, repair, headroom compression).
+- `brain.py` / `store.py` - markdown filesystem layout + SQLite/FTS canon & graph.
+- `shell.py` / `cli.py` / `ui.py` - Rich TUI, one-shot CLI, shared UI helpers.
+- `export.py` - pdf · epub · html · docx · txt · md renderers.

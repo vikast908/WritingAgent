@@ -21,7 +21,7 @@ def render_plan_md(plan: S.BookPlan) -> str:
 def render_toc_md(toc: S.TOC) -> str:
     out = ["# Table of Contents", ""]
     for c in toc.chapters:
-        deps = ", ".join(map(str, c.depends_on)) or "—"
+        deps = ", ".join(map(str, c.depends_on)) or "-"
         out += [
             f"## {c.number}. {c.title}",
             f"- **Purpose:** {c.purpose}",

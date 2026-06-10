@@ -41,7 +41,7 @@ dependencies = [
 # degrades gracefully). On Linux/macOS the latest headroom-ai ships prebuilt
 # Rust wheels, so it installs cleanly here. On Windows there is no wheel and the
 # transitive `litellm` has paths long enough to break installs without long-path
-# support — there, install the last pure-Python release without its deps:
+# support - there, install the last pure-Python release without its deps:
 #   pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"
 # (tiktoken is the only piece we actually need for token counting.)
 headroom = [

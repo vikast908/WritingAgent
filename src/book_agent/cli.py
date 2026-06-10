@@ -58,7 +58,7 @@ def _resolve_book(uid: str, book_id: str | None) -> str:
     if not projects:
         sys.exit(f"No projects for user '{uid}'. Create one with `book new`.")
     ids = ", ".join(p[0] for p in projects)
-    sys.exit("Multiple projects — specify --book-id: " + ids)
+    sys.exit("Multiple projects - specify --book-id: " + ids)
 
 
 def cmd_new(args, cfg, settings, uid):
@@ -151,14 +151,14 @@ def cmd_status(args, cfg, settings, uid):
     unit = "section" if is_article else "chapter"
     cur, tot = st.get(cur_key, "?"), st.get(tot_key, "?")
     if isinstance(cur, int) and isinstance(tot, int):
-        cur = min(cur, tot)   # current increments past total at completion — clamp for display
+        cur = min(cur, tot)   # current increments past total at completion - clamp for display
     body = Text()
     body.append(f"{unit} {cur}/{tot}", style=ui.PARCH)
     body.append(f"   ·   committed {st.get('committed', 0)}", style=ui.DIM)
     if words:
         body.append(f"\n{words:,} words   ·   ~{ui.reading_time_min(words)} min read", style=ui.DIM)
     if st.get("pending_review"):
-        body.append(f"\n⚠ review pending — resume:  review --chapter {st.get(cur_key)} "
+        body.append(f"\n⚠ review pending - resume:  review --chapter {st.get(cur_key)} "
                     f'--instruction "..."', style=f"bold {ui.ERR}")
     elif st.get("open_reviews"):
         body.append("\nopen reviews: " + ", ".join(st["open_reviews"]), style=ui.DIM)
@@ -195,7 +195,7 @@ def cmd_read(args, cfg, settings, uid):
         return
     from rich.markdown import Markdown
     md = Markdown(text)
-    if args.manuscript:                 # long — page through it
+    if args.manuscript:                 # long - page through it
         with console.pager(styles=True):
             console.print(md)
     else:
@@ -365,7 +365,7 @@ def build_parser(settings):
     sub.add_parser("list", parents=[common], help="List books for the user")
     p_export = sub.add_parser("export", parents=[common], help="Export the manuscript (pdf/epub/html/docx/txt/md)")
     p_export.add_argument("--format", choices=_EXPORT_FORMATS, default=None,
-                          help="Output format — omit to choose interactively")
+                          help="Output format - omit to choose interactively")
     sub.add_parser("seed-skills", parents=[common], help="Install built-in craft skills")
     p_del = sub.add_parser("delete", parents=[common], help="Permanently delete a book")
     p_del.add_argument("name", nargs="?", help="Book ID to delete (positional shorthand)")

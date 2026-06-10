@@ -1,9 +1,9 @@
-"""Wikimedia Commons image fetch (plan §2 — illustrated/technical books).
+"""Wikimedia Commons image fetch (plan §2 - illustrated/technical books).
 
 Queries the Wikimedia Commons API, filters for CC/PD licenses, and returns structured
 results with URL + full attribution ready for markdown embedding.
 
-Only used when `use_images=True` in settings (default off — fiction rarely needs it).
+Only used when `use_images=True` in settings (default off - fiction rarely needs it).
 No extra deps: uses stdlib urllib only.
 """
 from __future__ import annotations
@@ -118,5 +118,5 @@ def search_wikimedia(query: str, max_results: int = 3) -> list[ImageResult]:
         titles = _search_titles(query, limit=max_results * 4)
         results = _fetch_info(titles)
         return results[:max_results]
-    except Exception:  # noqa: BLE001 — network errors are non-fatal
+    except Exception:  # noqa: BLE001 - network errors are non-fatal
         return []

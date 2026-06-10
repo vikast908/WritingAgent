@@ -14,7 +14,7 @@ def _slug_id(title: str) -> str:
 
 # Manuscript markdown can carry raw HTML straight from an LLM (python-markdown
 # passes it through unescaped). Strip active content so exported HTML/EPUB can't
-# execute script when opened with file:// privileges. Conservative denylist —
+# execute script when opened with file:// privileges. Conservative denylist -
 # not a full sanitizer, but it neutralizes the realistic injection vectors here.
 _DANGER_TAGS = "script|iframe|object|embed|link|meta|base|form|svg|math"
 _STRIP_BLOCK = re.compile(rf"<\s*({_DANGER_TAGS})\b[^>]*>.*?<\s*/\s*\1\s*>",
@@ -220,7 +220,7 @@ def markdown_to_docx(md_text: str, out_path, title: str = "Article") -> Path:
             capture_output=True, text=True,
         )
     except FileNotFoundError:
-        raise RuntimeError("pandoc not found on PATH — install pandoc to export .docx") from None
+        raise RuntimeError("pandoc not found on PATH - install pandoc to export .docx") from None
     finally:
         Path(tmp_path).unlink(missing_ok=True)   # never leak the temp file, even on error
     if result.returncode != 0:

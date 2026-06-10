@@ -61,7 +61,7 @@ class Settings:
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
     use_headroom: bool = True               # context compression via headroom-ai (60-95% fewer tokens)
     request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
-    mode: str = "book"           # "book" | "article" — default for new projects
+    mode: str = "book"           # "book" | "article" - default for new projects
     num_sections: int = 6        # default section count for articles
 
 

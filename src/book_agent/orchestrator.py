@@ -3,7 +3,7 @@
 The brain on disk IS the checkpoint: every step persists to run_state.json + committed
 markdown, so `run()` is resumable across process restarts and human pauses. (This fulfils
 the plan's checkpoint/resume requirement without LangGraph's in-memory interrupt machinery;
-LangGraph can wrap this engine later — see plan §12 note.)
+LangGraph can wrap this engine later - see plan §12 note.)
 
 Phases: chapters -> consolidate -> production -> learn -> done.
 Per chapter: write -> critique -> (approve→commit | revise<cap→rewrite | cap/escalate→ESCALATE).
@@ -169,14 +169,14 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
     blueprint = toc.chapters[n - 1]
     # Resume guard: if this chapter was already committed on a prior run but the
     # state advance didn't land (crash between _commit and the run_state write),
-    # don't re-draft/re-extract — that would duplicate canon facts. Just advance.
+    # don't re-draft/re-extract - that would duplicate canon facts. Just advance.
     if brain.read_text(paths.ch(n)) is not None:
         log(f"\n== Chapter {n}: {blueprint.title} ==")
-        log("   [resume] already committed — advancing")
+        log("   [resume] already committed - advancing")
         return "commit"
     base_context = retrieval.assemble_context(store, paths, blueprint)
 
-    # Research and image-fetch are independent network-bound steps — run them
+    # Research and image-fetch are independent network-bound steps - run them
     # concurrently (the chapter chain itself stays sequential for continuity).
     def _do_research():
         if not state.get("use_researcher"):
@@ -201,7 +201,7 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
         if fetched:
             log(f"   fetched {len(fetched)} image(s) from Wikimedia Commons")
             return [r.to_markdown(str(i + 1)) for i, r in enumerate(fetched)]
-        # No Wikimedia image — generate an SVG diagram instead
+        # No Wikimedia image - generate an SVG diagram instead
         svg_text = nodes.generate_svg_diagram(cfg, blueprint.title, blueprint.purpose or "")
         svg_dir = paths.root / "images"
         svg_dir.mkdir(parents=True, exist_ok=True)
@@ -298,13 +298,13 @@ def _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pas
 def _escalate(paths, n, crit: S.Critique, draft: str) -> None:
     brain.write_text(paths.ch_draft(n), draft)
     lines = [
-        f"# Review needed — chapter {n}", "",
+        f"# Review needed - chapter {n}", "",
         f"- verdict: {crit.verdict}", f"- confidence: {crit.confidence:.2f}", "",
         "## Blocking",
         *(f"- [{b.type}] {b.where}: {b.detail}\n  fix: {b.fix}" for b in crit.blocking),
         "", "## Nits", *(f"- {x}" for x in crit.nits), "",
         "## Your directed instructions",
-        "_Run: book review --chapter N --instruction \"...\" — then book run to resume._",
+        "_Run: book review --chapter N --instruction \"...\" - then book run to resume._",
     ]
     brain.write_text(paths.review_of(n), "\n".join(lines))
     brain.append_text(paths.revision_log, f"## Chapter {n} ESCALATED ({crit.verdict})")
@@ -312,7 +312,7 @@ def _escalate(paths, n, crit: S.Critique, draft: str) -> None:
 
 # ── Consolidation / Production / Learner ─────────────────────────────────────
 def _write_consolidation_review(paths, tag, report) -> None:
-    lines = [f"# Consolidation review — {tag}", "",
+    lines = [f"# Consolidation review - {tag}", "",
              f"{len(report.contradictions)} contradiction(s) found:", ""]
     lines += [f"- [{c.kind}] ch{c.chapters}: {c.detail}\n  fix: {c.fix}"
               for c in report.contradictions]
@@ -378,7 +378,7 @@ def _production(cfg, paths, plan, store, *, log) -> None:
     author_meta = brain.read_text(brain.user_profile(paths.uid))
     toc_md = brain.read_text(paths.toc)
 
-    # Front/back-matter components are independent of one another — generate them
+    # Front/back-matter components are independent of one another - generate them
     # concurrently, then write in order. (Keyed by index to tolerate duplicate names.)
     tasks = {}
     for i, comp in enumerate(pplan.front_matter):
@@ -436,7 +436,7 @@ def _learn(cfg, paths, plan, *, log) -> None:
     out = nodes.learn(cfg, plan, instructions, "\n".join(findings), existing)
     for prop in out.skills:
         skills_mod.write_skill(uid, prop)
-    watch = ["# Avoid list (watch-list)", ""] + [f"- {w.pattern} — {w.why}" for w in out.watch_items]
+    watch = ["# Avoid list (watch-list)", ""] + [f"- {w.pattern} - {w.why}" for w in out.watch_items]
     brain.write_text(brain.watch_list(uid), "\n".join(watch))
     statuses = skills_mod.reconcile(uid)
     log(f"   [learn] +{len(out.skills)} skills, {len(out.watch_items)} watch items; "
@@ -465,7 +465,7 @@ def delete_book(uid: str, book_id: str) -> None:
             # A file is locked (e.g. open in Word/LibreOffice on Windows).
             locked = getattr(e, "filename", None) or str(e)
             raise PermissionError(
-                f"Cannot delete — a file is open in another program.\n"
+                f"Cannot delete - a file is open in another program.\n"
                 f"  Close it and try again: {locked}"
             ) from None
 
@@ -666,10 +666,10 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
     # not advanced => crash window; don't reprocess.
     if brain.read_text(paths.section(n)) is not None:
         log(f"\n== Section {n}: {section.heading} ==")
-        log("   [resume] already committed — advancing")
+        log("   [resume] already committed - advancing")
         return "commit"
 
-    # Research and image-fetch are independent network steps — run concurrently.
+    # Research and image-fetch are independent network steps - run concurrently.
     def _do_research():
         if not state.get("use_researcher"):
             return ("", [])
@@ -695,7 +695,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
         if got:
             log(f"   fetched {len(got)} image(s) from Wikimedia Commons")
             return [r.to_markdown(str(i + 1)) for i, r in enumerate(got)]
-        # No Wikimedia image — generate an SVG diagram instead
+        # No Wikimedia image - generate an SVG diagram instead
         ctx = getattr(section, "purpose", "") or getattr(section, "heading", "")
         svg_text = nodes.generate_svg_diagram(cfg, section.heading, ctx)
         paths.images.mkdir(parents=True, exist_ok=True)
@@ -713,7 +713,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
     article_context = _assemble_article_context(paths, n)
     full_context = (context_prefix + article_context).strip() or None
 
-    # Skills — use angle as genre proxy
+    # Skills - use angle as genre proxy
     embed_cache = None
     if state.get("use_embeddings"):
         embed_cache = brain._ROOT / ".index" / "embed_cache.json"
@@ -828,7 +828,7 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
             date = s.get("date", "")
             entry = f"{i}. [{title}]({url})"
             if date:
-                entry += f" — {date}"
+                entry += f" - {date}"
             lines.append(entry)
         refs_md = "\n".join(lines)
 
@@ -847,7 +847,7 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
     if refs_md:
         parts.append("\n---\n\n" + refs_md)
     brain.write_text(paths.manuscript, "\n\n---\n\n".join(parts))
-    # Clean up intermediate section files — keep only manuscript + images + metadata
+    # Clean up intermediate section files - keep only manuscript + images + metadata
     paths.cleanup_sections()
     log(f"   [production] {len(sections_md)} sections, {len(unique)} sources -> {paths.manuscript}")
 
@@ -871,7 +871,7 @@ def _learn_article(cfg, paths: ArticlePaths, outline, *, log) -> None:
     out = nodes.learn(cfg, article_as_plan, instructions, "\n".join(findings), existing)
     for prop in out.skills:
         skills_mod.write_skill(uid, prop)
-    watch = ["# Avoid list (watch-list)", ""] + [f"- {w.pattern} — {w.why}"
+    watch = ["# Avoid list (watch-list)", ""] + [f"- {w.pattern} - {w.why}"
                                                    for w in out.watch_items]
     brain.write_text(brain.watch_list(uid), "\n".join(watch))
     skills_mod.reconcile(uid)

@@ -30,7 +30,7 @@ feels structurally loose or fails to build toward anything.
 
 ### Argument arc (for non-fiction / articles)
 - **Thesis → evidence → complication → synthesis.** A flat "here are five points"
-  structure has no arc. The complication — where you challenge your own thesis — is
+  structure has no arc. The complication - where you challenge your own thesis - is
   what makes the argument credible and the piece worth reading.
 - Each section should advance the argument, not just add a related fact.
 - The final section should leave the reader with something new, not just a summary

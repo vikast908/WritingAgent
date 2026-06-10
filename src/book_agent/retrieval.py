@@ -139,7 +139,7 @@ def _score_semantic(
 
     try:
         vecs = emb.embed_texts(all_texts, cache_path=embed_cache)
-    except Exception:  # noqa: BLE001 — fall back to lexical on any embedding failure
+    except Exception:  # noqa: BLE001 - fall back to lexical on any embedding failure
         return _score_lexical(plan, candidates)
 
     profile_vec = vecs[0]

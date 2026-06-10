@@ -9,14 +9,14 @@ import difflib
 import os
 
 # ── palette: ink & gilt (editorial) ──────────────────────────────────────────
-GOLD = "#ff6719"     # brand orange — wordmark + accents
-GOLD_HI = "#ff8c4b"  # lit orange — gradient top
-INK = "#7c9cbf"      # slate ink-blue — tagline / values
-PARCH = "#d9cfb8"    # parchment — body text
+GOLD = "#ff6719"     # brand orange - wordmark + accents
+GOLD_HI = "#ff8c4b"  # lit orange - gradient top
+INK = "#7c9cbf"      # slate ink-blue - tagline / values
+PARCH = "#d9cfb8"    # parchment - body text
 DIM = "grey42"       # secondary
-RULE = "#8c3a10"     # dim burnt-orange — rules
-ERR = "#a8533a"      # burgundy — errors
-ON_CLR = "#6aaa5c"   # muted green — feature on / done
+RULE = "#8c3a10"     # dim burnt-orange - rules
+ERR = "#a8533a"      # burgundy - errors
+ON_CLR = "#6aaa5c"   # muted green - feature on / done
 OFF_CLR = "grey50"   # feature off
 FLEURON = "❧"
 

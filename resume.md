@@ -1,4 +1,4 @@
-# Resume — WRITING AGENT
+# Resume - WRITING AGENT
 
 > **Read this first, then `plan.md`.** This is the session log: what happened last time and
 > where to pick up. Newest entry on top. **Update it at the end of every working session.**
@@ -7,9 +7,9 @@
 
 - **Phase:** **Production-ready.** Books and articles both live-validated end-to-end.
 - **Agent name:** **WRITING AGENT** (was BOOKWRITER). CLI: `writing-agent` / `bookwriter` / `book` / `python book.py`.
-- **Article pipeline:** fully built and live-run — "How to think with AI without offloading your brain to AI" (6 sections, DOCX exported).
-- **Book pipeline:** fully built and live-run — *The Misprint File* (3 chapters, 9-page PDF).
-- **New this session (2026-06-10 session 5 — reliability/UX/security hardening, branch `hardening-reliability-ux`):**
+- **Article pipeline:** fully built and live-run - "How to think with AI without offloading your brain to AI" (6 sections, DOCX exported).
+- **Book pipeline:** fully built and live-run - *The Misprint File* (3 chapters, 9-page PDF).
+- **New this session (2026-06-10 session 5 - reliability/UX/security hardening, branch `hardening-reliability-ux`):**
   - **Headroom fixed:** pinned `headroom-ai==0.10.17` (last pure-Python release; ≥0.21 is a Rust/pyo3 ext with no Windows wheel), installed `--no-deps`; `_compress` counts tokens with a tiktoken model so compression actually runs on DeepSeek slugs.
   - **Reliability:** classified retry + exponential backoff (honors Retry-After), fail-fast on 4xx, request timeout, real structured-output repair retry, token-usage telemetry; atomic `write_json`/`write_text` + corrupt-tolerant `read_json`; resume guards prevent double-commit / canon duplication.
   - **Performance:** independent network steps overlap (research ∥ image/SVG; parallel front/back-matter) via `concurrency.py`; on-disk cache for web search + SVG diagrams (`cache.py`). Chapter chain stays sequential by design (continuity).
@@ -20,35 +20,35 @@
 - **How to run:** `writing-agent` (after `pip install -e .`) or `python book.py` → interactive shell; `python book.py <cmd> ...` for one-shot. Needs `OPENROUTER_API_KEY` in `.env`.
 - **Next up (all optional):** (a) unit tests for article nodes; (b) more built-in craft skills for technical writing; (c) LangGraph wrapper; (d) multi-user / server mode.
 - **Stack:** Python; durable on-disk state machine; markdown brain + SQLite/FTS5; OpenRouter + DeepSeek V4 Pro/Flash per-node; Rich TUI + prompt_toolkit.
-- **Platforms:** **Linux · macOS · Windows** — all code is portable (pathlib, atomic `os.replace`, `Path.as_uri()` links, OS-aware optional headroom) and CI runs the suite on all three × Python 3.10–3.13.
+- **Platforms:** **Linux · macOS · Windows** - all code is portable (pathlib, atomic `os.replace`, `Path.as_uri()` links, OS-aware optional headroom) and CI runs the suite on all three × Python 3.10–3.13.
 - **Open-source ready:** MIT `LICENSE`, full `pyproject` metadata (dist renamed `writing-agent`), `CONTRIBUTING.md` / `SECURITY.md` / `CODE_OF_CONDUCT.md` / `CHANGELOG.md`, GitHub Actions CI, issue/PR templates, ruff + pre-commit.
 - **Open product calls:** none blocking.
 
 ## How to use this file
 
 - **Session start:** read this file top-to-bottom, then `plan.md`.
-- **Session end:** prepend a new `### <YYYY-MM-DD> — <summary>` entry below with what changed,
+- **Session end:** prepend a new `### <YYYY-MM-DD> - <summary>` entry below with what changed,
   decisions made, and the concrete next step.
 - Keep entries short and factual. Durable decisions go in `plan.md`; this is the journal. Don't
   duplicate.
 
 ## Session log
 
-### 2026-06-10 — Reliability / performance / UX / security hardening (branch `hardening-reliability-ux`)
+### 2026-06-10 - Reliability / performance / UX / security hardening (branch `hardening-reliability-ux`)
 
 Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f7ee` (richer TUI/CLI). 44 tests pass.
 
 **Headroom (context compression) fixed on Windows:**
 - `headroom-ai` ≥0.21 is a Rust/pyo3 extension with **no published Windows wheel**; the sdist build failed (no toolchain + Git-Bash `link.exe` shadowing MSVC). 0.10.17 is the **last pure-Python release**, but its compressor still needs a native `_core`, *and* it routes non-tiktoken models (DeepSeek) to a HuggingFace tokenizer that hard-imports `transformers` → silently no-ops.
-- Fix: install `headroom-ai==0.10.17 --no-deps` (skips `litellm`, whose deeply-nested paths break installs without Windows long-path support); `llm._compress` now passes a tiktoken model (`gpt-4o`) to headroom purely for token counting — compression is model-agnostic, so DeepSeek runs really compress (~97% on tool-output JSON). Declared `tiktoken` + `ebooklib`; added `requirements.lock.txt`. `headroom-ai` is now an optional extra in `pyproject.toml`, not a hard dep.
+- Fix: install `headroom-ai==0.10.17 --no-deps` (skips `litellm`, whose deeply-nested paths break installs without Windows long-path support); `llm._compress` now passes a tiktoken model (`gpt-4o`) to headroom purely for token counting - compression is model-agnostic, so DeepSeek runs really compress (~97% on tool-output JSON). Declared `tiktoken` + `ebooklib`; added `requirements.lock.txt`. `headroom-ai` is now an optional extra in `pyproject.toml`, not a hard dep.
 
 **Reliability / performance (`llm.py`, `orchestrator.py`, new `concurrency.py` / `cache.py`):**
 - Classified retry with exponential backoff + jitter (honors `Retry-After`), fail-fast on 4xx, per-request `timeout` (new `request_timeout` setting), SDK retries disabled (we own them). Real structured-output **repair retry** (feeds the bad output + error back). Token-usage telemetry (`[usage]` line at run end + live in the dashboard).
-- Overlap independent network steps within a unit (research ∥ image/SVG) and parallelize production components via `concurrency.gather` (thread pool). **The chapter/section chain stays sequential** — each pulls the previous summary for continuity, so it can't be parallelized without breaking canon (correction to an earlier over-estimate).
+- Overlap independent network steps within a unit (research ∥ image/SVG) and parallelize production components via `concurrency.gather` (thread pool). **The chapter/section chain stays sequential** - each pulls the previous summary for continuity, so it can't be parallelized without breaking canon (correction to an earlier over-estimate).
 - On-disk cache (`cache.py`) for web search (7-day TTL) and generated SVG diagrams.
 
 **Durability / security:**
-- `brain.write_json`/`write_text` are atomic (temp + `os.replace`); `read_json` tolerates corrupt files (returns `None`) — `run_state.json` can no longer become unresumable. Resume guards in `_process_chapter`/`_process_article_section` skip already-committed units (no double-commit, no duplicate canon facts).
+- `brain.write_json`/`write_text` are atomic (temp + `os.replace`); `read_json` tolerates corrupt files (returns `None`) - `run_state.json` can no longer become unresumable. Resume guards in `_process_chapter`/`_process_article_section` skip already-committed units (no double-commit, no duplicate canon facts).
 - Chat assistant **cannot auto-execute** `delete` / `/user` / `/set` (data-loss / tenant / config). `is_safe_id` validation + `delete_book` path confinement. Export HTML sanitized (strip script/iframe/handlers/`javascript:`). `retrieval._parse_frontmatter` coerces non-dict → `{}`; `skills.write_skill` emits YAML-safe frontmatter + avoids slug collisions; `Critique.confidence` clamped to [0,1]; `load_config` falls back if `models.yaml` missing.
 
 **UX (`shell.py`, `cli.py`, new `ui.py`):**
@@ -57,20 +57,20 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 
 **Removed dead code:** vertical-slice prototype `run.py` + `src/book_agent/slice.py`.
 
-**Next:** push the branch + open PR when ready; the `--manuscript` path in `cmd_read` still uses `BookPaths` (won't find article manuscripts — pre-existing, low priority); consider article-node unit tests.
+**Next:** push the branch + open PR when ready; the `--manuscript` path in `cmd_read` still uses `BookPaths` (won't find article manuscripts - pre-existing, low priority); consider article-node unit tests.
 
-### 2026-06-09 — Bug fixes, headroom, SVG diagrams, colour update, push to GitHub
+### 2026-06-09 - Bug fixes, headroom, SVG diagrams, colour update, push to GitHub
 
 **Bugs fixed:**
-- `AttributeError: 'ArticlePaths' object has no attribute 'ch_draft'` — added duck-type aliases (`ch`, `ch_draft`, `ch_summary`, `eval_of`) to `ArticlePaths` so shared orchestrator helpers work for both project types.
-- `list_projects` type label wrong — now reads `run_state.json` `mode` field first; a project in `books/` created in article mode shows correctly as `(article)`.
-- Delete `PermissionError` (WinError 32) — wrapped `shutil.rmtree` to catch `PermissionError` and show a friendly "close the file and try again" message instead of a raw traceback.
-- SVG fallback — `generate_svg_diagram` was returning the placeholder because the model wraps SVG in a code fence and adds prose after. Fixed extraction: greedy match first; if no closing `</svg>`, extract from `<svg` to last `>` and auto-close.
-- SVG model — was using DeepSeek V4 Pro (reasoning model) which burned all 6000 tokens on thinking. Moved to a dedicated `diagram` node (Flash) so all tokens go to SVG output.
+- `AttributeError: 'ArticlePaths' object has no attribute 'ch_draft'` - added duck-type aliases (`ch`, `ch_draft`, `ch_summary`, `eval_of`) to `ArticlePaths` so shared orchestrator helpers work for both project types.
+- `list_projects` type label wrong - now reads `run_state.json` `mode` field first; a project in `books/` created in article mode shows correctly as `(article)`.
+- Delete `PermissionError` (WinError 32) - wrapped `shutil.rmtree` to catch `PermissionError` and show a friendly "close the file and try again" message instead of a raw traceback.
+- SVG fallback - `generate_svg_diagram` was returning the placeholder because the model wraps SVG in a code fence and adds prose after. Fixed extraction: greedy match first; if no closing `</svg>`, extract from `<svg` to last `>` and auto-close.
+- SVG model - was using DeepSeek V4 Pro (reasoning model) which burned all 6000 tokens on thinking. Moved to a dedicated `diagram` node (Flash) so all tokens go to SVG output.
 
 **Headroom integration:**
 - `headroom-ai` added as a core dependency (auto-installs with `pip install -e .`).
-- `use_headroom: true` by default — compresses messages in `complete_text`, `complete_structured`, `stream_text`.
+- `use_headroom: true` by default - compresses messages in `complete_text`, `complete_structured`, `stream_text`.
 - `configure_headroom(enabled)` called at startup from both `cli.py` and `shell.py`.
 
 **Colour update:**
@@ -78,22 +78,22 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 - SVG diagram accent palette updated: `#f7934f` → `#ff6719`.
 
 **Other:**
-- `use_images: true` default in `settings.yaml` — diagrams now generate on every run.
+- `use_images: true` default in `settings.yaml` - diagrams now generate on every run.
 - SVG prompt completely rewritten: 860×520 canvas, `<defs>` arrowhead marker, accent palette, mandatory topic-specific node labels, 6000 token budget.
 - README.md fully rewritten with ASCII banner, badges, full pipeline diagrams, architecture table, all commands and slash commands, headroom section, SVG section, design decisions.
 - Pushed to https://github.com/vikast908/WritingAgent (temp repo).
 
 **Next:** unit tests for article nodes; more craft skills; LangGraph wrapper (optional).
 
-### 2026-06-09 — Rename to WRITING AGENT, /update command, UX overhaul, docs update
+### 2026-06-09 - Rename to WRITING AGENT, /update command, UX overhaul, docs update
 
-**Rename:** `BOOKWRITER` → `WRITING AGENT` throughout — shell wordmark, tagline, `llm.py` `X-Title`, `pyproject.toml` (`writing-agent` entry point added), `CLAUDE.md`, `README.md`, `resume.md`.
+**Rename:** `BOOKWRITER` → `WRITING AGENT` throughout - shell wordmark, tagline, `llm.py` `X-Title`, `pyproject.toml` (`writing-agent` entry point added), `CLAUDE.md`, `README.md`, `resume.md`.
 
 **`/update` slash command:** type `/update [description]` or just `/update` (prompts inline). Reads the active project's `run_state.json` + last 800 chars of manuscript, then asks the chat agent to review and advise. Added to `_SLASH_HELP`, `_SLASH_COMPLETIONS`, and welcome screen.
 
 **`_auto_or_pick_project()` helper:** eliminates all `--book-id` errors in the TUI. Auto-picks if exactly one project exists; shows a numbered picker for multiple; filters by `settings.mode` first (`article` mode only sees articles), falls back to all if no mode match. Called before any command in `_NEEDS_PROJECT`.
 
-**`parse_known_args`:** both `_execute_cmd` and the main shell loop now use `parse_known_args` instead of `parse_args` — filler words (`run it`, `run now`, `run please`) no longer crash.
+**`parse_known_args`:** both `_execute_cmd` and the main shell loop now use `parse_known_args` instead of `parse_args` - filler words (`run it`, `run now`, `run please`) no longer crash.
 
 **`autonomous` bug fixed:** `cmd_new` was hardcoded to `autonomous=False`; changed to `getattr(args, "autonomous", settings.autonomous)` so `settings.yaml` `autonomous: true` is respected.
 
@@ -101,18 +101,18 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 
 **DOCX fix:** `export.markdown_to_docx` replaces `\n---\n` with `\n\n* * *\n\n` before pandoc, prepends a YAML front-matter block, and uses `--syntax-highlighting=kate`.
 
-**SVG fallback:** `nodes.generate_svg_diagram()` + `prompts.DIAGRAM_SYS` — when `use_images=True` and Wikimedia returns nothing, the LLM generates a self-contained `<svg>` saved to `images/`. Applies to both books (per-chapter) and articles (per-section).
+**SVG fallback:** `nodes.generate_svg_diagram()` + `prompts.DIAGRAM_SYS` - when `use_images=True` and Wikimedia returns nothing, the LLM generates a self-contained `<svg>` saved to `images/`. Applies to both books (per-chapter) and articles (per-section).
 
 **Docs:** `README.md` fully rewritten (WRITING AGENT name, article mode, all 6 exports, `/update`, SVG fallback, flat article layout, accurate status). `plan.md` implementation status updated. `resume.md` (this file) current status block updated.
 
 **Next:** unit tests for article nodes; more craft skills for technical writing; LangGraph wrapper (still optional).
 
-### 2026-06-09 — Skills overhaul, 5-format export, ddgs fix, slop rules
+### 2026-06-09 - Skills overhaul, 5-format export, ddgs fix, slop rules
 
 **Skills (non-negotiable, always-on):**
-- `NO_SLOP` constant added to `prompts.py` — injected into `WRITER_SYS`, `ARTICLE_WRITER_SYS`, `HUMANIZER_SYS`, and referenced in both critic prompts. 24 rules: banned verbs/adjectives/transitions/phrases/openers, no em-dashes, no fabrications, concrete > abstract.
+- `NO_SLOP` constant added to `prompts.py` - injected into `WRITER_SYS`, `ARTICLE_WRITER_SYS`, `HUMANIZER_SYS`, and referenced in both critic prompts. 24 rules: banned verbs/adjectives/transitions/phrases/openers, no em-dashes, no fabrications, concrete > abstract.
 - `HUMANIZER_SYS` fully rewritten with blader/humanizer rules (10 specific actions: inflated significance, symbolic language, weak construction verbs, synonym cycling, filler openers, transition phrases, sentence rhythm, hedging, rule-of-three).
-- `ARTICLE_CRITIC_SYS` / `CRITIC_SYS` — both now flag AI slop as BLOCKING (not just a nit).
+- `ARTICLE_CRITIC_SYS` / `CRITIC_SYS` - both now flag AI slop as BLOCKING (not just a nit).
 - 5 new seed skills (all general, no topic references): `no-ai-slop`, `writing-principles`, `prose-craft`, `story-architecture`, `prose-critique`. Updated: `humanize-prose`.
 - Removed 5 topic-specific learned skills from user brain (Serendipity Code world-building rules).
 
@@ -128,34 +128,34 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 
 **Next:** Export to DOCX once pipeline finishes (sections 5-6). Then the article is done.
 
-### 2026-06-09 — Fix "new says Book abstract after /mode article"
+### 2026-06-09 - Fix "new says Book abstract after /mode article"
 
-**What changed (shell.py only — 3 targeted edits):**
-1. **Prompt indicator** — `[article]` now shown even when no active book is set, using `global_mode = settings.mode`. Both prompt_toolkit path (`sfx_plain = " [article]"`) and Rich console path (`mode_tag`) updated.
-2. **AI system prompt** — `_build_chat_system` appends a `MODE OVERRIDE` block when `settings.mode == "article"`. Block tells the AI: "`new` creates an ARTICLE not a book, never say 'Book abstract', say 'article topic'."
-3. **`_CHAT_SYSTEM` static text** — `new` description changed from "Start a book" to "Start a new project — book (default) or article (when mode=article)"; removed old redundant `new (article mode)` line.
-4. **`_next_hint` + `_show_post_hint`** — made `settings`-aware so the footer hint says `new --abstract "your topic"` (not "your idea") in article mode.
+**What changed (shell.py only - 3 targeted edits):**
+1. **Prompt indicator** - `[article]` now shown even when no active book is set, using `global_mode = settings.mode`. Both prompt_toolkit path (`sfx_plain = " [article]"`) and Rich console path (`mode_tag`) updated.
+2. **AI system prompt** - `_build_chat_system` appends a `MODE OVERRIDE` block when `settings.mode == "article"`. Block tells the AI: "`new` creates an ARTICLE not a book, never say 'Book abstract', say 'article topic'."
+3. **`_CHAT_SYSTEM` static text** - `new` description changed from "Start a book" to "Start a new project - book (default) or article (when mode=article)"; removed old redundant `new (article mode)` line.
+4. **`_next_hint` + `_show_post_hint`** - made `settings`-aware so the footer hint says `new --abstract "your topic"` (not "your idea") in article mode.
 
-**Next up:** all previous optional items — unit tests, real article run, LangGraph, more built-in skills.
+**Next up:** all previous optional items - unit tests, real article run, LangGraph, more built-in skills.
 
-### 2026-06-09 — Chat UX: streaming, spinner, echo, next-step hints
+### 2026-06-09 - Chat UX: streaming, spinner, echo, next-step hints
 
 - **`llm.stream_text()`** (new): generator that yields text chunks from a streaming OpenAI
   call. Falls back to yielding the fake placeholder in fake mode; on error yields an error chunk.
 - **`_chat_respond()` rebuilt** with the full 5-step UX flow:
-  1. Separator + `you  ›  <message>` echo — immediate acknowledgment before any API call
-  2. `console.status("✦ deepseek-v4-flash...", spinner="dots")` — semantic loading state,
+  1. Separator + `you  ›  <message>` echo - immediate acknowledgment before any API call
+  2. `console.status("✦ deepseek-v4-flash...", spinner="dots")` - semantic loading state,
      shown while waiting for the first token
   3. Spinner drops the moment the first chunk arrives; remaining chunks stream progressively
      to the terminal with `console.file.flush()` per chunk
   4. ANSI cursor-up clears streamed raw text; Markdown re-renders it with code block styling
   5. Context-aware `_next_hint()` footer (e.g. `next: run` / `next: review --chapter N`)
-- **`_next_hint(state)`**: reads `run_state.json` to suggest the most useful next command —
+- **`_next_hint(state)`**: reads `run_state.json` to suggest the most useful next command -
   `new` if no books, `review` if pending escalation, `export` if done, else `run`.
 - **Plain-text fallback**: streams chunks directly with `print(chunk, end="", flush=True)`.
 - 11 pytest pass; compile clean.
 
-### 2026-06-09 — TUI chat mode + rich onboarding welcome screen
+### 2026-06-09 - TUI chat mode + rich onboarding welcome screen
 
 - **Chat mode:** any input that doesn't start with `/` and whose first word isn't a known
   book command is routed to DeepSeek Flash (`chat` node in `models.yaml`). Chat has full
@@ -163,8 +163,8 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
   In fake/offline mode returns a static helpful hint. Chat response rendered via
   `rich.Markdown` with rule separators in the TUI; plain text in plain mode.
 - **Welcome screen rebuilt** (`_welcome()`): now has four named sections:
-  - **COMMANDS** — all commands with descriptions (including export EPUB)
-  - **SLASH & CHAT** — slash commands + explicit "💬 free chat" tip
+  - **COMMANDS** - all commands with descriptions (including export EPUB)
+  - **SLASH & CHAT** - slash commands + explicit "💬 free chat" tip
   - **GETTING STARTED** (first-time users with no books): 3-step guide + /set tips
   - **YOUR BOOKS** (returning users): live phase/chapter/pending status per book from run_state.json
   - **FEATURES**: colour-coded on/off indicators for humanize, researcher, embeddings, images
@@ -175,7 +175,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
   shell so `/model chat <slug>` works.
 - 11 pytest pass; compile clean; smoke test green.
 
-### 2026-06-09 — Web search (Researcher), EPUB export, /set command
+### 2026-06-09 - Web search (Researcher), EPUB export, /set command
 
 - **`search.py`** (new): DuckDuckGo web search via `duckduckgo-search` (no API key). Returns
   `[]` in fake mode / on network errors so the pipeline never blocks. `build_query()` derives
@@ -198,7 +198,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
   `save_config()`); values are preserved correctly.
 - 11 pytest still pass; all new modules compile; integration smoke test green.
 
-### 2026-06-09 — Wikimedia image fetch + semantic embeddings for skill retrieval
+### 2026-06-09 - Wikimedia image fetch + semantic embeddings for skill retrieval
 
 - **`images.py`** (new): Wikimedia Commons API client (stdlib urllib, no new deps). Searches the
   File namespace, filters by CC/PD license, returns `ImageResult` dataclass with full attribution.
@@ -222,7 +222,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 - **To enable images:** set `use_images: true` in `config/settings.yaml` before `book new`.
 - **To enable embeddings:** `pip install sentence-transformers` then `use_embeddings: true`.
 
-### 2026-06-09 — TUI redesign (editorial "ink & gilt") + BOOKWRITER branding
+### 2026-06-09 - TUI redesign (editorial "ink & gilt") + BOOKWRITER branding
 
 - Rebranded the shell to **BOOKWRITER** with a distinctive editorial/letterpress look (via the
   frontend-design skill): gilt-gradient figlet wordmark, ink-blue tagline + colophon framed by
@@ -231,7 +231,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 - Added a `bookwriter` console-script alias (kept `book`); verified it launches from any directory.
 - Compiles; 11 tests pass.
 
-### 2026-06-09 — Slash commands + runtime model switching
+### 2026-06-09 - Slash commands + runtime model switching
 
 - Shell now has Hermes-style slash commands: `/help`, `/model` (+ per-agent), `/skills`,
   `/skill <name>`, `/seed-skills`, `/books`, `/use <book>`, `/user <id>`, `/config`, `/clear`,
@@ -242,7 +242,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 - Verified: `/model critic openai/gpt-4o-mini` persisted; `/skills` lists seed+learned; `/use` +
   typed `status` dispatched to the active book. 11 tests pass; config restored after test.
 
-### 2026-06-08 — Interactive shell (TUI) + pip-installable `book` command
+### 2026-06-08 - Interactive shell (TUI) + pip-installable `book` command
 
 - Added `shell.py`: a Hermes-style REPL (pyfiglet banner + rich command panel showing
   models/skills/books/user + `<model> ›` prompt). Launches when `book`/`python book.py` is run
@@ -251,17 +251,17 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
   reuses the same parser+`_COMMANDS` for one-shot and REPL.
 - Packaging: `pyproject.toml` → `pip install -e .` installs a global `book` console script
   (verified runnable from another directory). `.env` now loads anchored to the project root, so it
-  works from any CWD. **Git push is NOT required to run** — it's a local app.
+  works from any CWD. **Git push is NOT required to run** - it's a local app.
 - Deps: rich, pyfiglet (TUI). Smoke-tested (banner + panel render; piped commands dispatch).
   11 pytest still pass.
 
-### 2026-06-08 — Humanizer, both fixes, seed skills, format-aware critic
+### 2026-06-08 - Humanizer, both fixes, seed skills, format-aware critic
 
 - **Humanizer:** new `humanizer.py` (LLM rewrite + deterministic typographic clean that skips code
   fences) + `humanizer` model node; runs on each chapter at commit; `humanize` setting (default
   true) + `new --no-humanize`. Strips em-dashes and AI-favored phrasing.
 - **Fixed both known nits:** (1) manuscript title no longer duplicated; (2) autonomous mode now
-  ACTS on consolidation contradictions — `_repair_contradictions` rewrites the cited chapters
+  ACTS on consolidation contradictions - `_repair_contradictions` rewrites the cited chapters
   (bounded, 1 round) then re-consolidates. Human mode still pauses for review.
 - **Seed skills:** `seeds/skills/` (humanize-prose, diagrams-as-code, web-image-attribution,
   figure-captions-and-callouts) + `skills.seed_builtin` + `book seed-skills`; auto-seeded on `new`.
@@ -269,9 +269,9 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 - Tests +2 (humanizer clean; seed install) -> **11 pass**.
 - Feedback-loop validation: a human caught a fate-control-vs-prediction worldbuilding contradiction
   in the sample; our consolidation pass had already flagged the same issue (contradiction #4) + 4
-  others. (Autonomous mode reported but didn't act — exactly the gap the new auto-repair closes.)
+  others. (Autonomous mode reported but didn't act - exactly the gap the new auto-repair closes.)
 
-### 2026-06-08 — LIVE run: bug fixed + first autonomous book + PDF (SampleRun/)
+### 2026-06-08 - LIVE run: bug fixed + first autonomous book + PDF (SampleRun/)
 
 - Validated OpenRouter/DeepSeek live (3-call probe incl. JSON-structured).
 - **Bug fixed:** DeepSeek V4 is a reasoning model; the critic's `max_tokens=4000` let internal
@@ -287,7 +287,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 - Known nits (logged in Next up): manuscript title duplicated at top; autonomous mode reports but
   doesn't act on consolidation contradictions.
 
-### 2026-06-08 — `.env` set up + closed escalation gaps (#1, #2)
+### 2026-06-08 - `.env` set up + closed escalation gaps (#1, #2)
 
 - Created real `.env` (OpenRouter key, gitignored); scrubbed `.env.example` back to a placeholder
   (it's committed, so a live key there would leak).
@@ -302,7 +302,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
   rendered to md; skill `target_failures` always 0) + the deferred §15 items. Live API run still
   pending.
 
-### 2026-06-08 — Provider switch to OpenRouter + DeepSeek; LangGraph confirmed not needed
+### 2026-06-08 - Provider switch to OpenRouter + DeepSeek; LangGraph confirmed not needed
 
 - Replaced the Anthropic SDK with the **OpenAI SDK against OpenRouter** (`OPENROUTER_API_KEY`).
 - Per-node routing (`config/models.yaml`): `deepseek/deepseek-v4-pro` for planner/writer/
@@ -312,13 +312,13 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
   one repair retry (portable). Dropped the Opus temperature guard (DeepSeek accepts sampling).
 - `requirements.txt` → openai (not anthropic); `.env.example` → OPENROUTER_API_KEY.
 - Re-verified offline: compile + **6 pytest pass** + fake e2e CLI all green.
-- **Decision: LangGraph wrapper NOT required** — the on-disk state machine already gives
+- **Decision: LangGraph wrapper NOT required** - the on-disk state machine already gives
   orchestration + resume; LangGraph would only add ecosystem (viz/tracing), not function.
 
-### 2026-06-08 — Researcher, fake-LLM mode, pytest suite
+### 2026-06-08 - Researcher, fake-LLM mode, pytest suite
 
 - Added the **Researcher** node (optional, off by default via `use_researcher`) wired into the
-  chapter context slice — the last planned node.
+  chapter context slice - the last planned node.
 - Added an offline **fake-LLM mode** in `llm.py` (`BOOK_AGENT_FAKE`, optional
   `BOOK_AGENT_FAKE_VERDICT`): builds valid Pydantic instances + canned prose so the full pipeline
   runs with no API.
@@ -328,7 +328,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 - Added `book list`. All modules compile; UTF-8 console fix in place.
 - Still: not run against the real API.
 
-### 2026-06-08 — Full system built (all 10 components)
+### 2026-06-08 - Full system built (all 10 components)
 
 - Implemented the whole pipeline in `src/book_agent/`: `brain` (multi-tenant markdown layout +
   `BookPaths`), `store` (per-book SQLite FTS5 index + entity graph + canon, renders canon md),
@@ -347,7 +347,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
   skills write/record/reconcile/relevance). Smoke artifacts removed. **NOT run vs API.**
 - **Next:** end-to-end run with `ANTHROPIC_API_KEY`.
 
-### 2026-06-08 — Vertical slice built (Planner→TOC→Writer→Critic)
+### 2026-06-08 - Vertical slice built (Planner→TOC→Writer→Critic)
 
 - Built the files-only slice under `src/book_agent/` + `run.py` (no orchestrator yet). Nodes:
   planner (directions + expand), TOC, writer (streamed, adaptive thinking), critic
@@ -359,11 +359,11 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 - Structured output via `messages.parse(output_format=<Pydantic>)`; long prose via
   `messages.stream().get_final_message()`. All modules `py_compile`-clean.
 - Added `requirements.txt`, `.env.example`, `.gitignore`, `README.md`.
-- **Not yet run** — no API key in this env, and runs make paid external calls.
+- **Not yet run** - no API key in this env, and runs make paid external calls.
 - **Next:** user runs the slice with a key set, then iterate on prompts / start the memory
   substrate / LangGraph engine.
 
-### 2026-06-08 — Architecture + spec finalized (planning only)
+### 2026-06-08 - Architecture + spec finalized (planning only)
 
 - Reshaped the pasted architecture into a coherent design (discussion, no code).
 - Key reframes from the original draft:
@@ -378,4 +378,4 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
   N=5; skill efficacy = lift over baseline; researcher = shallow v1.
 - Added: per-node **model routing** (§12.1), a **Book Production** layer for front/back matter +
   manuscript assembly (§16), and this `resume.md` + `CLAUDE.md` session-continuity convention (§17).
-- **Next:** await user's choice — build memory substrate first, or thin vertical slice.
+- **Next:** await user's choice - build memory substrate first, or thin vertical slice.

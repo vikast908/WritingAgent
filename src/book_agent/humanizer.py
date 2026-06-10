@@ -7,7 +7,7 @@ from . import prompts as P
 from .config import ModelConfig
 from .llm import _fake_mode, complete_text
 
-# Only [ \t] around the dash — must NOT eat newlines, or an em-dash at a line end
+# Only [ \t] around the dash - must NOT eat newlines, or an em-dash at a line end
 # would merge two lines/paragraphs into one.
 _DASH = re.compile(r"[ \t]*[—–][ \t]*")  # em / en dash
 _QUOTES = {"“": '"', "”": '"', "‘": "'", "’": "'",
@@ -49,6 +49,6 @@ def humanize(cfg: ModelConfig, text: str) -> str:
     try:
         rewritten = complete_text(cfg.model_for("humanizer"), P.HUMANIZER_SYS, text,
                                   max_tokens=16000, temperature=cfg.temperature_for("humanizer"))
-    except Exception:  # noqa: BLE001 — the mechanical pass is a safe fallback
+    except Exception:  # noqa: BLE001 - the mechanical pass is a safe fallback
         return mechanical_clean(text)
     return mechanical_clean(rewritten)

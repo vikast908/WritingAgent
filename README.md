@@ -14,7 +14,7 @@
 /_/  |_\____/_____/_/ |_/ /_/
 </pre>
 
-### an autonomous writing studio — books, articles & more
+### an autonomous writing studio - books, articles & more
 
 [![CI](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://www.python.org/)
@@ -34,13 +34,13 @@
 
 ## What it does
 
-Writing Agent is a self-correcting, autonomous writing system that takes a topic and produces a publication-ready manuscript — drafting, critiquing, humanising, and revising in a loop until the work meets quality standards.
+Writing Agent is a self-correcting, autonomous writing system that takes a topic and produces a publication-ready manuscript - drafting, critiquing, humanising, and revising in a loop until the work meets quality standards.
 
-- **Books** — multi-chapter narratives with memory, continuity audits, and front/back matter
-- **Articles** — long-form editorial pieces with research, citations, and editorial angles
-- **Self-correction** — write → critique → revise → humanise → commit, up to a cap, then escalate
-- **Quality guardrails** — hard rules against AI slop baked into every prompt
-- **Context compression** — [headroom-ai](https://github.com/chopratejas/headroom) runs by default; 60–95% fewer tokens, same output quality
+- **Books** - multi-chapter narratives with memory, continuity audits, and front/back matter
+- **Articles** - long-form editorial pieces with research, citations, and editorial angles
+- **Self-correction** - write → critique → revise → humanise → commit, up to a cap, then escalate
+- **Quality guardrails** - hard rules against AI slop baked into every prompt
+- **Context compression** - [headroom-ai](https://github.com/chopratejas/headroom) runs by default; 60–95% fewer tokens, same output quality
 
 ---
 
@@ -48,14 +48,14 @@ Writing Agent is a self-correcting, autonomous writing system that takes a topic
 
 **Requirements:** Python 3.10+ · runs on **Linux · macOS · Windows** · an [OpenRouter API key](https://openrouter.ai/) (free tier works). No API key is needed to install, run the tests, or try the offline demo.
 
-### 1 — Clone
+### 1 - Clone
 
 ```bash
 git clone https://github.com/vikast908/WritingAgent.git
 cd WritingAgent
 ```
 
-### 2 — Create & activate a virtualenv
+### 2 - Create & activate a virtualenv
 
 <table>
 <tr><th>Linux / macOS</th><th>Windows (PowerShell)</th></tr>
@@ -79,23 +79,23 @@ python -m venv .venv
 > **Windows note:** if PowerShell blocks the activate script, run once:
 > `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then re-activate.
 
-### 3 — Install
+### 3 - Install
 
 ```bash
 pip install -e .                 # core (all platforms)
 pip install -e ".[dev]"          # + pytest + ruff (for development)
 ```
 
-### 4 — (optional) context compression via headroom
+### 4 - (optional) context compression via headroom
 
-Headroom is optional — the app runs fine without it and degrades gracefully.
+Headroom is optional - the app runs fine without it and degrades gracefully.
 
 | Platform | Command |
 |---|---|
-| **Linux / macOS** | `pip install -e ".[headroom]"` — prebuilt Rust wheels, installs cleanly |
-| **Windows** | `pip install -e ".[headroom]"` then `pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"` — current versions have no Windows wheel, so we use the last pure-Python release (skips the `litellm` dep, whose long paths break installs without long-path support) |
+| **Linux / macOS** | `pip install -e ".[headroom]"` - prebuilt Rust wheels, installs cleanly |
+| **Windows** | `pip install -e ".[headroom]"` then `pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"` - current versions have no Windows wheel, so we use the last pure-Python release (skips the `litellm` dep, whose long paths break installs without long-path support) |
 
-### 5 — Add your API key
+### 5 - Add your API key
 
 <table>
 <tr><th>Linux / macOS</th><th>Windows (PowerShell)</th></tr>
@@ -145,7 +145,7 @@ python book.py export --format pdf
 
 The TUI shows a **live dashboard** while writing (progress, current stage, elapsed time, live token count), **tab-autocompletes** commands and arguments, and remembers history across sessions. Add `--plain` (or set `NO_COLOR`) for unstyled output.
 
-### Try it offline first — no API key (fake mode)
+### Try it offline first - no API key (fake mode)
 
 Every node returns deterministic placeholder output, so you can verify the full pipeline, state machine, and exports without a key or any token spend.
 
@@ -230,20 +230,20 @@ Draft  →  Critic (approve | revise | escalate)
 
 | Command | Effect |
 |---|---|
-| `/mode article` | Write a long-form article — sections, angles, citations |
-| `/mode book` | Write a full book — chapters, canon, consolidation (default) |
+| `/mode article` | Write a long-form article - sections, angles, citations |
+| `/mode book` | Write a full book - chapters, canon, consolidation (default) |
 
 ### Core commands
 
 | Command | What it does |
 |---|---|
-| `new --abstract "..."` | Start a project — picks angles/directions, builds outline/TOC |
+| `new --abstract "..."` | Start a project - picks angles/directions, builds outline/TOC |
 | `run` | Drive the pipeline: draft → critique → humanise → commit |
 | `status` | Show phase, section/chapter progress, pending escalations |
 | `review --chapter N --instruction "..."` | Answer an escalation; `run` resumes from that point |
 | `read [--chapter N] [--summary] [--manuscript]` | Read any section, summary, or the full manuscript |
 | `export [--format <fmt>]` | Export (interactive picker if format omitted) |
-| `memory` | Inspect canon — characters, timeline, entity graph |
+| `memory` | Inspect canon - characters, timeline, entity graph |
 | `skills` | Browse learned craft skills and efficacy scores |
 | `list` | All projects with type and phase |
 | `delete [--yes]` | Permanently delete a project |
@@ -253,7 +253,7 @@ Draft  →  Critic (approve | revise | escalate)
 
 | Slash | What it does |
 |---|---|
-| `/update [description]` | Describe your changes — AI reviews and advises on next steps |
+| `/update [description]` | Describe your changes - AI reviews and advises on next steps |
 | `/mode [book\|article]` | Show or set writing mode |
 | `/use <project>` | Set active project (no `--book-id` needed on follow-up commands) |
 | `/books` · `/list` | List all projects with type and phase |
@@ -270,7 +270,7 @@ Draft  →  Critic (approve | revise | escalate)
 ```bash
 export --format pdf      # paginated A5 PDF  (via xhtml2pdf)
 export --format epub     # EPUB with NCX/Nav TOC  (via ebooklib)
-export --format docx     # Word document  (via pandoc — must be on PATH)
+export --format docx     # Word document  (via pandoc - must be on PATH)
 export --format html     # self-contained HTML with embedded CSS
 export --format txt      # clean plain text (Markdown stripped)
 export --format md       # raw Markdown with title header
@@ -285,7 +285,7 @@ Just type `export` for an interactive picker.
 | Feature | Setting | Default |
 |---|---|:---:|
 | Web research per section (DuckDuckGo) | `use_researcher` | ✅ on |
-| Humanizer — strips AI tells | `humanize` | ✅ on |
+| Humanizer - strips AI tells | `humanize` | ✅ on |
 | Headroom context compression | `use_headroom` | ✅ on |
 | SVG diagram generation (per section) | `use_images` | ✅ on |
 | Semantic skill retrieval (embeddings) | `use_embeddings` | off |
@@ -294,26 +294,26 @@ Just type `export` for an interactive picker.
 
 Toggle any feature live in the TUI: `/set use_researcher false`
 
-**Reliability:** every LLM call retries transient errors (429/5xx/timeouts) with exponential backoff and a request timeout, and fails fast on auth/bad-request. Run state is written atomically and is **resumable** — a crash mid-run never double-commits a chapter or corrupts the project. Token usage is reported at the end of each run.
+**Reliability:** every LLM call retries transient errors (429/5xx/timeouts) with exponential backoff and a request timeout, and fails fast on auth/bad-request. Run state is written atomically and is **resumable** - a crash mid-run never double-commits a chapter or corrupts the project. Token usage is reported at the end of each run.
 
 ---
 
 ## Writing Quality Guardrails
 
-Hard rules baked into **every** writer, humaniser, and critic prompt — not optional:
+Hard rules baked into **every** writer, humaniser, and critic prompt - not optional:
 
-**No AI slop** — 24 explicit bans:
+**No AI slop** - 24 explicit bans:
 - Verbs: `delve`, `leverage`, `utilize`, `foster`, `elevate`, `transform`, `unlock`
 - Adjectives: `robust`, `pivotal`, `comprehensive`, `nuanced`, `groundbreaking`
 - Transitions: `furthermore`, `moreover`, `in conclusion`, `it's worth noting`
 - Structure: no em-dashes, no scare quotes, no bullet-point padding
 
-**No fabrications** — no invented stats, quotes, or attributions
+**No fabrications** - no invented stats, quotes, or attributions
 
-**Humanizer pass** — 11 specific rewrite rules applied after every commit:
+**Humanizer pass** - 11 specific rewrite rules applied after every commit:
 removes inflated significance, symbolic language, weak construction verbs, synonym cycling, filler openers, AI transition phrases; varies sentence rhythm
 
-**Critic blocks on slop** — the critic returns `revise` (not `approve`) if any banned pattern appears, forcing a rewrite before commit
+**Critic blocks on slop** - the critic returns `revise` (not `approve`) if any banned pattern appears, forcing a rewrite before commit
 
 ---
 
@@ -326,7 +326,7 @@ Tool outputs, research results, skill context, conversation history
   ↓
 headroom (CacheAligner → ContentRouter → SmartCrusher / CodeCompressor)
   ↓
-LLM  (60–95% fewer tokens — same answers)
+LLM  (60–95% fewer tokens - same answers)
 ```
 
 Disable if needed: `/set use_headroom false`
@@ -340,7 +340,7 @@ When `use_images` is on, every section/chapter gets a generated diagram saved to
 - **860 × 520 px** canvas, publication-quality
 - Flowcharts, concept maps, timelines, comparison tables, process loops
 - Accent palette: `#4f8ef7` (blue) · `#34c98a` (green) · `#ff6719` (orange) · `#a78bfa` (purple)
-- Arrowhead markers, labelled nodes with actual topic concepts — not placeholders
+- Arrowhead markers, labelled nodes with actual topic concepts - not placeholders
 - Routed to DeepSeek Flash (not the reasoning model) so all tokens go to SVG output
 
 ---
@@ -398,7 +398,7 @@ Test the full pipeline without any API calls:
 $env:BOOK_AGENT_FAKE=1; python book.py new --abstract "test" --pick 1; python book.py run
 ```
 
-Every node returns valid placeholder output — lets you verify the pipeline loop, state machine, and exports locally.
+Every node returns valid placeholder output - lets you verify the pipeline loop, state machine, and exports locally.
 
 ---
 
@@ -416,7 +416,7 @@ Every node returns valid placeholder output — lets you verify the pipeline loo
 
 ## Platform support
 
-WRITING AGENT is **cross-platform** — Linux, macOS, and Windows — and CI runs the full
+WRITING AGENT is **cross-platform** - Linux, macOS, and Windows - and CI runs the full
 test suite on all three (Ubuntu · macOS · Windows) across Python 3.10–3.13 on every push.
 
 | Concern | How it stays portable |
@@ -424,7 +424,7 @@ test suite on all three (Ubuntu · macOS · Windows) across Python 3.10–3.13 o
 | Filesystem | `pathlib` everywhere; atomic writes via `os.replace`; ids validated/confined |
 | Console | Rich auto-detects the terminal and degrades; `--plain` / `NO_COLOR` for no styling; UTF-8 is forced on legacy Windows code pages |
 | Export links | clickable `file://` URIs built with `Path.as_uri()` (valid on Windows too) |
-| Compression | `headroom` is an optional extra with a platform marker — real wheels on Linux/macOS, the pure-Python fallback on Windows |
+| Compression | `headroom` is an optional extra with a platform marker - real wheels on Linux/macOS, the pure-Python fallback on Windows |
 | External tools | `pandoc` is only needed for **DOCX** export (install separately and put on `PATH`); a clear error is shown if it's missing. All other formats are pure-Python. |
 
 Per-OS install, activation, and offline-demo commands are in [Setup](#setup) and [Quick Start](#quick-start) above.
@@ -444,7 +444,7 @@ Per-OS install, activation, and offline-demo commands are in [Setup](#setup) and
 
 ## Contributing
 
-Contributions welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide.
+Contributions welcome - see **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide.
 
 ```bash
 git clone https://github.com/vikast908/WritingAgent.git && cd WritingAgent

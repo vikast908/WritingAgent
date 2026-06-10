@@ -1,4 +1,4 @@
-# NOTE: pyproject.toml is the canonical dependency list — prefer `pip install -e .`
+# NOTE: pyproject.toml is the canonical dependency list - prefer `pip install -e .`
 # (or `pip install -e ".[dev]"`). This file mirrors the runtime deps for convenience.
 # LLM calls go through OpenRouter (OpenAI-compatible API).
 openai>=1.0

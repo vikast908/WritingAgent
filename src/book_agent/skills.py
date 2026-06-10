@@ -4,7 +4,7 @@ Skills are markdown pages under users/<uid>/skills/. Efficacy counters live in a
 users/<uid>/skills_index.json. Promotion is lift-over-baseline:
   candidate -> trusted : applied>=5 and p_skill>=p_base and target_failures==0
   -> retired           : applied>=5 and (p_base - p_skill > 0.2 or target_failures>=2)
-(v1: target_failures stays 0 — we don't yet attribute a critic finding to a skill's target.)
+(v1: target_failures stays 0 - we don't yet attribute a critic finding to a skill's target.)
 """
 from __future__ import annotations
 

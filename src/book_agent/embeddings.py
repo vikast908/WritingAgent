@@ -3,7 +3,7 @@
 Uses sentence-transformers (local; no API cost; no per-call latency after the first run).
 Falls back silently to lexical scoring (retrieval.py Jaccard) if the library is absent.
 
-Embeddings are cached by SHA-256 hash in .index/embed_cache.json — computed once per
+Embeddings are cached by SHA-256 hash in .index/embed_cache.json - computed once per
 unique text, reused across process restarts and runs.
 
 Install:  pip install sentence-transformers

@@ -28,7 +28,7 @@ _BASE_URL = "https://openrouter.ai/api/v1"
 _client: OpenAI | None = None
 _client_lock = threading.Lock()
 
-# Retry/backoff knobs (network calls dominate runtime — a transient 429/5xx must
+# Retry/backoff knobs (network calls dominate runtime - a transient 429/5xx must
 # not kill a multi-hour book run, and a non-retryable 4xx must not waste attempts).
 _MAX_ATTEMPTS = 4
 _BACKOFF_BASE = 1.0   # seconds; doubles each attempt
@@ -95,7 +95,7 @@ def usage_summary() -> str | None:
 # ── Retry classification + backoff ─────────────────────────────────────────────
 def _is_retryable(exc: Exception) -> bool:
     """True for transient errors worth retrying (timeouts, connection drops, 429,
-    5xx). Auth/permission/bad-request (4xx) are fatal — retrying just wastes calls."""
+    5xx). Auth/permission/bad-request (4xx) are fatal - retrying just wastes calls."""
     from openai import (
         APIConnectionError,
         APITimeoutError,
@@ -140,8 +140,8 @@ class _EmptyResponse(RuntimeError):
 # headroom uses the model name only to select a tokenizer for tallying savings;
 # its compression transforms (SmartCrusher, ContentRouter, …) are model-agnostic.
 # headroom's non-tiktoken (HuggingFace) backends hard-import `transformers` and
-# raise instead of falling back to estimation, so any non-OpenAI slug — e.g. the
-# DeepSeek models we run on OpenRouter — makes compression silently no-op. We
+# raise instead of falling back to estimation, so any non-OpenAI slug - e.g. the
+# DeepSeek models we run on OpenRouter - makes compression silently no-op. We
 # therefore count with a tiktoken-native model; the tally is approximate but the
 # compressed output is identical.
 _HEADROOM_COUNT_MODEL = "gpt-4o"
@@ -151,7 +151,7 @@ def _compress(messages: list[dict], model: str) -> list[dict]:
     """Compress messages via headroom before sending to the LLM.
 
     Falls back to the original list silently if headroom is not installed or
-    compression raises any error — the pipeline must never block on this.
+    compression raises any error - the pipeline must never block on this.
     """
     if not _headroom_enabled:
         return messages
@@ -192,7 +192,7 @@ def _fake_mode() -> bool:
 
 
 _FAKE_TEXT = (
-    "## Chapter — Placeholder\n\n"
+    "## Chapter - Placeholder\n\n"
     "Placeholder prose generated in fake mode (BOOK_AGENT_FAKE) for offline testing.\n\n"
     "Maya stood at the window and watched the fog roll in.\n"
 )
@@ -268,7 +268,7 @@ def complete_text(
             content = (resp.choices[0].message.content or "").strip()
             if content:
                 return content
-            # Empty content (reasoning ate the budget) — retryable.
+            # Empty content (reasoning ate the budget) - retryable.
             raise _EmptyResponse(
                 f"empty response (finish_reason={resp.choices[0].finish_reason})")
         except Exception as e:  # noqa: BLE001
@@ -276,7 +276,7 @@ def complete_text(
             if attempt < _MAX_ATTEMPTS - 1 and _is_retryable(e):
                 _backoff_sleep(attempt, e)
                 continue
-            break  # non-retryable (e.g. 401/400) or out of attempts — fail fast
+            break  # non-retryable (e.g. 401/400) or out of attempts - fail fast
     raise RuntimeError(f"Text completion failed for {model}: {last_err}")
 
 
@@ -362,14 +362,14 @@ def complete_structured(
             kwargs["response_format"] = {"type": "json_object"}
         try:
             resp = _get_client().chat.completions.create(**kwargs)
-        except Exception as e:  # noqa: BLE001 — transport/API error
+        except Exception as e:  # noqa: BLE001 - transport/API error
             last_err = e
             if attempt < _MAX_ATTEMPTS - 1:
                 if _is_retryable(e):
                     _backoff_sleep(attempt, e)
                     continue
                 if use_response_format and getattr(e, "status_code", None) == 400:
-                    # This model likely rejects json_object response_format — drop it.
+                    # This model likely rejects json_object response_format - drop it.
                     use_response_format = False
                     _log.warning("structured: dropping response_format and retrying")
                     continue
@@ -383,7 +383,7 @@ def complete_structured(
                 raise _EmptyResponse(
                     f"empty model output (finish_reason={resp.choices[0].finish_reason})")
             return schema.model_validate_json(text)
-        except Exception as e:  # noqa: BLE001 — parse/validation/empty
+        except Exception as e:  # noqa: BLE001 - parse/validation/empty
             last_err = e
             if attempt < _MAX_ATTEMPTS - 1:
                 # Repair turn: show the model its own bad output + the error and ask
@@ -392,7 +392,7 @@ def complete_structured(
                     {"role": "assistant", "content": raw or "(empty response)"},
                     {"role": "user", "content": (
                         f"Your previous reply was not valid for the schema: {e}\n"
-                        "Return ONLY a single corrected JSON object — no prose, no code fences.")},
+                        "Return ONLY a single corrected JSON object - no prose, no code fences.")},
                 ]
                 continue
             break

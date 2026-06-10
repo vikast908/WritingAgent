@@ -1,7 +1,7 @@
 """Tiny thread-pool helper for overlapping independent I/O-bound work.
 
 The pipeline is dominated by network latency (LLM + web/image fetches). Most of it
-is an inherently sequential chain — each chapter is written from the *previous*
+is an inherently sequential chain - each chapter is written from the *previous*
 chapter's summary for continuity, so chapters cannot be parallelised without
 breaking canon. But a few steps within a single unit of work are genuinely
 independent (e.g. web research vs. image fetch, or the front/back-matter
@@ -21,7 +21,7 @@ _log = logging.getLogger(__name__)
 def gather(tasks: dict[str, Callable[[], Any]], *, max_workers: int = 8) -> dict[str, Any]:
     """Run each zero-arg thunk concurrently; return {name: result}.
 
-    A task that raises is logged and its result set to None — a failed image
+    A task that raises is logged and its result set to None - a failed image
     fetch must never sink the whole chapter (mirrors the pipeline's existing
     "network errors are non-fatal" contract).
     """

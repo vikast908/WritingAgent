@@ -222,7 +222,7 @@ def test_humanizer_leaves_code_fences_untouched():
 
 def test_humanizer_handles_unbalanced_fence():
     from book_agent.humanizer import mechanical_clean
-    # Odd number of fences must not raise or mangle — just don't crash.
+    # Odd number of fences must not raise or mangle - just don't crash.
     out = mechanical_clean("intro “q”\n```\nunterminated code—block")
     assert "intro \"q\"" in out
 

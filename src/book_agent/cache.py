@@ -3,7 +3,7 @@
 Used for web-search results and generated SVG diagrams: both are slow (network /
 LLM) and frequently re-requested across resumes and near-identical sections.
 Entries live under .index/cache/ (derived, gitignored) and carry a timestamp so
-stale results can expire. Any cache error is swallowed — caching must never be
+stale results can expire. Any cache error is swallowed - caching must never be
 able to break the pipeline.
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ def get(namespace: str, key_parts, *, max_age_s: float | None = None) -> Any | N
         return None
     try:
         entry = json.loads(p.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001 — corrupt cache file: treat as a miss
+    except Exception:  # noqa: BLE001 - corrupt cache file: treat as a miss
         return None
     if max_age_s is not None and (time.time() - entry.get("ts", 0)) > max_age_s:
         return None
@@ -49,5 +49,5 @@ def put(namespace: str, key_parts, value: Any) -> None:
             json.dumps({"ts": time.time(), "value": value}, ensure_ascii=False),
             encoding="utf-8",
         )
-    except Exception:  # noqa: BLE001 — caching is best-effort
+    except Exception:  # noqa: BLE001 - caching is best-effort
         pass

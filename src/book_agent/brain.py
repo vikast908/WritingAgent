@@ -147,14 +147,14 @@ def list_books(uid: str = "default") -> list[str]:
 
 # ── Article scope ─────────────────────────────────────────────────────────────
 class ArticlePaths:
-    """Flat paths for one article — no subdirectories except images/."""
+    """Flat paths for one article - no subdirectories except images/."""
 
     def __init__(self, article_id: str, uid: str = "default"):
         self.uid = uid
         self.article_id = article_id
         self.root = user_dir(uid) / "articles" / article_id
 
-    # core files (all at root — no subdirs)
+    # core files (all at root - no subdirs)
     @property
     def run_state(self) -> Path: return self.root / "run_state.json"
     @property
@@ -172,7 +172,7 @@ class ArticlePaths:
     @property
     def images(self) -> Path: return self.root / "images"
 
-    # per-section (flat, intermediate — cleaned up after assembly)
+    # per-section (flat, intermediate - cleaned up after assembly)
     def section(self, n: int) -> Path: return self.root / f"section_{n:02d}.md"
     def section_summary(self, n: int) -> Path: return self.root / f"section_{n:02d}.summary.md"
     def section_eval(self, n: int) -> Path: return self.root / f"eval_{n:02d}.json"
