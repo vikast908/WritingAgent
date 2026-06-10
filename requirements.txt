@@ -22,6 +22,17 @@ tiktoken>=0.5            # token counting for headroom (the only headroom dep we
 # Install WITHOUT its deps (skips litellm, whose long nested paths break installs on
 # Windows without long-path support):
 #   pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"
+
+# Optional: deep multi-source researcher fetch backend (plan §15.2). Enable
+# `deep_research` in settings.yaml. deep_research.py imports Scrapo lazily and falls
+# back to a pure-stdlib urllib + html.parser fetch when it's absent, so this is never
+# required. Scrapo needs Python 3.11+ and installs from git (it is not on PyPI):
+#   pip install ".[deep]"                          # via the pyproject extra, or directly:
+#   pip install "git+https://github.com/vikast908/Scrapo"
+# For Scrapo's browser tier (renders JS-heavy / bot-blocked pages the HTTP tiers can't),
+# also install Playwright and its Chromium binary:
+#   pip install playwright
+#   python -m playwright install chromium
 #
 # For an exact, reproducible environment see requirements.lock.txt (a pip freeze of a
 # known-good install).

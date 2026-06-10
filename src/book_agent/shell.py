@@ -370,6 +370,9 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
         _feat_row("researcher ", settings.use_researcher,
                   "web search per section - real facts + inline citations" if is_article
                   else "DuckDuckGo web search per chapter - grounds facts"),
+        _feat_row("deep search", settings.deep_research,
+                  "multi-query fan-out + full-page fetch + cross-source synthesis "
+                  "(needs researcher)"),
         _feat_row("embeddings ", settings.use_embeddings,
                   "semantic skill retrieval (all-MiniLM-L6-v2, local)"),
         _feat_row("images     ", settings.use_images,
@@ -805,6 +808,7 @@ def _build_chat_system(settings: Settings, state: dict) -> str:
     features_on = ", ".join(k for k, v in [
         ("humanize", settings.humanize),
         ("researcher", settings.use_researcher),
+        ("deep-research", settings.deep_research),
         ("embeddings", settings.use_embeddings),
         ("images", settings.use_images),
     ] if v) or "none"

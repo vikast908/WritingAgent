@@ -141,6 +141,11 @@ class ResearchBrief(BaseModel):
     comparisons: list[str]
 
 
+class SearchQueries(BaseModel):
+    """Query-expansion output for the deep researcher (plan §15)."""
+    queries: list[str]
+
+
 # ── Article mode ──────────────────────────────────────────────────────────────
 class ArticleAngle(BaseModel):
     title: str

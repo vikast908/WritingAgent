@@ -1,6 +1,7 @@
 aiohappyeyeballs==2.6.2
 aiohttp==3.14.1
 aiosignal==1.4.0
+aiosqlite==0.22.1
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.13.0
@@ -8,7 +9,8 @@ arabic-reshaper==3.0.1
 asn1crypto==1.5.1
 ast-grep-cli==0.42.3
 attrs==26.1.0
--e git+https://github.com/vikast908/WritingAgent.git@b41a20abfc5d6801bb2f6aa9cb0305d5b666b004#egg=book_agent
+beautifulsoup4==4.15.0
+-e git+https://github.com/vikast908/WritingAgent.git@0d35d3dbe425540c9b7e58718f4aef80da6cd4e2#egg=book_agent
 brotli==1.2.0
 certifi==2026.5.20
 cffi==2.0.0
@@ -26,6 +28,7 @@ filelock==3.29.1
 freetype-py==2.5.1
 frozenlist==1.8.0
 fsspec==2026.4.0
+greenlet==3.5.1
 h11==0.16.0
 h2==4.3.0
 headroom-ai==0.10.17
@@ -46,6 +49,7 @@ jsonschema-specifications==2025.9.1
 lxml==6.1.1
 Markdown==3.10.2
 markdown-it-py==4.2.0
+markdownify==1.2.2
 MarkupSafe==3.0.3
 mdurl==0.1.2
 multidict==6.7.1
@@ -54,6 +58,8 @@ opentelemetry-api==1.42.1
 oscrypto==1.3.0
 packaging==26.2
 pillow==12.2.0
+platformdirs==4.10.0
+playwright==1.60.0
 pluggy==1.6.0
 primp==1.3.1
 prompt_toolkit==3.0.52
@@ -62,6 +68,7 @@ pycairo==1.29.0
 pycparser==3.0
 pydantic==2.13.4
 pydantic_core==2.46.4
+pyee==13.0.1
 pyfiglet==1.0.4
 Pygments==2.20.0
 pyHanko==0.35.1
@@ -78,10 +85,14 @@ requests==2.34.2
 rich==15.0.0
 rlPyCairo==0.4.0
 rpds-py==2026.5.1
+scrapo @ git+https://github.com/vikast908/Scrapo@f4816cd6e79c50192922c4e31f63e814b88c7678
+selectolax==0.4.10
 shellingham==1.5.4
 six==1.17.0
 sniffio==1.3.1
 socksio==1.0.0
+soupsieve==2.8.4
+structlog==26.1.0
 svglib==1.6.0
 tiktoken==0.13.0
 tinycss2==1.5.1

@@ -6,6 +6,11 @@
 ## Current status
 
 - **Phase:** **Production-ready.** Books and articles both live-validated end-to-end.
+- **New this session (2026-06-10 session 6 - deep researcher + article tests + craft skills + read fix):**
+  - **Deep multi-source researcher** (`deep_research.py`, opt-in `deep_research` setting): LLM query-expansion -> concurrent multi-query fan-out -> URL/domain dedup -> full **page-text** fetch+extract -> cross-source synthesis node that cites sources by number. Wired into both book + article research branches; articles persist the real fetched URLs as references. **Fetch backend is pluggable:** prefers **Scrapo** (`github.com/vikast908/Scrapo`, optional `[deep]` extra - clean markdown + HTTP/browser/stealth escalation) and falls back to a stdlib `urllib`+`html.parser` path so there are still zero *required* deps. **Validated live** (real DuckDuckGo + real Scrapo fetch). Spec in `plan.md` §15.2.
+  - **`read --manuscript` works for articles** (`cli._paths_for` picks ArticlePaths vs BookPaths) - fixes the long-standing pre-existing bug.
+  - **+4 technical-writing seed skills:** `technical-explanation`, `runnable-code-examples`, `claims-and-evidence`, `information-architecture` (13 seed skills total).
+  - **First article-pipeline tests** (`test_article.py`) + deep-researcher tests (`test_deep_research.py`). **62 tests pass** (was 44); ruff clean.
 - **Agent name:** **WRITING AGENT** (was BOOKWRITER). CLI: `writing-agent` / `bookwriter` / `book` / `python book.py`.
 - **Article pipeline:** fully built and live-run - "How to think with AI without offloading your brain to AI" (6 sections, DOCX exported).
 - **Book pipeline:** fully built and live-run - *The Misprint File* (3 chapters, 9-page PDF).
@@ -18,7 +23,7 @@
   - Removed dead `run.py`/`slice.py`; new shared `ui.py` (palette + helpers). 44 tests (added `tests/test_hardening.py`, `tests/test_ui.py`).
 - **Source of truth:** `plan.md` (spec + implementation status); `README.md` = how to run.
 - **How to run:** `writing-agent` (after `pip install -e .`) or `python book.py` → interactive shell; `python book.py <cmd> ...` for one-shot. Needs `OPENROUTER_API_KEY` in `.env`.
-- **Next up (all optional):** (a) unit tests for article nodes; (b) more built-in craft skills for technical writing; (c) LangGraph wrapper; (d) multi-user / server mode.
+- **Next up (all optional):** (a) live end-to-end deep-research run through the full article/book pipeline (fetch path validated live; full pipeline only run offline); (b) LangGraph wrapper; (c) multi-user / server mode; (d) `robots.txt`/politeness + per-host rate-limit for the deep fetcher if usage grows (Scrapo has `SCRAPO_RESPECT_ROBOTS`).
 - **Stack:** Python; durable on-disk state machine; markdown brain + SQLite/FTS5; OpenRouter + DeepSeek V4 Pro/Flash per-node; Rich TUI + prompt_toolkit.
 - **Platforms:** **Linux · macOS · Windows** - all code is portable (pathlib, atomic `os.replace`, `Path.as_uri()` links, OS-aware optional headroom) and CI runs the suite on all three × Python 3.10–3.13.
 - **Open-source ready:** MIT `LICENSE`, full `pyproject` metadata (dist renamed `writing-agent`), `CONTRIBUTING.md` / `SECURITY.md` / `CODE_OF_CONDUCT.md` / `CHANGELOG.md`, GitHub Actions CI, issue/PR templates, ruff + pre-commit.
@@ -33,6 +38,30 @@
   duplicate.
 
 ## Session log
+
+### 2026-06-10 - Deep multi-source researcher + article tests + craft skills + read fix
+
+Worked four items off the backlog after fast-forwarding `master` to `origin/master` (the merged hardening branch). All offline; **62 tests pass** (was 44); ruff clean on `src` + `tests`.
+
+**1. `read --manuscript` for articles (`cli.py`):** `cmd_read` hardcoded `BookPaths`, so it never found article manuscripts/sections. Added `cli._paths_for(uid, project_id)` (ArticlePaths if the article `run_state` exists, else BookPaths - both expose `.manuscript`/`.ch`/`.ch_summary`) and routed `cmd_read` through it. The shell's `read` dispatches to the same `cmd_read`, so it's fixed there too.
+
+**2. Article-pipeline tests (`tests/test_article.py`, new):** the book pipeline had e2e tests; the article pipeline had none. Added: fake-mode start_article -> run -> done (manuscript + references assembled, intermediate `section_*` files cleaned up, learner skill emitted), escalate -> review -> resume, `_produce_article` source de-dup by URL, and the `_paths_for` article/book resolution.
+
+**3. Technical-writing seed skills (`seeds/skills/`, +4 -> 13):** `technical-explanation` (concrete-before-abstract, progressive disclosure, worked examples), `runnable-code-examples` (minimal/runnable/tagged + show output), `claims-and-evidence` (every claim sourced; no fabricated stats), `information-architecture` (one idea per section, dependency order, scannable). Same frontmatter+section format as the existing seeds; all `status: trusted`.
+
+**4. Deep multi-source researcher (`src/book_agent/deep_research.py`, new):** the §15 deferred "Deep Researcher", now built. Pipeline: `nodes.propose_search_queries` (query expansion, best-effort) -> `deep_research.gather_documents` (concurrent multi-query search via `concurrency.gather`, dedupe by URL, cap 2/domain, keep top 6) -> concurrent `fetch_text` (stdlib `urllib` + an `html.parser`-based `_TextExtractor` that strips script/style/nav; http(s)-only, byte-capped, non-HTML skipped, 7-day disk cache, all non-fatal) -> `nodes.deep_research` / `deep_research_article` synthesize across the numbered full-text sources and cite by number. Opt-in `deep_research` setting (layers on `use_researcher`), threaded through `start_book`/`start_article` run_state and both `_do_research` branches in the orchestrator. Articles persist the **real fetched URLs** as sources (more reliable than LLM-copied ones) -> References section. New schema `SearchQueries`; new prompts `QUERY_PLANNER_SYS` / `DEEP_RESEARCHER_SYS` / `DEEP_ARTICLE_RESEARCHER_SYS`; reuses the `researcher` model node (no models.yaml change). Surfaced in the shell FEATURES table + `settings.yaml`.
+
+**Fetch backend (added after first pass, at user's suggestion):** the page-fetch step is pluggable. It prefers **Scrapo** (`github.com/vikast908/Scrapo`, v0.7.0, installed from git - not on PyPI) when available: `await scrapo.scrape(url)` returns clean page **markdown** and escalates HTTP -> http+session -> browser -> stealth on real failure signals (403s etc.), reaching pages the naive fetch can't. Bridged from the sync `fetch_text` via a per-call `asyncio.run` (safe: runs on `concurrency.gather` worker threads / the sync orchestrator thread, neither has a live loop). Scrapo leaves logging to the caller and structlog's unconfigured default prints everything, so the loader calls `scrapo.logging.configure_logging("WARNING")` (overridable via `SCRAPO_LOG_LEVEL`) to keep the TUI clean. If Scrapo is absent or returns nothing, it falls back to the stdlib `urllib`+`html.parser` path - so there are still **zero required deps** and CI (py3.10-3.13 x 3 OSes) stays green. `BOOK_AGENT_NO_SCRAPO=1` forces the stdlib path. Optional `[deep]` extra in `pyproject.toml` (git ref + `python_version >= '3.11'` marker). Browser-tier escalation additionally needs `playwright install chromium` (not required; without it Scrapo just stops at the HTTP tiers).
+
+**Validated live:** real `gather_documents` over real DuckDuckGo + real Scrapo fetch returned 4 sources across 4 domains (realpython/docs.python.org/medium/datacamp/dataquest/geeksforgeeks across runs) with full markdown (~6000 chars each) in ~5s concurrently; medium.com's 403 escalated through the tiers; JS-only YouTube returned little text (needs the browser tier).
+
+Tests in `tests/test_deep_research.py` (HTML extraction, cache-hit-without-network, dedup/domain-cap/max-sources, query dedup, format/truncation, **Scrapo-preferred / stdlib-fallback / env-kill-switch backend selection**, offline e2e for both pipelines, query-helper fallback, and an **opt-in live test** gated by `BOOK_AGENT_LIVE=1`). **67 tests** (66 pass + 1 live skipped by default); ruff clean. Spec: `plan.md` §15.2.
+
+**Playwright installed (for Scrapo's browser tier):** `playwright==1.60.0` + `python -m playwright install chromium` (chromium-1223). Verified the browser tier now activates with no `playwright-missing` error (confirmed chromium launches + renders). Note: Scrapo escalates HTTP -> browser on *failure signals* (403/blocks), not merely thin content, so a 200-with-sparse-body page won't auto-escalate; hostile targets (YouTube) still return little even via browser.
+
+**Dependencies recorded:** `requirements.txt` gained a documented optional "deep researcher" section (Scrapo via git + Playwright + `playwright install chromium`), mirroring the headroom/sentence-transformers optional style - not hard deps (Scrapo is py3.11+/git-only/opt-in). `pyproject.toml` `[deep]` extra now lists both `scrapo` and `playwright` (both `; python_version >= '3.11'`). `requirements.lock.txt` surgically updated: +scrapo (commit-pinned) +playwright +their 9 transitive deps (aiosqlite, beautifulsoup4, greenlet, markdownify, platformdirs, pyee, selectolax, soupsieve, structlog) and the editable line bumped b41a20a -> 0d35d3d; deliberately did NOT fold in the unrelated torch/transformers/embeddings stack a blind `pip freeze` would have added.
+
+**Next:** a full deep-research pipeline run live (fetch path is validated live; full pipeline only run offline). The deep fetcher has no `robots.txt`/rate-limit yet (fine at this volume; Scrapo has `SCRAPO_RESPECT_ROBOTS`).
 
 ### 2026-06-10 - Reliability / performance / UX / security hardening (branch `hardening-reliability-ux`)
 

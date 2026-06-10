@@ -18,6 +18,20 @@ from .config import ModelConfig, Settings
 from .store import Store
 
 
+# ── Deep-research query planning ─────────────────────────────────────────────
+def _research_queries(cfg, topic: str, focus: str, *seed_queries: str, log=print) -> list[str]:
+    """Build the query set for the deep researcher: LLM-expanded queries first
+    (most targeted), then deterministic seeds as a fallback. The LLM step is
+    best-effort - if it fails we still search with the seeds. `gather_documents`
+    de-dupes and drops empties, so order-and-overlap here is harmless."""
+    proposed: list[str] = []
+    try:
+        proposed = list(nodes.propose_search_queries(cfg, topic, focus).queries)
+    except Exception:  # noqa: BLE001 - query expansion is optional; seeds still work
+        log("   [deep] query expansion failed; using seed queries")
+    return proposed + [q for q in seed_queries if q]
+
+
 # ── Setup (human picks a direction, then autonomous) ─────────────────────────
 def start_book(
     cfg: ModelConfig, settings: Settings, uid: str, abstract: str,
@@ -43,6 +57,7 @@ def start_book(
         "max_revisions": max_revisions, "consolidate_every": settings.consolidate_every,
         "current_chapter": 1, "committed": 0, "pending_review": False,
         "use_researcher": settings.use_researcher,
+        "deep_research": settings.deep_research,
         "autonomous": autonomous,
         "humanize": settings.humanize if humanize is None else humanize,
         "use_images": settings.use_images,
@@ -182,11 +197,25 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log) -> str:
         if not state.get("use_researcher"):
             return None
         from . import search as search_mod
-        query = search_mod.build_query(plan, blueprint)
-        results = search_mod.web_search(query, max_results=5)
+        base_query = search_mod.build_query(plan, blueprint)
+        if state.get("deep_research"):
+            from . import deep_research as dr
+            queries = _research_queries(
+                cfg, f"{plan.genre}: {plan.title} - {plan.premise}",
+                f"{blueprint.title}. {blueprint.purpose}", base_query, log=log)
+            docs = dr.gather_documents(queries, log=log)
+            brief = nodes.deep_research(cfg, plan, blueprint, dr.format_documents(docs) or None)
+            lines = ["## Research brief",
+                     "### Facts", *(f"- {f}" for f in brief.facts),
+                     "### Style cues", *(f"- {s}" for s in brief.style_cues),
+                     "### Comparisons", *(f"- {c}" for c in brief.comparisons)]
+            if docs:
+                lines += ["### Sources", *(f"- [{d.title}]({d.url})" for d in docs)]
+            return "\n".join(lines) + "\n\n"
+        results = search_mod.web_search(base_query, max_results=5)
         web_results = search_mod.format_results(results)
         if results:
-            log(f"   fetched {len(results)} web result(s) for: {query[:60]}")
+            log(f"   fetched {len(results)} web result(s) for: {base_query[:60]}")
         brief = nodes.research(cfg, plan, blueprint, web_results=web_results or None)
         return ("## Research brief\n" + "\n".join(
             ["### Facts", *(f"- {f}" for f in brief.facts),
@@ -608,6 +637,7 @@ def start_article(
         "max_revisions": max_revisions, "current_section": 1,
         "committed": 0, "pending_review": False,
         "use_researcher": settings.use_researcher,
+        "deep_research": settings.deep_research,
         "autonomous": autonomous,
         "humanize": settings.humanize if humanize is None else humanize,
         "use_images": settings.use_images,
@@ -674,11 +704,27 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log) -
         if not state.get("use_researcher"):
             return ("", [])
         from . import search as search_mod
-        query = section.search_query or f"{outline.title} {section.heading}"
-        results = search_mod.web_search(query, max_results=5)
+        base_query = section.search_query or f"{outline.title} {section.heading}"
+        if state.get("deep_research"):
+            from . import deep_research as dr
+            queries = _research_queries(
+                cfg, f"{outline.title} ({outline.angle})",
+                f"{section.heading}. {section.purpose}", base_query, log=log)
+            docs = dr.gather_documents(queries, log=log)
+            brief = nodes.deep_research_article(cfg, outline, section,
+                                                dr.format_documents(docs) or None)
+            # Real fetched sources are more reliable than LLM-copied URLs; prefer them.
+            sources = [S.Source(title=d.title, url=d.url) for d in docs] or list(brief.sources)
+            prefix = ("## Research brief\n" + "\n".join([
+                "### Facts", *(f"- {f}" for f in brief.facts),
+                "### Style cues", *(f"- {s}" for s in brief.style_cues),
+                "### Sources", *(f"- [{s.title}]({s.url})" for s in sources),
+            ]) + "\n\n")
+            return (prefix, sources)
+        results = search_mod.web_search(base_query, max_results=5)
         web_results = search_mod.format_results(results)
         if results:
-            log(f"   fetched {len(results)} web result(s) for: {query[:60]}")
+            log(f"   fetched {len(results)} web result(s) for: {base_query[:60]}")
         brief = nodes.research_article(cfg, outline, section, web_results=web_results or None)
         prefix = ("## Research brief\n" + "\n".join([
             "### Facts", *(f"- {f}" for f in brief.facts),

@@ -163,6 +163,42 @@ def research(
                                S.ResearchBrief, max_tokens=4000)
 
 
+# ── Deep researcher (multi-source, plan §15) ──────────────────────────────────
+def propose_search_queries(cfg: ModelConfig, topic: str, focus: str, n: int = 4) -> S.SearchQueries:
+    """Expand a topic + focus into a few distinct web search queries."""
+    model = cfg.model_for("researcher")
+    user = (f"Writing project:\n{topic}\n\nFocus for this part:\n{focus}\n\n"
+            f"Propose {n} distinct, specific web search queries that together cover this "
+            "from different angles.")
+    return complete_structured(model, P.QUERY_PLANNER_SYS, user, S.SearchQueries, max_tokens=1000)
+
+
+def deep_research(
+    cfg: ModelConfig, plan: S.BookPlan, blueprint: S.ChapterBlueprint, sources_block: str | None
+) -> S.ResearchBrief:
+    """Synthesize a grounded brief across multiple full-text sources (book chapter)."""
+    model = cfg.model_for("researcher")
+    parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
+    if sources_block:
+        parts.append(f"Full-text web sources (cite by number):\n{sources_block}")
+    parts.append("Synthesize a tight, source-grounded research brief for this chapter.")
+    return complete_structured(model, P.DEEP_RESEARCHER_SYS, "\n\n".join(parts),
+                               S.ResearchBrief, max_tokens=4000)
+
+
+def deep_research_article(
+    cfg: ModelConfig, outline: S.ArticleOutline, section: S.ArticleSection, sources_block: str | None
+) -> S.ArticleResearchBrief:
+    """Synthesize a grounded, source-cited brief across multiple full-text sources (article)."""
+    model = cfg.model_for("researcher")
+    parts = [f"Article outline:\n{_ctx(outline)}", f"Section:\n{_ctx(section)}"]
+    if sources_block:
+        parts.append(f"Full-text web sources (cite by number):\n{sources_block}")
+    parts.append("Synthesize a tight, source-grounded brief for this section.")
+    return complete_structured(model, P.DEEP_ARTICLE_RESEARCHER_SYS, "\n\n".join(parts),
+                               S.ArticleResearchBrief, max_tokens=3500)
+
+
 # ── Learner (plan §8) ─────────────────────────────────────────────────────────
 def learn(
     cfg: ModelConfig, plan: S.BookPlan, instructions: str, critic_findings: str,

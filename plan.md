@@ -468,7 +468,7 @@ The open items are now settled. All numeric thresholds are **tunable config**, n
 | **Notification channel** | Markdown review queue in `books/<id>/reviews/` + terminal print (interactive); surfaced by `book status` / `book review`. Any later channel tails the file queue. (§7) |
 | **Consolidation cadence** | Fixed: every `N=5` committed chapters + mandatory before `BOOK_DONE` + manual `book consolidate`. (§9) |
 | **Skill efficacy metric** | Lift over baseline: promote at `applied≥5`, `p_skill≥p_base`, `target_failures=0`; retire on sustained under-performance. (§8) |
-| **Researcher depth** | Optional, off by default for fiction. When on: a short brief (key facts + style cues) from provided references/topic, feeding the Writer's slice. No web-crawl/multi-source pipeline in v1. |
+| **Researcher depth** | Two tiers, both optional. **Shallow** (`use_researcher`): one DuckDuckGo query -> snippets -> a short brief (facts + style cues). **Deep** (`deep_research`, layers on `use_researcher`): LLM query-expansion -> several queries fanned out concurrently -> dedup + per-domain cap -> fetch and extract the actual page text of the top sources -> a synthesis node reads across full pages and cites sources by number. See §15.2. |
 
 ### 15.1 Reliability, performance & safety (2026-06-10 hardening)
 
@@ -484,6 +484,19 @@ Durable decisions from the hardening pass. All thresholds are tunable config.
 | **Safety** | The conversational assistant may **not** auto-execute `delete` / `/user` / `/set` (data-loss / tenant / config) - the human must type those. Project/user ids are validated (`is_safe_id`) and `delete_book` confines `rmtree` to the brain dir. Exported HTML is sanitized (no `<script>`/`<iframe>`/event handlers). |
 | **Telemetry** | Token usage is aggregated per run and surfaced (`[usage]` line + live in the run dashboard). |
 
+### 15.2 Deep multi-source researcher (`deep_research`, off by default)
+
+The "Deep Researcher" once deferred below, now built (`src/book_agent/deep_research.py`).
+Opt-in via `deep_research: true` (it layers on `use_researcher`); both books and articles use it.
+
+| Aspect | Decision |
+|---|---|
+| **Query expansion** | A `researcher`-model node (`nodes.propose_search_queries`) turns the chapter/section focus into a few distinct queries (core facts, recent developments, expert/critical angle, examples). Best-effort: on failure the deterministic seed query still runs. |
+| **Fan-out + diversity** | Queries are searched concurrently (`concurrency.gather` over `search.web_search`), hits merged in query order, **deduped by URL**, and capped at `max_per_domain` (2) so a brief spans multiple sites - then the top `max_sources` (6) are kept. |
+| **Full-text fetch** | The kept sources have their actual page text fetched concurrently. **Fetch backend is pluggable:** if **Scrapo** (`github.com/vikast908/Scrapo`) is installed it's preferred - it returns clean page markdown and escalates HTTP -> browser -> stealth, reaching JS-rendered/soft-blocked pages; otherwise a pure-stdlib `urllib` + `html.parser` extractor is used (script/style/nav stripped, http(s) only, byte-capped, non-HTML skipped). 7-day disk cache wraps both. Every step is non-fatal: Scrapo failure falls back to stdlib, which falls back to the snippet. `BOOK_AGENT_NO_SCRAPO=1` forces the stdlib path. |
+| **Synthesis** | `nodes.deep_research` / `deep_research_article` read the numbered full-text sources and produce a brief that cites sources by number and flags agreement/disagreement. For articles the **real fetched URLs** become the persisted sources (more reliable than LLM-copied URLs), feeding the References section. |
+| **Portability / cost** | Zero *required* deps - the stdlib fetch path keeps CI green on all three OSes x Python 3.10-3.13. Scrapo is an optional extra (`pip install '.[deep]'`; Python 3.11+, installs from git) for higher-fidelity fetching. Deep mode adds one query-planning LLM call + N page fetches per unit - hence opt-in. In fake/offline mode the whole path no-ops. |
+
 ### Still post-v1 (deliberately deferred)
 
 - **Web UI** - chapter reader, escalation review with side-by-side revision diffs,
@@ -491,7 +504,6 @@ Durable decisions from the hardening pass. All thresholds are tunable config.
 - **Salience-adaptive consolidation** - once §9 produces salience scores, let high canon-churn
   tighten the interval.
 - **External notifications** - email / desktop / push, tailing the review queue.
-- **Deep Researcher** - multi-source research harness, when factual/nonfiction books become a target.
 
 ---
 

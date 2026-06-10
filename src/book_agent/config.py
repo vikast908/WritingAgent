@@ -53,6 +53,7 @@ class Settings:
     max_revisions: int = 2
     consolidate_every: int = 5
     use_researcher: bool = False
+    deep_research: bool = False               # multi-source fetch+synthesize (needs use_researcher; plan §15)
     escalate_below_confidence: float = 0.5   # critic confidence below this -> escalate (plan §7)
     escalate_on_contradiction: bool = True   # consolidation contradictions -> review (plan §9)
     autonomous: bool = False                 # no human-in-the-loop: never pause, commit best draft

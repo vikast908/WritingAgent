@@ -273,6 +273,8 @@ Just type `export` for an interactive picker.
 | Feature | Setting | Default |
 |---|---|:---:|
 | Web research per section (DuckDuckGo) | `use_researcher` | ✅ on |
+| Deep research - multi-query fan-out + full-page fetch + cross-source synthesis | `deep_research` | off |
+| └ richer fetch backend ([Scrapo](https://github.com/vikast908/Scrapo); falls back to stdlib) | `pip install '.[deep]'` | optional |
 | Humanizer - strips AI tells | `humanize` | ✅ on |
 | Headroom context compression | `use_headroom` | ✅ on |
 | SVG diagram generation (per section) | `use_images` | ✅ on |

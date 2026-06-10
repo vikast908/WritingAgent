@@ -47,6 +47,16 @@ def _project_word_count(uid: str, book_id: str, mode: str) -> int:
     return 0
 
 
+def _paths_for(uid: str, project_id: str):
+    """Return the right paths object for a project: ArticlePaths if it's an
+    article, else BookPaths. Both expose .manuscript / .ch(n) / .ch_summary(n),
+    so callers can stay project-type agnostic."""
+    art = ArticlePaths(project_id, uid)
+    if art.run_state.exists():
+        return art
+    return BookPaths(project_id, uid)
+
+
 def _resolve_book(uid: str, book_id: str | None) -> str:
     if book_id:
         if not brain.is_safe_id(book_id):
@@ -178,7 +188,9 @@ def cmd_review(args, cfg, settings, uid):
 
 
 def cmd_read(args, cfg, settings, uid):
-    paths = BookPaths(_resolve_book(uid, args.book_id), uid)
+    # Articles and books store a manuscript/sections at different paths; pick the
+    # right one so `read --manuscript` works for both project types.
+    paths = _paths_for(uid, _resolve_book(uid, args.book_id))
     if args.manuscript:
         target = paths.manuscript
     elif args.summary:

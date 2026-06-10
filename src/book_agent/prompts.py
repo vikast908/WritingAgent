@@ -166,6 +166,36 @@ RESEARCHER_SYS = (
     "it does not replace them."
 )
 
+# ── Deep researcher (multi-source, plan §15) ──────────────────────────────────
+QUERY_PLANNER_SYS = (
+    "You are a research librarian planning a web search. Given a writing project and a "
+    "specific chapter/section focus, propose a few DISTINCT search queries that together "
+    "cover the subject from different angles: core facts and definitions, recent "
+    "developments, expert or critical perspectives, and concrete examples or data. Each "
+    "query must be specific enough to surface real, citable sources - never a single word "
+    "or the bare title. Avoid near-duplicate queries. Return only the query strings."
+)
+
+DEEP_RESEARCHER_SYS = (
+    "You are a research analyst writing a brief for a writer by synthesizing across MULTIPLE "
+    "full-text web sources, each numbered [1], [2], and so on. Read all of them. Produce: "
+    "concrete, specific facts (prefer named entities, numbers, and dates), noting where the "
+    "sources AGREE or DISAGREE; a few style cues; and useful comparisons or references. Cite "
+    "the source number inline like [2] for every fact you draw from a source. Do NOT invent "
+    "facts that are not supported by the provided sources. Keep it tight - the writer uses "
+    "this brief, it does not replace them."
+)
+
+DEEP_ARTICLE_RESEARCHER_SYS = (
+    "You are a research analyst building a source-grounded brief for one article section by "
+    "synthesizing across MULTIPLE full-text web sources, each numbered [1], [2], and so on. "
+    "Read all of them and produce: (1) concrete facts with specific numbers, names, or dates, "
+    "citing the source number inline like [2] and flagging where sources agree or disagree; "
+    "(2) style and angle cues for the writer; (3) the list of sources you actually drew facts "
+    "from - each with its title, URL, and date if stated. Do NOT invent facts, statistics, or "
+    "URLs that are not present in the provided sources."
+)
+
 LEARNER_SYS = (
     "You are a writing coach distilling lessons from a finished book. The strongest signal is "
     "the human's directed revision instructions; the critic's recurring findings are secondary. "
