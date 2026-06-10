@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 
+import yaml
+
 from . import brain, retrieval
 from .schemas import SkillProposal
 
@@ -62,14 +64,30 @@ def record_chapter(uid: str, applied_names: list[str], first_pass: bool) -> None
 
 def write_skill(uid: str, prop: SkillProposal) -> None:
     brain.ensure_user(uid)
-    tags = ", ".join(prop.genre_tags)
+    # Serialize frontmatter with yaml so a name/tag containing :, ], #, etc. can't
+    # produce malformed frontmatter that _parse_frontmatter then silently drops.
+    fm = yaml.safe_dump(
+        {"name": prop.name, "genre_tags": list(prop.genre_tags), "status": "candidate"},
+        sort_keys=False, allow_unicode=True, default_flow_style=False,
+    ).strip()
     lines = [
-        "---", f"name: {prop.name}", f"genre_tags: [{tags}]", "status: candidate", "---", "",
+        "---", fm, "---", "",
         "## When to apply", prop.when_to_apply, "",
         "## Technique", *(f"- {t}" for t in prop.technique), "",
         "## Anti-pattern it replaces", prop.anti_pattern,
     ]
-    brain.write_text(brain.skills_dir(uid) / f"{brain.slugify(prop.name)}.md", "\n".join(lines))
+    sdir = brain.skills_dir(uid)
+    slug = brain.slugify(prop.name)
+    # Avoid clobbering a *different* skill that happens to slug identically.
+    target = sdir / f"{slug}.md"
+    if target.exists():
+        existing = retrieval._parse_frontmatter(target.read_text(encoding="utf-8"))
+        if str(existing.get("name") or "") not in ("", prop.name):
+            n = 2
+            while (sdir / f"{slug}-{n}.md").exists():
+                n += 1
+            target = sdir / f"{slug}-{n}.md"
+    brain.write_text(target, "\n".join(lines))
 
 
 def _p_base(idx: dict) -> float:

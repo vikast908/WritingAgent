@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from . import prompts as P
 from . import schemas as S
@@ -264,6 +265,20 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "") -> s
     Returns raw SVG XML (starts with <svg ...). On failure returns a minimal placeholder SVG.
     """
     model = cfg.model_for("diagram")  # Flash — reasoning model wastes tokens on thinking, not SVG
+    _diagram_key = (model, heading, context[:900])
+    _fake = bool(os.getenv("BOOK_AGENT_FAKE"))
+    if not _fake:
+        from . import cache
+        cached = cache.get("diagram", _diagram_key)
+        if cached:
+            return cached
+
+    def _store(result: str) -> str:
+        if not _fake:
+            from . import cache
+            cache.put("diagram", _diagram_key, result)
+        return result
+
     ctx_block = f"\nContext (use this to choose specific labels/concepts for nodes):\n{context[:900]}" if context else ""
     user = (
         f"Topic: {heading}{ctx_block}\n\n"
@@ -284,7 +299,7 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "") -> s
     # 1. Try a proper greedy match (SVG is fully closed)
     m = re.search(r"(<svg\b[\s\S]+</svg>)", svg, re.IGNORECASE)
     if m:
-        return m.group(1)
+        return _store(m.group(1))
 
     # 2. Model wrapped in a code fence but may not have closed </svg>
     #    Extract from <svg to the last > in the file, then force-close.
@@ -299,7 +314,7 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "") -> s
         content = re.sub(r"```[\s\S]*$", "", content).rstrip()
         if not re.search(r"</svg\s*>", content, re.IGNORECASE):
             content += "\n</svg>"
-        return content
+        return _store(content)
 
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" width="860" height="120">'

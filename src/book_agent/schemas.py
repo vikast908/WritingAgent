@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 # ── Planner ────────────────────────────────────────────────────────────────
@@ -61,6 +61,15 @@ class Critique(BaseModel):
     confidence: float
     blocking: list[BlockingIssue]
     nits: list[str]
+
+    @field_validator("confidence")
+    @classmethod
+    def _clamp_confidence(cls, v: float) -> float:
+        # Models sometimes emit 0-100 or stray values; clamp so threshold checks and
+        # the "{:.2f}" displays stay sane (a returned 95 would otherwise read 95.00).
+        if v > 1.0:
+            v = v / 100.0 if v <= 100.0 else 1.0
+        return min(1.0, max(0.0, v))
 
 
 # ── Extraction (canon update on commit, plan §3.4) ───────────────────────────

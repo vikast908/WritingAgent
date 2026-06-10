@@ -11,13 +11,15 @@
 
 ### an autonomous writing studio — books, articles & more
 
+[![CI](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://www.python.org/)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-informational?style=flat-square)](#setup)
 [![OpenRouter](https://img.shields.io/badge/powered%20by-OpenRouter-orange?style=flat-square)](https://openrouter.ai/)
 [![DeepSeek](https://img.shields.io/badge/model-DeepSeek%20V4-blueviolet?style=flat-square)](https://deepseek.com/)
 [![Headroom](https://img.shields.io/badge/compression-headroom--ai-green?style=flat-square)](https://github.com/chopratejas/headroom)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square)](LICENSE)
 
-**60–95% token savings · self-correcting pipeline · books + articles · 6 export formats · local-first**
+**60–95% token savings · self-correcting pipeline · books + articles · 6 export formats · resilient (retry + resumable) · local-first**
 
 [Setup](#setup) · [Quick Start](#quick-start) · [How It Works](#how-it-works) · [Commands](#commands) · [Export](#export-formats) · [Features](#features) · [Architecture](#architecture)
 
@@ -39,40 +41,93 @@ Writing Agent is a self-correcting, autonomous writing system that takes a topic
 
 ## Setup
 
+**Requirements:** Python 3.10+ · runs on **Linux · macOS · Windows** · an [OpenRouter API key](https://openrouter.ai/) (free tier works). No API key is needed to install, run the tests, or try the offline demo.
+
+### 1 — Clone
+
 ```bash
-# 1 — Clone
 git clone https://github.com/vikast908/WritingAgent.git
 cd WritingAgent
-
-# 2 — Virtual environment
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # macOS / Linux
-
-# 3 — Install (headroom-ai included automatically)
-pip install -e .
-
-# 4 — API key
-copy .env.example .env          # Windows
-# cp .env.example .env          # macOS / Linux
-# → add your OPENROUTER_API_KEY inside .env
 ```
 
-**Requirements:** Python 3.10+ · [OpenRouter API key](https://openrouter.ai/) (free tier works)
+### 2 — Create & activate a virtualenv
+
+<table>
+<tr><th>Linux / macOS</th><th>Windows (PowerShell)</th></tr>
+<tr><td>
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+</td><td>
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+</td></tr>
+</table>
+
+> **Windows note:** if PowerShell blocks the activate script, run once:
+> `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then re-activate.
+
+### 3 — Install
+
+```bash
+pip install -e .                 # core (all platforms)
+pip install -e ".[dev]"          # + pytest + ruff (for development)
+```
+
+### 4 — (optional) context compression via headroom
+
+Headroom is optional — the app runs fine without it and degrades gracefully.
+
+| Platform | Command |
+|---|---|
+| **Linux / macOS** | `pip install -e ".[headroom]"` — prebuilt Rust wheels, installs cleanly |
+| **Windows** | `pip install -e ".[headroom]"` then `pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"` — current versions have no Windows wheel, so we use the last pure-Python release (skips the `litellm` dep, whose long paths break installs without long-path support) |
+
+### 5 — Add your API key
+
+<table>
+<tr><th>Linux / macOS</th><th>Windows (PowerShell)</th></tr>
+<tr><td>
+
+```bash
+cp .env.example .env
+```
+
+</td><td>
+
+```powershell
+copy .env.example .env
+```
+
+</td></tr>
+</table>
+
+Then edit `.env` and set `OPENROUTER_API_KEY=sk-or-...`.
 
 ---
 
 ## Quick Start
 
+Launch the interactive TUI (works the same on every OS once the venv is active):
+
 ```bash
-writing-agent          # launch the interactive TUI
+writing-agent          # or:  python book.py
 ```
 
+Then drive it from the `❧` prompt:
+
 ```
-❧ deepseek-v4-pro article ›  new --abstract "How stoicism applies to modern burnout"
-❧ deepseek-v4-pro article ›  run
-❧ deepseek-v4-pro article ›  export
-❧ deepseek-v4-pro article ›  read --manuscript
+❧ deepseek-v4-flash ›  new --abstract "How stoicism applies to modern burnout"
+❧ deepseek-v4-flash ›  run
+❧ deepseek-v4-flash ›  export
+❧ deepseek-v4-flash ›  read --manuscript
 ```
 
 Or one-shot from the terminal:
@@ -82,6 +137,37 @@ python book.py new --abstract "The psychology of decision fatigue" --pick 1
 python book.py run
 python book.py export --format pdf
 ```
+
+The TUI shows a **live dashboard** while writing (progress, current stage, elapsed time, live token count), **tab-autocompletes** commands and arguments, and remembers history across sessions. Add `--plain` (or set `NO_COLOR`) for unstyled output.
+
+### Try it offline first — no API key (fake mode)
+
+Every node returns deterministic placeholder output, so you can verify the full pipeline, state machine, and exports without a key or any token spend.
+
+<table>
+<tr><th>Linux / macOS</th><th>Windows (PowerShell)</th></tr>
+<tr><td>
+
+```bash
+export BOOK_AGENT_FAKE=1
+python book.py new --abstract "test" --pick 1
+python book.py run
+python book.py export --format pdf
+unset BOOK_AGENT_FAKE
+```
+
+</td><td>
+
+```powershell
+$env:BOOK_AGENT_FAKE = "1"
+python book.py new --abstract "test" --pick 1
+python book.py run
+python book.py export --format pdf
+$env:BOOK_AGENT_FAKE = $null
+```
+
+</td></tr>
+</table>
 
 ---
 
@@ -199,8 +285,11 @@ Just type `export` for an interactive picker.
 | SVG diagram generation (per section) | `use_images` | ✅ on |
 | Semantic skill retrieval (embeddings) | `use_embeddings` | off |
 | Fully autonomous (no pauses) | `autonomous` | off |
+| Per-request network timeout (seconds) | `request_timeout` | 60 |
 
 Toggle any feature live in the TUI: `/set use_researcher false`
+
+**Reliability:** every LLM call retries transient errors (429/5xx/timeouts) with exponential backoff and a request timeout, and fails fast on auth/bad-request. Run state is written atomically and is **resumable** — a crash mid-run never double-commits a chapter or corrupts the project. Token usage is reported at the end of each run.
 
 ---
 
@@ -278,7 +367,10 @@ src/book_agent/
   shell.py        ← Rich TUI + prompt_toolkit REPL
   cli.py          ← one-shot CLI entry points
   prompts.py      ← all system prompts (NO_SLOP, DIAGRAM_SYS, …)
-  export.py       ← pdf, epub, html, docx, txt, md renderers
+  export.py       ← pdf, epub, html, docx, txt, md renderers (HTML sanitized)
+  ui.py           ← shared palette + Rich helpers (stepper, bars, console)
+  concurrency.py  ← thread-pool helper for overlapping independent I/O
+  cache.py        ← on-disk cache for web search + SVG diagrams
 ```
 
 ### Model routing
@@ -317,18 +409,50 @@ Every node returns valid placeholder output — lets you verify the pipeline loo
 
 ---
 
+## Platform support
+
+WRITING AGENT is **cross-platform** — Linux, macOS, and Windows — and CI runs the full
+test suite on all three (Ubuntu · macOS · Windows) across Python 3.10–3.13 on every push.
+
+| Concern | How it stays portable |
+|---|---|
+| Filesystem | `pathlib` everywhere; atomic writes via `os.replace`; ids validated/confined |
+| Console | Rich auto-detects the terminal and degrades; `--plain` / `NO_COLOR` for no styling; UTF-8 is forced on legacy Windows code pages |
+| Export links | clickable `file://` URIs built with `Path.as_uri()` (valid on Windows too) |
+| Compression | `headroom` is an optional extra with a platform marker — real wheels on Linux/macOS, the pure-Python fallback on Windows |
+| External tools | `pandoc` is only needed for **DOCX** export (install separately and put on `PATH`); a clear error is shown if it's missing. All other formats are pure-Python. |
+
+Per-OS install, activation, and offline-demo commands are in [Setup](#setup) and [Quick Start](#quick-start) above.
+
+---
+
+## Troubleshooting
+
+- **PowerShell won't run the activate script** → `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then re-activate.
+- **`headroom-ai` fails to build on Windows** → that's expected; install the pure-Python fallback: `pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"`. Headroom is optional and the app runs without it.
+- **`export --format docx` fails** → install [pandoc](https://pandoc.org/installing.html) and ensure it's on your `PATH`. Other formats (pdf/epub/html/txt/md) need no external tools.
+- **Garbled box-drawing / colors** → run with `--plain` or set `NO_COLOR=1`; on Windows use Windows Terminal for best results.
+- **`401 Unauthorized` on a real run** → check `OPENROUTER_API_KEY` in `.env`. To verify everything else without a key, use [fake mode](#try-it-offline-first--no-api-key-fake-mode).
+- **A run was interrupted** → just run again; state is written atomically and resumes where it left off (no double-committed chapters).
+
+---
+
 ## Contributing
+
+Contributions welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide.
 
 ```bash
 git clone https://github.com/vikast908/WritingAgent.git && cd WritingAgent
-pip install -e ".[dev]"
-pytest
+pip install -e ".[dev]"     # Linux · macOS · Windows
+ruff check .                # lint
+pytest                      # tests (run fully offline)
 ```
 
-Full spec in [`plan.md`](plan.md) · session log in [`resume.md`](resume.md)
+Full spec in [`plan.md`](plan.md) · session log in [`resume.md`](resume.md) · also see
+[`SECURITY.md`](SECURITY.md) and [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
 <div align="center">
-  <sub>Built with DeepSeek V4 on OpenRouter · Context compression by <a href="https://github.com/chopratejas/headroom">headroom-ai</a></sub>
+  <sub>Built with DeepSeek V4 on OpenRouter · Context compression by <a href="https://github.com/chopratejas/headroom">headroom-ai</a> · Runs on Linux · macOS · Windows</sub>
 </div>

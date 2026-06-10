@@ -60,13 +60,16 @@ class Settings:
     use_images: bool = False                 # fetch Wikimedia Commons images (non-fiction/illustrated)
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
     use_headroom: bool = True               # context compression via headroom-ai (60-95% fewer tokens)
+    request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
     mode: str = "book"           # "book" | "article" — default for new projects
     num_sections: int = 6        # default section count for articles
 
 
 def load_config() -> ModelConfig:
-    with open(_MODELS, "r", encoding="utf-8") as f:
-        return ModelConfig(yaml.safe_load(f))
+    if not _MODELS.exists():
+        return ModelConfig({})   # sensible defaults; mirrors load_settings' guard
+    with open(_MODELS, encoding="utf-8") as f:
+        return ModelConfig(yaml.safe_load(f) or {})
 
 
 def save_config(cfg: ModelConfig) -> None:
@@ -83,9 +86,11 @@ def save_config(cfg: ModelConfig) -> None:
 
 def load_settings() -> Settings:
     if _SETTINGS.exists():
-        with open(_SETTINGS, "r", encoding="utf-8") as f:
+        import dataclasses
+        with open(_SETTINGS, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-        return Settings(**{k: v for k, v in data.items() if k in Settings.__annotations__})
+        valid = {f.name for f in dataclasses.fields(Settings)}
+        return Settings(**{k: v for k, v in data.items() if k in valid})
     return Settings()
 
 

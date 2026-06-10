@@ -8,6 +8,7 @@ No extra deps: uses stdlib urllib only.
 """
 from __future__ import annotations
 
+import html
 import json
 import re
 import urllib.parse
@@ -15,6 +16,20 @@ import urllib.request
 from dataclasses import dataclass
 
 _API = "https://commons.wikimedia.org/w/api.php"
+_MD_SPECIAL = re.compile(r"([\\`*_\[\]])")
+
+
+def _md_text(s: str) -> str:
+    """Make LLM/Commons text safe to embed in Markdown: decode entities, collapse
+    whitespace, and backslash-escape the chars that would break image/italic syntax."""
+    s = html.unescape(s or "")
+    s = re.sub(r"\s+", " ", s).strip()
+    return _MD_SPECIAL.sub(r"\\\1", s)
+
+
+def _md_url(u: str) -> str:
+    """Percent-encode a URL so spaces and parens can't terminate `(...)` early."""
+    return urllib.parse.quote(u or "", safe="/:?#@!$&'+,;=~")
 _FREE_LICENSE = re.compile(r"cc[-_ ]?by|cc0|public.?domain|pd[-_ ]", re.IGNORECASE)
 _TAG = re.compile(r"<[^>]+>")
 _IMG_EXT = re.compile(r"\.(jpe?g|png|gif|svg|webp)$", re.IGNORECASE)
@@ -31,11 +46,14 @@ class ImageResult:
 
     def to_markdown(self, figure_label: str = "") -> str:
         prefix = f"Figure {figure_label}: " if figure_label else ""
-        bare_title = self.title.removeprefix("File:")
+        bare_title = _md_text(self.title.removeprefix("File:"))
+        desc = _md_text(self.description)
+        author = _md_text(self.author)
+        lic = _md_text(self.license)
         return (
-            f"![{self.description}]({self.url})\n"
-            f'*{prefix}{self.description}. Source: "{bare_title}" by {self.author}, '
-            f"{self.license}, via Wikimedia Commons.*"
+            f"![{desc}]({_md_url(self.url)})\n"
+            f'*{prefix}{desc}. Source: "{bare_title}" by {author}, '
+            f"{lic}, via Wikimedia Commons.*"
         )
 
 

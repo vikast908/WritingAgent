@@ -1,3 +1,5 @@
+# NOTE: pyproject.toml is the canonical dependency list — prefer `pip install -e .`
+# (or `pip install -e ".[dev]"`). This file mirrors the runtime deps for convenience.
 # LLM calls go through OpenRouter (OpenAI-compatible API).
 openai>=1.0
 pydantic>=2.0
@@ -7,8 +9,19 @@ markdown>=3.5
 xhtml2pdf>=0.2.11
 rich>=13.0
 pyfiglet>=1.0
-duckduckgo-search>=6.0    # web search for the Researcher node (plan §4); no API key needed
+prompt_toolkit>=3.0
+ddgs>=0.1                 # web search for the Researcher node (plan §4); no API key needed
 ebooklib>=0.18            # EPUB export (book export --format epub)
+tiktoken>=0.5            # token counting for headroom (the only headroom dep we actually need)
 # Optional: semantic skill retrieval (plan §10). Enable use_embeddings in settings.yaml.
 # Downloads ~80 MB all-MiniLM-L6-v2 on first use; falls back to lexical if not installed.
 # sentence-transformers>=2.0
+
+# Optional: context compression (headroom). headroom-ai >=0.21 is a Rust extension with
+# no Windows wheel; 0.10.17 is the last pure-Python release that actually compresses.
+# Install WITHOUT its deps (skips litellm, whose long nested paths break installs on
+# Windows without long-path support):
+#   pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"
+#
+# For an exact, reproducible environment see requirements.lock.txt (a pip freeze of a
+# known-good install).
