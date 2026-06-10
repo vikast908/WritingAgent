@@ -175,14 +175,16 @@ def _trim_blank_edges(lines: list[str]) -> list[str]:
 
 
 def _wordmark() -> list[str]:
-    """Block-letter wordmark as a list of lines. WRITING stacked over AGENT.
+    """Wordmark as a list of lines. WRITING stacked over AGENT.
 
-    Prefers the clean 'ANSI Shadow' block font; falls back to plainer fonts and
-    finally to plain text so it never crashes on an exotic pyfiglet build.
+    Uses pure line-art ASCII fonts (not block/box-drawing fonts) so the letters
+    render correctly in any terminal regardless of font or line spacing — block
+    fonts like ANSI Shadow only tile cleanly in some terminals. Falls back to
+    plain text so it never crashes on an exotic pyfiglet build.
     """
     try:
         import pyfiglet
-        for font in ("ansi_shadow", "big", "standard"):
+        for font in ("slant", "small", "standard"):
             try:
                 top = pyfiglet.figlet_format("WRITING", font=font)
                 bot = pyfiglet.figlet_format("AGENT", font=font)
@@ -206,13 +208,12 @@ def _banner(console) -> None:
     from rich.align import Align
     from rich.rule import Rule
     from rich.text import Text
-    width = max((len(ln) for ln in lines), default=1)
-    # Left-to-right warm gradient across the block letters (lit-from-the-left sheen).
+    # Gentle per-line vertical gradient (top lit -> bottom). Coloring whole lines
+    # (not each character) keeps the letters reading as one cohesive wordmark.
+    n = max(len(lines) - 1, 1)
     grad = Text()
-    for ln in lines:
-        for col, ch in enumerate(ln):
-            grad.append(ch, style=f"bold {_lerp(GOLD_HI, GOLD, col / max(width - 1, 1))}")
-        grad.append("\n")
+    for i, ln in enumerate(lines):
+        grad.append(ln + "\n", style=f"bold {_lerp(GOLD_HI, GOLD, i / n)}")
     console.print()
     console.print(Rule(style=RULE))
     console.print()
