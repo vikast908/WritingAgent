@@ -14,7 +14,7 @@
 
 **60–95% token savings · self-correcting pipeline · books + articles · 6 export formats · resilient (retry + resumable) · local-first**
 
-[Setup](#setup) · [Quick Start](#quick-start) · [How It Works](#how-it-works) · [Commands](#commands) · [Export](#export-formats) · [Features](#features) · [Architecture](#architecture)
+[Setup](#setup) · [Quick Start](#quick-start) · [How It Works](#how-it-works) · [Commands](#commands) · [Export](#export-formats) · [Features](#features) · [Themes](#themes) · [Architecture](#architecture)
 
 </div>
 
@@ -26,6 +26,7 @@ Writing Agent is a self-correcting, autonomous writing system that takes a topic
 
 - **Books** - multi-chapter narratives with memory, continuity audits, and front/back matter
 - **Articles** - long-form editorial pieces with research, citations, and editorial angles
+- **One-shot `write`** - interviews you once upfront, then researches, writes, self-edits, and exports the finished file with zero mid-run interruptions
 - **Self-correction** - write → critique → revise → humanise → commit, up to a cap, then escalate
 - **Quality guardrails** - hard rules against AI slop baked into every prompt
 - **Context compression** - [headroom-ai](https://github.com/chopratejas/headroom) runs by default; 60–95% fewer tokens, same output quality
@@ -114,7 +115,14 @@ Launch the interactive TUI (works the same on every OS once the venv is active):
 writing-agent          # or:  python book.py
 ```
 
-Then drive it from the `❧` prompt:
+The fastest path is **`write`** - it interviews you once upfront (audience, depth, length,
+tone, must-includes), then runs fully autonomously and hands you a finished, exported file:
+
+```
+❧ deepseek-v4-flash ›  write --abstract "How stoicism applies to modern burnout"
+```
+
+Or drive each step yourself from the `❧` prompt:
 
 ```
 ❧ deepseek-v4-flash ›  new --abstract "How stoicism applies to modern burnout"
@@ -126,6 +134,8 @@ Then drive it from the `❧` prompt:
 Or one-shot from the terminal:
 
 ```bash
+python book.py write --abstract "The psychology of decision fatigue"
+# or step by step:
 python book.py new --abstract "The psychology of decision fatigue" --pick 1
 python book.py run
 python book.py export --format pdf
@@ -225,7 +235,8 @@ Draft  →  Critic (approve | revise | escalate)
 
 | Command | What it does |
 |---|---|
-| `new --abstract "..."` | Start a project - picks angles/directions, builds outline/TOC |
+| `write --abstract "..."` | **One-shot:** upfront interview (audience, depth, length, tone, must-includes, byline, format) → fully autonomous run → exported finished file. No mid-run pauses. |
+| `new --abstract "..."` | Start a project - picks angles/directions, builds outline/TOC. `--autonomous` / `--no-autonomous` override the `autonomous` setting |
 | `run` | Drive the pipeline: draft → critique → humanise → commit |
 | `status` | Show phase, section/chapter progress, pending escalations |
 | `review --chapter N --instruction "..."` | Answer an escalation; `run` resumes from that point |
@@ -247,6 +258,7 @@ Draft  →  Critic (approve | revise | escalate)
 | `/books` · `/list` | List all projects with type and phase |
 | `/model [agent] <slug>` | Switch any agent to any OpenRouter model slug |
 | `/set <key> <value>` | Toggle any setting live (`use_researcher`, `humanize`, `autonomous` …) |
+| `/theme [<name>]` | List or switch the TUI theme - changes the palette **and** the wordmark font ([see Themes](#themes)) |
 | `/skills` · `/skill <name>` · `/seed-skills` | Browse / view / install built-in craft skills |
 | `/retry` · `/reset` · `/compact` | Retry last response · clear memory · compress history |
 | `/help` · `/clear` · `/exit` | Full slash list · clear screen · quit |
@@ -280,9 +292,35 @@ Just type `export` for an interactive picker.
 | SVG diagram generation (per section) | `use_images` | ✅ on |
 | Semantic skill retrieval (embeddings) | `use_embeddings` | off |
 | Fully autonomous (no pauses) | `autonomous` | off |
+| TUI color + font theme ([see Themes](#themes)) | `theme` | editorial |
 | Per-request network timeout (seconds) | `request_timeout` | 60 |
 
 Toggle any feature live in the TUI: `/set use_researcher false`
+
+---
+
+## Themes
+
+The TUI ships **10 themes**. A theme changes *everything*: the color palette, the wordmark's
+figlet face, the banner gradient, the section glyph, and the body-text tint. Switch live with
+`/theme <name>` (persisted to `settings.yaml`); bare `/theme` lists them with swatches.
+
+| Theme | Identity | Wordmark face |
+|---|---|---|
+| `editorial` *(default)* | ink & brass - blue-ink accent, semantic status colors (green ok / red error) | ANSI Shadow |
+| `kazama` | Jin Kazama - red → orange → yellow flame, Tekken italic lean | ANSI Shadow (sheared) |
+| `supabase` | emerald on midnight - flat dashboard green | ANSI Regular |
+| `violet-bloom` | royal purple gradient, soft rounded face | mono12 |
+| `t3-chat` | hot pink with a purple second voice | smblock |
+| `starry-night` | gold stars on van Gogh indigo, deco face | elite |
+| `vercel` | monochrome minimal, cyan success | smmono9 |
+| `fallout` | pip-boy CRT - amber phosphor + terminal green, scanline face | pagga |
+| `mimi` | dusky rose, cream and teal pastels | double_blocky |
+| `astrovista` | mars rust over deep-space navy, sci-fi face | delta_corps_priest_1 |
+
+Every theme's accent is a **different hue family** (enforced by a test - no two themes within
+RGB distance 60), and all non-kazama themes keep red/yellow/green reserved for status semantics
+so the run dashboard reads at a glance.
 
 **Reliability:** every LLM call retries transient errors (429/5xx/timeouts) with exponential backoff and a request timeout, and fails fast on auth/bad-request. Run state is written atomically and is **resumable** - a crash mid-run never double-commits a chapter or corrupts the project. Token usage is reported at the end of each run.
 
@@ -415,7 +453,7 @@ src/book_agent/
   cli.py          ← one-shot CLI entry points
   prompts.py      ← all system prompts (NO_SLOP, DIAGRAM_SYS, …)
   export.py       ← pdf, epub, html, docx, txt, md renderers (HTML sanitized)
-  ui.py           ← shared palette + Rich helpers (stepper, bars, console)
+  ui.py           ← theme registry (10 themes) + Rich helpers (stepper, bars, console)
   concurrency.py  ← thread-pool helper for overlapping independent I/O
   cache.py        ← on-disk cache for web search + SVG diagrams
 ```

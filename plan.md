@@ -275,6 +275,11 @@ tails it.
 Why directed instructions instead of edits: an instruction encodes the *principle* and
 generalizes; a diff only tells you what changed in one chapter.
 
+**Alternative interaction model (§15.3):** for "ask me everything upfront, then deliver,"
+the `write` command front-loads all questions into a single interview and then runs fully
+autonomously (no mid-run escalation). The mid-run human-as-exception-handler model above is the
+default for `new`/`run`; `write` is the opt-in one-shot path.
+
 ---
 
 ## 8. The Learner (skills + watch-list)
@@ -421,7 +426,8 @@ and canon in any editor):
 
 | Command | Does |
 |---|---|
-| `new` | Abstract → directions (human/auto pick) → plan + TOC. Flags: `--autonomous`, `--no-humanize`, `--chapters N`, `--max-revisions N`, `--pick K` |
+| `write` | One-shot (§15.3): topic → upfront interview → fully autonomous run → exported finished file. Flags: `--abstract`, `--chapters N`, `--max-revisions N`, `--no-humanize` |
+| `new` | Abstract → directions (human/auto pick) → plan + TOC. Flags: `--autonomous` / `--no-autonomous` (else `settings.autonomous`), `--no-humanize`, `--chapters N`, `--max-revisions N`, `--pick K` |
 | `run` | Drive write → critique → humanize → commit → consolidate → produce → learn. `--force` passes a consolidation review |
 | `status` | Where the book is; pending escalations |
 | `review --chapter K --instruction "..."` | Answer an escalation; resume on next `run` |
@@ -434,7 +440,12 @@ and canon in any editor):
 
 **Slash commands (shell only):** `/help`, `/model [<agent>] <slug>` (switch any model, per agent,
 persisted to `config/models.yaml`), `/skills`, `/skill <name>`, `/seed-skills`, `/use <book>`,
-`/books`, `/user <id>`, `/config`, `/clear`, `/exit`.
+`/books`, `/user <id>`, `/config`, `/theme [<name>]` (themes change *everything* - palette,
+wordmark figlet face, fleuron, gradient; each a distinct hue family. `editorial` blue-ink default
+with semantic status colors; alternates `kazama` (flame, sheared) · `supabase` (emerald) ·
+`violet-bloom` (purple) · `t3-chat` (pink) · `starry-night` (indigo+gold) · `vercel` (monochrome) ·
+`fallout` (CRT amber) · `mimi` (rose pastels) · `astrovista` (mars rust); registry in `ui.THEMES`
+incl. `FONT`/`WORDS`/`SHEAR`, persisted via `settings.theme`), `/clear`, `/exit`.
 
 Run modes: **interactive** (prompts inline on escalation), **autonomous** (`--autonomous`: never
 pauses; commits the best draft + auto-repairs contradictions), **async** (background; resume via
@@ -504,6 +515,20 @@ Opt-in via `deep_research: true` (it layers on `use_researcher`); both books and
 | **Full-text fetch** | The kept sources have their actual page text fetched concurrently. **Fetch backend is pluggable:** if **Scrapo** (`github.com/vikast908/Scrapo`) is installed it's preferred - it returns clean page markdown and escalates HTTP -> browser -> stealth, reaching JS-rendered/soft-blocked pages; otherwise a pure-stdlib `urllib` + `html.parser` extractor is used (script/style/nav stripped, http(s) only, byte-capped, non-HTML skipped). All Scrapo coroutines share **one persistent background event loop** (no per-URL loop churn; enables session/browser reuse inside Scrapo). 7-day disk cache wraps both. Every step is non-fatal: Scrapo failure falls back to stdlib, which falls back to the snippet. `BOOK_AGENT_NO_SCRAPO=1` forces the stdlib path. |
 | **Synthesis** | `nodes.deep_research` / `deep_research_article` read the numbered full-text sources and produce a brief that cites sources by number and flags agreement/disagreement. For articles the **real fetched URLs** become the persisted sources (more reliable than LLM-copied URLs), feeding the References section. |
 | **Portability / cost** | Zero *required* deps - the stdlib fetch path keeps CI green on all three OSes x Python 3.10-3.13. Scrapo is an optional extra (`pip install '.[deep]'`; Python 3.11+, installs from git) for higher-fidelity fetching. Deep mode adds one query-planning LLM call + N page fetches per unit - hence opt-in. In fake/offline mode the whole path no-ops. |
+
+### 15.3 Upfront-interview `write` flow (interview once, then deliver)
+
+An alternative to the "autonomous + human as mid-run exception handler" default (§7), for users
+who want "ask me everything upfront, then only come back with the finished material." Opt in per
+run via the **`write`** command (the `new`→`run`→`export` path is unchanged and still available).
+
+| Aspect | Decision |
+|---|---|
+| **One command** | `write` does topic → quick best-effort web peek → interview → forced-autonomous run → auto-export, with no further prompts. It never reuses an active project id (it creates one) and sets the new project active on completion. |
+| **Interview** | A `planner`-model node (`nodes.interview`, schema `Interview`) turns the topic (+ chosen approach + quick research) into a small batch of tailored clarifying questions, each with a default. All are shown and answered **once** upfront; nothing is asked again. Markup-safe rendering. |
+| **Intake threading** | Answers ("intake") are (a) folded into the planner/outline prompt so structure/length/audience reflect them, and (b) injected into every writer/critic call as a high-priority `requirements` block (new kwarg). A clear violation (wrong audience/length/tone, missing must-include) is BLOCKING. Persisted to `run_state` + `intake.md`. |
+| **Hard-blocker facts** | Author/byline name is captured in the interview and written to `user/profile.md` (`_record_author`, never clobbers an existing profile), so Production fills bylines/copyright instead of escalating. Contradictions are auto-repaired (autonomous). Net effect: the run does not pause. |
+| **Autonomous resolution** | `--autonomous` is tri-state (`--autonomous`/`--no-autonomous`/unset); unset falls back to `settings.autonomous`. (Previously a `store_true` default of `False` silently shadowed the setting, forcing non-autonomous runs that escalated repeatedly - the bug this flow's users hit.) |
 
 ### Still post-v1 (deliberately deferred)
 

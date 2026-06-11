@@ -119,20 +119,45 @@ def _renumber_citations(text: str, mapping: dict[int, int]) -> str:
     return _CITE.sub(_sub, text).replace("\x00", "")
 
 
+# ── Upfront-intake plumbing (answers gathered once, before the autonomous run) ─
+def _with_intake(abstract: str, intake: str | None) -> str:
+    """Fold the author's upfront answers into the abstract the planner sees, so the
+    plan/outline (length, depth, sections, audience) reflects them from the start."""
+    if not intake:
+        return abstract
+    return (abstract + "\n\nAUTHOR REQUIREMENTS (gathered upfront - honor these in the "
+            "structure, depth, audience, and angle):\n" + intake)
+
+
+def _record_author(uid: str, author: str | None) -> None:
+    """Persist the author's name to user/profile.md (if given and not already set) so
+    Production can fill bylines/copyright instead of escalating for a missing fact."""
+    if not author or not author.strip():
+        return
+    prof = brain.user_profile(uid)
+    if brain.read_text(prof):
+        return   # never clobber an existing profile
+    brain.ensure_user(uid)
+    brain.write_text(prof, f"name: {author.strip()}\n")
+
+
 # ── Setup (human picks a direction, then autonomous) ─────────────────────────
 def start_book(
     cfg: ModelConfig, settings: Settings, uid: str, abstract: str,
     chosen: S.Direction, book_id_override: str | None,
     num_chapters: int, max_revisions: int, autonomous: bool = False,
-    humanize: bool | None = None,
+    humanize: bool | None = None, intake: str | None = None, author: str | None = None,
 ) -> str:
-    plan = nodes.planner_expand(cfg, abstract, chosen)
+    brain.ensure_user(uid)
+    _record_author(uid, author)
+    plan = nodes.planner_expand(cfg, _with_intake(abstract, intake), chosen)
     book_id = book_id_override or brain.slugify(plan.title)
     paths = BookPaths(book_id, uid).ensure()
-    brain.ensure_user(uid)
 
     brain.write_json(paths.root / "plan.json", plan.model_dump())
     brain.write_text(paths.book_plan, render.render_plan_md(plan))
+    if intake:
+        brain.write_text(paths.root / "intake.md", intake)
 
     toc = nodes.build_toc(cfg, plan, num_chapters)
     brain.write_json(paths.root / "toc.json", toc.model_dump())
@@ -140,6 +165,7 @@ def start_book(
 
     state = {
         "uid": uid, "book_id": book_id, "abstract": abstract,
+        "intake": intake or "", "author": author or "",
         "phase": "chapters", "num_chapters": len(toc.chapters),
         "max_revisions": max_revisions, "consolidate_every": settings.consolidate_every,
         "current_chapter": 1, "committed": 0, "pending_review": False,
@@ -385,6 +411,7 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
     skill_names = [name for name, _ in skill_pairs]
     skill_bodies = [body for _, body in skill_pairs]
     watch = brain.read_text(brain.watch_list(paths.uid))
+    requirements = (state.get("intake") or "").strip() or None  # author's upfront answers
 
     instruction = brain.read_text(paths.instruction_of(n))  # from a prior review, if any
     fix_notes = instruction
@@ -403,12 +430,12 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
         draft = nodes.write_chapter(cfg, plan, blueprint, fix_notes=fix_notes,
                                     context=context, skills=skill_bodies, images=images,
-                                    base_draft=base_draft,
+                                    base_draft=base_draft, requirements=requirements,
                                     length_note=_length_note(0, blueprint.target_words))
         log("   critiquing...")
         crit = nodes.critique_chapter(
             cfg, plan, blueprint, draft, context=context, watch_list=watch,
-            skills=skill_bodies,
+            skills=skill_bodies, requirements=requirements,
             length_note=_length_note(len(draft.split()), blueprint.target_words))
         brain.write_json(paths.eval_of(n),
                          {"chapter_id": n, "attempt": attempt, **crit.model_dump()})
@@ -798,18 +825,23 @@ def start_article(
     chosen: S.ArticleAngle, article_id_override: str | None,
     num_sections: int, max_revisions: int,
     autonomous: bool = False, humanize: bool | None = None,
+    intake: str | None = None, author: str | None = None,
 ) -> str:
-    outline = nodes.build_article_outline(cfg, abstract, chosen, num_sections)
+    brain.ensure_user(uid)
+    _record_author(uid, author)
+    outline = nodes.build_article_outline(cfg, _with_intake(abstract, intake), chosen, num_sections)
     article_id = article_id_override or brain.slugify(outline.title)
     paths = ArticlePaths(article_id, uid).ensure()
-    brain.ensure_user(uid)
 
     brain.write_json(paths.angle_json, chosen.model_dump())
     brain.write_json(paths.outline_json, outline.model_dump())
     brain.write_text(paths.outline_md, render.render_outline_md(outline))
+    if intake:
+        brain.write_text(paths.root / "intake.md", intake)
 
     state = {
         "uid": uid, "article_id": article_id, "abstract": abstract,
+        "intake": intake or "", "author": author or "",
         "mode": "article",
         "phase": "sections", "num_sections": len(outline.sections),
         "max_revisions": max_revisions, "current_section": 1,
@@ -986,6 +1018,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     skill_names = [name for name, _ in skill_pairs]
     skill_bodies = [body for _, body in skill_pairs]
     watch = brain.read_text(brain.watch_list(paths.uid))
+    requirements = (state.get("intake") or "").strip() or None  # author's upfront answers
 
     # Per-section word target: the outline's per-section value, falling back to an
     # even share of the article-wide target.
@@ -1010,11 +1043,12 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
         draft = nodes.write_article_section(cfg, outline, section,
                                             fix_notes=fix_notes, context=full_context,
                                             skills=skill_bodies, images=images,
-                                            base_draft=base_draft,
+                                            base_draft=base_draft, requirements=requirements,
                                             length_note=_length_note(0, target))
         log("   critiquing...")
         crit = nodes.critique_article_section(
             cfg, outline, section, draft, context=full_context, watch_list=watch,
+            requirements=requirements,
             length_note=_length_note(len(draft.split()), target))
         brain.write_json(paths.section_eval(n),
                          {"section": n, "attempt": attempt, **crit.model_dump()})
@@ -1147,11 +1181,12 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
     # Header block
     total_words = len(body.split())
     read_time = max(1, round(total_words / 200))
+    byline = (state.get("author") or "").strip() or "[AUTHOR NAME]"
     header = "\n".join([
         f"# {outline.title}", "",
         f"*{outline.angle}*", "",
         f"**Estimated read time:** {read_time} min  ",
-        "**By:** [AUTHOR NAME]", "",
+        f"**By:** {byline}", "",
         "---", "",
     ])
 

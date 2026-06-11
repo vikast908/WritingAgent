@@ -6,6 +6,11 @@
 ## Current status
 
 - **Phase:** **Production-ready.** Books and articles both live-validated end-to-end.
+- **New this session (2026-06-12 - upfront-interview `write` flow):** one command (`write`) that
+  interviews you once upfront, then runs **fully autonomously** to an exported file. Fixed a bug
+  that silently ignored `autonomous: true` (so old runs kept pausing for review), and a chat-
+  streaming bug that duplicated long replies in the scrollback. See the top session-log entry.
+  **88 tests pass.**
 - **New this session (2026-06-10 session 6 - deep researcher + article tests + craft skills + read fix):**
   - **Deep multi-source researcher** (`deep_research.py`, opt-in `deep_research` setting): LLM query-expansion -> concurrent multi-query fan-out -> URL/domain dedup -> full **page-text** fetch+extract -> cross-source synthesis node that cites sources by number. Wired into both book + article research branches; articles persist the real fetched URLs as references. **Fetch backend is pluggable:** prefers **Scrapo** (`github.com/vikast908/Scrapo`, optional `[deep]` extra - clean markdown + HTTP/browser/stealth escalation) and falls back to a stdlib `urllib`+`html.parser` path so there are still zero *required* deps. **Validated live** (real DuckDuckGo + real Scrapo fetch). Spec in `plan.md` §15.2.
   - **`read --manuscript` works for articles** (`cli._paths_for` picks ArticlePaths vs BookPaths) - fixes the long-standing pre-existing bug.
@@ -38,6 +43,150 @@
   duplicate.
 
 ## Session log
+
+### 2026-06-12 (5) - Themes v3: 10 themes, each with its OWN figlet face ("theme changes everything")
+
+User: add 3 tweakcn themes (by URL), revisit old ones, and make a theme change the *font style*
+too, not just colors. Theme palettes were scraped from the tweakcn pages (hex values live in the
+escaped Next.js flight payload; the `/r/themes/<id>.json` registry endpoint 500s).
+
+- **Theme schema grew:** every theme now defines `FONT` (figlet face), `WORDS` (wordmark words/
+  case), `SHEAR` (italic lean) alongside the palette - `apply_theme` rebinds them and
+  `shell._wordmark` renders the active theme's face first (generic solid faces as fallback).
+  A theme switch now changes palette + wordmark typography + fleuron + gradient + text tint.
+- **New themes (tweakcn imports):** `fallout` (pip-boy amber `#ffcc00` + terminal green, pagga
+  scanline face, ►), `mimi` (dusky rose/cream/teal pastels, double_blocky tiny face, ♡),
+  `astrovista` (mars rust `#c14a24` - shifted from tweakcn's `#df6035` to clear the kazama-
+  distance guard - over space navy, delta_corps_priest_1 sci-fi face, ✧).
+- **Old themes:** per-theme faces assigned (editorial=ansi_shadow, kazama=ansi_shadow+**shear
+  restored**, supabase=ansi_regular, violet-bloom=mono12 mixed-case, t3-chat=smblock,
+  starry-night=elite, vercel=smmono9 hairline) + stronger PARCH tints so body text visibly
+  shifts per theme.
+- New guards: `test_theme_changes_wordmark_face`, `test_every_theme_face_is_available` (font
+  must exist in pyfiglet - no silent fallback). **97 tests pass**; ruff clean.
+
+### 2026-06-12 (4) - Theme set v2: distinct hue families + ANSI Shadow + left-aligned banner
+
+User feedback on v1 themes: they all clustered warm (yellow/red/gold) and looked alike; wanted
+tweakcn-style presets with completely different colors, the ANSI Shadow figlet for every theme,
+and a left-aligned banner.
+
+- **New theme set (each its own hue family):** `editorial` (default - **blue-ink** accent
+  `#6f9ed9` + brass secondary, semantic status colors), `kazama` (flame, unchanged),
+  `supabase` (emerald `#3ecf8e`, ◆), `violet-bloom` (purple `#8b5cf6`, ✿), `t3-chat` (pink
+  `#ec4899` + purple, ♥), `starry-night` (gold stars `#ffd86b` on van Gogh indigo, ✶ - accent
+  is the GOLD, indigo is secondary, so it doesn't collide with editorial's blue), `vercel`
+  (monochrome white, cyan success, ▲). shakespeare/poe/gatsby dropped (too similar to the warm
+  band).
+- **Wordmark:** `ansi_shadow` is now the house face for ALL themes (solid █ + dark-outline
+  shadow chars), upright (shear off), **left-aligned** with a 2-col indent (banner tagline +
+  version too; `Align.center` gone).
+- New guard test `test_themes_are_visually_distinct` (pairwise accent RGB distance > 60) -
+  caught editorial-vs-starry-night blue clash during dev; fixed by making starry-night's
+  accent the gold. **95 tests pass**; ruff clean.
+
+### 2026-06-12 (3) - Theme system: editorial default + /theme switcher (5 themes)
+
+Design review for open-sourcing: the Kazama flame as *default* broke status semantics (red/
+yellow/green spent on branding) and collapses for red-green colorblind users. User agreed:
+**`editorial` is the new default** (one warm accent `#ff6719`, amber→orange wordmark gradient,
+ink-blue secondary, and semantic status colors - green ok / red error preserved); **kazama**
+stays as a switchable theme, plus three fun ones: **shakespeare** (violet & old gold, ❦),
+**poe** (midnight wine & crimson, ☾), **gatsby** (deco teal & champagne, ✦).
+
+- `ui.THEMES` registry + `ui.apply_theme(name)` (rebinds the module palette constants; unknown
+  -> default). Editorial values are also the static module bindings (lint-visible, single
+  source). `flame_color()` now samples the *active theme's* `STOPS`.
+- Live switching: `shell._sync_palette()` refreshes shell's from-imported names; cli.py reads
+  `ui.X` at call time so it needs no sync. `cli.main` applies `settings.theme` BEFORE the shell
+  import. prompt_toolkit completion/toolbar styles are built once per session -> refresh on next
+  launch (noted in the switch message).
+- Surfaces: `/theme` lists themes with gradient swatches, `/theme <name>` or `/set theme <name>`
+  switches + persists (`settings.theme`, new Settings field); tab-completion for theme names;
+  welcome footer shows the active theme; /help + chat system prompt updated.
+- `tests/test_themes.py` (+6: completeness, apply/fallback, gradient sampling, shell sync,
+  settings default, banner renders in all 5). **94 tests pass**; ruff clean.
+
+### 2026-06-12 (2) - TUI retheme: "Kazama flame" (Jin Kazama red · orange · yellow on black)
+
+User asked for a Jin Kazama (Tekken) look - red/yellow/black gradient - with a gradient-filled
+wordmark. All theming flows through `ui.py` constants, so the swap is centralized.
+
+- **Palette (`ui.py`):** new `FLAME_RED #e8240c` / `FLAME_ORG #ff7a18` / `FLAME_YEL #ffd23f`
+  stops + `lerp_hex` / `flame_color(t)` multi-stop gradient sampler. Remapped: `GOLD`=orange,
+  `GOLD_HI`=yellow, `INK` slate-blue -> ember red `#d4452f`, `RULE` -> dried-blood `#7a1208`,
+  `ERR` -> alarm red `#ff4d3d`, `ON_CLR` green -> flame yellow (no green in the theme), `PARCH`
+  -> warm bone. Old "ink & gilt" blue is gone.
+- **Wordmark:** `shell._flame_text` renders WRITING/AGENT with a **per-character diagonal
+  gradient** (red top-left -> orange -> yellow bottom-right, vertical-weighted 0.72/0.28);
+  replaces the old per-line two-color lerp (local `_lerp` deleted - `ui.lerp_hex` is the one
+  implementation).
+- **Masthead frame:** `_flame_rule` - a mirrored-gradient `━` rule (red edges -> yellow-hot
+  core) above and below the banner.
+- **Details:** section headers = yellow fleuron + orange title; bottom toolbar fg RULE -> INK
+  (dark red on near-black was unreadable); completion menu inherits the remap.
+- **Wordmark v3 (user picked the Terminus face):** user pasted a half-block "Terminus" sample;
+  matched it to figlet **`mono9`** (the Terminus-derived face). Wordmark is now mixed-case
+  "Writing" / "Agent" in mono9 - every stroke is solid `▄▀█`, so the flame gradient fills it
+  fully; upright (no shear), like the sample. Faces are now data
+  (`_WORDMARK_FACES`: mono9 → ansi_shadow → ansi_regular → line-art fallbacks).
+- **Wordmark v2 (user feedback - "hollow dotted outline", wanted Tekken-style fill):** switched
+  the figlet font to **`ansi_shadow`** (solid `█` fill + `╔═╝` shadow chars), per-word **shear**
+  (`_shear`, 1 col/row) for the Tekken italic lean, and two-layer coloring in `_flame_text`:
+  solid blocks get the diagonal flame gradient, shadow chars become a near-black ember outline
+  (`_OUTLINE #5c0d04`) like the logo's dark edge. Line-art fonts (slant/small/standard) remain
+  fallbacks for terminals without box-drawing glyphs; the old "avoid block fonts" comment is
+  superseded (user's terminal renders them fine).
+- No test pinned colors; **88 pass**, ruff clean. `--plain`/`NO_COLOR` paths unchanged.
+- Not touched: the SVG-diagram accent palette in `prompts.DIAGRAM_SYS` (that styles exported
+  *content*, not the TUI).
+
+### 2026-06-12 - Upfront-interview `write` flow + autonomous-flag bug fix
+
+User wanted: "research, ask me everything upfront, then only come back with the end material" -
+but the agent kept pausing for input and halting. Two root causes fixed; **86 tests pass** (+5);
+ruff clean. Spec rows added to plan §7 and §15.3.
+
+**The bug behind "asks again and again / stops":** `cmd_new` resolved autonomy with
+`getattr(args, "autonomous", settings.autonomous)`, but `--autonomous` is an argparse
+`store_true` whose default `False` *always exists* - so `settings.autonomous: true` was silently
+shadowed and **every project was created non-autonomous**. It then escalated (`pending_review`)
+on every low-confidence section and revision cap. Fix: `--autonomous` is now tri-state
+(`store_const`/`default=None`) with a `--no-autonomous` override, resolved by
+`cli._autonomous_value` (explicit flag wins, else the setting). Verified end-to-end: a plain
+`new` now yields `autonomous=True, escalate_below_confidence=0.0, escalate_on_contradiction=False`.
+
+**New one-shot `write` command** (`cli.cmd_write`): topic → quick best-effort web peek →
+`nodes.interview` generates a tailored batch of clarifying questions (audience, depth, length,
+tone, must-include, avoid) → all asked **once** upfront (`_conduct_interview` + `_ask_batch`,
+markup-safe) → forced-autonomous run → **auto-exported finished file** (docx for articles, pdf
+for books; chosen in the interview). Blocked from chat auto-exec (interactive). Reuses the live
+dashboard via the new `shell.run_with_dashboard` (refactored out of `_cmd_run_rich`).
+
+**Intake threading:** answers ("intake") fold into the planner/outline prompt (`_with_intake`)
+AND inject into every writer/critic call as a high-priority `requirements` block (new kwarg on
+`write_chapter`/`write_article_section`/`critique_*`). Author name captured upfront →
+`user/profile.md` (`_record_author`) so Production fills bylines instead of escalating; article
+byline now uses it. `intake` + `author` persisted in `run_state` and `intake.md`.
+
+New: `schemas.Interview`/`InterviewQuestion`, `prompts.INTERVIEW_SYS`, `nodes.interview`,
+`tests/test_write_flow.py`. Welcome screen + chat command list now lead with `write`.
+
+**Also fixed - chat streaming duplicated itself in the scrollback** (user saw ~5 copies of a long
+reply). `_chat_respond` fed a continuously-growing `Markdown` to a non-transient Rich `Live` with
+`vertical_overflow="visible"`; once the reply was taller than the terminal, Live could not
+overwrite the prior frame and re-emitted the whole block every refresh. Fix: stream a **transient,
+cropped plain-text tail** (bounded to the viewport, erased on exit), then render the complete reply
+**once** below. Partial text is still kept on cancel. `tests/test_shell_chat.py` added. The run
+dashboard's `Live` was unaffected (its renderable is bounded). **88 tests pass.**
+
+**"Stops after a certain token"** was the escalation halt + the `new`→`run` split, both removed
+by the above (one command, no pauses). Per-node `max_tokens` were already generous (writer 8k
+article / 16k book) and were not the cause.
+
+**Next:** live (non-fake) `write` run to sight-check the interview questions' quality and that
+requirements (length/tone/must-include) actually land in the prose; consider a `--yes`/scripted
+intake for non-interactive `write`.
 
 ### 2026-06-11 (2) - Logic-review fixes: revision loop, learning loop, citations, length, cohesion, exports
 

@@ -15,6 +15,29 @@ def _ctx(obj) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
+# ── Upfront interview ─────────────────────────────────────────────────────────
+def interview(
+    cfg: ModelConfig, topic: str, mode: str = "book",
+    research_brief: str | None = None, n: int = 6,
+) -> S.Interview:
+    """Generate one batch of clarifying questions to ask the author upfront.
+
+    The whole point is to gather everything that shapes the piece in a single pass,
+    so the autonomous run that follows never needs to interrupt the author again.
+    """
+    model = cfg.model_for("planner")
+    kind = "long-form article" if mode == "article" else "book"
+    parts = [f"The author wants to write a {kind} about:\n{topic}"]
+    if research_brief:
+        parts.append("Quick research context (use it to ask sharper, better-grounded "
+                     f"questions - do not just summarize it):\n{research_brief}")
+    parts.append(f"Propose up to {n} clarifying questions, each with a sensible default "
+                 "'suggestion'.")
+    out = complete_structured(model, P.INTERVIEW_SYS, "\n\n".join(parts), S.Interview,
+                              max_tokens=2000, temperature=cfg.temperature_for("planner"))
+    return S.Interview(questions=list(out.questions)[:n])
+
+
 # ── Planner ───────────────────────────────────────────────────────────────────
 def planner_directions(cfg: ModelConfig, abstract: str, n: int = 3) -> S.Directions:
     model = cfg.model_for("planner")
@@ -52,9 +75,13 @@ def write_chapter(
     images: list[str] | None = None,
     base_draft: str | None = None,
     length_note: str | None = None,
+    requirements: str | None = None,
 ) -> str:
     model = cfg.model_for("writer")
     parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
+    if requirements:
+        parts.append("AUTHOR REQUIREMENTS (gathered upfront - the highest priority; honor "
+                     f"every point exactly):\n{requirements}")
     if context:
         parts.append(f"Canonical context:\n{context}")
     if skills:
@@ -87,9 +114,13 @@ def critique_chapter(
     watch_list: str | None = None,
     skills: list[str] | None = None,
     length_note: str | None = None,
+    requirements: str | None = None,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
+    if requirements:
+        parts.append("AUTHOR REQUIREMENTS (gathered upfront; treat a clear violation - wrong "
+                     f"audience, length, tone, or a missing must-include - as BLOCKING):\n{requirements}")
     if context:
         parts.append(f"Canonical context:\n{context}")
     if watch_list:
@@ -261,9 +292,13 @@ def write_article_section(
     images: list[str] | None = None,
     base_draft: str | None = None,
     length_note: str | None = None,
+    requirements: str | None = None,
 ) -> str:
     model = cfg.model_for("writer")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section to write:\n{_ctx(section)}"]
+    if requirements:
+        parts.append("AUTHOR REQUIREMENTS (gathered upfront - the highest priority; honor "
+                     f"every point exactly):\n{requirements}")
     if context:
         parts.append(f"Prior section summaries (for continuity):\n{context}")
     if skills:
@@ -290,9 +325,13 @@ def critique_article_section(
     context: str | None = None,
     watch_list: str | None = None,
     length_note: str | None = None,
+    requirements: str | None = None,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section blueprint:\n{_ctx(section)}"]
+    if requirements:
+        parts.append("AUTHOR REQUIREMENTS (gathered upfront; treat a clear violation - wrong "
+                     f"audience, length, tone, or a missing must-include - as BLOCKING):\n{requirements}")
     if context:
         parts.append(f"Prior context:\n{context}")
     if watch_list:

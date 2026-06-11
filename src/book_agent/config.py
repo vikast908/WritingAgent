@@ -65,6 +65,7 @@ class Settings:
     request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
     mode: str = "book"           # "book" | "article" - default for new projects
     num_sections: int = 6        # default section count for articles
+    theme: str = "editorial"     # TUI color theme (see ui.THEMES; /theme to switch)
 
 
 def load_config() -> ModelConfig:

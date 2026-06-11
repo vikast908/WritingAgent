@@ -20,6 +20,18 @@ class Directions(BaseModel):
     directions: list[Direction]
 
 
+# ── Upfront interview (ask everything once, then run autonomously) ────────────
+class InterviewQuestion(BaseModel):
+    key: str               # short slug for the dimension (audience, length, tone, ...)
+    question: str          # the question to put to the author
+    why: str = ""          # why it matters (shown dimly; optional)
+    suggestion: str = ""   # a sensible default the author can accept with Enter
+
+
+class Interview(BaseModel):
+    questions: list[InterviewQuestion]
+
+
 class BookPlan(BaseModel):
     title: str
     premise: str

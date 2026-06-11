@@ -1,7 +1,9 @@
 """Interactive REPL/TUI for WRITING AGENT (run `writing-agent` / `book` / `python book.py`).
 
-Aesthetic: editorial letterpress - an "ink & gilt" palette, a title-page masthead, fleuron
-section markers, and clean borderless command tables.
+Aesthetic: themed (see ui.THEMES; /theme to switch). The default "editorial" theme is
+ink & brass - one warm accent, semantic status colors, a gradient-filled wordmark,
+fleuron section markers, and clean borderless command tables. Alternates: kazama
+(Jin Kazama flame), shakespeare, poe, gatsby.
 
 Lines starting with `/` are slash commands; recognised book-command words dispatch to the
 one-shot CLI; anything else is routed to the built-in conversational assistant (DeepSeek Flash).
@@ -22,6 +24,21 @@ from .config import ModelConfig, Settings, save_config, save_settings
 from .ui import DIM, ERR, GOLD, GOLD_HI, INK, OFF_CLR, ON_CLR, PARCH, RULE  # palette
 
 _VERSION = "0.1.0"
+
+
+def _sync_palette() -> None:
+    """Rebind this module's palette names after a live theme switch.
+
+    ui.apply_theme() rebinds ui's globals, but this module from-imported the
+    color names at import time - those copies must be refreshed for the new
+    theme to take effect without a restart. (cli.py reads `ui.X` at call time,
+    so it needs no sync.)
+    """
+    g = globals()
+    for k in ("GOLD", "GOLD_HI", "INK", "PARCH", "DIM", "RULE", "ERR",
+              "ON_CLR", "OFF_CLR"):
+        g[k] = getattr(ui, k)
+    g["_FLEURON"] = ui.FLEURON
 _NODES = ["planner", "toc", "writer", "critic", "summarizer", "consolidation",
           "production", "learner", "researcher", "humanizer", "chat"]
 _EXIT = {"exit", "quit", "q", ":q"}
@@ -41,6 +58,7 @@ _SLASH_HELP = [
     ("/update [changes]", "describe your changes - AI reviews and advises on next steps"),
     ("/retry", "resend the last chat message"),
     ("/mode [book|article]", "show or set the project mode (default: book)"),
+    ("/theme [<name>]", "list or switch themes - each changes palette, wordmark font, and glyphs"),
     ("/reset", "clear the assistant's conversation memory (fresh context)"),
     ("/compact", "summarize conversation memory to save context space"),
     ("/clear · /exit", "clear screen · quit"),
@@ -60,6 +78,9 @@ WRITING AGENT writes complete books: give it an abstract, it plans, writes, crit
 revises, and assembles a finished manuscript (PDF or EPUB). It runs on OpenRouter + DeepSeek.
 
 COMMANDS  (type these directly in this shell - no 'book' prefix needed):
+  write --abstract "..."     One-shot: asks a few questions upfront, then autonomously
+                             researches, writes, and EXPORTS a finished file. No pauses.
+                             (Interactive - tell the user to type it themselves; never auto-run it.)
   new --abstract "..."       Start a new project - book (default) or article (when mode=article)
   run                        Write the book/article - drafts, critiques, humanises, commits
   status                     Where the project is (phase, chapter/section, pending reviews)
@@ -82,6 +103,8 @@ SLASH COMMANDS  (start with /):
   /books · /skills           List books · browse craft skills
   /retry                     Resend your last chat message
   /mode [book|article]       Show or set mode - 'book' for novels/nonfiction, 'article' for single long-form articles
+  /theme [<name>]            List or switch theme (changes palette + wordmark font) - editorial (default),
+                             kazama, supabase, violet-bloom, t3-chat, starry-night, vercel, fallout, mimi, astrovista
   /reset                     Clear assistant memory (fresh context)
   /compact                   Summarize memory to save context space
   /help                      Show all slash commands
@@ -159,13 +182,6 @@ def _out(console, text: str) -> None:
         print(_MARKUP.sub("", text))
 
 
-def _lerp(a: str, b: str, t: float) -> str:
-    ca = [int(a.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)]
-    cb = [int(b.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)]
-    r, g, bl = (round(ca[i] + (cb[i] - ca[i]) * t) for i in range(3))
-    return f"#{r:02x}{g:02x}{bl:02x}"
-
-
 def _trim_blank_edges(lines: list[str]) -> list[str]:
     while lines and not lines[0].strip():
         lines.pop(0)
@@ -174,29 +190,95 @@ def _trim_blank_edges(lines: list[str]) -> list[str]:
     return lines
 
 
-def _wordmark() -> list[str]:
-    """Wordmark as a list of lines. WRITING stacked over AGENT.
+def _shear(lines: list[str], step: int = 1) -> list[str]:
+    """Italicize a figlet block: indent upper rows so the letters lean right,
+    like the slanted Tekken wordmark."""
+    n = len(lines)
+    return [(" " * ((n - 1 - i) * step)) + ln for i, ln in enumerate(lines)]
 
-    Uses pure line-art ASCII fonts (not block/box-drawing fonts) so the letters
-    render correctly in any terminal regardless of font or line spacing - block
-    fonts like ANSI Shadow only tile cleanly in some terminals. Falls back to
-    plain text so it never crashes on an exotic pyfiglet build.
+
+# Generic wordmark fallbacks: (figlet font, top word, bottom word, shear). Tried
+# when the active theme's own face (ui.FONT) is unavailable in this pyfiglet
+# build; plain text is the last resort so the banner never crashes.
+_WORDMARK_FACES = (
+    ("ansi_shadow", "WRITING", "AGENT", False),
+    ("ansi_regular", "WRITING", "AGENT", False),
+    ("mono9", "Writing", "Agent", False),
+    ("slant", "WRITING", "AGENT", False),
+    ("small", "WRITING", "AGENT", False),
+    ("standard", "WRITING", "AGENT", False),
+)
+
+
+def _wordmark() -> list[str]:
+    """Wordmark as a list of lines, one word stacked over the other.
+
+    The figlet FACE is part of the theme (ui.FONT/WORDS/SHEAR) - switching the
+    theme changes the typography, not just the colors. Falls back through the
+    generic solid faces if the theme's face is missing from this pyfiglet build.
     """
+    theme_face = (ui.FONT, ui.WORDS[0], ui.WORDS[1], ui.SHEAR)
     try:
         import pyfiglet
-        for font in ("slant", "small", "standard"):
+        for font, top_word, bot_word, shear in (theme_face, *_WORDMARK_FACES):
             try:
-                top = pyfiglet.figlet_format("WRITING", font=font)
-                bot = pyfiglet.figlet_format("AGENT", font=font)
+                top = pyfiglet.figlet_format(top_word, font=font)
+                bot = pyfiglet.figlet_format(bot_word, font=font)
             except Exception:
                 continue
-            lines = (_trim_blank_edges(top.split("\n"))
-                     + [""] + _trim_blank_edges(bot.split("\n")))
+            top_l = _trim_blank_edges(top.split("\n"))
+            bot_l = _trim_blank_edges(bot.split("\n"))
+            if shear:   # Tekken-style italic lean (block faces only)
+                top_l, bot_l = _shear(top_l), _shear(bot_l)
+            lines = top_l + [""] + bot_l
             if lines and max((len(ln) for ln in lines), default=0) <= 80:
                 return lines
     except Exception:
         pass
     return ["W R I T I N G", "A G E N T"]
+
+
+# Box-drawing shadow chars in the ansi_shadow fallback font - rendered as the
+# wordmark's dark outline (the theme's RULE color), not part of the gradient fill.
+_SHADOW_CHARS = set("╔╗╚╝═║")
+
+
+def _flame_text(lines: list[str], *, bold: bool = True):
+    """Render lines with a per-character diagonal gradient in the active theme.
+
+    Two layers: the solid letter strokes sweep the theme's gradient stops from
+    the top-left to the bottom-right (vertical-weighted so each letterform reads
+    as one piece), while any shadow characters become a dark outline that gives
+    the mark its depth.
+    """
+    from rich.text import Text
+    n_rows = max(len(lines) - 1, 1)
+    width = max((len(ln) for ln in lines), default=1)
+    weight = "bold " if bold else ""
+    t = Text()
+    for i, ln in enumerate(lines):
+        for j, ch in enumerate(ln):
+            if ch == " ":
+                t.append(ch)
+            elif ch in _SHADOW_CHARS:
+                t.append(ch, style=RULE)
+            else:
+                frac = 0.72 * (i / n_rows) + 0.28 * (j / max(width - 1, 1))
+                t.append(ch, style=f"{weight}{ui.flame_color(frac)}")
+        t.append("\n")
+    return t
+
+
+def _flame_rule(console):
+    """A horizontal rule with a mirrored flame gradient: red edges burning to a
+    yellow-hot core. Frames the masthead."""
+    from rich.text import Text
+    width = console.size.width or 80
+    t = Text()
+    for j in range(width):
+        frac = j / max(width - 1, 1)
+        t.append("━", style=ui.flame_color(1 - abs(2 * frac - 1)))
+    return t
 
 
 def _banner(console) -> None:
@@ -205,31 +287,26 @@ def _banner(console) -> None:
         print("\n".join(lines))
         print("an autonomous writing studio - books, articles & more")
         return
-    from rich.align import Align
-    from rich.rule import Rule
+    from rich.padding import Padding
     from rich.text import Text
-    # Gentle per-line vertical gradient (top lit -> bottom). Coloring whole lines
-    # (not each character) keeps the letters reading as one cohesive wordmark.
-    n = max(len(lines) - 1, 1)
-    grad = Text()
-    for i, ln in enumerate(lines):
-        grad.append(ln + "\n", style=f"bold {_lerp(GOLD_HI, GOLD, i / n)}")
+    pad = (0, 0, 0, 2)   # left-aligned with a 2-col indent
     console.print()
-    console.print(Rule(style=RULE))
+    console.print(_flame_rule(console))
     console.print()
-    console.print(Align.center(grad))
-    console.print(Align.center(Text("an autonomous writing studio - books, articles & more",
-                                    style=f"italic {INK}")))
-    console.print(Align.center(Text(f"OpenRouter · DeepSeek · v{_VERSION}", style=DIM)))
+    console.print(Padding(_flame_text(lines), pad))
+    console.print(Padding(Text("an autonomous writing studio - books, articles & more",
+                               style=f"italic {INK}"), pad))
+    console.print(Padding(Text(f"OpenRouter · DeepSeek · v{_VERSION}", style=DIM), pad))
     console.print()
-    console.print(Rule(style=RULE))
+    console.print(_flame_rule(console))
 
 
 def _section(console, title: str) -> None:
     from rich.rule import Rule
     from rich.text import Text
-    console.print(Rule(Text(f" {_FLEURON}  {title} ", style=f"bold {GOLD}"),
-                       style=RULE, align="left"))
+    label = Text(f" {_FLEURON}  ", style=GOLD_HI)      # yellow flame-tip fleuron
+    label.append(f"{title} ", style=f"bold {GOLD}")    # blazing-orange title
+    console.print(Rule(label, style=RULE, align="left"))
 
 
 def _cmd_table(console, rows: list[tuple[str, str]]) -> None:
@@ -304,7 +381,9 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
         new_desc = "start a book - idea → directions → plan + TOC"
     export_desc = "pdf · epub · html · docx · txt · md  (prompts if format omitted)"
     _cmd_table(console, [
-        ("new --abstract \"...\"", new_desc),
+        ("write --abstract \"...\"", "★ ask a few questions upfront, then autonomously "
+                                     "research → write → export a finished file"),
+        ("new --abstract \"...\"", new_desc + "  (then `run`)"),
         ("run", "write it - draft · critique · humanise · commit per section" if is_article
                 else "write it - draft · critique · humanise · commit per chapter"),
         ("status · review", "where the project stands · answer escalations"),
@@ -322,6 +401,7 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     _cmd_table(console, [
         ("/model [agent] <slug>", "switch any model to any OpenRouter slug"),
         ("/set <key> <value>", "change a setting live (e.g. /set use_researcher true)"),
+        ("/theme [<name>]", "switch theme - palette + wordmark font (10 built-in)"),
         ("/update [changes]", "describe your changes - AI reviews and advises"),
         ("/use <project> · /books", "set active project · list projects"),
         ("/skills · /seed-skills", "browse skills · install built-ins"),
@@ -336,23 +416,19 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
         _section(console, "GETTING STARTED")
         if is_article:
             _cmd_table(console, [
-                ("Step 1", 'new --abstract "How Python async/await actually works"'),
-                ("Step 2", "run                   ← writes every section automatically"),
-                ("Step 3", "export   ← picks format interactively (docx · pdf · html · txt · md)"),
+                ("Easiest", 'write --abstract "How Python async/await actually works"'),
+                ("", "  → answers a few questions upfront, then writes + exports it all"),
                 ("", ""),
-                ("Tip", "pick from 3 editorial angles (e.g. beginner vs deep-dive)"),
+                ("Manual", "new …  →  run  →  export   (review at each step)"),
                 ("Tip", "/set use_researcher true  for real web sources + citations"),
-                ("Tip", "/set autonomous true  to run without any pauses"),
                 ("Tip", "/mode book  to switch back to full-book mode"),
             ])
         else:
             _cmd_table(console, [
-                ("Step 1", 'new --abstract "A thriller set on Mars in 2089"'),
-                ("Step 2", "run                  ← writes every chapter automatically"),
-                ("Step 3", "export   ← picks format interactively (epub · pdf · docx · txt · md)"),
+                ("Easiest", 'write --abstract "A thriller set on Mars in 2089"'),
+                ("", "  → answers a few questions upfront, then writes + exports it all"),
                 ("", ""),
-                ("Tip", "you can also just describe your idea in plain English below"),
-                ("Tip", "/set autonomous true  to run without any pauses"),
+                ("Manual", "new …  →  run  →  export   (review at each step)"),
                 ("Tip", "/set num_chapters 12  to change the book length (default 8)"),
                 ("Tip", "/mode article  to write a single long-form article instead"),
             ])
@@ -392,6 +468,8 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     foot.append(cfg.model_for("writer").split("/")[-1], style=INK)
     foot.append("   flash ", style=DIM)
     foot.append(cfg.model_for("critic").split("/")[-1], style=INK)
+    foot.append("   theme ", style=DIM)
+    foot.append(ui.current_theme, style=INK)
     n_proj = len(projects)
     foot.append(f"   {len(skl)} skills   {n_proj} project{'s' if n_proj != 1 else ''}   {uid}",
                 style=DIM)
@@ -439,6 +517,16 @@ def _cmd_model(console, cfg: ModelConfig, rest: list[str]) -> None:
     _out(console, f"[{GOLD}]{node}[/] -> [{GOLD}]{slug}[/] [dim](saved)[/]")
 
 
+def _set_theme(name: str, console, settings: Settings) -> None:
+    """Apply + persist a theme; shared by /theme and /set theme."""
+    settings.theme = name
+    save_settings(settings)
+    ui.apply_theme(name)
+    _sync_palette()
+    _out(console, f"theme -> [{ui.GOLD}]{name}[/] [dim](saved - the prompt/completion "
+                  f"styles refresh on next launch)[/]")
+
+
 def _cmd_set(console, settings: Settings, rest: list[str]) -> None:
     import dataclasses
     if len(rest) < 2:
@@ -446,6 +534,13 @@ def _cmd_set(console, settings: Settings, rest: list[str]) -> None:
         _out(console, f"usage: /set <key> <value>\nkeys: [dim]{fields}[/]")
         return
     key, raw = rest[0], rest[1]
+    if key == "theme":   # needs the apply/sync side-effect, not just the setattr
+        if raw.lower() in ui.THEMES:
+            _set_theme(raw.lower(), console, settings)
+        else:
+            _out(console, f"[{ERR}]unknown theme '{raw}'[/] [dim]- themes: "
+                          f"{' · '.join(ui.THEMES)}[/]")
+        return
     field_map = {f.name: f for f in dataclasses.fields(settings)}
     if key not in field_map:
         valid = "  ".join(sorted(field_map))
@@ -512,8 +607,9 @@ _NEEDS_PROJECT = {"run", "status", "read", "export", "review", "memory",
 # The chat assistant must NOT silently auto-execute destructive or
 # config/tenant-changing commands - the human has to type these. (The model may
 # still mention them in prose.) `delete` = data loss; `/user` switches tenant;
-# `/set` can disable human-in-the-loop (autonomous) and reroute models.
-_CHAT_BLOCKED_CMDS = {"delete"}
+# `/set` can disable human-in-the-loop (autonomous) and reroute models;
+# `write` runs an interactive interview + a long autonomous run - the human starts it.
+_CHAT_BLOCKED_CMDS = {"delete", "write"}
 _CHAT_BLOCKED_SLASH = {"user", "set"}
 
 
@@ -766,19 +862,17 @@ class _RunDashboard:
             self.events.append(Text(f"  {c}", style=DIM))
 
 
-def _cmd_run_rich(args, cfg, settings, uid: str, console) -> None:
-    """Run the pipeline with a live Rich dashboard."""
+def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = False) -> None:
+    """Drive orchestrator.run for one project under a live Rich dashboard.
+
+    Shared by the shell's `run` command and the one-shot `write` flow so both show
+    the same live progress view.
+    """
+    from rich.live import Live
+
     from . import brain as _brain
     from . import orchestrator
     from .brain import ArticlePaths, BookPaths
-
-    # book_id is resolved by callers (_auto_or_pick_project in the shell loop or _execute_cmd)
-    book_id = getattr(args, "book_id", None)
-    if not book_id:
-        _out(console, f"[{ERR}]No active project.[/]  Run `/use <name>` or just type `run` from the shell.")
-        return
-
-    from rich.live import Live
 
     try:
         art = ArticlePaths(book_id, uid)
@@ -796,8 +890,18 @@ def _cmd_run_rich(args, cfg, settings, uid: str, console) -> None:
         def _log(msg: str) -> None:
             dash.log(msg)
             live.update(dash.render())
-        orchestrator.run(cfg, uid, book_id, force=getattr(args, "force", False), log=_log)
+        orchestrator.run(cfg, uid, book_id, force=force, log=_log)
         live.update(dash.render())
+
+
+def _cmd_run_rich(args, cfg, settings, uid: str, console) -> None:
+    """Run the pipeline with a live Rich dashboard."""
+    # book_id is resolved by callers (_auto_or_pick_project in the shell loop or _execute_cmd)
+    book_id = getattr(args, "book_id", None)
+    if not book_id:
+        _out(console, f"[{ERR}]No active project.[/]  Run `/use <name>` or just type `run` from the shell.")
+        return
+    run_with_dashboard(cfg, uid, book_id, console, force=getattr(args, "force", False))
 
 
 # ── Conversational assistant ──────────────────────────────────────────────────
@@ -1007,21 +1111,26 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
                 chunks.append(chunk)
                 break  # first chunk received - drop spinner
 
-        # 3. Stream remaining chunks with Rich Live (no manual ANSI cursor tricks)
+        # 3. Stream a TRANSIENT, in-place tail preview while tokens arrive; the
+        #    complete reply is rendered once, below, after the loop.
+        #
+        #    Why not Live-update a growing Markdown block: once the reply is taller
+        #    than the terminal, a non-transient Live with vertical_overflow="visible"
+        #    can't overwrite the previous frame, so it re-emits the WHOLE block on
+        #    every refresh - stacking many identical copies in the scrollback (the
+        #    "I see 5 duplicates" bug). A transient + cropped plain-text tail is
+        #    bounded to the viewport, updates in place, and is erased on exit, so the
+        #    single final print is the only thing left on screen.
         console.print(Rule(style=RULE))
         if chunks:
-            with Live(
-                Padding(Markdown(chunks[0] + "▌"), pad=(0, 2)),
-                console=console,
-                refresh_per_second=12,
-                transient=False,
-                vertical_overflow="visible",
-            ) as live:
+            max_rows = max(6, (console.size.height or 24) - 4)
+            with Live(console=console, refresh_per_second=12, transient=True,
+                      vertical_overflow="crop") as live:
                 for chunk in gen:
                     chunks.append(chunk)
-                    live.update(Padding(Markdown("".join(chunks) + "▌"), pad=(0, 2)))
-                # Final render without the streaming cursor
-                live.update(Padding(Markdown("".join(chunks)), pad=(0, 2)))
+                    tail = "".join(chunks).splitlines()[-max_rows:]
+                    live.update(Padding(Text("\n".join(tail) + " ▌", style=PARCH),
+                                        pad=(0, 2)))
 
     except KeyboardInterrupt:
         cancelled = True  # stop streaming, keep partial text, stay in the shell
@@ -1029,8 +1138,13 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
     except Exception as e:  # noqa: BLE001
         error = f"_(assistant unavailable: {e})_\n\nType `/help` to see all commands."
 
+    # The only thing committed to the scrollback: the complete reply, formatted
+    # once. (The streaming preview above was transient, so there's nothing to
+    # duplicate.) On cancel we still render whatever partial text we collected.
     full = "".join(chunks)
-    if not full and error:
+    if full:
+        console.print(Padding(Markdown(full), pad=(0, 2)))
+    elif error:
         console.print(Text(f"  {error}", style=ERR))
 
     # 4. Save history
@@ -1220,6 +1334,19 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
             _out(console, f"mode -> [{GOLD}]{rest[0]}[/] [dim](saved - next `new` will use this mode)[/]")
         else:
             _out(console, f"[{ERR}]unknown mode '{rest[0]}'[/] - valid: book  article")
+    elif name in ("theme", "themes"):
+        if not rest:
+            _section(console, "THEMES") if console else None
+            for tname, t in ui.THEMES.items():
+                mark = "●" if tname == ui.current_theme else "○"
+                swatch = "".join(f"[{c}]█[/]" for c in t["STOPS"])
+                _out(console, f"  [{t['GOLD']}]{mark} {tname:<13}[/] {swatch}  [dim]{t['DESC']}[/]")
+            _out(console, "  [dim]switch: /theme <name>[/]")
+        elif rest[0].lower() in ui.THEMES:
+            _set_theme(rest[0].lower(), console, settings)
+        else:
+            names = " · ".join(ui.THEMES)
+            _out(console, f"[{ERR}]unknown theme '{rest[0]}'[/] [dim]- themes: {names}[/]")
     else:
         sug = ui.did_you_mean(name, [s[0] for s in _SLASH_COMPLETIONS])
         hint = f"did you mean /{sug}?" if sug else "try /help"
@@ -1244,6 +1371,7 @@ _SLASH_COMPLETIONS = [
     ("update",      "describe changes - AI reviews and suggests next steps"),
     ("retry",       "resend last chat message"),
     ("mode",        "show / set mode  book | article"),
+    ("theme",       "list / switch color theme"),
     ("reset",       "clear chat memory"),
     ("compact",     "compress chat memory to one summary"),
     ("clear",       "clear screen"),
@@ -1302,12 +1430,16 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                         for n, f in fields.items():
                             if n.startswith(cur):
                                 yield _comp(n, -len(cur), type(f.default).__name__)
-                    else:                                        # bool values
+                    else:                                        # values
                         key = words[1]
                         if key in fields and isinstance(fields[key].default, bool):
                             for v in ("true", "false"):
                                 if v.startswith(cur):
                                     yield _comp(v, -len(cur))
+                        elif key == "theme":
+                            for v in ui.THEMES:
+                                if v.startswith(cur):
+                                    yield _comp(v, -len(cur), "theme")
                 elif sub == "skill":
                     sdir = brain.skills_dir(state["uid"])
                     if sdir.exists():
@@ -1318,6 +1450,10 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                     for v in ("book", "article"):
                         if v.startswith(cur):
                             yield _comp(v, -len(cur))
+                elif sub in ("theme", "themes"):
+                    for v in ui.THEMES:
+                        if v.startswith(cur):
+                            yield _comp(v, -len(cur), "theme")
                 return
 
             # ── book commands ────────────────────────────────────────────────
@@ -1353,9 +1489,9 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
         "completion-menu.completion.current":        f"bg:{RULE} fg:{GOLD_HI} bold",
         "completion-menu.meta.completion":           f"bg:#111111 fg:{_DIM_HEX}",
         "completion-menu.meta.completion.current":   f"bg:{RULE} fg:{PARCH}",
-        # Bottom toolbar
-        "bottom-toolbar":                            f"bg:#0a0a0a fg:{RULE}",
-        "bottom-toolbar.text":                       f"bg:#0a0a0a fg:{RULE}",
+        # Bottom toolbar (ember on near-black; RULE is too dark for small text)
+        "bottom-toolbar":                            f"bg:#0a0a0a fg:{INK}",
+        "bottom-toolbar.text":                       f"bg:#0a0a0a fg:{INK}",
         # Prompt
         "":                                          f"fg:{PARCH}",
     })
@@ -1480,15 +1616,19 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
                     msg = err_text.split(": error: ", 1)[-1] if ": error: " in err_text else err_text
                     _out(console, f"[{ERR}]error:[/] {msg}  [dim](try /help)[/]")
                 continue
-            # Auto-pick project when none is active and the command needs one
+            # Auto-pick project when none is active and the command needs one.
+            # `new`/`write` CREATE a project, so they must never inherit the active id.
+            creates_project = first in ("new", "write")
             if getattr(args, "book_id", None) is None:
                 if first in _NEEDS_PROJECT and not state["book"]:
                     picked = _auto_or_pick_project(state["uid"], settings, console, state)
                     if not picked and first not in {"list", "new", "skills", "config"}:
                         continue
-                if state["book"]:
+                if state["book"] and not creates_project:
                     args.book_id = state["book"]
             user = args.user if args.user != settings.default_user else state["uid"]
+            projects_before = ({p[0] for p in brain.list_projects(user)}
+                               if creates_project else None)
             try:
                 # Special handling for destructive/interactive commands in Rich TUI
                 if first == "run" and console:
@@ -1507,6 +1647,12 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
                         _out(console, "[dim]aborted[/]")
                 else:
                     commands[args.command](args, cfg, settings, user)
+                # After new/write, make the freshly created project active.
+                if projects_before is not None:
+                    fresh = [p[0] for p in brain.list_projects(user)
+                             if p[0] not in projects_before]
+                    if fresh:
+                        state["book"] = fresh[0]
                 _show_post_hint(console, state, settings)
             except KeyboardInterrupt:
                 _out(console,

@@ -105,7 +105,7 @@ def _cmd_new_book(args, cfg, settings, uid, abstract):
     print(f"\n-> {chosen.title}")
     book_id = _spin("building plan + TOC", lambda: orchestrator.start_book(
         cfg, settings, uid, abstract, chosen, args.book_id, chapters, max_rev,
-        autonomous=getattr(args, "autonomous", settings.autonomous),
+        autonomous=_autonomous_value(args, settings),
         humanize=(False if getattr(args, "no_humanize", False) else None)))
     print(f"\n[OK] Created book '{book_id}'.")
     print(f"     Next: python book.py run --book-id {book_id}")
@@ -122,10 +122,183 @@ def _cmd_new_article(args, cfg, settings, uid, abstract):
     print(f"\n-> {chosen.title}")
     article_id = _spin("building outline", lambda: orchestrator.start_article(
         cfg, settings, uid, abstract, chosen, args.book_id, num_sections, max_rev,
-        autonomous=getattr(args, "autonomous", settings.autonomous),
+        autonomous=_autonomous_value(args, settings),
         humanize=(False if getattr(args, "no_humanize", False) else None)))
     print(f"\n[OK] Created article '{article_id}'.")
     print(f"     Next: python book.py run --book-id {article_id}")
+
+
+# ── Autonomous "write" flow: interview once, then run to a finished file ───────
+def _autonomous_value(args, settings) -> bool:
+    """Resolve the autonomous flag. An explicit --autonomous / --no-autonomous wins;
+    otherwise fall back to settings.autonomous. (The old `store_true` default of False
+    silently shadowed the setting, so `autonomous: true` never took effect.)"""
+    flag = getattr(args, "autonomous", None)
+    return settings.autonomous if flag is None else flag
+
+
+def _quick_research(settings, topic: str) -> str | None:
+    """A fast, best-effort web peek so the interview can ask sharper questions. Never
+    blocks: researcher off, offline, or any error -> None and the flow continues."""
+    if not settings.use_researcher:
+        return None
+    try:
+        from . import search as search_mod
+        results = search_mod.web_search(topic, max_results=3)
+        return search_mod.format_results(results) or None
+    except Exception:  # noqa: BLE001 - research is optional
+        return None
+
+
+def _ask_batch(console, intro: str, items: list[tuple[str, str]]) -> list[str]:
+    """Show every question upfront, then collect answers one line at a time.
+    `items` is [(question, default)]; an empty answer takes the default."""
+    answers: list[str] = []
+    if console:
+        from rich.markup import escape
+        console.print(f"\n[bold {ui.GOLD}]{escape(intro)}[/]\n")
+        for i, (q, d) in enumerate(items, 1):
+            dflt = f"  [dim](default: {escape(d)})[/]" if d else ""
+            console.print(f"  [{ui.GOLD}]{i}.[/] {escape(q)}{dflt}")
+        console.print()
+        for i, (_q, d) in enumerate(items, 1):
+            raw = console.input(f"  [{ui.GOLD}]{i} ›[/] ").strip()
+            answers.append(raw or d)
+    else:
+        print("\n" + intro + "\n")
+        for i, (q, d) in enumerate(items, 1):
+            print(f"  {i}. {q}" + (f"  (default: {d})" if d else ""))
+        print()
+        for i, (_q, d) in enumerate(items, 1):
+            answers.append(input(f"  {i} > ").strip() or d)
+    return answers
+
+
+def _pick_approach(console, topic: str, items: list[str]) -> int:
+    """Show candidate angles/directions; return the chosen 1-based index (default 1)."""
+    if console:
+        from rich.markup import escape
+        console.print(f"\n[bold {ui.GOLD}]Approaches[/] [dim]for: {escape(topic)}[/]")
+        for i, it in enumerate(items, 1):
+            console.print(f"  [{ui.GOLD}]{i}[/]  {escape(it)}")
+        raw = console.input("\n  [dim]pick an approach[/] [dim][1]:[/] ").strip()
+    else:
+        print(f"\nApproaches for: {topic}")
+        for i, it in enumerate(items, 1):
+            print(f"  {i}  {it}")
+        raw = input("\n  pick an approach [1]: ").strip()
+    try:
+        idx = int(raw or "1")
+    except ValueError:
+        idx = 1
+    return max(1, min(idx, len(items)))
+
+
+def _render_intake(topic: str, approach: str, qa_pairs, author: str) -> str:
+    lines = ["# Author requirements (captured upfront)", "",
+             f"Topic: {topic}", f"Approach: {approach}", "", "## Answers"]
+    for q, a in qa_pairs:
+        a = (a or "").strip()
+        if a:
+            lines.append(f"- **{q}**\n  {a}")
+    if author:
+        lines.append(f"- **Author / byline:** {author}")
+    return "\n".join(lines)
+
+
+def _conduct_interview(cfg, settings, uid, topic, mode, console):
+    """Gather everything upfront: pick an approach, then answer one batch of tailored
+    questions. Returns (chosen, intake_md, export_format, author)."""
+    research = _quick_research(settings, topic)
+    if mode == "article":
+        angles = _spin("studying the topic + planning angles",
+                       lambda: nodes.plan_article_angles(cfg, topic)).angles
+        approach_items = [f"{a.title} - {a.angle}  (for {a.audience})" for a in angles]
+        choices = angles
+    else:
+        dirs = _spin("planning directions",
+                     lambda: nodes.planner_directions(cfg, topic)).directions
+        approach_items = [f"{d.title} - {d.premise}  (tone: {d.tone})" for d in dirs]
+        choices = dirs
+    idx = _pick_approach(console, topic, approach_items)
+    chosen = choices[idx - 1]
+
+    chosen_focus = f"{topic}\n\nChosen approach: {approach_items[idx - 1]}"
+    iv = _spin("preparing your questions",
+               lambda: nodes.interview(cfg, chosen_focus, mode, research)).questions
+
+    default_fmt = "docx" if mode == "article" else "pdf"
+    qa_items = [(q.question, q.suggestion or "") for q in iv]
+    qa_items.append(("Your name for the byline / author credit (Enter to skip)", ""))
+    qa_items.append((f"Output file format ({' / '.join(_EXPORT_FORMATS)})", default_fmt))
+    answers = _ask_batch(
+        console, "A few questions - then I'll research, write, self-edit, and hand you "
+                 "the finished piece. No more interruptions:", qa_items)
+
+    fmt = (answers[-1] or default_fmt).strip().lower()
+    if fmt not in _EXPORT_FORMATS:
+        fmt = default_fmt
+    author = answers[-2].strip()
+    qa_pairs = list(zip([q.question for q in iv], answers[:-2], strict=False))
+    return chosen, _render_intake(topic, approach_items[idx - 1], qa_pairs, author), fmt, author
+
+
+def cmd_write(args, cfg, settings, uid):
+    """One-shot autonomous flow: topic -> upfront interview -> full run -> exported file."""
+    skills_mod.seed_builtin(uid)
+    mode = settings.mode
+    label = "Article topic" if mode == "article" else "Book idea"
+    topic = args.abstract or input(f"{label}: ").strip()
+    if not topic:
+        sys.exit("No topic provided.")
+    console = _console()
+
+    chosen, intake_md, fmt, author = _conduct_interview(cfg, settings, uid, topic, mode, console)
+
+    units = args.chapters or (settings.num_sections if mode == "article"
+                              else settings.num_chapters)
+    max_rev = args.max_revisions if args.max_revisions is not None else settings.max_revisions
+    humanize = False if getattr(args, "no_humanize", False) else None
+
+    if mode == "article":
+        pid = _spin("building the outline", lambda: orchestrator.start_article(
+            cfg, settings, uid, topic, chosen, args.book_id, units, max_rev,
+            autonomous=True, humanize=humanize, intake=intake_md, author=author))
+    else:
+        pid = _spin("building the plan + chapters", lambda: orchestrator.start_book(
+            cfg, settings, uid, topic, chosen, args.book_id, units, max_rev,
+            autonomous=True, humanize=humanize, intake=intake_md, author=author))
+
+    msg = (f"Writing '{pid}' autonomously - research, drafting, self-review, assembly. "
+           "This can take a while; no more questions.")
+    if console:
+        console.print(f"\n[{ui.GOLD}]{msg}[/]")
+    else:
+        print("\n" + msg)
+
+    if console:
+        from .shell import run_with_dashboard
+        run_with_dashboard(cfg, uid, pid, console)
+    else:
+        orchestrator.run(cfg, uid, pid, log=print)
+
+    try:
+        out = _EXPORT_FNS[fmt](uid, pid)
+    except Exception as e:  # noqa: BLE001
+        print(f"[!] Couldn't export {fmt}: {e}\n"
+              f"    The manuscript is finished - run `export` to retry.")
+        return pid
+    if console and out is not None:
+        try:
+            uri = out.resolve().as_uri()
+        except ValueError:
+            uri = str(out)
+        kb = out.stat().st_size / 1024
+        console.print(f"\n  [bold {ui.ON_CLR}]✓ done[/]  [link={uri}]{out}[/]  "
+                      f"[{ui.DIM}]({kb:.0f} KB)[/]")
+    else:
+        print(f"[OK] {fmt} -> {out}")
+    return pid
 
 
 def cmd_run(args, cfg, settings, uid):
@@ -330,7 +503,7 @@ def cmd_config(args, cfg, settings, uid):
 
 
 _COMMANDS = {
-    "new": cmd_new, "run": cmd_run, "status": cmd_status, "review": cmd_review,
+    "new": cmd_new, "write": cmd_write, "run": cmd_run, "status": cmd_status, "review": cmd_review,
     "read": cmd_read, "memory": cmd_memory, "produce": cmd_produce,
     "consolidate": cmd_consolidate, "skills": cmd_skills, "config": cmd_config,
     "list": cmd_list, "export": cmd_export, "seed-skills": cmd_seed_skills,
@@ -351,10 +524,23 @@ def build_parser(settings):
     p_new.add_argument("--pick", type=int)
     p_new.add_argument("--chapters", type=int)
     p_new.add_argument("--max-revisions", type=int)
-    p_new.add_argument("--autonomous", action="store_true",
-                       help="No human-in-the-loop: never pause; commit the best draft")
+    # Tri-state so the settings.autonomous default isn't shadowed by a store_true False.
+    p_new.add_argument("--autonomous", dest="autonomous", action="store_const", const=True,
+                       default=None, help="Never pause; commit the best draft (overrides setting)")
+    p_new.add_argument("--no-autonomous", dest="autonomous", action="store_const", const=False,
+                       help="Force human-in-the-loop review (overrides settings.autonomous)")
     p_new.add_argument("--no-humanize", action="store_true",
                        help="Skip the humanizer pass that strips AI tells")
+
+    # `write`: interview once, then run fully autonomously to a finished, exported file.
+    p_write = sub.add_parser(
+        "write", parents=[common],
+        help="Interview upfront, then autonomously research + write + export a finished file")
+    p_write.add_argument("--abstract", help="Topic/idea (prompted if omitted)")
+    p_write.add_argument("--chapters", type=int, help="Number of chapters/sections")
+    p_write.add_argument("--max-revisions", type=int)
+    p_write.add_argument("--no-humanize", action="store_true",
+                         help="Skip the humanizer pass that strips AI tells")
 
     p_run = sub.add_parser("run", parents=[common], help="Drive the pipeline until done or escalation")
     p_run.add_argument("--force", action="store_true", help="Proceed past a consolidation review")
@@ -399,6 +585,7 @@ def main() -> None:
 
     settings = load_settings()
     cfg = load_config()
+    ui.apply_theme(settings.theme)   # before the shell import - it copies the palette
     from . import llm as _llm
     _llm.configure_headroom(settings.use_headroom)
     _llm.configure_timeout(settings.request_timeout)

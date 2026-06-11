@@ -1,5 +1,5 @@
-"""Shared TUI helpers: the editorial palette, a console factory that honors
-NO_COLOR / --plain, and small pure renderers (phase stepper, efficacy bar,
+"""Shared TUI helpers: the theme registry + active palette, a console factory that
+honors NO_COLOR / --plain, and small pure renderers (phase stepper, efficacy bar,
 "did you mean", word count / reading time). Imported by both shell.py and cli.py
 so the one-shot CLI and the interactive REPL render consistently.
 """
@@ -8,17 +8,162 @@ from __future__ import annotations
 import difflib
 import os
 
-# ── palette: ink & gilt (editorial) ──────────────────────────────────────────
-GOLD = "#ff6719"     # brand orange - wordmark + accents
-GOLD_HI = "#ff8c4b"  # lit orange - gradient top
-INK = "#7c9cbf"      # slate ink-blue - tagline / values
-PARCH = "#d9cfb8"    # parchment - body text
+# ── themes ────────────────────────────────────────────────────────────────────
+# Every theme defines the same palette keys; apply_theme() rebinds the module-level
+# constants (GOLD, INK, ...) that every renderer reads. "editorial" is the default:
+# ONE warm accent used sparingly, and red/yellow/green reserved for status semantics
+# (error / warning / ok) so the run dashboard stays readable at a glance. The rest
+# are personality themes - kazama deliberately spends the warm band on its flame.
+# The editorial defaults double as the static module bindings (linters and
+# import-time from-imports see real names); apply_theme() rebinds them live.
+# A theme changes EVERYTHING: the full palette, the wordmark's figlet FACE
+# (FONT/WORDS/SHEAR), the gradient STOPS, the body-text tint, and the fleuron.
+# Each theme owns a DIFFERENT hue family so they're distinguishable at a glance:
+# editorial=blue-ink · kazama=flame · supabase=emerald · violet-bloom=purple ·
+# t3-chat=pink · starry-night=indigo+gold · vercel=monochrome · fallout=CRT
+# amber · mimi=rose pastels · astrovista=mars rust.
+GOLD = "#6f9ed9"     # primary accent - commands, headings, prompt (blue ink)
+GOLD_HI = "#a8c8ec"  # lit accent - highlights
+INK = "#c9a86a"      # brass - tagline / secondary values
+PARCH = "#dcd7c9"    # soft parchment - body text
 DIM = "grey42"       # secondary
-RULE = "#8c3a10"     # dim burnt-orange - rules
-ERR = "#a8533a"      # burgundy - errors
-ON_CLR = "#6aaa5c"   # muted green - feature on / done
+RULE = "#4a5568"     # slate - rules / borders
+ERR = "#e06c75"      # clear red - errors (semantic)
+ON_CLR = "#6aaa5c"   # green - feature on / done (semantic)
 OFF_CLR = "grey50"   # feature off
 FLEURON = "❧"
+STOPS = ("#3a6ea5", "#6f9ed9", "#a8c8ec")   # wordmark gradient - deep → pale ink
+FONT = "ansi_shadow"                        # wordmark figlet face
+WORDS = ("WRITING", "AGENT")                # wordmark words (case matters per face)
+SHEAR = False                               # italic lean (block faces only)
+
+THEMES: dict[str, dict] = {
+    "editorial": dict(
+        GOLD=GOLD, GOLD_HI=GOLD_HI, INK=INK, PARCH=PARCH,
+        DIM=DIM, RULE=RULE, ERR=ERR, ON_CLR=ON_CLR,
+        OFF_CLR=OFF_CLR, FLEURON=FLEURON, STOPS=STOPS,
+        FONT=FONT, WORDS=WORDS, SHEAR=SHEAR,
+        DESC="ink & brass - blue-ink default, semantic status colors",
+    ),
+    "kazama": dict(
+        GOLD="#ff7a18", GOLD_HI="#ffd23f", INK="#d4452f", PARCH="#e8ddd0",
+        DIM="grey42", RULE="#7a1208", ERR="#ff4d3d", ON_CLR="#ffd23f",
+        OFF_CLR="grey50", FLEURON="❧",
+        STOPS=("#e8240c", "#ff7a18", "#ffd23f"),
+        FONT="ansi_shadow", WORDS=("WRITING", "AGENT"), SHEAR=True,
+        DESC="Jin Kazama - flame gradient, Tekken italic lean",
+    ),
+    "supabase": dict(
+        GOLD="#3ecf8e", GOLD_HI="#7ce8b5", INK="#9fb8ad", PARCH="#cfe5d8",
+        DIM="grey42", RULE="#1f4636", ERR="#e06c75", ON_CLR="#3ecf8e",
+        OFF_CLR="grey50", FLEURON="◆",
+        STOPS=("#0c7a4d", "#3ecf8e", "#7ce8b5"),
+        FONT="ansi_regular", WORDS=("WRITING", "AGENT"), SHEAR=False,
+        DESC="emerald on midnight - flat dashboard green",
+    ),
+    "violet-bloom": dict(
+        GOLD="#8b5cf6", GOLD_HI="#c4b5fd", INK="#bf7fbf", PARCH="#ded5f2",
+        DIM="grey42", RULE="#3b2a5e", ERR="#e06c75", ON_CLR="#6aaa5c",
+        OFF_CLR="grey50", FLEURON="✿",
+        STOPS=("#5b21b6", "#8b5cf6", "#c4b5fd"),
+        FONT="mono12", WORDS=("Writing", "Agent"), SHEAR=False,
+        DESC="violet bloom - royal purple, soft rounded face",
+    ),
+    "t3-chat": dict(
+        GOLD="#ec4899", GOLD_HI="#f9a8d4", INK="#a78bfa", PARCH="#f2d9e5",
+        DIM="grey42", RULE="#59243f", ERR="#ff6b6b", ON_CLR="#6aaa5c",
+        OFF_CLR="grey50", FLEURON="♥",
+        STOPS=("#9d174d", "#ec4899", "#f9a8d4"),
+        FONT="smblock", WORDS=("WRITING", "AGENT"), SHEAR=False,
+        DESC="t3 chat - hot pink, light bubbly face",
+    ),
+    "starry-night": dict(
+        GOLD="#ffd86b", GOLD_HI="#ffeaa6", INK="#5b8dd9", PARCH="#cfdcf2",
+        DIM="grey42", RULE="#27355c", ERR="#e06c75", ON_CLR="#6aaa5c",
+        OFF_CLR="grey50", FLEURON="✶",
+        STOPS=("#1e3a6e", "#5b8dd9", "#ffd86b"),
+        FONT="elite", WORDS=("WRITING", "AGENT"), SHEAR=False,
+        DESC="starry night - gold stars on van Gogh indigo, deco face",
+    ),
+    "vercel": dict(
+        GOLD="#ededed", GOLD_HI="#ffffff", INK="#888888", PARCH="#c8c8c8",
+        DIM="grey42", RULE="#333333", ERR="#ff4444", ON_CLR="#50e3c2",
+        OFF_CLR="grey50", FLEURON="▲",
+        STOPS=("#555555", "#ededed", "#ffffff"),
+        FONT="smmono9", WORDS=("WRITING", "AGENT"), SHEAR=False,
+        DESC="vercel - monochrome minimal, hairline face",
+    ),
+    # tweakcn imports (dark variants) - palettes from tweakcn.com/themes/<id>
+    "fallout": dict(
+        GOLD="#ffcc00", GOLD_HI="#ffe97a", INK="#00ff66", PARCH="#e0d5a0",
+        DIM="grey42", RULE="#5d4a00", ERR="#ff4444", ON_CLR="#00ff66",
+        OFF_CLR="grey50", FLEURON="►",
+        STOPS=("#8a6d00", "#ffcc00", "#ffe97a"),
+        FONT="pagga", WORDS=("WRITING", "AGENT"), SHEAR=False,
+        DESC="fallout - pip-boy amber phosphor, terminal green, scanline face",
+    ),
+    "mimi": dict(
+        GOLD="#e4a2b1", GOLD_HI="#fbe2a7", INK="#50afb6", PARCH="#f3e3ea",
+        DIM="grey42", RULE="#324859", ERR="#e06c75", ON_CLR="#6aaa5c",
+        OFF_CLR="grey50", FLEURON="♡",
+        STOPS=("#c67b96", "#e4a2b1", "#fbe2a7"),
+        FONT="double_blocky", WORDS=("WRITING", "AGENT"), SHEAR=False,
+        DESC="mimi - dusky rose, cream and teal pastels, tiny playful face",
+    ),
+    "astrovista": dict(
+        GOLD="#c14a24", GOLD_HI="#e58a5f", INK="#85a6c7", PARCH="#dfe3e8",
+        DIM="grey42", RULE="#2a3656", ERR="#ef4444", ON_CLR="#6aaa5c",
+        OFF_CLR="grey50", FLEURON="✧",
+        STOPS=("#284167", "#c14a24", "#e58a5f"),
+        FONT="delta_corps_priest_1", WORDS=("WRITING", "AGENT"), SHEAR=False,
+        DESC="astrovista - mars rust over deep-space navy, sci-fi face",
+    ),
+}
+DEFAULT_THEME = "editorial"
+_PALETTE_KEYS = ("GOLD", "GOLD_HI", "INK", "PARCH", "DIM", "RULE", "ERR",
+                 "ON_CLR", "OFF_CLR", "FLEURON", "STOPS", "FONT", "WORDS", "SHEAR")
+
+current_theme = DEFAULT_THEME
+
+
+def apply_theme(name: str) -> str:
+    """Activate a theme by rebinding this module's palette constants.
+
+    Unknown names fall back to the default. Returns the name actually applied.
+    NOTE: shell.py from-imports these names, so after a LIVE switch it must call
+    its `_sync_palette()`; at startup (cli.main applies the theme before shell is
+    imported) the import picks the themed values up naturally.
+    """
+    global current_theme
+    applied = name if name in THEMES else DEFAULT_THEME
+    theme = THEMES[applied]
+    globals().update({k: theme[k] for k in _PALETTE_KEYS})
+    current_theme = applied
+    return applied
+
+
+def lerp_hex(a: str, b: str, t: float) -> str:
+    """Linear blend between two #rrggbb colors, t in [0, 1]."""
+    ca = [int(a.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)]
+    cb = [int(b.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)]
+    r, g, bl = (round(ca[i] + (cb[i] - ca[i]) * t) for i in range(3))
+    return f"#{r:02x}{g:02x}{bl:02x}"
+
+
+def flame_color(t: float, stops: tuple[str, ...] | None = None) -> str:
+    """Sample the active theme's gradient: t=0 -> first stop ... t=1 -> last."""
+    if stops is None:
+        stops = STOPS
+    t = max(0.0, min(1.0, t))
+    segs = len(stops) - 1
+    if segs <= 0:
+        return stops[0]
+    pos = t * segs
+    i = min(int(pos), segs - 1)
+    return lerp_hex(stops[i], stops[i + 1], pos - i)
+
+
+apply_theme(DEFAULT_THEME)   # bind GOLD/INK/... at import time
 
 _FORCE_PLAIN = False
 
