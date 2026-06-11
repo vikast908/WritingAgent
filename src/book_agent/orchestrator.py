@@ -17,8 +17,11 @@ from . import brain, concurrency, humanizer, llm, nodes, render, retrieval
 from . import schemas as S
 from . import skills as skills_mod
 from .brain import ArticlePaths, BookPaths
-from .config import ModelConfig, Settings
+from .config import ModelConfig, Settings, load_settings
 from .store import Store
+
+_BUDGET_PAUSE_MSG = ("[!] {err} - run paused. Raise the cap (/set max_run_tokens N, "
+                     "0 = unlimited) or just run again to continue with a fresh budget.")
 
 
 # ── Deep-research query planning ─────────────────────────────────────────────
@@ -196,6 +199,8 @@ def _load(uid: str, book_id: str):
 # ── Main driver ──────────────────────────────────────────────────────────────
 def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=print) -> dict:
     llm.reset_usage()
+    llm.set_project(book_id)                                   # telemetry attribution
+    llm.set_run_budget(load_settings().max_run_tokens)         # cost kill-switch
     # Detect whether this is a book or an article (check articles/ first, then books/)
     art_paths = ArticlePaths(book_id, uid)
     if art_paths.run_state.exists():
@@ -232,6 +237,7 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=pr
     try:
         while state["phase"] != "done":
             phase = state["phase"]
+            llm.set_unit(phase)
             if phase == "chapters":
                 n = state["current_chapter"]
                 if n > state["num_chapters"]:
@@ -299,6 +305,11 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=pr
         _summary = llm.usage_summary()
         if _summary:
             log("   " + _summary)
+        return state
+    except llm.BudgetExceeded as e:
+        # Nothing committed mid-flight is lost: the resume guards make a re-run
+        # pick up exactly where this one stopped.
+        log(_BUDGET_PAUSE_MSG.format(err=e))
         return state
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
@@ -385,6 +396,7 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
 
 
 def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=None) -> str:
+    llm.set_unit(f"ch{n:02d}")
     blueprint = toc.chapters[n - 1]
     # Resume guard: if this chapter was already committed on a prior run but the
     # state advance didn't land (crash between _commit and the run_state write),
@@ -871,6 +883,7 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log):
     try:
         while state["phase"] != "done":
             phase = state["phase"]
+            llm.set_unit(phase)
             if phase == "sections":
                 n = state["current_section"]
                 if n > state["num_sections"]:
@@ -906,6 +919,9 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log):
                 paths.cleanup_sections()
                 state["phase"] = "done"
                 brain.write_json(paths.run_state, state)
+    except llm.BudgetExceeded as e:
+        log(_BUDGET_PAUSE_MSG.format(err=e))
+        return state
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
     log(f"[OK] Article '{paths.article_id}' complete. Manuscript: {paths.manuscript}")
@@ -990,6 +1006,7 @@ def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
 
 def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
                              prefetched=None) -> str:
+    llm.set_unit(f"sec{n:02d}")
     section = outline.sections[n - 1]
 
     # Resume guard (see _process_chapter): committed section file present but state

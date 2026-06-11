@@ -19,6 +19,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Deep multi-source researcher** (`deep_research` setting) - query expansion, concurrent
   multi-query search, full page-text fetch (Scrapo or stdlib), cross-source synthesis with
   numbered citations.
+- **Run cost kill-switch** - `max_run_tokens` pauses a run cleanly once its total token
+  spend crosses the cap; resumable as always. Live dashboard shows `tokens / budget` and
+  real USD cost (OpenRouter `usage.cost`).
+- **Structured telemetry** - one JSONL record per LLM call (run, project, unit, model,
+  latency, attempts, tokens, cost, error) under `.index/telemetry/`; `/dashboard
+  [<project>]` renders the rollup in the TUI with per-model and per-unit breakdowns.
+- **Prompt-injection defense** - all web-fetched content is fenced as data-only
+  (spoof-neutralized markers + standing instruction) at every research → prompt path.
 - Open-source scaffolding: `LICENSE` (MIT), `CONTRIBUTING.md`, `SECURITY.md`,
   `CODE_OF_CONDUCT.md`, issue/PR templates, GitHub Actions CI (Linux/macOS/Windows
   × Python 3.10–3.13), ruff config, and pre-commit hooks.

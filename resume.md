@@ -44,6 +44,31 @@
 
 ## Session log
 
+### 2026-06-12 (6) - Production guards: run budget, JSONL telemetry + /dashboard, injection defense
+
+From a production-readiness gap analysis (stack: identity/tools/memory/RAG/planning/guardrails/
+approval/observability/eval/reliability/governance/ops), user picked the top 3; /dashboard added
+on request mid-build. **107 tests pass** (+10); ruff clean. Spec rows in plan §15.1.
+
+- **Run budget kill-switch:** `max_run_tokens` setting (0 = unlimited), read live at run start.
+  `llm._check_budget()` runs before every text/structured call (before fake mode too, so it's
+  testable offline) and raises `BudgetExceeded`; both run loops catch it and pause cleanly -
+  resumable, nothing lost. Chat streaming is exempt.
+- **Telemetry:** new `telemetry.py` - one JSONL record per LLM call (ts, run_id, project, unit,
+  kind, model, latency_ms, attempts, tokens, cost, error) under `.index/telemetry/`, never
+  raises. Attribution: `llm.set_project` (module-global - prefetch threads inherit) +
+  `llm.set_unit` (thread-local; set per chapter/section/phase). Real cost captured via
+  OpenRouter `extra_body={"usage":{"include":true}}` -> `usage.cost` (gated on an openrouter
+  base URL); `[usage]` line + live dashboard now show $ and `tokens / budget`.
+- **`/dashboard [<project>]`:** TUI rollup from the JSONL - totals (calls/tokens/$/avg
+  latency/errors), per-model table; bare = all projects + recent runs, with a project name =
+  per-chapter/section breakdown. Tab-completes project names.
+- **Injection defense:** `prompts.wrap_untrusted` (markers + neutralization of spoofed markers
+  + standing data-not-instructions note) applied at all 5 web->prompt choke points: research,
+  research_article, deep_research, deep_research_article, interview.
+- Next candidates from the same analysis (not built): golden-set eval harness, brain
+  auto-git-commit, SSRF/robots guard on the fetcher, PyPI release, dependabot+pip-audit.
+
 ### 2026-06-12 (5) - Themes v3: 10 themes, each with its OWN figlet face ("theme changes everything")
 
 User: add 3 tweakcn themes (by URL), revisit old ones, and make a theme change the *font style*

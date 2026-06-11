@@ -9,6 +9,7 @@ Set OPENROUTER_API_KEY. Models are configured per node in config/models.yaml.
 """
 from __future__ import annotations
 
+import datetime
 import functools
 import logging
 import os
@@ -16,6 +17,7 @@ import random
 import threading
 import time
 import types
+import uuid
 from typing import Literal, TypeVar, Union, get_args, get_origin
 
 from openai import OpenAI
@@ -28,6 +30,7 @@ _log = logging.getLogger(__name__)
 _BASE_URL = "https://openrouter.ai/api/v1"
 _client: OpenAI | None = None
 _client_lock = threading.Lock()
+_include_cost = False   # ask OpenRouter to report usage.cost (set when client builds)
 
 # Retry/backoff knobs (network calls dominate runtime - a transient 429/5xx must
 # not kill a multi-hour book run, and a non-retryable 4xx must not waste attempts).
@@ -54,26 +57,75 @@ def configure_headroom(enabled: bool) -> None:
     _headroom_enabled = enabled
 
 
-# ── Token-usage telemetry ─────────────────────────────────────────────────────
+# ── Token-usage telemetry + run budget ────────────────────────────────────────
 # Aggregated across every call since the last reset; surfaced at the end of a run.
 _usage_lock = threading.Lock()
-_usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+_usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
+          "cost": 0.0}
+_run_id = uuid.uuid4().hex[:12]
+_budget_max = 0           # run token budget; 0 = unlimited (see set_run_budget)
+_tl_ctx = threading.local()   # .unit - which chapter/section/phase a call belongs to
+_run_project: str | None = None   # module-global: one run per process; prefetch
+                                  # threads inherit it (thread-locals wouldn't)
+
+
+class BudgetExceeded(RuntimeError):
+    """The run's total token spend reached max_run_tokens - pause, don't burn on."""
+
+
+def set_run_budget(max_tokens: int) -> None:
+    """Set the kill-switch for the current run (0 disables it)."""
+    global _budget_max
+    _budget_max = max(0, int(max_tokens or 0))
+
+
+def run_budget() -> int:
+    return _budget_max
+
+
+def set_unit(unit: str | None) -> None:
+    """Tag subsequent calls on THIS thread with the unit being processed
+    (ch03 / sec02 / consolidate / production / learn) for telemetry attribution."""
+    _tl_ctx.unit = unit
+
+
+def set_project(project: str | None) -> None:
+    """Tag all subsequent calls (any thread) with the project being run."""
+    global _run_project
+    _run_project = project
+
+
+def _check_budget() -> None:
+    if _budget_max:
+        with _usage_lock:
+            total = _usage["total_tokens"]
+        if total >= _budget_max:
+            raise BudgetExceeded(
+                f"run token budget reached ({total:,} >= {_budget_max:,} tokens)")
 
 
 def reset_usage() -> None:
+    global _run_id
     with _usage_lock:
-        _usage.update(calls=0, prompt_tokens=0, completion_tokens=0, total_tokens=0)
+        _usage.update(calls=0, prompt_tokens=0, completion_tokens=0, total_tokens=0,
+                      cost=0.0)
+    _run_id = uuid.uuid4().hex[:12]
 
 
 def _record_usage(resp) -> None:
     u = getattr(resp, "usage", None)
     if u is None:
         return
+    try:
+        cost = float(getattr(u, "cost", 0) or 0)   # OpenRouter reports usage.cost (USD)
+    except (TypeError, ValueError):
+        cost = 0.0
     with _usage_lock:
         _usage["calls"] += 1
         _usage["prompt_tokens"] += getattr(u, "prompt_tokens", 0) or 0
         _usage["completion_tokens"] += getattr(u, "completion_tokens", 0) or 0
         _usage["total_tokens"] += getattr(u, "total_tokens", 0) or 0
+        _usage["cost"] += cost
 
 
 def current_tokens() -> int:
@@ -82,15 +134,50 @@ def current_tokens() -> int:
         return _usage["total_tokens"]
 
 
+def current_cost() -> float:
+    """Live cost tally (USD) since the last reset; 0.0 if the provider doesn't report it."""
+    with _usage_lock:
+        return _usage["cost"]
+
+
 def usage_summary() -> str | None:
-    """One-line tally of tokens spent since the last reset, or None if nothing ran."""
+    """One-line tally of tokens (and cost when known) since the last reset."""
     with _usage_lock:
         if _usage["calls"] == 0:
             return None
-        return (f"[usage] {_usage['calls']} LLM calls, "
+        line = (f"[usage] {_usage['calls']} LLM calls, "
                 f"{_usage['prompt_tokens']:,} prompt + "
                 f"{_usage['completion_tokens']:,} completion = "
                 f"{_usage['total_tokens']:,} tokens")
+        if _usage["cost"] > 0:
+            line += f" · ${_usage['cost']:.4f}"
+        return line
+
+
+def _log_call(kind: str, model: str, t0: float, attempts: int, resp,
+              error: str | None = None) -> None:
+    """Emit one structured JSONL record for this call (best-effort)."""
+    from . import telemetry
+    u = getattr(resp, "usage", None)
+    try:
+        cost = float(getattr(u, "cost", 0) or 0) if u else 0.0
+    except (TypeError, ValueError):
+        cost = 0.0
+    telemetry.log_call({
+        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "run_id": _run_id,
+        "project": _run_project,
+        "unit": getattr(_tl_ctx, "unit", None),
+        "kind": kind,
+        "model": model,
+        "latency_ms": round((time.time() - t0) * 1000),
+        "attempts": attempts,
+        "prompt_tokens": (getattr(u, "prompt_tokens", 0) or 0) if u else 0,
+        "completion_tokens": (getattr(u, "completion_tokens", 0) or 0) if u else 0,
+        "total_tokens": (getattr(u, "total_tokens", 0) or 0) if u else 0,
+        "cost": cost,
+        "error": error,
+    })
 
 
 # ── Retry classification + backoff ─────────────────────────────────────────────
@@ -171,20 +258,29 @@ def _compress(messages: list[dict], model: str) -> list[dict]:
 
 
 def _get_client() -> OpenAI:
-    global _client
+    global _client, _include_cost
     # Double-checked lock: concurrent first calls (parallel research/image fetch)
     # must not each build a client.
     if _client is None:
         with _client_lock:
             if _client is None:
+                base_url = os.getenv("OPENROUTER_BASE_URL", _BASE_URL)
+                # OpenRouter reports real USD cost in usage when asked; other
+                # OpenAI-compatible hosts may reject the extra body field.
+                _include_cost = "openrouter" in base_url
                 _client = OpenAI(
-                    base_url=os.getenv("OPENROUTER_BASE_URL", _BASE_URL),
+                    base_url=base_url,
                     api_key=os.environ["OPENROUTER_API_KEY"],
                     default_headers={"X-Title": "Writing Agent"},
                     timeout=_request_timeout,   # a hung connection must not block forever
                     max_retries=0,              # we own retries (classified backoff below)
                 )
     return _client
+
+
+def _cost_kwargs() -> dict:
+    """Per-request extra body asking OpenRouter to include usage.cost."""
+    return {"extra_body": {"usage": {"include": True}}} if _include_cost else {}
 
 
 # ── Fake mode (offline testing/demo; no API calls) ───────────────────────────
@@ -252,15 +348,18 @@ def complete_text(
     temperature: float | None = None,
     thinking: bool = False,  # accepted for API parity; reasoning is model-internal
 ) -> str:
+    _check_budget()   # kill-switch: before fake mode too, so tests exercise it offline
     if _fake_mode():
         return _FAKE_TEXT
     messages = _compress(
         [{"role": "system", "content": system}, {"role": "user", "content": user}],
         model,
     )
+    t0 = time.time()
     last_err: Exception | None = None
     for attempt in range(_MAX_ATTEMPTS):
-        kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages}
+        kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages,
+                        **_cost_kwargs()}
         if temperature is not None:
             kwargs["temperature"] = temperature
         try:
@@ -268,6 +367,7 @@ def complete_text(
             _record_usage(resp)
             content = (resp.choices[0].message.content or "").strip()
             if content:
+                _log_call("text", model, t0, attempt + 1, resp)
                 return content
             # Empty content (reasoning ate the budget) - retryable.
             raise _EmptyResponse(
@@ -278,6 +378,7 @@ def complete_text(
                 _backoff_sleep(attempt, e)
                 continue
             break  # non-retryable (e.g. 401/400) or out of attempts - fail fast
+    _log_call("text", model, t0, attempt + 1, None, error=str(last_err))
     raise RuntimeError(f"Text completion failed for {model}: {last_err}")
 
 
@@ -349,6 +450,7 @@ def complete_structured(
     max_tokens: int = 8000,
     temperature: float | None = None,
 ) -> T:
+    _check_budget()   # kill-switch: before fake mode too, so tests exercise it offline
     if _fake_mode():
         return _fake_instance(schema)
     system_full = system + "\n\n" + _json_instruction(schema)
@@ -356,10 +458,12 @@ def complete_structured(
         [{"role": "system", "content": system_full}, {"role": "user", "content": user}],
         model,
     )
+    t0 = time.time()
     last_err: Exception | None = None
     use_response_format = True   # dropped if a model rejects it (BadRequest)
     for attempt in range(_MAX_ATTEMPTS):
-        kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages}
+        kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages,
+                        **_cost_kwargs()}
         if temperature is not None:
             kwargs["temperature"] = temperature
         if use_response_format:
@@ -386,7 +490,9 @@ def complete_structured(
             if not text.strip():
                 raise _EmptyResponse(
                     f"empty model output (finish_reason={resp.choices[0].finish_reason})")
-            return schema.model_validate_json(text)
+            out = schema.model_validate_json(text)
+            _log_call("structured", model, t0, attempt + 1, resp)
+            return out
         except Exception as e:  # noqa: BLE001 - parse/validation/empty
             last_err = e
             if attempt < _MAX_ATTEMPTS - 1:
@@ -400,4 +506,5 @@ def complete_structured(
                 ]
                 continue
             break
+    _log_call("structured", model, t0, attempt + 1, None, error=str(last_err))
     raise RuntimeError(f"Structured parse failed for {schema.__name__}: {last_err}")

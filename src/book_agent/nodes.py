@@ -30,7 +30,7 @@ def interview(
     parts = [f"The author wants to write a {kind} about:\n{topic}"]
     if research_brief:
         parts.append("Quick research context (use it to ask sharper, better-grounded "
-                     f"questions - do not just summarize it):\n{research_brief}")
+                     f"questions - do not just summarize it):\n{P.wrap_untrusted(research_brief)}")
     parts.append(f"Propose up to {n} clarifying questions, each with a sensible default "
                  "'suggestion'.")
     out = complete_structured(model, P.INTERVIEW_SYS, "\n\n".join(parts), S.Interview,
@@ -204,7 +204,8 @@ def research(
     model = cfg.model_for("researcher")
     parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
     if web_results:
-        parts.append(f"Live web search results (use as factual grounding):\n{web_results}")
+        parts.append("Live web search results (use as factual grounding):\n"
+                     + P.wrap_untrusted(web_results))
     parts.append("Produce a short research brief for this chapter.")
     return complete_structured(model, P.RESEARCHER_SYS, "\n\n".join(parts),
                                S.ResearchBrief, max_tokens=4000)
@@ -230,7 +231,8 @@ def deep_research(
     model = cfg.model_for("researcher")
     parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
     if sources_block:
-        parts.append(f"Full-text web sources (cite by number):\n{sources_block}")
+        parts.append("Full-text web sources (cite by number):\n"
+                     + P.wrap_untrusted(sources_block))
     parts.append("Synthesize a tight, source-grounded research brief for this chapter.")
     return complete_structured(model, P.DEEP_RESEARCHER_SYS, "\n\n".join(parts),
                                S.ResearchBrief, max_tokens=4000)
@@ -243,7 +245,8 @@ def deep_research_article(
     model = cfg.model_for("researcher")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section:\n{_ctx(section)}"]
     if sources_block:
-        parts.append(f"Full-text web sources (cite by number):\n{sources_block}")
+        parts.append("Full-text web sources (cite by number):\n"
+                     + P.wrap_untrusted(sources_block))
     parts.append("Synthesize a tight, source-grounded brief for this section.")
     return complete_structured(model, P.DEEP_ARTICLE_RESEARCHER_SYS, "\n\n".join(parts),
                                S.ArticleResearchBrief, max_tokens=3500)
@@ -352,7 +355,7 @@ def research_article(
     model = cfg.model_for("researcher")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section:\n{_ctx(section)}"]
     if web_results:
-        parts.append(f"Live web search results:\n{web_results}")
+        parts.append("Live web search results:\n" + P.wrap_untrusted(web_results))
     parts.append("Produce a source-grounded research brief for this section.")
     return complete_structured(model, P.ARTICLE_RESEARCHER_SYS, "\n\n".join(parts),
                                S.ArticleResearchBrief, max_tokens=3000)

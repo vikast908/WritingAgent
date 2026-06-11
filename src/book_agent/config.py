@@ -63,6 +63,7 @@ class Settings:
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
     use_headroom: bool = True               # context compression via headroom-ai (60-95% fewer tokens)
     request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
+    max_run_tokens: int = 0                 # pause a run once its total tokens exceed this (0 = unlimited)
     mode: str = "book"           # "book" | "article" - default for new projects
     num_sections: int = 6        # default section count for articles
     theme: str = "editorial"     # TUI color theme (see ui.THEMES; /theme to switch)

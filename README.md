@@ -259,6 +259,7 @@ Draft  →  Critic (approve | revise | escalate)
 | `/model [agent] <slug>` | Switch any agent to any OpenRouter model slug |
 | `/set <key> <value>` | Toggle any setting live (`use_researcher`, `humanize`, `autonomous` …) |
 | `/theme [<name>]` | List or switch the TUI theme - changes the palette **and** the wordmark font ([see Themes](#themes)) |
+| `/dashboard [<project>]` | Telemetry rollup: calls, tokens, cost, latency, errors - all projects, or one project with its per-chapter/section breakdown |
 | `/skills` · `/skill <name>` · `/seed-skills` | Browse / view / install built-in craft skills |
 | `/retry` · `/reset` · `/compact` | Retry last response · clear memory · compress history |
 | `/help` · `/clear` · `/exit` | Full slash list · clear screen · quit |
@@ -293,6 +294,7 @@ Just type `export` for an interactive picker.
 | Semantic skill retrieval (embeddings) | `use_embeddings` | off |
 | Fully autonomous (no pauses) | `autonomous` | off |
 | TUI color + font theme ([see Themes](#themes)) | `theme` | editorial |
+| Run token budget - pause the run past this spend (0 = unlimited) | `max_run_tokens` | 0 |
 | Per-request network timeout (seconds) | `request_timeout` | 60 |
 
 Toggle any feature live in the TUI: `/set use_researcher false`
@@ -322,7 +324,13 @@ Every theme's accent is a **different hue family** (enforced by a test - no two 
 RGB distance 60), and all non-kazama themes keep red/yellow/green reserved for status semantics
 so the run dashboard reads at a glance.
 
-**Reliability:** every LLM call retries transient errors (429/5xx/timeouts) with exponential backoff and a request timeout, and fails fast on auth/bad-request. Run state is written atomically and is **resumable** - a crash mid-run never double-commits a chapter or corrupts the project. Token usage is reported at the end of each run.
+**Reliability:** every LLM call retries transient errors (429/5xx/timeouts) with exponential backoff and a request timeout, and fails fast on auth/bad-request. Run state is written atomically and is **resumable** - a crash mid-run never double-commits a chapter or corrupts the project. Token usage (and real cost, when OpenRouter reports it) is shown live and summarized at run end.
+
+**Observability:** every LLM call appends a structured JSONL record (`.index/telemetry/`) - run, project, chapter/section, model, latency, attempts, tokens, cost, error. Inspect it in the TUI with **`/dashboard`** (all projects) or **`/dashboard <project>`** (per-chapter/section breakdown).
+
+**Cost kill-switch:** set `max_run_tokens` and a run pauses cleanly when its total spend crosses the cap - nothing is lost; run again (or raise the cap) to continue.
+
+**Prompt-injection defense:** all web-fetched text (search snippets, full page text) is fenced as data-only with spoof-resistant markers before it ever enters a prompt - a hostile page can't issue instructions to the writer.
 
 ---
 

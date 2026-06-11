@@ -59,6 +59,7 @@ _SLASH_HELP = [
     ("/retry", "resend the last chat message"),
     ("/mode [book|article]", "show or set the project mode (default: book)"),
     ("/theme [<name>]", "list or switch themes - each changes palette, wordmark font, and glyphs"),
+    ("/dashboard [<project>]", "telemetry rollup - calls, tokens, cost, latency, errors (per project: per-unit breakdown)"),
     ("/reset", "clear the assistant's conversation memory (fresh context)"),
     ("/compact", "summarize conversation memory to save context space"),
     ("/clear · /exit", "clear screen · quit"),
@@ -105,6 +106,8 @@ SLASH COMMANDS  (start with /):
   /mode [book|article]       Show or set mode - 'book' for novels/nonfiction, 'article' for single long-form articles
   /theme [<name>]            List or switch theme (changes palette + wordmark font) - editorial (default),
                              kazama, supabase, violet-bloom, t3-chat, starry-night, vercel, fallout, mimi, astrovista
+  /dashboard [<project>]     Telemetry rollup: LLM calls, tokens, cost, latency, errors - overall, or
+                             per project with a per-chapter/section breakdown
   /reset                     Clear assistant memory (fresh context)
   /compact                   Summarize memory to save context space
   /help                      Show all slash commands
@@ -402,6 +405,7 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
         ("/model [agent] <slug>", "switch any model to any OpenRouter slug"),
         ("/set <key> <value>", "change a setting live (e.g. /set use_researcher true)"),
         ("/theme [<name>]", "switch theme - palette + wordmark font (10 built-in)"),
+        ("/dashboard [<project>]", "usage telemetry - calls · tokens · cost · errors"),
         ("/update [changes]", "describe your changes - AI reviews and advises"),
         ("/use <project> · /books", "set active project · list projects"),
         ("/skills · /seed-skills", "browse skills · install built-ins"),
@@ -515,6 +519,78 @@ def _cmd_model(console, cfg: ModelConfig, rest: list[str]) -> None:
     cfg.set_default(slug) if node == "default" else cfg.set_node(node, slug)
     save_config(cfg)
     _out(console, f"[{GOLD}]{node}[/] -> [{GOLD}]{slug}[/] [dim](saved)[/]")
+
+
+def _cmd_dashboard(console, uid: str, rest: list[str]) -> None:
+    """/dashboard [project] - telemetry rollup: calls, tokens, cost, latency, errors."""
+    from . import telemetry
+    project = rest[0] if rest else None
+    if project and project not in {p[0] for p in brain.list_projects(uid)}:
+        sug = ui.did_you_mean(project, [p[0] for p in brain.list_projects(uid)])
+        hint = f"did you mean '{sug}'?" if sug else "see /books"
+        _out(console, f"[{ERR}]no project '{project}'[/] [dim]({hint})[/]")
+        return
+    s = telemetry.summarize(project)
+    t = s["totals"]
+    scope = project or "all projects"
+    if not t["calls"]:
+        _out(console, f"[dim](no telemetry yet for {scope} - records are written per "
+                      "LLM call to .index/telemetry/)[/]")
+        return
+
+    cost_part = f"   ·   ${t['cost']:.4f}" if t["cost"] > 0 else ""
+    err_clr = ERR if t["errors"] else DIM
+    if not console:
+        print(f"dashboard: {scope}")
+        print(f"  {t['calls']} calls   {t['tokens']:,} tokens{cost_part}   "
+              f"~{t['avg_latency_ms']} ms/call   {t['errors']} errors")
+        for model, calls, toks, cost in s["by_model"]:
+            print(f"  {model:<38} {calls:>5} calls  {toks:>10,} tok  ${cost:.4f}")
+        return
+
+    from rich.table import Table
+    from rich.text import Text
+    _section(console, f"DASHBOARD  ·  {scope}")
+    head = Text("  ")
+    head.append(f"{t['calls']:,} calls", style=PARCH)
+    head.append(f"   ·   {t['tokens']:,} tokens", style=PARCH)
+    if t["cost"] > 0:
+        head.append(f"   ·   ${t['cost']:.4f}", style=f"bold {GOLD}")
+    head.append(f"   ·   ~{t['avg_latency_ms']:,} ms/call", style=DIM)
+    head.append(f"   ·   {t['errors']} errors", style=err_clr)
+    console.print(head)
+
+    bm = Table(box=None, show_header=True, header_style=DIM, padding=(0, 3, 0, 2))
+    bm.add_column("model", style=f"bold {GOLD}", no_wrap=True)
+    bm.add_column("calls", justify="right", style=PARCH)
+    bm.add_column("tokens", justify="right", style=PARCH)
+    bm.add_column("cost", justify="right", style=PARCH)
+    for model, calls, toks, cost in s["by_model"]:
+        bm.add_row(model, f"{calls:,}", f"{toks:,}", f"${cost:.4f}" if cost else "-")
+    console.print(bm)
+
+    if project:
+        bu = Table(box=None, show_header=True, header_style=DIM, padding=(0, 3, 0, 2))
+        bu.add_column("unit", style=INK, no_wrap=True)
+        bu.add_column("calls", justify="right", style=PARCH)
+        bu.add_column("tokens", justify="right", style=PARCH)
+        bu.add_column("cost", justify="right", style=PARCH)
+        for unit, calls, toks, cost in s["by_unit"]:
+            bu.add_row(unit, f"{calls:,}", f"{toks:,}", f"${cost:.4f}" if cost else "-")
+        console.print(bu)
+    else:
+        rr = Table(box=None, show_header=True, header_style=DIM, padding=(0, 3, 0, 2))
+        rr.add_column("run", style=DIM, no_wrap=True)
+        rr.add_column("project", style=INK)
+        rr.add_column("calls", justify="right", style=PARCH)
+        rr.add_column("tokens", justify="right", style=PARCH)
+        rr.add_column("cost", justify="right", style=PARCH)
+        for run_id, proj, calls, toks, cost in s["runs"][-6:]:
+            rr.add_row(run_id, proj, f"{calls:,}", f"{toks:,}",
+                       f"${cost:.4f}" if cost else "-")
+        console.print(rr)
+        console.print(Text("  /dashboard <project> for the per-chapter/section breakdown",
+                           style=DIM))
 
 
 def _set_theme(name: str, console, settings: Settings) -> None:
@@ -810,7 +886,12 @@ class _RunDashboard:
         from . import llm
         head = Text()
         head.append(f"{_FLEURON} {self.book_id}", style=f"bold {GOLD}")
-        head.append(f"     {self._elapsed()} elapsed · {llm.current_tokens():,} tokens",
+        toks = f"{llm.current_tokens():,}"
+        if llm.run_budget():
+            toks += f" / {llm.run_budget():,}"
+        cost = llm.current_cost()
+        cost_sfx = f" · ${cost:.4f}" if cost > 0 else ""
+        head.append(f"     {self._elapsed()} elapsed · {toks} tokens{cost_sfx}",
                     style=DIM)
         w = 24
         filled = min(w, round(self.done / self.total * w))
@@ -1334,6 +1415,8 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
             _out(console, f"mode -> [{GOLD}]{rest[0]}[/] [dim](saved - next `new` will use this mode)[/]")
         else:
             _out(console, f"[{ERR}]unknown mode '{rest[0]}'[/] - valid: book  article")
+    elif name == "dashboard":
+        _cmd_dashboard(console, uid, rest)
     elif name in ("theme", "themes"):
         if not rest:
             _section(console, "THEMES") if console else None
@@ -1372,6 +1455,7 @@ _SLASH_COMPLETIONS = [
     ("retry",       "resend last chat message"),
     ("mode",        "show / set mode  book | article"),
     ("theme",       "list / switch color theme"),
+    ("dashboard",   "telemetry: calls · tokens · cost · errors"),
     ("reset",       "clear chat memory"),
     ("compact",     "compress chat memory to one summary"),
     ("clear",       "clear screen"),
@@ -1416,7 +1500,7 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                                              display=f"/{name}", display_meta=desc)
                     return
                 sub = words[0].lstrip("/").lower()
-                if sub == "use":                                 # → real project names
+                if sub in ("use", "dashboard"):                  # → real project names
                     for pid, ptype in brain.list_projects(state["uid"]):
                         if pid.startswith(cur):
                             yield _comp(pid, -len(cur), ptype)
