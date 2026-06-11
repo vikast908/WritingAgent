@@ -5,9 +5,12 @@
 
 ## Current status
 
-- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **107 tests
+- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **111 tests
   pass**; ruff clean.
-- **New (2026-06-12, sessions 1-6):**
+- **New (2026-06-12, sessions 1-7):**
+  - **Chat NL flow** - propose abstract → refine with plain English → "run it"/"go ahead"
+    creates + starts writing in one turn. Fixed the regex that silently dropped every
+    chat-emitted command and the routing that swallowed "run it" as bare `run`.
   - **`write` one-shot flow** - upfront interview → fully autonomous run → exported file (plan
     §15.3). Fixed the bug that silently ignored `autonomous: true` (runs kept pausing).
   - **10 TUI themes** (`/theme`) - each owns a distinct hue family AND its own wordmark figlet
@@ -51,6 +54,28 @@
   duplicate.
 
 ## Session log
+
+### 2026-06-12 (7) - Chat NL flow fixed: propose → refine in English → "go ahead" creates + runs
+
+User screenshot showed the chat assistant promising a `new --abstract` it never ran, then
+"run it"/"go ahead" failing with "No projects yet." **111 tests pass** (+4); root causes + fixes:
+
+- **`_CODE_BLOCK_RE` bug (root cause):** `[^\n`]*` (info-string skip) greedily ate the entire
+  content of single-line fenced blocks (```` ```run``` ````) - exactly the format the chat
+  system prompt teaches - so the capture group was empty and every chat-emitted command was
+  silently dropped. New regex only consumes the language tag when it ends in a newline:
+  `` ```(?:[A-Za-z0-9_+-]*\n)?(.*?)``` ``.
+- **"run it" routing bug:** REPL routed any line whose first word is a known command to
+  argparse and `parse_known_args` discarded the leftover tokens, so "run it" ran bare `run`.
+  Now leftover tokens → the whole line goes to `_chat_respond` instead.
+- **New chat flow (system prompt):** no project yet → assistant PROPOSES a short abstract as
+  inline code (no execution), the user can REFINE it with plain English (changes merge into a
+  revised abstract, still no execution), and on confirmation ("run it"/"go ahead") it emits
+  ```` ```new --abstract "..."``` ```` + ```` ```run``` ```` in ONE response - allowed now
+  because `_execute_cmd` activates the fresh project between the two commands. (Removed the
+  old "NEVER new+run together" rule.)
+- Tests: single-line / language-tagged / bare fenced-block extraction in `test_hardening.py`.
+- **Next step:** live-validate the flow with a real chat model (topic → refine → "go ahead").
 
 ### 2026-06-12 (6) - Production guards: run budget, JSONL telemetry + /dashboard, injection defense
 

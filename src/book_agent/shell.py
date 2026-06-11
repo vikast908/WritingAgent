@@ -65,8 +65,11 @@ _SLASH_HELP = [
     ("/clear · /exit", "clear screen · quit"),
 ]
 _MARKUP = re.compile(r"\[/?[^\]]*\]")
-# Matches single-line fenced code blocks: ```cmd``` or ```\ncmd\n```
-_CODE_BLOCK_RE = re.compile(r"```[^\n`]*\n?(.*?)```", re.DOTALL)
+# Matches fenced code blocks: ```cmd``` or ```lang\ncmd\n```. The info string
+# (language tag) is only consumed when it ends in a newline - otherwise a
+# single-line block like ```run``` would lose its whole content to the tag
+# and the capture group would come back empty.
+_CODE_BLOCK_RE = re.compile(r"```(?:[A-Za-z0-9_+-]*\n)?(.*?)```", re.DOTALL)
 
 # ── chat system prompt ────────────────────────────────────────────────────────
 _CHAT_SYSTEM = """\
@@ -150,14 +153,29 @@ The session context below always shows the ACTIVE PROJECT. Check it first.
   DO NOT ask "which project?" in text. Just pick the most recent/relevant one from context and use it.
   The shell auto-routes to the right project type for the current mode.
 
+NEW TOPIC FLOW (no project yet → propose first, execute on confirmation):
+When the user describes something to write (a topic, question, or idea):
+1. PROPOSE - reply in plain text with a short abstract shown as inline code:
+     I'll write: `the fastest 100ms-latency voice agents - techniques and trade-offs`
+   Then ask: say "run it" / "go ahead" to start writing, or tell me what to change.
+   Do NOT emit any fenced code block in this turn.
+2. REFINE - if the user replies with changes or additions in plain English
+   ("also cover WebRTC", "make it more technical", "add a section on costs"),
+   merge them into a REVISED abstract, show it the same way, and ask again.
+   Every refinement turn: updated abstract as inline code, NO fenced blocks.
+3. EXECUTE - when the user confirms ("run it", "go ahead", "yes", "start", "do it"),
+   emit BOTH commands as fenced blocks in ONE response:
+   ```new --abstract "<final abstract>"```
+   ```run```
+   The shell runs them in order; the project created by `new` becomes active
+   before `run` starts, so writing begins immediately.
+
 `new` COMMAND RULES:
 - `new` picks an angle/direction automatically (auto-selects option 1).
-  After it runs, the new project becomes active automatically.
-- If user says "run it" / "go ahead" AFTER a new project was created:
-  Just emit ```run``` - no /use needed because the project is already active.
-- NEVER put `new` and `run` in the same response. Two separate turns:
-  first turn: ```new --abstract "..."```  → project created + activated
-  next turn (if user says "run it"): ```run```
+  After it runs, the new project becomes active automatically - that is why
+  `new` followed by `run` in the same response is safe and is THE way to
+  start writing after a confirmation.
+- If a project already EXISTS and is active, "run it" / "go ahead" means just ```run```.
 - ALWAYS wrap the --abstract value in double quotes.
   Keep it SHORT (under 100 characters). The planner fleshes it out.
   CORRECT:   ```new --abstract "Can LLMs ever achieve AGI? 2026 analysis"```
@@ -1692,13 +1710,19 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
             stderr_buf = io.StringIO()
             try:
                 with contextlib.redirect_stderr(stderr_buf):
-                    args, _ = parser.parse_known_args(argv)
+                    args, extras = parser.parse_known_args(argv)
             except SystemExit:
                 err_text = stderr_buf.getvalue().strip()
                 if err_text:
                     # Strip "book: error: " prefix that argparse prepends
                     msg = err_text.split(": error: ", 1)[-1] if ": error: " in err_text else err_text
                     _out(console, f"[{ERR}]error:[/] {msg}  [dim](try /help)[/]")
+                continue
+            if extras:
+                # "run it", "read chapter 3" - a command word followed by plain
+                # English. Hand the whole line to the assistant instead of
+                # silently dropping the extra words and running the bare command.
+                _chat_respond(line, console, cfg, settings, state)
                 continue
             # Auto-pick project when none is active and the command needs one.
             # `new`/`write` CREATE a project, so they must never inherit the active id.

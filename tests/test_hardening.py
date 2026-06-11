@@ -350,7 +350,6 @@ def test_write_skill_does_not_clobber_distinct_name(tmp_brain):
 def test_chat_command_filter_blocks_destructive():
     from book_agent import shell
     known = {"run", "delete", "new", "status"}
-    # The extractor captures multi-line fenced blocks (the first line is the info string).
     blk = lambda c: f"```\n{c}\n```"
     text = "\n".join(blk(c) for c in
                      ["run", "delete --yes", "/use mybook", "/set autonomous true", "/user bob"])
@@ -360,6 +359,27 @@ def test_chat_command_filter_blocks_destructive():
     assert all(not c.startswith("delete") for c in cmds)   # delete never auto-runs
     assert all("/set" not in c for c in cmds)              # /set blocked
     assert all("/user" not in c for c in cmds)             # /user blocked
+
+
+def test_chat_command_extractor_single_line_blocks():
+    """Single-line fenced blocks (```run```) - the format the chat system prompt
+    teaches - must be extracted, not swallowed as an info string."""
+    from book_agent import shell
+    known = {"run", "new", "status"}
+    text = ('Starting now:\n'
+            '```new --abstract "How to build the fastest voice agent"```\n'
+            '```run```\n'
+            'Sit back while I write.')
+    cmds = shell._commands_in_response(text, known)
+    assert cmds == ['new --abstract "How to build the fastest voice agent"', "run"]
+
+
+def test_chat_command_extractor_language_tagged_blocks():
+    from book_agent import shell
+    known = {"run"}
+    assert shell._commands_in_response("```bash\nrun\n```", known) == ["run"]
+    assert shell._commands_in_response("```run```", known) == ["run"]
+    assert shell._commands_in_response("```\nrun\n```", known) == ["run"]
 
 
 # ── export HTML sanitization (#6) ───────────────────────────────────────────────
