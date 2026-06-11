@@ -58,3 +58,55 @@ def test_chat_stream_keeps_partial_on_cancel(tmp_brain, monkeypatch):
 
     out = console.file.getvalue()
     assert "First chunk kept." in out      # partial text still shown once
+
+
+def _stream_new_and_run(model, system, message, *, history=None, max_tokens=400,
+                        temperature=0.7):
+    yield 'On it!\n\n```new --abstract "voice agents"```\n```run```\n'
+
+
+def test_chat_new_without_goahead_is_held(tmp_brain, monkeypatch):
+    """The model jumps straight to new+run on a topic message → nothing executes."""
+    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.setattr("book_agent.llm.stream_text", _stream_new_and_run)
+    executed = []
+    monkeypatch.setattr(shell, "_execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
+
+    cfg, settings = load_config(), load_settings()
+    console = _console()
+    state = _state()
+    state["_known_commands"] = {"new", "run"}
+    shell._chat_respond("write about voice agents", console, cfg, settings, state)
+
+    assert executed == []                                  # held, not run
+    assert "not run yet" in console.file.getvalue()
+    # the model is told its commands did not run, so it re-emits on confirmation
+    assert "NOT executed" in state["chat_history"][-1]["content"]
+
+
+def test_chat_new_with_goahead_executes(tmp_brain, monkeypatch):
+    """Same response on an explicit go-ahead turn → both commands run in order."""
+    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.setattr("book_agent.llm.stream_text", _stream_new_and_run)
+    executed = []
+    monkeypatch.setattr(shell, "_execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
+
+    cfg, settings = load_config(), load_settings()
+    console = _console()
+    state = _state()
+    state["_known_commands"] = {"new", "run"}
+    shell._chat_respond("yes, go ahead", console, cfg, settings, state)
+
+    assert executed == ['new --abstract "voice agents"', "run"]
+
+
+def test_is_confirmation():
+    yes = ["go ahead", "run it", "ok", "yes, go ahead and run it",
+           "run it until the end", "ok start writing", "looks good, go ahead"]
+    no = ["write about voice agents", "go ahead but make it shorter",
+          'new --abstract "voice agents" run', "no, don't run it",
+          "make it more technical", ""]
+    for msg in yes:
+        assert shell._is_confirmation(msg), msg
+    for msg in no:
+        assert not shell._is_confirmation(msg), msg

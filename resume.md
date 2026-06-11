@@ -7,10 +7,14 @@
 
 - **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **111 tests
   pass**; ruff clean.
-- **New (2026-06-12, sessions 1-7):**
+- **New (2026-06-12, sessions 1-8):**
   - **Chat NL flow** - propose abstract → refine with plain English → "run it"/"go ahead"
     creates + starts writing in one turn. Fixed the regex that silently dropped every
     chat-emitted command and the routing that swallowed "run it" as bare `run`.
+  - **Hard confirmation gate (session 8):** a chat-emitted `new` now only executes when
+    the user's own message was an explicit go-ahead (`shell._is_confirmation`); otherwise
+    the whole command batch is held and shown as a proposal. Prompt-only enforcement had
+    failed live (model skipped PROPOSE and ran new+run immediately).
   - **`write` one-shot flow** - upfront interview → fully autonomous run → exported file (plan
     §15.3). Fixed the bug that silently ignored `autonomous: true` (runs kept pausing).
   - **10 TUI themes** (`/theme`) - each owns a distinct hue family AND its own wordmark figlet
@@ -54,6 +58,28 @@
   duplicate.
 
 ## Session log
+
+### 2026-06-12 (8) - Hard go-ahead gate: chat can no longer create+run without the user's ok
+
+Live run (the session-7 "next step") showed the chat model SKIPPING the PROPOSE step: the
+user typed `new --abstract "..." run` (trailing `run` → leftover token → routed to chat) and
+the model emitted ```` ```new``` ```` + ```` ```run``` ```` immediately - project created and
+writing started with zero confirmation. Prompt rules alone don't hold.
+
+- **Code-level gate in `_chat_respond`:** chat-emitted `new` executes ONLY when the
+  triggering user message is an explicit go-ahead (`_is_confirmation`: short message whose
+  words all come from a confirm vocabulary - "go ahead", "run it until the end", "ok start
+  writing"...). Otherwise the WHOLE batch is held (a trailing `run` would hit the previously
+  active project), rendered as "proposed - not run yet" with a confirm hint, and a
+  `[shell: ... NOT executed ...]` note is appended to the assistant history message so the
+  model re-emits the commands on the next confirming turn.
+- **Prompt hardened too:** NEW TOPIC FLOW now covers imperative phrasings ("write an
+  article on X", pasted `new ... run` lines) and tells the model the shell enforces the
+  gate, so proposing first saves a turn.
+- Tests: gate holds without go-ahead / executes with go-ahead / `_is_confirmation`
+  positives+negatives (`test_shell_chat.py`, +3). **111 passed, 2 skipped**; ruff clean.
+- **Next step:** re-run the live chat flow (topic → refine → "go ahead") to confirm the
+  gate's UX feels right in a real terminal.
 
 ### 2026-06-12 (7) - Chat NL flow fixed: propose → refine in English → "go ahead" creates + runs
 

@@ -154,7 +154,8 @@ The session context below always shows the ACTIVE PROJECT. Check it first.
   The shell auto-routes to the right project type for the current mode.
 
 NEW TOPIC FLOW (no project yet → propose first, execute on confirmation):
-When the user describes something to write (a topic, question, or idea):
+When the user describes something to write (a topic, question, or idea - even when
+phrased as a command, e.g. "write an article on X" or a pasted `new ... run` line):
 1. PROPOSE - reply in plain text with a short abstract shown as inline code:
      I'll write: `the fastest 100ms-latency voice agents - techniques and trade-offs`
    Then ask: say "run it" / "go ahead" to start writing, or tell me what to change.
@@ -169,6 +170,11 @@ When the user describes something to write (a topic, question, or idea):
    ```run```
    The shell runs them in order; the project created by `new` becomes active
    before `run` starts, so writing begins immediately.
+
+The shell ENFORCES this flow: a ```new``` block is executed ONLY on a turn where the
+user's own message was an explicit confirmation. If you emit ```new``` before the
+user confirmed, the shell holds the commands un-run and asks the user to confirm -
+so always PROPOSE first; skipping it just wastes a turn.
 
 `new` COMMAND RULES:
 - `new` picks an angle/direction automatically (auto-selects option 1).
@@ -705,6 +711,25 @@ _NEEDS_PROJECT = {"run", "status", "read", "export", "review", "memory",
 # `write` runs an interactive interview + a long autonomous run - the human starts it.
 _CHAT_BLOCKED_CMDS = {"delete", "write"}
 _CHAT_BLOCKED_SLASH = {"user", "set"}
+
+# A chat-emitted `new` only executes on a turn where the user's own message was an
+# explicit go-ahead. The model is *instructed* to propose first and wait (NEW TOPIC
+# FLOW in _CHAT_SYSTEM), but prompts are advisory - this is the hard guarantee that
+# a project is never created + run without the user saying so.
+_CONFIRM_FILLER = {"please", "now", "and", "then", "the", "a", "an", "that", "this"}
+_CONFIRM_VOCAB = {
+    "go", "ahead", "run", "it", "yes", "yeah", "yep", "y", "ok", "okay", "sure",
+    "start", "do", "proceed", "begin", "write", "writing", "confirm", "confirmed",
+    "approve", "approved", "lgtm", "ship", "lets", "let's", "sounds", "looks",
+    "good", "fine", "great", "perfect", "works", "until", "end", "finish", "all",
+    "way", "everything",
+}
+
+
+def _is_confirmation(message: str) -> bool:
+    """True when the message is a pure go-ahead ("run it", "yes - go ahead")."""
+    words = [w for w in re.findall(r"[a-z']+", message.lower()) if w not in _CONFIRM_FILLER]
+    return 0 < len(words) <= 6 and all(w in _CONFIRM_VOCAB for w in words)
 
 
 def _auto_or_pick_project(uid: str, settings: Settings, console, state: dict) -> str | None:
@@ -1255,6 +1280,22 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
     # 6. Execute any commands the model included in code blocks
     #    (skip when cancelled - a half-streamed response may carry a partial command)
     cmds = _commands_in_response(full, state.get("_known_commands", set())) if full and not cancelled else []
+    # Hard gate: creating a project from chat needs the user's explicit go-ahead.
+    # If the model jumped straight to `new` on a turn where the user didn't confirm,
+    # hold the WHOLE batch (a trailing `run` would otherwise hit the previously
+    # active project) and ask. The note appended to history tells the model its
+    # commands did not run, so it re-emits them once the user confirms.
+    if cmds and any(c.split()[0] == "new" for c in cmds) and not _is_confirmation(message):
+        console.print(Rule(Text(f"  {_FLEURON}  proposed - not run yet", style=f"bold {GOLD}"), style=RULE))
+        for cmd_line in cmds:
+            console.print(Text(f"  $ {cmd_line}", style=f"dim {GOLD}"))
+        console.print(Text('  say "go ahead" to start writing, or tell me what to change', style=DIM))
+        if history and history[-1]["role"] == "assistant":
+            history[-1]["content"] += (
+                "\n\n[shell: the commands above were NOT executed - the shell is waiting "
+                "for the user's explicit go-ahead. Re-emit them when the user confirms.]"
+            )
+        cmds = []
     if cmds:
         console.print(Rule(Text(f"  {_FLEURON}  running", style=f"bold {GOLD}"), style=RULE))
         for cmd_line in cmds:
