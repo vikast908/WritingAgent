@@ -7,19 +7,22 @@ human when it's unsure, and **learns reusable craft skills per user across many 
 > **The loop:** write → judge → (approve | revise | escalate to human) → commit canon →
 > consolidate → learn skills → write the next chapter better.
 
-> **Implementation status (v1, updated 2026-06-09).** Built in `src/book_agent/` and shipped as an
-> interactive **WRITING AGENT** shell (a TUI with slash commands + per-agent model switching) plus a
-> one-shot CLI (`writing-agent` / `bookwriter` / `book` / `python book.py`; see README).
+> **Implementation status (v1, updated 2026-06-12).** Built in `src/book_agent/` and shipped as an
+> interactive **WRITING AGENT** shell (a themed TUI with slash commands + per-agent model switching)
+> plus a one-shot CLI (`writing-agent` / `bookwriter` / `book` / `python book.py`; see README).
 > **Live-validated** on OpenRouter + DeepSeek V4 Pro/Flash: fully autonomous runs completed a book
 > (9-page PDF, captured in `SampleRun/`) and a long-form article (6 sections, DOCX export).
 >
 > Features beyond the §1–16 spec: **article mode** (parallel section pipeline with editorial angle
-> picker, flat `articles/<id>/` layout, inline citations + sources.json); **humanizer** pass (strips
+> picker, flat `articles/<id>/` layout, inline citations + sources.json); **`write` one-shot flow**
+> (upfront interview → fully autonomous run → exported file, §15.3); **humanizer** pass (strips
 > AI tells, 11 rules); **SVG diagram fallback** (LLM-generated `<svg>` when Wikimedia returns nothing,
 > saved to `images/`); **6 export formats** (pdf · epub · html · docx · txt · md; interactive picker);
-> **`/update` slash command** (describe changes → AI reviews and advises); seed craft-skills (9
-> built-in); autonomous mode (best-draft commit + contradiction auto-repair); `NO_SLOP` guardrails
-> injected into every writer/humanizer/critic prompt.
+> **deep multi-source researcher** (§15.2); **10 TUI themes** (palette + wordmark figlet per theme,
+> `/theme`); **production guards** (run token budget kill-switch, per-call JSONL telemetry +
+> `/dashboard`, untrusted-web-content fencing - §15.1); **`/update` slash command** (describe changes
+> → AI reviews and advises); seed craft-skills (13 built-in); autonomous mode (best-draft commit +
+> contradiction auto-repair); `NO_SLOP` guardrails injected into every writer/humanizer/critic prompt.
 >
 > Two deliberate deviations: (1) the orchestrator (§6) is a **durable on-disk state machine**, not
 > LangGraph - the brain on disk is the checkpoint, giving resumable runs; LangGraph stays an
@@ -419,9 +422,12 @@ is the architectural reason the Critic is a separate node in the first place.
 Two surfaces over one engine (plus the markdown brain repo, which is half the UI - read chapters
 and canon in any editor):
 
-- **Interactive shell - the BOOKWRITER TUI.** Run `bookwriter` / `book` / `python book.py` with no
-  command (see `shell.py`). Editorial title-page banner, a command panel, and a `❧ <model>` prompt.
-  Type book commands without the `book` prefix; lines starting with `/` are slash commands.
+- **Interactive shell - the WRITING AGENT TUI.** Run `writing-agent` / `book` / `python book.py`
+  with no command (see `shell.py`). Themed masthead (gradient-filled ANSI Shadow wordmark; theme
+  also sets palette/figlet/glyphs - `ui.THEMES`), welcome screen with project status + feature
+  board, live run dashboard (progress, stage, tokens vs budget, USD cost), `/dashboard` telemetry
+  rollup, autocomplete + persistent history, and a `❧ <model>` prompt. Type book commands without
+  the `book` prefix; lines starting with `/` are slash commands; anything else is free chat.
 - **One-shot CLI** - `python book.py <command> ...` (same commands), for scripting.
 
 | Command | Does |
@@ -445,7 +451,9 @@ wordmark figlet face, fleuron, gradient; each a distinct hue family. `editorial`
 with semantic status colors; alternates `kazama` (flame, sheared) · `supabase` (emerald) ·
 `violet-bloom` (purple) · `t3-chat` (pink) · `starry-night` (indigo+gold) · `vercel` (monochrome) ·
 `fallout` (CRT amber) · `mimi` (rose pastels) · `astrovista` (mars rust); registry in `ui.THEMES`
-incl. `FONT`/`WORDS`/`SHEAR`, persisted via `settings.theme`), `/clear`, `/exit`.
+incl. `FONT`/`WORDS`/`SHEAR`, persisted via `settings.theme`), `/dashboard [<project>]` (telemetry
+rollup - calls/tokens/cost/latency/errors; per-unit breakdown when a project is named; reads the
+JSONL call log, §15.1), `/clear`, `/exit`.
 
 Run modes: **interactive** (prompts inline on escalation), **autonomous** (`--autonomous`: never
 pauses; commits the best draft + auto-repairs contradictions), **async** (background; resume via

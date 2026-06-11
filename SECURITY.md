@@ -23,9 +23,18 @@ own machine. A few properties are worth understanding:
 - **Generated content:** manuscripts and SVG diagrams come from an LLM. Exported HTML is
   sanitized (script/iframe/event handlers stripped), but treat generated output as
   untrusted if you publish it.
+- **Untrusted web content / prompt injection:** everything fetched from the public web
+  (search snippets, deep-research page text) is fenced as **data-only** before entering any
+  prompt - spoof-resistant markers plus a standing instruction that the block is never
+  instructions. A hostile page cannot direct the writer, but no fence is perfect: review
+  research-grounded output before publishing.
 - **Network:** the only outbound calls are to your configured OpenRouter endpoint, the
-  optional DuckDuckGo researcher, and optional Wikimedia Commons image search. All
-  manuscript data stays on disk locally.
+  optional DuckDuckGo researcher (plus full page fetches when `deep_research` is enabled),
+  and optional Wikimedia Commons image search. All manuscript data stays on disk locally.
+- **Telemetry stays local:** per-call usage records (model, tokens, cost, latency) are
+  written only to `.index/telemetry/` on your machine - nothing is sent anywhere.
+- **Cost containment:** `max_run_tokens` caps a run's total token spend; the run pauses
+  cleanly at the cap and is resumable.
 
 ## Supported versions
 

@@ -12,9 +12,9 @@
 [![Headroom](https://img.shields.io/badge/compression-headroom--ai-green?style=flat-square)](https://github.com/chopratejas/headroom)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square)](LICENSE)
 
-**60–95% token savings · self-correcting pipeline · books + articles · 6 export formats · resilient (retry + resumable) · local-first**
+**self-correcting pipeline · books + articles · 6 export formats · 10 TUI themes · cost guardrails + telemetry · resilient (retry + resumable) · local-first**
 
-[Setup](#setup) · [Quick Start](#quick-start) · [How It Works](#how-it-works) · [Commands](#commands) · [Export](#export-formats) · [Features](#features) · [Themes](#themes) · [Architecture](#architecture)
+[Setup](#setup) · [Quick Start](#quick-start) · [The TUI](#the-tui) · [How It Works](#how-it-works) · [Commands](#commands) · [Export](#export-formats) · [Features](#features) · [Themes](#themes) · [Architecture](#architecture)
 
 </div>
 
@@ -141,7 +141,7 @@ python book.py run
 python book.py export --format pdf
 ```
 
-The TUI shows a **live dashboard** while writing (progress, current stage, elapsed time, live token count), **tab-autocompletes** commands and arguments, and remembers history across sessions. Add `--plain` (or set `NO_COLOR`) for unstyled output.
+The TUI shows a **live dashboard** while writing, tab-autocompletes everything, and remembers history - the full tour is in [The TUI](#the-tui) below.
 
 ### Try it offline first - no API key (fake mode)
 
@@ -171,6 +171,31 @@ $env:BOOK_AGENT_FAKE = $null
 
 </td></tr>
 </table>
+
+---
+
+## The TUI
+
+The shell is a full editorial workspace, not a bare prompt:
+
+- **Masthead & themes** - a gradient-filled ANSI Shadow wordmark framed by gradient rules,
+  left-aligned. Ten built-in themes (`/theme`) change *everything*: palette, the wordmark's
+  figlet face, glyphs, and text tint - from the blue-ink `editorial` default to `kazama`
+  (Tekken flame), `fallout` (Pip-Boy CRT), `vercel` (monochrome), and more. [Full list ↓](#themes)
+- **Welcome screen** - commands, slash list, your projects with live phase/progress, and a
+  feature board showing what's on/off, all rendered on launch.
+- **`write` interview flow** - one batch of tailored questions upfront (each with a default you
+  accept by pressing Enter), then it runs to a finished exported file with zero interruptions.
+- **Live run dashboard** - progress bar, current chapter/section and stage, elapsed time, live
+  token count vs your `max_run_tokens` budget, and real USD cost as it accrues.
+- **`/dashboard` telemetry view** - totals (calls · tokens · $ · avg latency · errors), a
+  per-model table, and recent runs; `/dashboard <project>` breaks it down per chapter/section.
+- **Autocomplete everywhere** - commands, slash commands, project names, settings keys/values,
+  theme names, export formats; persistent history across sessions (↑ to recall).
+- **Free chat** - type plain English and the built-in assistant answers or converts it into
+  commands and runs them (destructive commands are never auto-executed).
+- **Graceful degradation** - `--plain` / `NO_COLOR` for unstyled output; UTF-8 forced on
+  legacy Windows consoles; falls back cleanly when Rich or prompt_toolkit are unavailable.
 
 ---
 

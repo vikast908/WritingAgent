@@ -86,8 +86,13 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
 A 60-second map (full detail in `plan.md` and the README's Architecture section):
 
 - `src/book_agent/orchestrator.py` - durable on-disk state machine (the brain *is* the checkpoint).
-- `nodes.py` / `prompts.py` / `schemas.py` - the LLM nodes, their prompts, and structured outputs.
-- `llm.py` - OpenRouter wrapper (retry/backoff, timeout, repair, headroom compression).
+- `nodes.py` / `prompts.py` / `schemas.py` - the LLM nodes, their prompts (incl. the
+  `wrap_untrusted` injection fence), and structured outputs.
+- `llm.py` - OpenRouter wrapper (retry/backoff, timeout, repair, headroom compression,
+  run token budget, usage/cost tallies).
+- `telemetry.py` - per-call JSONL records + the `/dashboard` aggregation.
 - `brain.py` / `store.py` - markdown filesystem layout + SQLite/FTS canon & graph.
-- `shell.py` / `cli.py` / `ui.py` - Rich TUI, one-shot CLI, shared UI helpers.
+- `search.py` / `deep_research.py` / `images.py` / `cache.py` - the optional research stack.
+- `shell.py` / `cli.py` / `ui.py` - Rich TUI, one-shot CLI, and the theme registry
+  (10 themes: palette + wordmark figlet per theme).
 - `export.py` - pdf · epub · html · docx · txt · md renderers.

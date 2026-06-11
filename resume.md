@@ -5,12 +5,20 @@
 
 ## Current status
 
-- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end.
-- **New this session (2026-06-12 - upfront-interview `write` flow):** one command (`write`) that
-  interviews you once upfront, then runs **fully autonomously** to an exported file. Fixed a bug
-  that silently ignored `autonomous: true` (so old runs kept pausing for review), and a chat-
-  streaming bug that duplicated long replies in the scrollback. See the top session-log entry.
-  **88 tests pass.**
+- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **107 tests
+  pass**; ruff clean.
+- **New (2026-06-12, sessions 1-6):**
+  - **`write` one-shot flow** - upfront interview → fully autonomous run → exported file (plan
+    §15.3). Fixed the bug that silently ignored `autonomous: true` (runs kept pausing).
+  - **10 TUI themes** (`/theme`) - each owns a distinct hue family AND its own wordmark figlet
+    face (editorial blue-ink default, kazama flame, supabase, violet-bloom, t3-chat,
+    starry-night, vercel, fallout, mimi, astrovista). README banner SVG = the real ANSI Shadow
+    wordmark, gradient-filled, centered.
+  - **Production guards** (plan §15.1): `max_run_tokens` budget kill-switch (clean resumable
+    pause + tokens/budget + USD cost in the live dashboard), per-call JSONL telemetry with
+    `/dashboard [<project>]` rollup, and `wrap_untrusted` injection fencing on every
+    web→prompt path.
+  - Chat-stream scrollback duplication fixed (transient tail preview + single final render).
 - **New this session (2026-06-10 session 6 - deep researcher + article tests + craft skills + read fix):**
   - **Deep multi-source researcher** (`deep_research.py`, opt-in `deep_research` setting): LLM query-expansion -> concurrent multi-query fan-out -> URL/domain dedup -> full **page-text** fetch+extract -> cross-source synthesis node that cites sources by number. Wired into both book + article research branches; articles persist the real fetched URLs as references. **Fetch backend is pluggable:** prefers **Scrapo** (`github.com/vikast908/Scrapo`, optional `[deep]` extra - clean markdown + HTTP/browser/stealth escalation) and falls back to a stdlib `urllib`+`html.parser` path so there are still zero *required* deps. **Validated live** (real DuckDuckGo + real Scrapo fetch). Spec in `plan.md` §15.2.
   - **`read --manuscript` works for articles** (`cli._paths_for` picks ArticlePaths vs BookPaths) - fixes the long-standing pre-existing bug.
