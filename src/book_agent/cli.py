@@ -94,6 +94,35 @@ def _spin(label: str, fn):
     return fn()
 
 
+def _outline_gate(uid, project_id, abstract, create_fn, *, is_article, gate_on: bool):
+    """Manual-mode checkpoint after `new`: show the outline (and thesis) BEFORE any
+    prose is written. Reviewing 6 headings costs the human 30 seconds; a bad outline
+    costs the whole run. Enter accepts; 'r' regenerates; 'g' regenerates with guidance.
+    Skipped for autonomous runs and non-interactive stdin (tests, pipes, CI)."""
+    if not gate_on or not sys.stdin.isatty():
+        return project_id
+    for _round in range(3):   # cap regenerations - the planner won't improve forever
+        paths = ArticlePaths(project_id, uid) if is_article else BookPaths(project_id, uid)
+        outline_md = brain.read_text(paths.outline_md if is_article else paths.toc) or ""
+        print("\n" + outline_md.strip())
+        thesis_md = brain.read_text(paths.root / "thesis.md") if is_article else None
+        if thesis_md:
+            claim = next((ln for ln in thesis_md.splitlines() if ln.startswith("**Claim:**")), "")
+            if claim:
+                print(f"\n{claim}")
+        ans = input("\n[Enter] start writing · r regenerate outline · "
+                    "g regenerate with guidance: ").strip().lower()
+        if ans not in ("r", "g"):
+            return project_id
+        if ans == "g":
+            guidance = input("guidance for the planner: ").strip()
+            if guidance:
+                abstract = f"{abstract}\n\nAuthor guidance (honor exactly): {guidance}"
+        orchestrator.delete_book(uid, project_id)
+        project_id = create_fn(abstract)
+    return project_id
+
+
 def _cmd_new_book(args, cfg, settings, uid, abstract):
     directions = _spin("planning directions", lambda: nodes.planner_directions(cfg, abstract)).directions
     for i, d in enumerate(directions, 1):
@@ -102,11 +131,16 @@ def _cmd_new_book(args, cfg, settings, uid, abstract):
     chosen = directions[idx - 1]
     chapters = args.chapters or settings.num_chapters
     max_rev = args.max_revisions if args.max_revisions is not None else settings.max_revisions
+    autonomous = _autonomous_value(args, settings)
     print(f"\n-> {chosen.title}")
-    book_id = _spin("building plan + TOC", lambda: orchestrator.start_book(
-        cfg, settings, uid, abstract, chosen, args.book_id, chapters, max_rev,
-        autonomous=_autonomous_value(args, settings),
-        humanize=(False if getattr(args, "no_humanize", False) else None)))
+
+    def _create(abs_):
+        return _spin("building plan + TOC", lambda: orchestrator.start_book(
+            cfg, settings, uid, abs_, chosen, args.book_id, chapters, max_rev,
+            autonomous=autonomous,
+            humanize=(False if getattr(args, "no_humanize", False) else None)))
+    book_id = _outline_gate(uid, _create(abstract), abstract, _create,
+                            is_article=False, gate_on=not autonomous)
     print(f"\n[OK] Created book '{book_id}'.")
     print(f"     Next: python book.py run --book-id {book_id}")
 
@@ -119,11 +153,16 @@ def _cmd_new_article(args, cfg, settings, uid, abstract):
     chosen = angles[idx - 1]
     num_sections = args.chapters or settings.num_sections
     max_rev = args.max_revisions if args.max_revisions is not None else settings.max_revisions
+    autonomous = _autonomous_value(args, settings)
     print(f"\n-> {chosen.title}")
-    article_id = _spin("building outline", lambda: orchestrator.start_article(
-        cfg, settings, uid, abstract, chosen, args.book_id, num_sections, max_rev,
-        autonomous=_autonomous_value(args, settings),
-        humanize=(False if getattr(args, "no_humanize", False) else None)))
+
+    def _create(abs_):
+        return _spin("building outline", lambda: orchestrator.start_article(
+            cfg, settings, uid, abs_, chosen, args.book_id, num_sections, max_rev,
+            autonomous=autonomous,
+            humanize=(False if getattr(args, "no_humanize", False) else None)))
+    article_id = _outline_gate(uid, _create(abstract), abstract, _create,
+                               is_article=True, gate_on=not autonomous)
     print(f"\n[OK] Created article '{article_id}'.")
     print(f"     Next: python book.py run --book-id {article_id}")
 
@@ -303,7 +342,8 @@ def cmd_write(args, cfg, settings, uid):
 
 def cmd_run(args, cfg, settings, uid):
     orchestrator.run(cfg, uid, _resolve_book(uid, args.book_id),
-                     force=getattr(args, "force", False))
+                     force=getattr(args, "force", False),
+                     autonomous=getattr(args, "autonomous", None))
 
 
 def cmd_status(args, cfg, settings, uid):
@@ -358,6 +398,15 @@ def cmd_review(args, cfg, settings, uid):
     orchestrator.record_instruction(uid, book_id, args.chapter, args.instruction)
     print(f"[OK] Recorded instruction for chapter {args.chapter}. Now: python book.py run "
           f"--book-id {book_id}")
+
+
+def cmd_revise(args, cfg, settings, uid):
+    """Post-completion revision: rewrite one committed chapter/section to an instruction."""
+    if args.chapter is None or not args.instruction:
+        sys.exit('revise needs --chapter and --instruction (e.g. revise --chapter 3 '
+                 '--instruction "more technical, add a benchmark table")')
+    book_id = _resolve_book(uid, args.book_id)
+    orchestrator.revise_unit(cfg, uid, book_id, args.chapter, args.instruction)
 
 
 def cmd_read(args, cfg, settings, uid):
@@ -504,6 +553,7 @@ def cmd_config(args, cfg, settings, uid):
 
 _COMMANDS = {
     "new": cmd_new, "write": cmd_write, "run": cmd_run, "status": cmd_status, "review": cmd_review,
+    "revise": cmd_revise,
     "read": cmd_read, "memory": cmd_memory, "produce": cmd_produce,
     "consolidate": cmd_consolidate, "skills": cmd_skills, "config": cmd_config,
     "list": cmd_list, "export": cmd_export, "seed-skills": cmd_seed_skills,
@@ -544,11 +594,22 @@ def build_parser(settings):
 
     p_run = sub.add_parser("run", parents=[common], help="Drive the pipeline until done or escalation")
     p_run.add_argument("--force", action="store_true", help="Proceed past a consolidation review")
+    # Tri-state (default None): switch the project's run mode as it resumes. --autonomous
+    # also unblocks an escalated unit so the run finishes without pausing.
+    p_run.add_argument("--autonomous", dest="autonomous", action="store_const", const=True,
+                       default=None, help="Stop pausing for review; commit best drafts and finish")
+    p_run.add_argument("--manual", dest="autonomous", action="store_const", const=False,
+                       help="Re-enable human-in-the-loop review at each chapter/section")
     sub.add_parser("status", parents=[common], help="Show run state + open reviews")
 
     p_rev = sub.add_parser("review", parents=[common], help="Answer an escalation")
     p_rev.add_argument("--chapter", type=int)
     p_rev.add_argument("--instruction")
+
+    p_revise = sub.add_parser("revise", parents=[common],
+                              help="Rewrite one committed chapter/section of a finished piece")
+    p_revise.add_argument("--chapter", type=int, help="Chapter/section number to rewrite")
+    p_revise.add_argument("--instruction", help="What to change, in your words")
 
     p_read = sub.add_parser("read", parents=[common], help="Print chapter/summary/manuscript")
     p_read.add_argument("--chapter", type=int)

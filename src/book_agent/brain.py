@@ -76,6 +76,40 @@ def watch_list(uid: str = "default") -> Path:
     return user_dir(uid) / "prefs" / "watch_list.md"
 
 
+def voice_dir(uid: str = "default") -> Path:
+    """Admired writing samples: user-dropped .md/.txt files plus /praise'd passages.
+    Injected into writer calls as register to MATCH (showing voice beats describing
+    it) and read by the learner as positive exemplars."""
+    return user_dir(uid) / "voice"
+
+
+def voice_exemplars(uid: str = "default", max_chars: int = 2400) -> str | None:
+    """Assemble exemplar paragraphs from voice_dir under a character budget.
+
+    Takes leading prose paragraphs (skipping headings and code fences) from each
+    file in name order until the budget is spent, so users control priority by
+    file naming. Returns None when there are no exemplars.
+    """
+    d = voice_dir(uid)
+    if not d.exists():
+        return None
+    chunks: list[str] = []
+    total = 0
+    for p in sorted(list(d.glob("*.md")) + list(d.glob("*.txt"))):
+        text = read_text(p) or ""
+        for para in re.split(r"\n\s*\n", text):
+            para = para.strip()
+            if not para or para.startswith("#") or para.startswith("```"):
+                continue
+            if total + len(para) > max_chars:
+                break
+            chunks.append(para)
+            total += len(para)
+        if total >= max_chars:
+            break
+    return "\n\n".join(chunks) or None
+
+
 # ── Book scope ───────────────────────────────────────────────────────────────
 class BookPaths:
     """All paths for one book. The brain on disk is the source of truth."""

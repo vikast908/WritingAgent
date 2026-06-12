@@ -61,6 +61,16 @@ class TOC(BaseModel):
     chapters: list[ChapterBlueprint]
 
 
+# ── Thesis (the piece's contestable argument - what makes it not-slop) ────────
+class Thesis(BaseModel):
+    claim: str               # one contestable sentence a smart reader could disagree with
+    stakes: str              # why the claim matters / what changes if it's true
+    arguments: list[str]     # 2-3 supporting arguments, each concrete
+    counterargument: str     # the strongest objection a skeptic would raise
+    rebuttal: str            # why the claim survives that objection
+    non_goals: list[str]     # what the piece deliberately does NOT cover
+
+
 # ── Critic ────────────────────────────────────────────────────────────────────
 class BlockingIssue(BaseModel):
     type: str  # continuity | character | plot | style | clarity | setup_payoff | plan
@@ -74,6 +84,10 @@ class Critique(BaseModel):
     confidence: float
     blocking: list[BlockingIssue]
     nits: list[str]
+    # Quality (not correctness): 5 = specific, contestable argument a generic piece
+    # wouldn't contain; 3 = competent but predictable; 1 = could appear on any site.
+    # Default keeps old eval JSON files loadable (the field didn't exist before).
+    insight: int = 3
 
     @field_validator("confidence")
     @classmethod
@@ -198,3 +212,13 @@ class ArticleResearchBrief(BaseModel):
     facts: list[str]
     style_cues: list[str]
     sources: list[Source]
+
+
+# ── Surgical humanizer (per-sentence line edits, plan: anti-slop) ─────────────
+class LineEdit(BaseModel):
+    index: int    # the number of the flagged sentence being rewritten
+    text: str     # the minimal rewrite (same meaning, tell removed)
+
+
+class LineEdits(BaseModel):
+    edits: list[LineEdit]

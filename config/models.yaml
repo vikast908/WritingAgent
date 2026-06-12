@@ -8,7 +8,8 @@ nodes:
   writer:        deepseek/deepseek-v4-pro      # prose quality
   consolidation: deepseek/deepseek-v4-pro      # global reasoning across the whole book
   toc:           deepseek/deepseek-v4-flash
-  critic:        deepseek/deepseek-v4-flash    # independent judge - a different model than the writer
+  critic:        deepseek/deepseek-v4-pro      # pro-tier judge: insight scoring + thesis checks
+                                               # need real judgment, worth the extra cost/latency
   summarizer:    deepseek/deepseek-v4-flash    # chapter summaries + canon extraction
   production:    deepseek/deepseek-v4-flash    # front/back matter + assembly
   learner:       deepseek/deepseek-v4-flash    # distill skills from a finished book
@@ -21,4 +22,5 @@ temperature:
   toc:        0.4
   critic:     0.2
   summarizer: 0.0
-  humanizer:  0.7
+  humanizer:  0.3   # surgical line edits - low temp; it must not get creative
+  writer:     0.9   # explicit base temp; divergent first drafts sample 0.7/1.0/1.2

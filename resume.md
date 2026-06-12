@@ -5,8 +5,70 @@
 
 ## Current status
 
-- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **111 tests
+- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **149 tests
   pass**; ruff clean.
+- **New (2026-06-12, session 9b - TUI/UX batch + headroom actually installed):**
+  - **Escalation picker**: a stalled run now shows the critic's blocking issues and prompts
+    `[f]ix · [i]nstruct · [a]pprove as-is · [g]o autonomous · [r]ead draft · [s]top` - one
+    keypress instead of `review --chapter N --instruction "..."`. Backed by new
+    `orchestrator.approve_escalation()` (commits the stalled draft via the normal commit path).
+  - **`revise` command** (post-completion loop): `revise --chapter N --instruction "..."`
+    rewrites ONE committed unit of a finished piece (write→critique→optional fix pass→
+    humanize), patches the section file AND the assembled manuscript
+    (`_replace_manuscript_section`); books re-run production. Canon deliberately not
+    re-extracted. NL chat maps "make section 3 more technical" to it.
+  - **Outline gate** (manual mode, TTY only): after `new`, the outline + thesis claim are
+    shown with `[Enter] write · r regenerate · g regenerate with guidance` (max 3 rounds).
+  - **Manual variant pick**: in manual interactive runs the human chooses among divergent
+    drafts (glimpse + critic verdict/insight per variant; Enter = critic's pick) via an
+    `ask` callback threaded through `run()` (Live display pauses/resumes around input).
+  - **Summary card + bell**: finished runs ring the terminal and show words/time/tokens/
+    cost/avg-insight (state["insights"] tracked per commit) + table-read pointer.
+  - **Table read** (`table_read: true`): whole-article cold read by a skeptical
+    target-audience reader -> `table_read.md` report (boredom/trust/unclear/missing),
+    report-only, feeds `revise`.
+  - **Toolbar turns red** (prompt_toolkit HTML) when a review is pending; dashboard now
+    shows a draft-opening glimpse line per attempt.
+  - **Headroom fixed**: `headroom-ai` was configured but NOT INSTALLED (silent no-op since
+    day one). Installed the Windows pure-Python build (0.10.17 + opentelemetry-api +
+    tiktoken); verified through `llm._compress`. Caveat: transforms target long multi-turn
+    payloads - expect savings on late-book context, not every call.
+- **New (2026-06-12, session 9 - quality machinery: originality over slop-absence):**
+  Code review concluded the pipeline guaranteed the floor (no slop symptoms) but had no
+  machinery for the ceiling (a thesis, a voice, a risk). Implemented all three tiers:
+  - **Thesis node** (`nodes.generate_thesis`, `schemas.Thesis`): contestable claim + stakes +
+    arguments + steelmanned counterargument/rebuttal + non-goals, generated at `start_article`,
+    persisted as `thesis.json`/`thesis.md`, injected into every section writer + critic call.
+    Critic blocks sections that cover the topic without advancing the thesis.
+  - **Voice exemplars** (`brain.voice_dir`/`voice_exemplars`): drop admired paragraphs in
+    `brain/users/<uid>/voice/`; they're injected into every writer call as register to MATCH.
+    New **`/praise [N]`** command saves a committed chapter/section there (falls back to
+    manuscript extraction for finished articles) - feeds both the writer and the learner
+    (`nodes.learn` now takes `praised=` positive exemplars).
+  - **Surgical humanizer** (humanizer.py rewritten): tells detected deterministically
+    (lexicon regex), ONLY flagged sentences rewritten (structured `LineEdits`), each rewrite
+    guarded (citations/numbers/length/tell-gone) before splicing. No more wholesale
+    re-generation of approved prose. "optimize" removed from the lexicon (wrong for technical
+    prose - the old ban was leaky anyway).
+  - **Divergent first drafts** (`divergent_drafts: 2` setting): attempt 0 samples N drafts at
+    temps 0.7/1.0/1.2 in parallel; critic scores all; the winner gets refined. Both loops.
+  - **Insight gate** (`Critique.insight` 1-5, `min_insight: 3` setting): approve now requires
+    insight >= bar; correct-but-generic drafts get a sharpening revision note. Deterministic
+    `structural_report()` (paragraph uniformity, rule-of-three density, specificity density)
+    feeds the critic as computed evidence. `_crit_better` prefers higher insight.
+  - **Critic = DeepSeek v4-pro** (user decisions: DeepSeek pro/flash only - no other
+    providers; then critic upgraded flash→pro since insight scoring + thesis checks need
+    real judgment). Writer temp now explicit (0.9); humanizer 0.3.
+  - **Researcher default ON** (`use_researcher: true`); critic treats uncited stats as
+    fabrication risk when research is off; production logs a warning when [n] citations exist
+    with an empty source registry.
+  - Earlier same day: `/auto` autonomous↔manual toggle (clears stuck escalations),
+    `run --autonomous/--manual`, chat escalation playbook, export fixes (PDF code wrap,
+    Mermaid→PNG with disk cache, U+2011 tofu, byline, "Section N:" strip, per-section
+    reference consolidation, EPUB code-wrap CSS).
+  - **Next:** live-validate a real article run end-to-end with the new machinery (thesis +
+    divergent drafts + insight gate + cross-family critic); compare output quality against
+    the voice-agent article; tune `min_insight`/`divergent_drafts` from telemetry cost data.
 - **New (2026-06-12, sessions 1-8):**
   - **Chat NL flow** - propose abstract → refine with plain English → "run it"/"go ahead"
     creates + starts writing in one turn. Fixed the regex that silently dropped every

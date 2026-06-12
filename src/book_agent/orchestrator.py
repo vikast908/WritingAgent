@@ -65,12 +65,65 @@ def _merge_fix_notes(instruction: str | None, crit: S.Critique) -> str:
 
 def _crit_better(a: S.Critique, b: S.Critique) -> bool:
     """True when critique a judges its draft better than b judges its own:
-    approve beats non-approve, then fewer blocking issues, then higher confidence."""
+    approve beats non-approve, then fewer blocking issues, then higher insight,
+    then higher confidence."""
     if (a.verdict == "approve") != (b.verdict == "approve"):
         return a.verdict == "approve"
     if len(a.blocking) != len(b.blocking):
         return len(a.blocking) < len(b.blocking)
+    if a.insight != b.insight:
+        return a.insight > b.insight
     return a.confidence > b.confidence
+
+
+# Sampling temperatures for divergent first drafts (attempt 0, best-of-N): conservative,
+# default, and adventurous. The critic picks the winner; revisions refine it.
+_DIVERGENT_TEMPS = (0.7, 1.0, 1.2)
+
+
+def _draft_glimpse(draft: str) -> str:
+    """First prose line of a draft, for the dashboard - what is it actually writing?"""
+    return next((ln.strip() for ln in draft.splitlines()
+                 if ln.strip() and not ln.lstrip().startswith(("#", "!", "```"))), "")[:76]
+
+
+def _pick_variant(drafts: dict, crits: dict, ask, log) -> tuple[str, S.Critique]:
+    """Choose among divergent drafts. The critic ranks them; in manual interactive
+    runs (ask provided) the human gets the final say - taste is exactly what the
+    human is in the loop for. Enter accepts the critic's pick."""
+    keys = list(drafts)
+    best = keys[0]
+    for k in keys:
+        if _crit_better(crits[k], crits[best]):
+            best = k
+    if ask is None:
+        return drafts[best], crits[best]
+    lines = []
+    for i, k in enumerate(keys, 1):
+        c = crits[k]
+        star = "  ← critic's pick" if k == best else ""
+        lines.append(f"  [{i}] {c.verdict} · insight {c.insight}/5 · "
+                     f"{len(c.blocking)} blocking{star}\n"
+                     f'      "{_draft_glimpse(drafts[k])}"')
+    try:
+        choice = ask("Variant drafts ready:\n" + "\n".join(lines)
+                     + f"\npick [1-{len(keys)}, Enter = critic's pick]: ")
+        idx = int(str(choice).strip()) - 1
+        if 0 <= idx < len(keys):
+            best = keys[idx]
+            log(f"   human picked variant {idx + 1}")
+    except (ValueError, TypeError):
+        pass   # Enter / noise → critic's pick
+    return drafts[best], crits[best]
+
+
+def _insight_note(crit: S.Critique, bar: int) -> str:
+    """Revision note for a draft that is correct but generic."""
+    return (f"The draft is publishable-correct but generic (insight {crit.insight}/5; "
+            f"the bar is {bar}). Sharpen the argument: lead with the contestable claim, "
+            "replace each generic statement with a specific fact, example, or number, "
+            "and cut every sentence that could appear unchanged in another piece on "
+            "this topic.")
 
 
 def _length_note(word_count: int, target: int) -> str | None:
@@ -120,6 +173,52 @@ def _renumber_citations(text: str, mapping: dict[int, int]) -> str:
         n = int(m.group(1))
         return f"[\x00{mapping[n]}\x00]" if n in mapping else m.group(0)
     return _CITE.sub(_sub, text).replace("\x00", "")
+
+
+# A section heading the LLM prefixed with "Section N:" / "Section N -" - the producer
+# owns numbering, so strip the prefix and keep the real title.
+_SECTION_PREFIX = re.compile(r"(?im)^(#{1,4}\s*)Section\s+\d+\s*[:.–—-]\s*")
+# A trailing References block the section writer emitted on its own (the producer
+# assembles the real one). Cuts from the References heading to the end of the section.
+_REF_BLOCK = re.compile(r"(?ims)\n#{1,4}\s*References\b.*\Z")
+# One reference entry inside such a block: "[3] Author (2009)..." up to the next marker.
+_REF_ENTRY = re.compile(r"\[(\d+)\]\s*(.*?)(?=\s*\[\d+\]|\Z)", re.DOTALL)
+
+
+def _strip_section_prefix(md: str) -> str:
+    return _SECTION_PREFIX.sub(r"\1", md)
+
+
+def _consolidate_section_refs(sections_md: list[str]) -> tuple[list[str], list[str]]:
+    """Merge writer-emitted per-section reference lists into one global list.
+
+    Each section may end with its own '## References' block numbered locally ([1], [2]
+    that reset every section). This pulls those blocks out, dedupes entries by text,
+    renumbers each section's in-text [n] citations to the global sequence, and returns
+    (cleaned_sections, global_entries). Used when there are no registry-managed sources
+    (e.g. the researcher was off); otherwise the registry numbering already governs.
+    """
+    global_entries: list[str] = []
+    text_to_global: dict[str, int] = {}
+    cleaned: list[str] = []
+    for sec in sections_md:
+        m = _REF_BLOCK.search(sec)
+        if not m:
+            cleaned.append(sec)
+            continue
+        body, block = sec[:m.start()], sec[m.start():]
+        local_to_global: dict[int, int] = {}
+        for em in _REF_ENTRY.finditer(block):
+            entry = " ".join(em.group(2).split()).strip(" .")
+            if not entry:
+                continue
+            key = entry.lower()
+            if key not in text_to_global:
+                global_entries.append(entry)
+                text_to_global[key] = len(global_entries)
+            local_to_global[int(em.group(1))] = text_to_global[key]
+        cleaned.append(_renumber_citations(body, local_to_global).rstrip())
+    return cleaned, global_entries
 
 
 # ── Upfront-intake plumbing (answers gathered once, before the autonomous run) ─
@@ -178,6 +277,8 @@ def start_book(
         "humanize": settings.humanize if humanize is None else humanize,
         "use_images": settings.use_images,
         "use_embeddings": settings.use_embeddings,
+        "divergent_drafts": settings.divergent_drafts,
+        "min_insight": settings.min_insight,
         # Autonomous runs never pause: no confidence/contradiction escalation.
         "escalate_below_confidence": 0.0 if autonomous else settings.escalate_below_confidence,
         "escalate_on_contradiction": False if autonomous else settings.escalate_on_contradiction,
@@ -197,10 +298,16 @@ def _load(uid: str, book_id: str):
 
 
 # ── Main driver ──────────────────────────────────────────────────────────────
-def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=print) -> dict:
+def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
+        autonomous: bool | None = None, log=print, ask=None) -> dict:
     llm.reset_usage()
     llm.set_project(book_id)                                   # telemetry attribution
     llm.set_run_budget(load_settings().max_run_tokens)         # cost kill-switch
+    # An explicit autonomous/manual override (from `run --autonomous` or `/auto`)
+    # rewrites the project's run_state before this run reads it, so switching to
+    # autonomous over an escalated unit clears the pending review and resumes.
+    if autonomous is not None:
+        apply_autonomous(uid, book_id, autonomous, load_settings())
     # Detect whether this is a book or an article (check articles/ first, then books/)
     art_paths = ArticlePaths(book_id, uid)
     if art_paths.run_state.exists():
@@ -208,7 +315,7 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=pr
         if state is None:
             raise FileNotFoundError(f"No run_state for article '{book_id}'.")
         outline = S.ArticleOutline(**brain.read_json(art_paths.outline_json))
-        return _run_article(cfg, art_paths, state, outline, force=force, log=log)
+        return _run_article(cfg, art_paths, state, outline, force=force, log=log, ask=ask)
     paths = BookPaths(book_id, uid)
     state = brain.read_json(paths.run_state)
     if state is None:
@@ -254,7 +361,7 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False, log=pr
                         prefetch[k] = pool.submit(
                             _chapter_fetch, cfg, paths, plan, toc, state, k, log)
                 outcome = _process_chapter(cfg, paths, plan, toc, store, state, n, log,
-                                           prefetched=prefetch.pop(n, None))
+                                           prefetched=prefetch.pop(n, None), ask=ask)
                 if outcome == "escalate":
                     state["pending_review"] = True
                     state["review_kind"] = "chapter"
@@ -395,7 +502,8 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
         {"research": _do_research, "images": _do_images, "skills": _do_skills})
 
 
-def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=None) -> str:
+def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=None,
+                     ask=None) -> str:
     llm.set_unit(f"ch{n:02d}")
     blueprint = toc.chapters[n - 1]
     # Resume guard: if this chapter was already committed on a prior run but the
@@ -432,31 +540,62 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
     base_draft = brain.read_text(paths.ch_draft(n)) if instruction else None
     max_rev = state["max_revisions"]
     threshold = state.get("escalate_below_confidence", 0.0)
+    min_insight = int(state.get("min_insight", 0) or 0)
+    voice = brain.voice_exemplars(paths.uid)
     crit: S.Critique | None = None
     draft = ""
     best: tuple[str, S.Critique] | None = None
     approved_attempt = -1
 
+    def _write(notes, base, temperature=None):
+        return nodes.write_chapter(cfg, plan, blueprint, fix_notes=notes,
+                                   context=context, skills=skill_bodies, images=images,
+                                   base_draft=base, requirements=requirements, voice=voice,
+                                   length_note=_length_note(0, blueprint.target_words),
+                                   temperature=temperature)
+
+    def _critique(d):
+        return nodes.critique_chapter(
+            cfg, plan, blueprint, d, context=context, watch_list=watch,
+            skills=skill_bodies, requirements=requirements,
+            length_note=_length_note(len(d.split()), blueprint.target_words))
+
+    n_div = max(1, int(state.get("divergent_drafts", 1) or 1))
     log(f"\n== Chapter {n}: {blueprint.title} ==")
     for attempt in range(max_rev + 1):
-        log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
-        draft = nodes.write_chapter(cfg, plan, blueprint, fix_notes=fix_notes,
-                                    context=context, skills=skill_bodies, images=images,
-                                    base_draft=base_draft, requirements=requirements,
-                                    length_note=_length_note(0, blueprint.target_words))
-        log("   critiquing...")
-        crit = nodes.critique_chapter(
-            cfg, plan, blueprint, draft, context=context, watch_list=watch,
-            skills=skill_bodies, requirements=requirements,
-            length_note=_length_note(len(draft.split()), blueprint.target_words))
+        if attempt == 0 and n_div > 1 and not base_draft:
+            # Divergent first drafts: varied temperatures in parallel, critic picks the
+            # winner, revisions refine it (selection for strength over convergence).
+            temps = _DIVERGENT_TEMPS[:n_div]
+            log(f"   drafting {len(temps)} variants (temps {', '.join(map(str, temps))})...")
+            drafts = concurrency.gather(
+                {f"v{i}": (lambda t=t, fn=fix_notes: _write(fn, None, t))
+                 for i, t in enumerate(temps)},
+                strict=True)
+            log("   critiquing variants...")
+            crits = concurrency.gather(
+                {k: (lambda d=d: _critique(d)) for k, d in drafts.items()}, strict=True)
+            picker_ask = None if state.get("autonomous") else ask
+            draft, crit = _pick_variant(drafts, crits, picker_ask, log)
+            log(f"   picked variant ({sum(1 for c in crits.values() if c.verdict == 'approve')}"
+                f"/{len(temps)} approved)")
+        else:
+            log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
+            draft = _write(fix_notes, base_draft)
+            log("   critiquing...")
+            crit = _critique(draft)
+        glimpse = _draft_glimpse(draft)
+        if glimpse:
+            log(f'   · opens: "{glimpse}"')
         brain.write_json(paths.eval_of(n),
                          {"chapter_id": n, "attempt": attempt, **crit.model_dump()})
         log(f"   verdict={crit.verdict} confidence={crit.confidence:.2f} "
-            f"blocking={len(crit.blocking)} nits={len(crit.nits)}")
+            f"blocking={len(crit.blocking)} nits={len(crit.nits)} insight={crit.insight}")
         if best is None or _crit_better(crit, best[1]):
             best = (draft, crit)
         low_conf = crit.confidence < threshold
-        if crit.verdict == "approve" and not low_conf:
+        low_insight = bool(min_insight) and crit.insight < min_insight
+        if crit.verdict == "approve" and not low_conf and not low_insight:
             approved_attempt = attempt
             break
         if (crit.verdict == "escalate" or low_conf) and not state.get("autonomous"):
@@ -467,6 +606,9 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
             log("   revision cap reached")
             break
         fix_notes = _merge_fix_notes(instruction, crit)
+        if low_insight and crit.verdict == "approve":
+            log(f"   insight {crit.insight}/5 below bar {min_insight} -> sharpening")
+            fix_notes = (fix_notes + "\n\n" if fix_notes else "") + _insight_note(crit, min_insight)
         base_draft = draft   # revise the latest attempt, not regenerate from notes alone
 
     assert crit is not None and best is not None
@@ -476,6 +618,7 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
             log(f"   autonomous: committing best draft "
                 f"(blocking={len(crit.blocking)}, confidence={crit.confidence:.2f})")
         first_pass = approved_attempt == 0 and instruction is None
+        state.setdefault("insights", []).append(crit.insight)   # quality history for the summary card
         _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass,
                 log, humanize=bool(state.get("humanize")), sources=ch_sources)
         paths.ch_draft(n).unlink(missing_ok=True)   # escalation draft resolved
@@ -667,6 +810,25 @@ def _assemble_manuscript(paths, plan, pplan: S.ProductionPlan) -> None:
     brain.write_text(paths.manuscript, "\n".join(parts))
 
 
+def _praised_passages(uid: str, max_chars: int = 4000) -> str:
+    """Passages the human marked great via /praise - positive signal for the learner."""
+    d = brain.voice_dir(uid)
+    if not d.exists():
+        return ""
+    chunks: list[str] = []
+    total = 0
+    for p in sorted(d.glob("praised-*.md")):
+        text = (brain.read_text(p) or "").strip()
+        if not text:
+            continue
+        take = text[: max(0, max_chars - total)]
+        chunks.append(f"### {p.stem}\n{take}")
+        total += len(take)
+        if total >= max_chars:
+            break
+    return "\n\n".join(chunks)
+
+
 def _learn(cfg, paths, plan, *, log) -> None:
     uid = paths.uid
     instructions = "\n\n".join(
@@ -679,7 +841,8 @@ def _learn(cfg, paths, plan, *, log) -> None:
         findings += [f"- [{b['type']}] {b['detail']}" for b in data.get("blocking", [])]
     existing = "\n".join(p.stem for p in brain.skills_dir(uid).glob("*.md"))
 
-    out = nodes.learn(cfg, plan, instructions, "\n".join(findings), existing)
+    out = nodes.learn(cfg, plan, instructions, "\n".join(findings), existing,
+                      praised=_praised_passages(uid))
     for prop in out.skills:
         skills_mod.write_skill(uid, prop)
     watch = ["# Avoid list (watch-list)", ""] + [f"- {w.pattern} - {w.why}" for w in out.watch_items]
@@ -746,6 +909,192 @@ def record_instruction(uid: str, book_id: str, n: int, instruction: str) -> None
     state["pending_review"] = False
     state["review_kind"] = None
     brain.write_json(paths.run_state, state)
+
+
+def apply_autonomous(uid: str, book_id: str, autonomous: bool, settings) -> dict | None:
+    """Switch an existing project between autonomous and manual run modes.
+
+    `autonomous` is baked into the run_state at creation (start_book/start_article),
+    so flipping it afterwards means rewriting that state: re-derive the escalation
+    thresholds the orchestrator reads each run, and - when turning autonomous ON over
+    a chapter/section that already escalated - clear the pending review so the next
+    `run` resumes and commits the best draft instead of waiting for a human.
+    Consolidation reviews still gate on `--force`, so those are left untouched.
+
+    Returns the updated state, or None if the project has no run_state.
+    """
+    art = ArticlePaths(book_id, uid)
+    paths = art if art.run_state.exists() else BookPaths(book_id, uid)
+    state = brain.read_json(paths.run_state)
+    if state is None:
+        return None
+    state["autonomous"] = autonomous
+    state["escalate_below_confidence"] = (
+        0.0 if autonomous else settings.escalate_below_confidence)
+    state["escalate_on_contradiction"] = (
+        False if autonomous else settings.escalate_on_contradiction)
+    if (autonomous and state.get("pending_review")
+            and state.get("review_kind") in ("chapter", "section")):
+        state["pending_review"] = False
+        state["review_kind"] = None
+    brain.write_json(paths.run_state, state)
+    return state
+
+
+def approve_escalation(cfg: ModelConfig, uid: str, book_id: str, *, log=print) -> dict | None:
+    """Commit a stalled (escalated) chapter/section draft AS-IS - the human read it and
+    decided the critic was wrong. Runs the normal commit path (summary, canon, humanize)
+    so continuity for later units is intact, then clears the review so `run` resumes.
+
+    Returns the updated state, or None when there is nothing pending to approve."""
+    art = ArticlePaths(book_id, uid)
+    if art.run_state.exists():
+        state = brain.read_json(art.run_state) or {}
+        n = state.get("current_section")
+        draft = brain.read_text(art.section_draft(n)) if n else None
+        if not (state.get("pending_review") and draft):
+            return None
+        outline = S.ArticleOutline(**brain.read_json(art.outline_json))
+        _commit_section(cfg, art, outline.sections[n - 1], n, draft, [], [], False,
+                        log, humanize=bool(state.get("humanize")))
+        art.section_draft(n).unlink(missing_ok=True)
+        state.update(pending_review=False, review_kind=None,
+                     committed=state.get("committed", 0) + 1, current_section=n + 1)
+        brain.write_json(art.run_state, state)
+        log(f"[OK] Section {n} approved as-is. Run `run` to continue.")
+        return state
+    paths, state, plan, toc = _load(uid, book_id)
+    n = state.get("current_chapter")
+    draft = brain.read_text(paths.ch_draft(n)) if n else None
+    if not (state.get("pending_review") and draft):
+        return None
+    store = Store.open(paths)
+    try:
+        _commit(cfg, paths, plan, toc.chapters[n - 1], store, n, draft, [], False,
+                log, humanize=bool(state.get("humanize")), sources=[])
+    finally:
+        store.close()
+    paths.ch_draft(n).unlink(missing_ok=True)
+    state.update(pending_review=False, review_kind=None,
+                 committed=state.get("committed", 0) + 1, current_chapter=n + 1)
+    brain.write_json(paths.run_state, state)
+    log(f"[OK] Chapter {n} approved as-is. Run `run` to continue.")
+    return state
+
+
+# ── Post-completion revision (`revise` command) ───────────────────────────────
+def _manuscript_section_bodies(ms: str) -> list[str]:
+    """Section bodies from an assembled manuscript (skips header + References).
+    Tolerates the doubled '---' separators the header block produces."""
+    bodies = []
+    for part in ms.split("\n\n---\n\n"):
+        s = re.sub(r"^(?:-{3,}\s*)+", "", part.strip()).strip()
+        if s.startswith("## ") and not s.startswith("## References"):
+            bodies.append(s)
+    return bodies
+
+
+def _replace_manuscript_section(ms: str, idx: int, new_body: str) -> str | None:
+    """Replace the idx-th (0-based) section body in an assembled manuscript.
+    Returns the new manuscript, or None when idx is out of range."""
+    parts = ms.split("\n\n---\n\n")
+    count = -1
+    for i, part in enumerate(parts):
+        s = re.sub(r"^(?:-{3,}\s*)+", "", part.strip()).strip()
+        if s.startswith("## ") and not s.startswith("## References"):
+            count += 1
+            if count == idx:
+                prefix = part[: part.find(s)] if s and s in part else ""
+                parts[i] = prefix + new_body
+                return "\n\n---\n\n".join(parts)
+    return None
+
+
+def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: str,
+                *, log=print) -> None:
+    """Rewrite ONE chapter/section of a finished (or in-progress) piece to the human's
+    instruction, re-critique once, and patch the committed file + assembled manuscript.
+    Closes the gap between 'pipeline done' and 'author satisfied' without a full re-run.
+
+    Books: the chapter file is rewritten and production re-assembles the manuscript.
+    Canon is NOT re-extracted (a post-completion polish must not mutate the knowledge
+    base later chapters were already written against)."""
+    llm.reset_usage()
+    llm.set_project(book_id)
+    voice = brain.voice_exemplars(uid)
+
+    art = ArticlePaths(book_id, uid)
+    if art.run_state.exists():
+        state = brain.read_json(art.run_state) or {}
+        outline = S.ArticleOutline(**brain.read_json(art.outline_json))
+        if not (1 <= n <= len(outline.sections)):
+            raise ValueError(f"Section {n} out of range (1-{len(outline.sections)}).")
+        section = outline.sections[n - 1]
+        base = brain.read_text(art.section(n))
+        ms = brain.read_text(art.manuscript) or ""
+        if base is None:   # finished article - per-section files were cleaned up
+            bodies = _manuscript_section_bodies(ms)
+            if n > len(bodies):
+                raise FileNotFoundError(f"Section {n} not found in the manuscript.")
+            base = bodies[n - 1]
+        thesis_md = brain.read_text(art.root / "thesis.md")
+        log(f"== Revising section {n}: {section.heading} ==")
+        log("   rewriting to your instruction...")
+        draft = nodes.write_article_section(
+            cfg, outline, section, fix_notes=instruction, base_draft=base,
+            thesis=thesis_md, voice=voice,
+            requirements=(state.get("intake") or "").strip() or None)
+        log("   critiquing...")
+        crit = nodes.critique_article_section(
+            cfg, outline, section, draft, thesis=thesis_md,
+            research_on=bool(state.get("use_researcher")))
+        if crit.blocking and crit.verdict != "approve":
+            log(f"   {len(crit.blocking)} blocking issue(s) - one fix pass...")
+            draft = nodes.write_article_section(
+                cfg, outline, section, fix_notes=_merge_fix_notes(instruction, crit),
+                base_draft=draft, thesis=thesis_md, voice=voice)
+        if state.get("humanize"):
+            log("   humanizing...")
+            draft = humanizer.humanize(cfg, draft)
+        draft = _strip_section_prefix(draft).strip()
+        if brain.read_text(art.section(n)) is not None:
+            brain.write_text(art.section(n), draft)
+        if ms:
+            patched = _replace_manuscript_section(ms, n - 1, draft)
+            if patched:
+                brain.write_text(art.manuscript, patched)
+        brain.append_text(art.revision_log, f"## Section {n} post-completion revision\n{instruction}")
+        log(f"[OK] Section {n} revised. Re-export to refresh output files.")
+        return
+
+    paths, state, plan, toc = _load(uid, book_id)
+    if not (1 <= n <= len(toc.chapters)):
+        raise ValueError(f"Chapter {n} out of range (1-{len(toc.chapters)}).")
+    blueprint = toc.chapters[n - 1]
+    base = brain.read_text(paths.ch(n))
+    if base is None:
+        raise FileNotFoundError(f"Chapter {n} has not been committed yet - use `review` instead.")
+    log(f"== Revising chapter {n}: {blueprint.title} ==")
+    log("   rewriting to your instruction...")
+    draft = nodes.write_chapter(cfg, plan, blueprint, fix_notes=instruction,
+                                base_draft=base, voice=voice,
+                                requirements=(state.get("intake") or "").strip() or None)
+    log("   critiquing...")
+    crit = nodes.critique_chapter(cfg, plan, blueprint, draft)
+    if crit.blocking and crit.verdict != "approve":
+        log(f"   {len(crit.blocking)} blocking issue(s) - one fix pass...")
+        draft = nodes.write_chapter(cfg, plan, blueprint,
+                                    fix_notes=_merge_fix_notes(instruction, crit),
+                                    base_draft=draft, voice=voice)
+    if state.get("humanize"):
+        log("   humanizing...")
+        draft = humanizer.humanize(cfg, draft)
+    brain.write_text(paths.ch(n), draft)
+    brain.append_text(paths.revision_log, f"## Chapter {n} post-completion revision\n{instruction}")
+    if brain.read_text(paths.manuscript):
+        log("   re-assembling manuscript...")
+        run_production(cfg, uid, book_id, log=log)
+    log(f"[OK] Chapter {n} revised. Re-export to refresh output files.")
 
 
 def status(uid: str, book_id: str) -> dict:
@@ -851,6 +1200,12 @@ def start_article(
     if intake:
         brain.write_text(paths.root / "intake.md", intake)
 
+    # The thesis: the piece's contestable argument. Generated once here, injected into
+    # every section's writer + critic call - the difference between arguing and covering.
+    thesis = nodes.generate_thesis(cfg, abstract, chosen, outline)
+    brain.write_json(paths.root / "thesis.json", thesis.model_dump())
+    brain.write_text(paths.root / "thesis.md", nodes.render_thesis(thesis))
+
     state = {
         "uid": uid, "article_id": article_id, "abstract": abstract,
         "intake": intake or "", "author": author or "",
@@ -865,6 +1220,9 @@ def start_article(
         "use_images": settings.use_images,
         "use_embeddings": settings.use_embeddings,
         "article_cohesion": settings.article_cohesion,
+        "table_read": settings.table_read,
+        "divergent_drafts": settings.divergent_drafts,
+        "min_insight": settings.min_insight,
         "escalate_below_confidence": 0.0 if autonomous else settings.escalate_below_confidence,
         "escalate_on_contradiction": False,
     }
@@ -872,7 +1230,7 @@ def start_article(
     return article_id
 
 
-def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log):
+def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log, ask=None):
     if state.get("pending_review"):
         log(f"[!] Section {state['current_section']} awaits review. "
             f"Run: review --chapter {state['current_section']} --instruction \"...\"")
@@ -898,7 +1256,7 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log):
                         prefetch[k] = pool.submit(
                             _section_fetch, cfg, paths, outline, state, k, log)
                 outcome = _process_article_section(cfg, paths, outline, state, n, log,
-                                                   prefetched=prefetch.pop(n, None))
+                                                   prefetched=prefetch.pop(n, None), ask=ask)
                 if outcome == "escalate":
                     state["pending_review"] = True
                     state["review_kind"] = "section"
@@ -1005,7 +1363,7 @@ def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
 
 
 def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
-                             prefetched=None) -> str:
+                             prefetched=None, ask=None) -> str:
     llm.set_unit(f"sec{n:02d}")
     section = outline.sections[n - 1]
 
@@ -1049,32 +1407,64 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     base_draft = brain.read_text(paths.section_draft(n)) if instruction else None
     max_rev = state["max_revisions"]
     threshold = state.get("escalate_below_confidence", 0.0)
+    min_insight = int(state.get("min_insight", 0) or 0)
+    research_on = bool(state.get("use_researcher"))
+    thesis_md = brain.read_text(paths.root / "thesis.md")
+    voice = brain.voice_exemplars(paths.uid)
     crit: S.Critique | None = None
     draft = ""
     best: tuple[str, S.Critique] | None = None
     approved_attempt = -1
 
+    def _write(notes, base, temperature=None):
+        return nodes.write_article_section(
+            cfg, outline, section, fix_notes=notes, context=full_context,
+            skills=skill_bodies, images=images, base_draft=base,
+            requirements=requirements, thesis=thesis_md, voice=voice,
+            length_note=_length_note(0, target), temperature=temperature)
+
+    def _critique(d):
+        return nodes.critique_article_section(
+            cfg, outline, section, d, context=full_context, watch_list=watch,
+            requirements=requirements, thesis=thesis_md, research_on=research_on,
+            length_note=_length_note(len(d.split()), target))
+
+    n_div = max(1, int(state.get("divergent_drafts", 1) or 1))
     log(f"\n== Section {n}: {section.heading} ==")
     for attempt in range(max_rev + 1):
-        log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
-        draft = nodes.write_article_section(cfg, outline, section,
-                                            fix_notes=fix_notes, context=full_context,
-                                            skills=skill_bodies, images=images,
-                                            base_draft=base_draft, requirements=requirements,
-                                            length_note=_length_note(0, target))
-        log("   critiquing...")
-        crit = nodes.critique_article_section(
-            cfg, outline, section, draft, context=full_context, watch_list=watch,
-            requirements=requirements,
-            length_note=_length_note(len(draft.split()), target))
+        if attempt == 0 and n_div > 1 and not base_draft:
+            # Divergent first drafts: sample at varied temperatures in parallel, critique
+            # each, refine the winner. Selection for strength, not convergence to safety.
+            temps = _DIVERGENT_TEMPS[:n_div]
+            log(f"   drafting {len(temps)} variants (temps {', '.join(map(str, temps))})...")
+            drafts = concurrency.gather(
+                {f"v{i}": (lambda t=t, fn=fix_notes: _write(fn, None, t))
+                 for i, t in enumerate(temps)},
+                strict=True)
+            log("   critiquing variants...")
+            crits = concurrency.gather(
+                {k: (lambda d=d: _critique(d)) for k, d in drafts.items()}, strict=True)
+            picker_ask = None if state.get("autonomous") else ask
+            draft, crit = _pick_variant(drafts, crits, picker_ask, log)
+            log(f"   picked variant ({sum(1 for c in crits.values() if c.verdict == 'approve')}"
+                f"/{len(temps)} approved)")
+        else:
+            log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
+            draft = _write(fix_notes, base_draft)
+            log("   critiquing...")
+            crit = _critique(draft)
+        glimpse = _draft_glimpse(draft)
+        if glimpse:
+            log(f'   · opens: "{glimpse}"')
         brain.write_json(paths.section_eval(n),
                          {"section": n, "attempt": attempt, **crit.model_dump()})
         log(f"   verdict={crit.verdict} confidence={crit.confidence:.2f} "
-            f"blocking={len(crit.blocking)}")
+            f"blocking={len(crit.blocking)} insight={crit.insight}")
         if best is None or _crit_better(crit, best[1]):
             best = (draft, crit)
         low_conf = crit.confidence < threshold
-        if crit.verdict == "approve" and not low_conf:
+        low_insight = bool(min_insight) and crit.insight < min_insight
+        if crit.verdict == "approve" and not low_conf and not low_insight:
             approved_attempt = attempt
             break
         if (crit.verdict == "escalate" or low_conf) and not state.get("autonomous"):
@@ -1083,6 +1473,9 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             log("   revision cap reached")
             break
         fix_notes = _merge_fix_notes(instruction, crit)
+        if low_insight and crit.verdict == "approve":
+            log(f"   insight {crit.insight}/5 below bar {min_insight} -> sharpening")
+            fix_notes = (fix_notes + "\n\n" if fix_notes else "") + _insight_note(crit, min_insight)
         base_draft = draft
 
     assert crit is not None and best is not None
@@ -1092,6 +1485,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             log(f"   autonomous: committing best draft "
                 f"(blocking={len(crit.blocking)}, confidence={crit.confidence:.2f})")
         first_pass = approved_attempt == 0 and instruction is None
+        state.setdefault("insights", []).append(crit.insight)   # quality history for the summary card
         _commit_section(cfg, paths, section, n, draft, skill_names, sources, first_pass,
                         log, humanize=bool(state.get("humanize")))
         paths.section_draft(n).unlink(missing_ok=True)
@@ -1164,6 +1558,18 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
             seen_urls.add(url)
             unique.append(s if isinstance(s, dict) else s.model_dump())
 
+    # Normalize section structure before assembly:
+    #  - drop "Section N:" heading prefixes (the producer owns numbering)
+    #  - reconcile references. With registry-managed sources the commit-time renumbering
+    #    already governs, so just strip any stray writer-emitted "References" block.
+    #    Without them, consolidate the per-section lists into one global, renumbered list.
+    sections_md = [_strip_section_prefix(s) for s in sections_md]
+    extracted_refs: list[str] = []
+    if unique:
+        sections_md = [_REF_BLOCK.sub("", s).rstrip() for s in sections_md]
+    else:
+        sections_md, extracted_refs = _consolidate_section_refs(sections_md)
+
     # Whole-article cohesion pass: smooth transitions and cross-section repetition.
     # Guarded - if the edit loses headings or shrinks the body too much, keep the
     # original (this pass must never be able to lose content).
@@ -1183,6 +1589,14 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
 
     # Build references section
     refs_md = ""
+    if not unique and _CITE.search(body):
+        # In-text [n] markers with no registry entries = the writer cited from memory.
+        log("   [!] citations present but NO verified sources captured - they are "
+            "model-generated and unverifiable. Enable the researcher "
+            "(/set use_researcher true) for grounded citations.")
+    if not unique and extracted_refs:
+        lines = ["## References", ""] + [f"{i}. {t}" for i, t in enumerate(extracted_refs, 1)]
+        refs_md = "\n".join(lines)
     if unique:
         lines = ["## References", ""]
         for i, s in enumerate(unique, 1):
@@ -1198,14 +1612,16 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
     # Header block
     total_words = len(body.split())
     read_time = max(1, round(total_words / 200))
-    byline = (state.get("author") or "").strip() or "[AUTHOR NAME]"
-    header = "\n".join([
+    author = (state.get("author") or "").strip()
+    header_lines = [
         f"# {outline.title}", "",
         f"*{outline.angle}*", "",
         f"**Estimated read time:** {read_time} min  ",
-        f"**By:** {byline}", "",
-        "---", "",
-    ])
+    ]
+    if author:   # omit the byline entirely when unknown - no "[AUTHOR NAME]" placeholder
+        header_lines.append(f"**By:** {author}")
+    header_lines += ["", "---", ""]
+    header = "\n".join(header_lines)
 
     parts = [header, body]
     if refs_md:
@@ -1214,6 +1630,19 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
     # NOTE: intermediate section/eval files are cleaned up after the LEARN phase -
     # the learner needs the eval_*.json critic findings (cleaning here starved it).
     log(f"   [production] {len(sections_md)} sections, {len(unique)} sources -> {paths.manuscript}")
+
+    # Table read: a cold read of the WHOLE piece as a skeptical target-audience reader.
+    # Catches boredom curves and trust breaks no per-section critic can see. Report-only,
+    # best-effort - it informs the human (and `revise`), it never rewrites anything.
+    if state.get("table_read") and body.strip():
+        log("   table read (skeptical reader pass)...")
+        try:
+            report = nodes.table_read(cfg, outline, body)
+            brain.write_text(paths.root / "table_read.md", report)
+            log("   [table-read] report -> table_read.md "
+                "(act on it with: revise --chapter N --instruction \"...\")")
+        except Exception as e:  # noqa: BLE001 - a missing report must not fail production
+            log(f"   [table-read] skipped ({type(e).__name__})")
 
 
 def _learn_article(cfg, paths: ArticlePaths, outline, *, log) -> None:
@@ -1232,7 +1661,8 @@ def _learn_article(cfg, paths: ArticlePaths, outline, *, log) -> None:
         genre="long-form article", tone="informative", audience=outline.angle[:100],
         themes=[], constraints=[], world_rules=[], main_characters=[],
     )
-    out = nodes.learn(cfg, article_as_plan, instructions, "\n".join(findings), existing)
+    out = nodes.learn(cfg, article_as_plan, instructions, "\n".join(findings), existing,
+                      praised=_praised_passages(uid))
     for prop in out.skills:
         skills_mod.write_skill(uid, prop)
     watch = ["# Avoid list (watch-list)", ""] + [f"- {w.pattern} - {w.why}"

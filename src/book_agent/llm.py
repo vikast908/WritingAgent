@@ -303,6 +303,16 @@ def _fake_value(annotation, field_name: str = ""):
     if annotation is bool:
         return True
     if annotation is int:
+        if field_name == "insight":
+            # Default fake = a passing insight score so autonomous runs complete;
+            # tests force the low-insight path with BOOK_AGENT_FAKE_INSIGHT.
+            override = os.getenv("BOOK_AGENT_FAKE_INSIGHT")
+            if override:
+                try:
+                    return int(override)
+                except ValueError:
+                    pass
+            return 5
         return 1
     if annotation is float:
         if field_name == "confidence":

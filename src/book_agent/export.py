@@ -81,9 +81,133 @@ def _sanitize_html(html_body: str) -> str:
     html_body = _STRIP_JS_URL.sub(r'\1=\2#\2', html_body)
     return html_body
 
+
+# ── Markdown preprocessing (applied before any exporter renders) ──────────────
+# Glyphs the humanizer/LLM emit that the PDF serif font can't render (they show as
+# □/■ "tofu") or that confuse downstream tools. Normalize to plain ASCII equivalents.
+_UNICODE_FIXES = {
+    "‑": "-",   # non-breaking hyphen  → hyphen   (the main "tofu" culprit in PDFs)
+    "‐": "-",   # unicode hyphen       → hyphen
+    " ": " ",   # narrow no-break space → space
+    " ": " ",   # no-break space        → space
+}
+# A byline the article producer leaves when no author is known. Drop the whole line
+# rather than print the literal placeholder on the title page.
+_PLACEHOLDER_BYLINE = re.compile(r"(?im)^\**By:\**\s*\[AUTHOR NAME\]\s*$\n?")
+# An LLM-added "Section N:" heading prefix (numbering is the producer's job). Matches
+# only "Section <num>" - book "Chapter N" headings are deliberately left intact.
+_SECTION_PREFIX = re.compile(r"(?im)^(#{1,4}\s*)Section\s+\d+\s*[:.–—-]\s*")
+# A fenced ```mermaid block. Rendered to an image so it isn't dumped as raw source.
+_MERMAID_RE = re.compile(r"```mermaid[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL)
+# A <pre>...</pre> block, for preserving source line breaks in the PDF (see below).
+_PRE_BLOCK = re.compile(r"(<pre\b[^>]*>)(.*?)(</pre>)", re.DOTALL | re.IGNORECASE)
+
+
+def _pre_linebreaks(html_body: str) -> str:
+    """Turn newlines inside <pre> into explicit <br/>.
+
+    xhtml2pdf collapses newlines in <pre> even under white-space: pre-wrap, which
+    flattens every code block into one run-on line. Converting each newline to <br/>
+    keeps the source line structure while word-wrap still prevents right-edge clipping.
+    PDF-only - HTML/EPUB readers honour <pre> newlines natively.
+    """
+    def repl(m):
+        return m.group(1) + m.group(2).replace("\n", "<br/>") + m.group(3)
+    return _PRE_BLOCK.sub(repl, html_body)
+
+
+def _normalize_text(md_text: str) -> str:
+    """Unicode + placeholder + heading cleanup that every exporter wants."""
+    for bad, good in _UNICODE_FIXES.items():
+        md_text = md_text.replace(bad, good)
+    md_text = _PLACEHOLDER_BYLINE.sub("", md_text)
+    return _SECTION_PREFIX.sub(r"\1", md_text)
+
+
+def _mermaid_png(code: str, timeout: float = 12.0) -> bytes | None:
+    """Render a Mermaid diagram to PNG bytes via the mermaid.ink service.
+
+    Returns None on any failure (offline, bad diagram, non-200) so callers can fall
+    back to the raw source block instead of breaking the whole export.
+    """
+    import base64 as _b64
+    import urllib.request
+    try:
+        payload = _b64.urlsafe_b64encode(code.strip().encode()).decode()
+        url = f"https://mermaid.ink/img/{payload}?type=png&bgColor=white"
+        # mermaid.ink (Cloudflare-fronted) 403s the default Python-urllib UA; send a
+        # browser-like User-Agent so the request is served.
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; writing-agent/0.1; +https://github.com/vikast908/WritingAgent)"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 - fixed host
+            if getattr(r, "status", 200) != 200:
+                return None
+            data = r.read()
+        return data if data[:8] == b"\x89PNG\r\n\x1a\n" else None
+    except Exception:  # noqa: BLE001 - any network/parse error → fall back to source
+        return None
+
+
+def _mermaid_asset(code: str, base_dir: Path | None) -> tuple[bytes | None, str | None]:
+    """Ensure a diagram PNG exists; return (png_bytes, relative_path_or_None).
+
+    When base_dir is set the PNG is cached at base_dir/images/mermaid_<hash>.png and
+    its relative path is returned, so every exporter routes the diagram through its
+    normal LOCAL-image path (PDF → absolute file, HTML → inlined, EPUB → packaged as a
+    real item, DOCX → embedded via --resource-path). The cache also means mermaid.ink
+    is hit at most once per diagram - later re-exports are offline. With no base_dir the
+    caller falls back to an inline data URI. None bytes ⇒ render failed, keep the source.
+    """
+    import hashlib
+    if base_dir:
+        digest = hashlib.sha1(code.strip().encode()).hexdigest()[:16]
+        rel = f"images/mermaid_{digest}.png"
+        path = Path(base_dir) / rel
+        if path.is_file():
+            return path.read_bytes(), rel
+        png = _mermaid_png(code)
+        if png:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(png)
+                return png, rel
+            except OSError:
+                return png, None   # couldn't cache; fall back to inline data URI
+        return None, None
+    return _mermaid_png(code), None
+
+
+def _render_mermaid(md_text: str, base_dir: Path | None = None) -> str:
+    """Replace ```mermaid blocks with a rendered PNG image.
+
+    Emits a local-image reference when cached under base_dir (so EPUB/DOCX package it
+    properly), else an inline data URI. On failure or in offline/fake mode the original
+    fenced block is kept, so the diagram source still appears (and wraps, not clipped).
+    """
+    import os
+    if os.getenv("BOOK_AGENT_FAKE", "").lower() in ("1", "true", "yes"):
+        return md_text
+
+    def repl(m):
+        png, rel = _mermaid_asset(m.group(1), base_dir)
+        if not png:
+            return m.group(0)
+        if rel:   # block-level markdown image → each exporter resolves it locally
+            return f"\n\n![Diagram]({rel})\n\n"
+        uri = "data:image/png;base64," + base64.b64encode(png).decode()
+        return f'<p><img src="{uri}" alt="Diagram" /></p>'
+    return _MERMAID_RE.sub(repl, md_text)
+
+
+def _preprocess(md_text: str, *, diagrams: bool, base_dir: Path | None = None) -> str:
+    """Shared pre-render pass: normalize glyphs, drop placeholder byline, and
+    (for rich formats) turn Mermaid source into images."""
+    md_text = _normalize_text(md_text)
+    return _render_mermaid(md_text, base_dir) if diagrams else md_text
+
 # ── Shared styles ─────────────────────────────────────────────────────────────
 _PDF_CSS = """
-@page { size: A5; margin: 2cm 1.8cm; }
+@page { size: A4; margin: 2cm 2cm; }
 body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.5; }
 h1 { font-size: 22pt; text-align: center; margin: 2cm 0 1cm; }
 h2 { font-size: 15pt; margin-top: 1cm; page-break-before: always; }
@@ -91,6 +215,15 @@ h3 { font-size: 12pt; margin-top: 0.8cm; }
 p { text-align: justify; margin: 0 0 0.6em; }
 hr { border: 0; margin: 1em 0; }
 em { font-style: italic; }
+img { max-width: 100%; }
+/* Code & diagram source must WRAP, not clip: xhtml2pdf hard-truncates any line in a
+   <pre> wider than the page unless white-space lets it wrap. A smaller mono size plus
+   pre-wrap/word-wrap keeps every character on the page. */
+pre { font-family: 'DejaVu Sans Mono', 'Courier New', monospace; font-size: 8pt;
+      line-height: 1.3; background: #f4f4f4; padding: 0.5em 0.7em; margin: 0.8em 0;
+      white-space: pre-wrap; word-wrap: break-word; page-break-inside: avoid; }
+code { font-family: 'DejaVu Sans Mono', 'Courier New', monospace; font-size: 0.92em; }
+pre code { font-size: 8pt; }
 """
 
 _EPUB_CSS = """
@@ -99,8 +232,13 @@ h1 { font-size: 2em; text-align: center; margin: 2em 0 1em; }
 h2 { font-size: 1.4em; margin-top: 2em; }
 h3 { font-size: 1.1em; margin-top: 1.2em; }
 p { text-align: justify; margin: 0 0 0.7em; }
-img { max-width: 100%; }
+img { max-width: 100%; height: auto; }
 em { font-style: italic; }
+/* Wrap code so long lines don't clip off the page edge in e-readers. */
+pre { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;
+      background: #f4f4f4; padding: 0.6em 0.8em; font-size: 0.85em;
+      font-family: 'DejaVu Sans Mono', Consolas, monospace; }
+code { font-family: 'DejaVu Sans Mono', Consolas, monospace; word-wrap: break-word; }
 """
 
 
@@ -110,7 +248,9 @@ def markdown_to_pdf(md_text: str, out_path, title: str = "Manuscript", base_dir=
     import markdown
     from xhtml2pdf import pisa
 
-    html_body = _sanitize_html(markdown.markdown(md_text, extensions=["extra", "sane_lists"]))
+    md_text = _preprocess(md_text, diagrams=True, base_dir=Path(base_dir) if base_dir else None)
+    html_body = _pre_linebreaks(markdown.markdown(md_text, extensions=["extra", "sane_lists"]))
+    html_body = _sanitize_html(html_body)
     html_body = _pdf_prepare_images(html_body, Path(base_dir) if base_dir else None)
     html = (f"<html><head><meta charset='utf-8'><title>{_esc(title)}</title>"
             f"<style>{_PDF_CSS}</style></head><body>{html_body}</body></html>")
@@ -154,6 +294,7 @@ def markdown_to_epub(
     book.add_item(css_item)
 
     # Split on '---' separators that the manuscript assembler inserts between sections
+    md_text = _preprocess(md_text, diagrams=True, base_dir=Path(base_dir) if base_dir else None)
     raw_sections = [s.strip() for s in md_text.split("\n---\n") if s.strip()]
 
     spine_items = []
@@ -238,6 +379,7 @@ def markdown_to_html(md_text: str, out_path, title: str = "Article", base_dir=No
     """Render Markdown to a self-contained HTML file with embedded CSS + inlined images."""
     import markdown
 
+    md_text = _preprocess(md_text, diagrams=True, base_dir=Path(base_dir) if base_dir else None)
     try:
         html_body = markdown.markdown(
             md_text, extensions=["extra", "sane_lists", "codehilite", "fenced_code"]
@@ -266,6 +408,7 @@ def markdown_to_docx(md_text: str, out_path, title: str = "Article", base_dir=No
     import tempfile
 
     out = Path(out_path)
+    md_text = _preprocess(md_text, diagrams=True, base_dir=Path(base_dir) if base_dir else None)
     # Replace horizontal rules (---) with a unicode divider so pandoc
     # doesn't interpret them as YAML metadata block separators.
     safe_md = md_text.replace("\n---\n", "\n\n* * *\n\n")
@@ -301,7 +444,7 @@ def markdown_to_docx(md_text: str, out_path, title: str = "Article", base_dir=No
 def markdown_to_txt(md_text: str, out_path, title: str = "Article") -> Path:
     """Strip Markdown to readable plain text."""
     import re
-    text = f"{title}\n{'=' * len(title)}\n\n" + md_text
+    text = f"{title}\n{'=' * len(title)}\n\n" + _preprocess(md_text, diagrams=False)
     # fenced code blocks first, so their contents aren't mangled by the inline passes
     text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
     # headings
@@ -327,6 +470,7 @@ def markdown_to_txt(md_text: str, out_path, title: str = "Article") -> Path:
 # ── Markdown passthrough ──────────────────────────────────────────────────────
 def markdown_to_md(md_text: str, out_path, title: str = "Article") -> Path:
     """Save the raw Markdown manuscript (title header only if it doesn't have one)."""
+    md_text = _normalize_text(md_text)
     first = next((ln for ln in md_text.splitlines() if ln.strip()), "")
     if not first.startswith("# "):
         md_text = f"# {title}\n\n" + md_text

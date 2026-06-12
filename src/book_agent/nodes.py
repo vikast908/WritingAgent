@@ -76,12 +76,17 @@ def write_chapter(
     base_draft: str | None = None,
     length_note: str | None = None,
     requirements: str | None = None,
+    voice: str | None = None,
+    temperature: float | None = None,
 ) -> str:
     model = cfg.model_for("writer")
     parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
     if requirements:
         parts.append("AUTHOR REQUIREMENTS (gathered upfront - the highest priority; honor "
                      f"every point exactly):\n{requirements}")
+    if voice:
+        parts.append("VOICE EXEMPLARS - passages in the register to MATCH. Imitate their "
+                     "rhythm, diction, and stance; do NOT copy their content:\n\n" + voice)
     if context:
         parts.append(f"Canonical context:\n{context}")
     if skills:
@@ -100,7 +105,8 @@ def write_chapter(
     parts.append(f'Write chapter {blueprint.number}: "{blueprint.title}".')
     return complete_text(model, P.WRITER_SYS, "\n\n".join(parts),
                          max_tokens=16000, thinking=True,
-                         temperature=cfg.temperature_for("writer"))
+                         temperature=(temperature if temperature is not None
+                                      else cfg.temperature_for("writer")))
 
 
 # ── Critic ────────────────────────────────────────────────────────────────────
@@ -129,6 +135,9 @@ def critique_chapter(
         parts.append("Craft skills the writer was asked to apply:\n\n" + "\n\n---\n\n".join(skills))
     if length_note:
         parts.append(length_note)
+    from .humanizer import structural_report
+    parts.append("DETERMINISTIC STYLE METRICS (computed from the draft, not opinions):\n"
+                 + structural_report(prose))
     parts.append(f"Chapter draft:\n{prose}")
     return complete_structured(model, P.CRITIC_SYS, "\n\n".join(parts), S.Critique,
                                max_tokens=8000, temperature=cfg.temperature_for("critic"))
@@ -255,11 +264,13 @@ def deep_research_article(
 # ── Learner (plan §8) ─────────────────────────────────────────────────────────
 def learn(
     cfg: ModelConfig, plan: S.BookPlan, instructions: str, critic_findings: str,
-    existing_skills: str
+    existing_skills: str, praised: str = ""
 ) -> S.LearnerOutput:
     model = cfg.model_for("learner")
     user = (f"Book plan (for genre):\n{_ctx(plan)}\n\n"
             f"Human directed revision instructions (strongest signal):\n{instructions or '(none)'}\n\n"
+            f"Passages the human PRAISED (positive exemplars - distill what makes them "
+            f"work, not just what to avoid):\n{praised or '(none)'}\n\n"
             f"Recurring critic findings (secondary):\n{critic_findings or '(none)'}\n\n"
             f"Existing skills (do not duplicate):\n{existing_skills or '(none)'}\n\n"
             "Distill reusable skills + a watch-list.")
@@ -284,6 +295,33 @@ def build_article_outline(
                                max_tokens=8000, temperature=cfg.temperature_for("planner"))
 
 
+def generate_thesis(
+    cfg: ModelConfig, abstract: str, angle: S.ArticleAngle | None, outline: S.ArticleOutline
+) -> S.Thesis:
+    """The piece's contestable argument - generated once, injected into every
+    writer and critic call so sections argue rather than merely cover."""
+    model = cfg.model_for("planner")
+    parts = [f"Topic / abstract:\n{abstract}"]
+    if angle:
+        parts.append(f"Chosen editorial angle:\n{_ctx(angle)}")
+    parts.append(f"Article outline:\n{_ctx(outline)}")
+    parts.append("Produce the thesis for this piece.")
+    return complete_structured(model, P.THESIS_SYS, "\n\n".join(parts), S.Thesis,
+                               max_tokens=2000, temperature=cfg.temperature_for("planner"))
+
+
+def render_thesis(thesis: S.Thesis) -> str:
+    """Markdown rendering of the thesis for prompt injection and thesis.md."""
+    return "\n".join([
+        f"**Claim:** {thesis.claim}",
+        f"**Stakes:** {thesis.stakes}",
+        "**Arguments:**", *(f"- {a}" for a in thesis.arguments),
+        f"**Strongest counterargument:** {thesis.counterargument}",
+        f"**Rebuttal:** {thesis.rebuttal}",
+        "**Deliberately not covered:**", *(f"- {g}" for g in thesis.non_goals),
+    ])
+
+
 def write_article_section(
     cfg: ModelConfig,
     outline: S.ArticleOutline,
@@ -296,12 +334,21 @@ def write_article_section(
     base_draft: str | None = None,
     length_note: str | None = None,
     requirements: str | None = None,
+    thesis: str | None = None,
+    voice: str | None = None,
+    temperature: float | None = None,
 ) -> str:
     model = cfg.model_for("writer")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section to write:\n{_ctx(section)}"]
     if requirements:
         parts.append("AUTHOR REQUIREMENTS (gathered upfront - the highest priority; honor "
                      f"every point exactly):\n{requirements}")
+    if thesis:
+        parts.append("ARTICLE THESIS - every section must ADVANCE this argument (argue it, "
+                     "evidence it, or set it up), not merely cover the topic:\n" + thesis)
+    if voice:
+        parts.append("VOICE EXEMPLARS - passages in the register to MATCH. Imitate their "
+                     "rhythm, diction, and stance; do NOT copy their content:\n\n" + voice)
     if context:
         parts.append(f"Prior section summaries (for continuity):\n{context}")
     if skills:
@@ -316,7 +363,9 @@ def write_article_section(
         parts.append(length_note)
     parts.append(f'Write section {section.number}: "{section.heading}".')
     return complete_text(model, P.ARTICLE_WRITER_SYS, "\n\n".join(parts),
-                         max_tokens=8000, temperature=cfg.temperature_for("writer"))
+                         max_tokens=8000,
+                         temperature=(temperature if temperature is not None
+                                      else cfg.temperature_for("writer")))
 
 
 def critique_article_section(
@@ -329,18 +378,29 @@ def critique_article_section(
     watch_list: str | None = None,
     length_note: str | None = None,
     requirements: str | None = None,
+    thesis: str | None = None,
+    research_on: bool = True,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section blueprint:\n{_ctx(section)}"]
     if requirements:
         parts.append("AUTHOR REQUIREMENTS (gathered upfront; treat a clear violation - wrong "
                      f"audience, length, tone, or a missing must-include - as BLOCKING):\n{requirements}")
+    if thesis:
+        parts.append("ARTICLE THESIS (the section must advance or set up this argument):\n"
+                     + thesis)
+    if not research_on:
+        parts.append("NO WEB RESEARCH was available for this draft - every specific statistic, "
+                     "study citation, or named-source attribution is a fabrication risk.")
     if context:
         parts.append(f"Prior context:\n{context}")
     if watch_list:
         parts.append(f"LEARNED WATCH-LIST (flag these patterns as blocking):\n{watch_list}")
     if length_note:
         parts.append(length_note)
+    from .humanizer import structural_report
+    parts.append("DETERMINISTIC STYLE METRICS (computed from the draft, not opinions):\n"
+                 + structural_report(prose))
     parts.append(f"Section draft:\n{prose}")
     return complete_structured(model, P.ARTICLE_CRITIC_SYS, "\n\n".join(parts), S.Critique,
                                max_tokens=4000, temperature=cfg.temperature_for("critic"))
@@ -366,6 +426,19 @@ def summarize_section(cfg: ModelConfig, section: S.ArticleSection, prose: str) -
     user = f"Section {section.number}: {section.heading}\n\n{prose}"
     return complete_text(model, P.SUMMARIZER_SYS, user,
                          max_tokens=600, temperature=cfg.temperature_for("summarizer"))
+
+
+def table_read(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str) -> str:
+    """Whole-piece cold read as a skeptical target-audience reader (not a line editor).
+
+    Catches problems no per-section critic can see: boredom curves, trust breaks,
+    concepts never grounded, missing answers. Returns a Markdown report; the caller
+    saves it for the human - it never auto-rewrites anything.
+    """
+    model = cfg.model_for("consolidation")   # whole-piece reasoning = pro tier
+    user = (f"Article outline (who it is for, what it promised):\n{_ctx(outline)}\n\n"
+            f"The finished article:\n{body_md}\n\nGive your reader report.")
+    return complete_text(model, P.TABLE_READ_SYS, user, max_tokens=2000, temperature=0.4)
 
 
 def cohesion_edit(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str) -> str:

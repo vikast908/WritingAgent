@@ -77,8 +77,7 @@ def test_article_byline_uses_recorded_author(tmp_brain, fake_llm):
 def test_intake_reaches_the_writer(tmp_brain, fake_llm, monkeypatch):
     captured = {}
 
-    def spy(cfg, outline, section, fix_notes=None, *, context=None, skills=None,
-            images=None, base_draft=None, length_note=None, requirements=None):
+    def spy(cfg, outline, section, fix_notes=None, *, requirements=None, **_kw):
         captured["requirements"] = requirements
         return "## Section\n\nBody text."
     monkeypatch.setattr(nodes, "write_article_section", spy)

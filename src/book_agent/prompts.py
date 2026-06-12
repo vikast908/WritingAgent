@@ -136,7 +136,11 @@ CRITIC_SYS = (
     "If a LEARNED WATCH-LIST is provided, treat any of its patterns appearing in the draft "
     "as BLOCKING. If craft skills the writer was asked to apply are provided, note clear "
     "non-application as a nit. If a word-count line is provided and the draft misses the "
-    "target by more than 40% in either direction, report the length as a BLOCKING issue."
+    "target by more than 40% in either direction, report the length as a BLOCKING issue.\n\n"
+    "Separately from correctness, score 'insight' 1-5: 5 = the chapter takes risks and "
+    "contains specifics (images, turns, observations) a generic treatment would not; "
+    "3 = competent but predictable; 1 = any paragraph could appear unchanged elsewhere. "
+    "Judge insight independently - a chapter can be flawless and still score 1."
 )
 
 SUMMARIZER_SYS = (
@@ -251,6 +255,32 @@ LEARNER_SYS = (
     "Propose only lessons that are genuinely reusable across future books in this genre."
 )
 
+THESIS_SYS = (
+    "You are an opinionated subject-matter expert, not a survey writer. Given a topic, the "
+    "chosen editorial angle, and the outline, produce the piece's THESIS - the argument that "
+    "makes it worth a reader's time:\n"
+    "(1) claim: ONE contestable sentence a smart, informed reader could disagree with. "
+    "Not a fact, not a topic, not 'X matters' - a position. If no one could argue the "
+    "opposite, it is not a thesis.\n"
+    "(2) stakes: what the reader gains or risks depending on whether the claim is true.\n"
+    "(3) arguments: 2-3 concrete supporting arguments (each one sentence, specific).\n"
+    "(4) counterargument: the STRONGEST objection a skeptic would actually raise - steelman "
+    "it, do not pick a weak one.\n"
+    "(5) rebuttal: why the claim survives that objection (concede what must be conceded).\n"
+    "(6) non_goals: 2-3 things the piece deliberately will NOT cover, so it stays sharp.\n"
+    "Be specific to THIS topic. A thesis that could be pasted onto a different article is "
+    "a failure."
+)
+
+HUMANIZER_SURGICAL_SYS = (
+    "You are a line editor. You will receive numbered sentences, each flagged for a specific "
+    "AI-writing tell (banned word, stock phrase, inflated significance, filler opener). "
+    "Rewrite EACH sentence minimally: remove the tell, keep the meaning, facts, numbers, "
+    "names, and any inline citation markers like [1] EXACTLY as they are. Do not add new "
+    "claims, do not embellish, do not change technical terms. Prefer the shortest natural "
+    "rewrite. Return one edit per flagged sentence, keyed by its number."
+)
+
 ARTICLE_ANGLES_SYS = (
     "You are an editorial strategist. Given a topic or abstract, propose distinct editorial "
     "angles - each a genuinely different take, thesis, or audience lens on the same subject. "
@@ -282,7 +312,10 @@ ARTICLE_WRITER_SYS = (
     "(6) When a PRIOR DRAFT is provided, REVISE that draft - keep what works, change only "
     "what the revision notes require - rather than starting fresh. "
     "(7) Aim for the target length when one is given. "
-    "Output ONLY the section text in Markdown, starting with '## Section Heading'. "
+    "(8) Do NOT add your own 'References'/'Bibliography' section - the producer assembles "
+    "one consolidated reference list for the whole article; just use inline [N] markers. "
+    "Output ONLY the section text in Markdown, starting with '## ' followed by the section's "
+    "title text only (the topic - never a 'Section N:' prefix; the producer handles numbering). "
     "No meta-commentary or explanations.\n\n" + NO_SLOP
 )
 
@@ -299,7 +332,19 @@ ARTICLE_CRITIC_SYS = (
     "'confidence' is your 0.0–1.0 certainty.\n\n"
     "If a LEARNED WATCH-LIST is provided, treat any of its patterns appearing in the draft "
     "as BLOCKING. If a word-count line is provided and the draft misses the target by more "
-    "than 40% in either direction, report the length as a BLOCKING issue."
+    "than 40% in either direction, report the length as a BLOCKING issue.\n\n"
+    "If an ARTICLE THESIS is provided, the section must ADVANCE it (argue it, evidence it, "
+    "or set it up) - a section that merely covers the topic without advancing the thesis is "
+    "a BLOCKING issue (type='plan'). If a note says NO WEB RESEARCH was available, treat "
+    "every specific statistic, study citation, or named-source attribution as a fabrication "
+    "risk: flag it as BLOCKING unless it is genuinely common knowledge.\n\n"
+    "Separately from correctness, score 'insight' 1-5: 5 = makes a specific, contestable "
+    "argument with evidence or examples a generic article would not contain; 3 = competent "
+    "but predictable; 1 = any paragraph could appear unchanged on any site. Judge insight "
+    "independently - a section can be flawless and still score 1. If DETERMINISTIC STYLE "
+    "METRICS are provided, treat egregious values (near-uniform paragraph lengths, heavy "
+    "rule-of-three density, very low specificity) as evidence toward a lower insight score "
+    "and report the worst as nits."
 )
 
 ARTICLE_RESEARCHER_SYS = (
@@ -320,6 +365,20 @@ COHESION_SYS = (
     "separator line between sections, all inline citation markers like [1], [2], all image "
     "embeds, and all fenced code blocks. Keep the overall length close to the original. "
     "Output ONLY the revised article body in Markdown - no commentary.\n\n" + NO_SLOP
+)
+
+TABLE_READ_SYS = (
+    "You are a skeptical member of this piece's TARGET AUDIENCE doing a cold read of the "
+    "finished article - not an editor, not a fan. You paid attention reluctantly, the way "
+    "real readers do. Produce a short Markdown report with exactly these sections:\n"
+    "## Where I got bored (quote the sentence where attention dropped, say why)\n"
+    "## Where I stopped trusting it (claims that felt thin, unsupported, or salesy)\n"
+    "## What I still don't understand (concepts used but never made concrete)\n"
+    "## What's missing (the question I expected answered that never was)\n"
+    "## The one change that would most improve it\n"
+    "Be specific - quote actual phrases. If a section genuinely has no entries, write "
+    "'(nothing)'. No praise padding; this report exists to find problems a per-section "
+    "editor cannot see."
 )
 
 DIAGRAM_SYS = """\

@@ -52,8 +52,11 @@ class Settings:
     num_chapters: int = 8
     max_revisions: int = 2
     consolidate_every: int = 5
-    use_researcher: bool = False
+    use_researcher: bool = True              # web grounding per unit - off means citations are unverifiable
     deep_research: bool = False               # multi-source fetch+synthesize (needs use_researcher; plan §15)
+    divergent_drafts: int = 2                # first-attempt drafts at varied temps; critic picks best (1 = off)
+    min_insight: int = 3                     # critic insight (1-5) required to approve (0 = off)
+    table_read: bool = True                  # whole-article cold read by a skeptical reader (report only)
     escalate_below_confidence: float = 0.5   # critic confidence below this -> escalate (plan §7)
     escalate_on_contradiction: bool = True   # consolidation contradictions -> review (plan §9)
     autonomous: bool = False                 # no human-in-the-loop: never pause, commit best draft

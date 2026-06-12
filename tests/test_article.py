@@ -93,9 +93,9 @@ def test_article_learner_receives_critic_findings(tmp_brain, fake_llm, monkeypat
     seen = {}
     real_learn = nodes.learn
 
-    def spy(cfg, plan, instructions, critic_findings, existing):
+    def spy(cfg, plan, instructions, critic_findings, existing, **kw):
         seen["findings"] = critic_findings
-        return real_learn(cfg, plan, instructions, critic_findings, existing)
+        return real_learn(cfg, plan, instructions, critic_findings, existing, **kw)
     monkeypatch.setattr(nodes, "learn", spy)
 
     cfg, settings = load_config(), load_settings()

@@ -57,6 +57,8 @@ _SLASH_HELP = [
     ("/user <id> · /config", "switch user · show config"),
     ("/update [changes]", "describe your changes - AI reviews and advises on next steps"),
     ("/retry", "resend the last chat message"),
+    ("/auto [on|off]", "autonomous (never pause) vs manual (review each unit)"),
+    ("/praise [N]", "mark a committed chapter/section as great - feeds voice + learner"),
     ("/mode [book|article]", "show or set the project mode (default: book)"),
     ("/theme [<name>]", "list or switch themes - each changes palette, wordmark font, and glyphs"),
     ("/dashboard [<project>]", "telemetry rollup - calls, tokens, cost, latency, errors (per project: per-unit breakdown)"),
@@ -90,6 +92,9 @@ COMMANDS  (type these directly in this shell - no 'book' prefix needed):
   status                     Where the project is (phase, chapter/section, pending reviews)
   review --chapter N \\
     --instruction "..."      Answer an escalation when the book gets stuck
+  revise --chapter N \\
+    --instruction "..."      Rewrite ONE committed chapter/section of a finished piece
+                             (e.g. "make section 3 more technical") and re-assemble
   read [--chapter N]         Read a chapter; add --summary or --manuscript for those views
   export [--format <fmt>]    Export: pdf · epub · html · docx · txt · md  (prompts if omitted)
   memory                     Inspect characters, timeline, entity graph
@@ -152,6 +157,29 @@ The session context below always shows the ACTIVE PROJECT. Check it first.
 
   DO NOT ask "which project?" in text. Just pick the most recent/relevant one from context and use it.
   The shell auto-routes to the right project type for the current mode.
+
+RESOLVING AN ESCALATION (when SESSION CONTEXT shows "ESCALATION PENDING"):
+A chapter/section stalled at review and the pipeline is PAUSED waiting on the user.
+Do NOT just run `status` or `read` - that leaves them stuck (this is the #1 mistake).
+Read the blocking issues shown in the context, then pick by the user's intent:
+- They give direction OR just say "fix it"/"continue"/"keep going":
+  Turn their intent + the critic's blocking issues into ONE concrete instruction:
+  ```review --chapter <N> --instruction "<specific, actionable fixes>"```
+  ```run```
+- They want it DONE with no more review ("just finish", "finish all", "do the rest",
+  "stop asking me", "the whole thing"):
+  ```run --autonomous```
+Use the unit number <N> straight from the SESSION CONTEXT.
+
+AUTONOMOUS vs MANUAL RUN MODE:
+- "finish all" / "do everything" / "run to the end" / "don't pause"  →  ```run --autonomous```
+  (commits the best draft for every remaining unit and runs through to export, no pauses)
+- "let me review each part" / "pause for me" / "go back to manual"   →  ```run --manual```
+
+POST-COMPLETION REVISION (the project is DONE but the user wants a change):
+- "make section 3 more technical", "rewrite the intro, punchier", "add benchmarks to ch 2" →
+  ```revise --chapter 3 --instruction "more technical - add concrete benchmarks"```
+  This rewrites just that unit and re-assembles the manuscript; suggest re-export after.
 
 NEW TOPIC FLOW (no project yet → propose first, execute on confirmation):
 When the user describes something to write (a topic, question, or idea - even when
@@ -389,8 +417,8 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
 
     if not console:
         print("commands: new run status review read export memory consolidate produce list")
-        print("slash:    /help /model /set /skills /use /config /clear /exit")
-        print(f"mode:     {mode}")
+        print("slash:    /help /model /set /skills /use /auto /config /clear /exit")
+        print(f"mode:     {mode}   run: {'autonomous' if settings.autonomous else 'manual'}")
         print(f"models:   pro={cfg.model_for('writer')}  flash={cfg.model_for('critic')}")
         proj_str = ", ".join(f"{p[0]}[{p[1]}]" for p in projects) or "(none)"
         print(f"skills: {len(skl)}   projects: {proj_str}   user: {uid}")
@@ -414,6 +442,7 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
         ("run", "write it - draft · critique · humanise · commit per section" if is_article
                 else "write it - draft · critique · humanise · commit per chapter"),
         ("status · review", "where the project stands · answer escalations"),
+        ("revise --chapter N ...", "rewrite one committed section/chapter to your instruction"),
         ("read", "section (--chapter N) · --summary · --manuscript" if is_article
                  else "chapter (--chapter N) · --summary · --manuscript"),
         ("export [--format <fmt>]", export_desc),
@@ -432,6 +461,7 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
         ("/dashboard [<project>]", "usage telemetry - calls · tokens · cost · errors"),
         ("/update [changes]", "describe your changes - AI reviews and advises"),
         ("/use <project> · /books", "set active project · list projects"),
+        ("/auto [on|off]", "autonomous (never pause) vs manual (review each unit)"),
         ("/skills · /seed-skills", "browse skills · install built-ins"),
         ("/retry · /reset · /compact", "retry last message · clear memory · compress memory"),
         ("/help · /clear · /exit", "full slash list · clear · quit"),
@@ -492,6 +522,9 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     foot = Text("  ")
     foot.append("mode ", style=DIM)
     foot.append(mode, style=f"bold {GOLD}" if is_article else INK)
+    foot.append("   run ", style=DIM)
+    foot.append("autonomous" if settings.autonomous else "manual",
+                style=f"bold {GOLD}" if settings.autonomous else INK)
     foot.append("   pro ", style=DIM)
     foot.append(cfg.model_for("writer").split("/")[-1], style=INK)
     foot.append("   flash ", style=DIM)
@@ -669,6 +702,100 @@ def _cmd_set(console, settings: Settings, rest: list[str]) -> None:
         _out(console, f"[{ERR}]invalid value for '{key}': {e}[/]")
 
 
+_AUTO_ON = {"on", "true", "1", "yes", "auto", "autonomous"}
+_AUTO_OFF = {"off", "false", "0", "no", "manual", "human"}
+
+
+def _cmd_auto(console, settings: Settings, state: dict, name: str, rest: list[str]) -> None:
+    """Toggle autonomous (never-pause) vs manual (human-in-the-loop) run mode.
+
+    Saves the default for new projects AND applies to the active project's
+    run_state - so `/auto on` over a stalled section clears its review and the
+    next `run` finishes the piece without pausing.
+    """
+    from . import orchestrator
+    if name == "manual":
+        want = False
+    elif name == "autonomous":
+        want = True
+    elif rest:
+        tok = rest[0].lower()
+        if tok in _AUTO_ON:
+            want = True
+        elif tok in _AUTO_OFF:
+            want = False
+        else:
+            _out(console, f"[{ERR}]usage:[/] /auto [on|off]  "
+                          f"[dim](on = autonomous · off = manual)[/]")
+            return
+    else:
+        cur = "autonomous" if settings.autonomous else "manual"
+        _out(console, f"mode: [{GOLD}]{cur}[/] [dim](autonomous = never pause · "
+                      f"manual = review each unit · switch with /auto on|off)[/]")
+        return
+
+    settings.autonomous = want
+    save_settings(settings)
+    label = "autonomous" if want else "manual"
+    note = ""
+    active = state.get("book")
+    if active:
+        st = orchestrator.apply_autonomous(state["uid"], active, want, settings)
+        if st is not None:
+            if want:
+                note = f" · {active} won't pause - type `run` to finish it"
+            else:
+                note = f" · {active} will pause for review each unit"
+    _out(console, f"mode -> [{GOLD}]{label}[/] [dim](saved{note})[/]")
+
+
+def _cmd_praise(console, state: dict, rest: list[str]) -> None:
+    """/praise [N] - mark a committed chapter/section as great writing.
+
+    Saves it under the user's voice/ dir, where it feeds BOTH loops: future writer
+    calls receive it as a register exemplar, and the learner distills what made it
+    work (positive signal, not just failure patterns).
+    """
+    from .brain import ArticlePaths, BookPaths
+    book = state.get("book")
+    if not book:
+        _out(console, f"[{ERR}]No active project.[/] Use `/use <project>` first.")
+        return
+    uid = state["uid"]
+    art = ArticlePaths(book, uid)
+    is_article = art.run_state.exists()
+    st = brain.read_json(art.run_state if is_article else BookPaths(book, uid).run_state) or {}
+    committed = int(st.get("committed", 0) or 0)
+    try:
+        n = int(rest[0]) if rest else committed
+    except ValueError:
+        _out(console, f"[{ERR}]usage:[/] /praise [chapter-or-section number]")
+        return
+    if n < 1:
+        _out(console, "[dim](nothing committed yet - praise after a chapter/section lands)[/]")
+        return
+    unit = "section" if is_article else "chapter"
+    text = brain.read_text(art.section(n) if is_article else BookPaths(book, uid).ch(n))
+    if not text and is_article:
+        # Finished articles clean up per-section files after the learn phase -
+        # recover the section from the assembled manuscript instead.
+        ms = brain.read_text(art.manuscript) or ""
+        bodies = []
+        for part in ms.split("\n\n---\n\n"):
+            part = re.sub(r"^(?:-{3,}\s*)+", "", part.strip()).strip()  # doubled '---' seps
+            if part.startswith("## ") and not part.startswith("## References"):
+                bodies.append(part)
+        if 1 <= n <= len(bodies):
+            text = bodies[n - 1]
+    if not text:
+        _out(console, f"[{ERR}]no committed {unit} {n}[/] [dim](committed: {committed})[/]")
+        return
+    dest = brain.voice_dir(uid) / f"praised-{book}-{unit}{n:02d}.md"
+    brain.write_text(dest, text)
+    _out(console, f"[{GOLD}]praised[/] {unit} {n} of {book} [dim]-> {dest.name}; future drafts "
+                  f"imitate its register and the learner distills why it works[/]")
+
+
 def _print_skills(console, uid: str) -> None:
     rows = skills_mod.list_skills(uid)
     if not rows:
@@ -701,7 +828,7 @@ def _print_skill(console, uid: str, rest: list[str]) -> None:
 
 # ── NL → command execution helpers ───────────────────────────────────────────
 
-_NEEDS_PROJECT = {"run", "status", "read", "export", "review", "memory",
+_NEEDS_PROJECT = {"run", "status", "read", "export", "review", "revise", "memory",
                    "delete", "produce", "consolidate"}
 
 # The chat assistant must NOT silently auto-execute destructive or
@@ -986,36 +1113,163 @@ class _RunDashboard:
             self.events.append(Text(f"  {c}", style=DIM))
 
 
-def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = False) -> None:
+def _ring() -> None:
+    """Terminal bell - a long run finished or needs the human; they may be elsewhere."""
+    print("\a", end="", flush=True)
+
+
+def _summary_card(console, dash, state: dict, uid: str, book_id: str) -> None:
+    """Post-run card: the 'was it worth it' screen a finished run deserves."""
+    from rich.panel import Panel
+    from rich.text import Text
+
+    from . import llm
+    from .brain import ArticlePaths, BookPaths
+    is_article = state.get("mode") == "article"
+    paths = ArticlePaths(book_id, uid) if is_article else BookPaths(book_id, uid)
+    words = len((brain.read_text(paths.manuscript) or "").split())
+    insights = [i for i in (state.get("insights") or []) if isinstance(i, int)]
+    units = state.get("num_sections" if is_article else "num_chapters", "?")
+    toks, cost = llm.current_tokens(), llm.current_cost()
+
+    body = Text()
+    body.append(f"{units} {'sections' if is_article else 'chapters'}", style=PARCH)
+    body.append(f"   ·   {words:,} words", style=PARCH)
+    body.append(f"   ·   {dash._elapsed()} elapsed\n", style=DIM)
+    body.append(f"{toks:,} tokens", style=DIM)
+    if cost > 0:
+        body.append(f"   ·   ${cost:.4f}", style=f"bold {GOLD}")
+    if insights:
+        avg = sum(insights) / len(insights)
+        clr = ON_CLR if avg >= 4 else (PARCH if avg >= 3 else ERR)
+        body.append(f"   ·   insight {avg:.1f}/5", style=f"bold {clr}")
+    if is_article and (paths.root / "table_read.md").exists():
+        body.append("\n📋 table read ready - a skeptical reader's report: ", style=PARCH)
+        body.append("read it, then  revise --chapter N --instruction \"...\"", style=f"bold {GOLD}")
+    body.append("\nnext:  export   (pdf · epub · html · docx · txt · md)", style=DIM)
+    console.print(Panel(body, title=f"[{ON_CLR}]✓ complete[/]  [{GOLD}]{book_id}[/]",
+                        title_align="left", border_style=ON_CLR, padding=(1, 2)))
+
+
+def _escalation_picker(console, cfg, uid: str, book_id: str, state: dict) -> str:
+    """Interactive resolution of a stalled chapter/section - one keypress instead of
+    a two-flag command. Returns 'rerun' (resume the pipeline) or 'stop'."""
+    from rich.markdown import Markdown
+
+    from . import orchestrator
+    from .brain import ArticlePaths, BookPaths
+    from .config import load_settings as _load_settings
+    is_article = state.get("mode") == "article"
+    unit = "section" if is_article else "chapter"
+    n = state.get("current_section" if is_article else "current_chapter")
+    paths = ArticlePaths(book_id, uid) if is_article else BookPaths(book_id, uid)
+    review_md = brain.read_text(paths.review_of(n)) or "(no review file found)"
+
+    _section(console, f"REVIEW NEEDED  ·  {unit} {n}")
+    console.print(Markdown(review_md))
+    while True:
+        console.print()
+        ans = console.input(
+            f"  [{GOLD}][f][/]ix automatically · [{GOLD}][i][/]nstruct in your words · "
+            f"[{GOLD}][a][/]pprove as-is · [{GOLD}][g][/]o autonomous & finish · "
+            f"[{GOLD}][r][/]ead draft · [{GOLD}][s][/]top  > ").strip().lower()
+        if ans == "f":
+            orchestrator.record_instruction(
+                uid, book_id, n,
+                "Fix every blocking issue exactly as the critic's 'fix' lines suggest:\n\n"
+                + review_md)
+            _out(console, "[dim]critique recorded as the instruction - resuming...[/]")
+            return "rerun"
+        if ans == "i":
+            text = console.input("  your instruction: ").strip()
+            if text:
+                orchestrator.record_instruction(uid, book_id, n, text)
+                return "rerun"
+            _out(console, "[dim](empty - pick again)[/]")
+            continue
+        if ans == "a":
+            done = orchestrator.approve_escalation(
+                cfg, uid, book_id, log=lambda m: _out(console, f"[dim]{m}[/]"))
+            if done is not None:
+                return "rerun"
+            _out(console, f"[{ERR}]nothing to approve (draft missing)[/]")
+            continue
+        if ans == "g":
+            orchestrator.apply_autonomous(uid, book_id, True, _load_settings())
+            _out(console, "[dim]autonomous on - finishing the rest without pauses[/]")
+            return "rerun"
+        if ans == "r":
+            draft = brain.read_text(
+                paths.section_draft(n) if is_article else paths.ch_draft(n)) or "(draft missing)"
+            with console.pager(styles=True):
+                console.print(Markdown(draft))
+            continue
+        return "stop"
+
+
+def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = False,
+                       autonomous: bool | None = None) -> None:
     """Drive orchestrator.run for one project under a live Rich dashboard.
 
-    Shared by the shell's `run` command and the one-shot `write` flow so both show
-    the same live progress view.
+    Shared by the shell's `run` command and the one-shot `write` flow so both show the
+    same live progress view. `autonomous` (when not None) flips the project's run mode
+    as it resumes. Interactive extras (TTY only): manual divergent-variant picking via
+    an ask callback, an escalation picker when a unit stalls, a bell + summary card at
+    the end.
     """
+    import sys as _sys
+
     from rich.live import Live
 
     from . import brain as _brain
     from . import orchestrator
     from .brain import ArticlePaths, BookPaths
 
-    try:
-        art = ArticlePaths(book_id, uid)
-        st = (_brain.read_json(art.run_state) if art.run_state.exists()
-              else _brain.read_json(BookPaths(book_id, uid).run_state)) or {}
-        total = (max(st.get("num_sections", 1), 1) if st.get("mode") == "article"
-                 else max(st.get("num_chapters", 1), 1))
-        done_so_far = st.get("committed", 0)
-    except Exception:
-        total, done_so_far = 1, 0
+    interactive = bool(console) and _sys.stdin.isatty()
+    while True:
+        try:
+            art = ArticlePaths(book_id, uid)
+            st = (_brain.read_json(art.run_state) if art.run_state.exists()
+                  else _brain.read_json(BookPaths(book_id, uid).run_state)) or {}
+            total = (max(st.get("num_sections", 1), 1) if st.get("mode") == "article"
+                     else max(st.get("num_chapters", 1), 1))
+            done_so_far = st.get("committed", 0)
+        except Exception:
+            total, done_so_far = 1, 0
 
-    dash = _RunDashboard(book_id, total, done_so_far)
-    with Live(dash.render(), console=console, refresh_per_second=8,
-              transient=False, vertical_overflow="visible") as live:
-        def _log(msg: str) -> None:
-            dash.log(msg)
+        dash = _RunDashboard(book_id, total, done_so_far)
+        with Live(dash.render(), console=console, refresh_per_second=8,
+                  transient=False, vertical_overflow="visible") as live:
+            def _log(msg: str, dash=dash, live=live) -> None:   # bind: defined in a loop
+                dash.log(msg)
+                live.update(dash.render())
+
+            def _ask(prompt: str) -> str:
+                # Pause the live render, take input, resume - prompting inside a Live
+                # frame corrupts the display otherwise.
+                live.stop()
+                try:
+                    return console.input(f"\n{prompt}")
+                finally:
+                    console.print()
+                    live.start(refresh=True)
+
+            state = orchestrator.run(cfg, uid, book_id, force=force, autonomous=autonomous,
+                                     log=_log, ask=_ask if interactive else None)
             live.update(dash.render())
-        orchestrator.run(cfg, uid, book_id, force=force, log=_log)
-        live.update(dash.render())
+        force, autonomous = False, None   # one-shot flags; later passes resume plainly
+
+        if state.get("phase") == "done":
+            if console:
+                _ring()
+                _summary_card(console, dash, state, uid, book_id)
+            return
+        if (interactive and state.get("pending_review")
+                and state.get("review_kind") in ("chapter", "section")):
+            _ring()
+            if _escalation_picker(console, cfg, uid, book_id, state) == "rerun":
+                continue
+        return
 
 
 def _cmd_run_rich(args, cfg, settings, uid: str, console) -> None:
@@ -1025,7 +1279,8 @@ def _cmd_run_rich(args, cfg, settings, uid: str, console) -> None:
     if not book_id:
         _out(console, f"[{ERR}]No active project.[/]  Run `/use <name>` or just type `run` from the shell.")
         return
-    run_with_dashboard(cfg, uid, book_id, console, force=getattr(args, "force", False))
+    run_with_dashboard(cfg, uid, book_id, console, force=getattr(args, "force", False),
+                       autonomous=getattr(args, "autonomous", None))
 
 
 # ── Conversational assistant ──────────────────────────────────────────────────
@@ -1049,15 +1304,38 @@ def _build_chat_system(settings: Settings, state: dict) -> str:
     )
     today = datetime.date.today().strftime("%Y-%m-%d")
     all_proj = ", ".join(f"{p[0]}[{p[1]}]" for p in projects) if projects else "(none yet)"
+    run_mode = ("autonomous (never pauses for review)" if settings.autonomous
+                else "manual (pauses for review at each unit)")
     ctx = (
         "\n\nCURRENT SESSION CONTEXT:"
         f"\n  date: {today}"
         f"\n  {active_line}"
         f"\n  all projects: {all_proj}"
         f"\n  mode: {settings.mode}"
+        f"\n  run mode: {run_mode}"
         f"\n  features on: {features_on}"
         f"\n  user: {uid}"
     )
+    # If the active project is paused at a chapter/section escalation, surface the
+    # unit number + the critic's blocking issues so the assistant can resolve it
+    # (emit `review --chapter N --instruction ...` or `run --autonomous`) instead of
+    # looping on status/read.
+    if active:
+        from .brain import ArticlePaths, BookPaths
+        ap = ArticlePaths(active, uid)
+        paths = ap if ap.run_state.exists() else BookPaths(active, uid)
+        st = brain.read_json(paths.run_state) or {}
+        if st.get("pending_review") and st.get("review_kind") in ("chapter", "section"):
+            unit_key = "current_section" if st.get("mode") == "article" else "current_chapter"
+            unit_n = st.get(unit_key)
+            review_md = (brain.read_text(paths.review_of(unit_n)) or "").strip()
+            ctx += (
+                f"\n\n⚠ ESCALATION PENDING: unit {unit_n} stalled at review and is waiting for the user."
+                f"\n  Resolve it this turn - emit `review --chapter {unit_n} --instruction \"...\"` then `run`,"
+                f"\n  or `run --autonomous` if the user wants it finished without more review."
+            )
+            if review_md:
+                ctx += f"\n  Critic's blocking issues:\n{review_md[:900]}"
     # Tell the AI about article mode + how to handle project selection
     if settings.mode == "article":
         ctx += (
@@ -1465,6 +1743,10 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
             state["chat_history"] = _compact_history(hist, cfg)
             turns_before = len(hist) // 2
             _out(console, f"[{GOLD}]compacted[/] [dim]{turns_before} turn(s) -> 1 summary[/]")
+    elif name in ("auto", "autonomous", "manual"):
+        _cmd_auto(console, settings, state, name, rest)
+    elif name == "praise":
+        _cmd_praise(console, state, rest)
     elif name == "mode":
         if not rest:
             _out(console, f"mode: [{GOLD}]{settings.mode}[/] [dim](book | article)[/]")
@@ -1512,6 +1794,8 @@ _SLASH_COMPLETIONS = [
     ("config",      "show model + settings config"),
     ("update",      "describe changes - AI reviews and suggests next steps"),
     ("retry",       "resend last chat message"),
+    ("auto",        "autonomous vs manual run mode  on | off"),
+    ("praise",      "mark a chapter/section as great writing"),
     ("mode",        "show / set mode  book | article"),
     ("theme",       "list / switch color theme"),
     ("dashboard",   "telemetry: calls · tokens · cost · errors"),
@@ -1593,6 +1877,10 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                     for v in ("book", "article"):
                         if v.startswith(cur):
                             yield _comp(v, -len(cur))
+                elif sub == "auto":
+                    for v in ("on", "off"):
+                        if v.startswith(cur):
+                            yield _comp(v, -len(cur))
                 elif sub in ("theme", "themes"):
                     for v in ui.THEMES:
                         if v.startswith(cur):
@@ -1621,9 +1909,15 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
         model = cfg.model_for("writer").split("/")[-1]
         today = datetime.date.today().strftime("%Y-%m-%d")
         mode_part = "[article]" if settings.mode == "article" else "[book]"
+        run_mode = "auto" if settings.autonomous else "manual"
         book = state.get("book") or ""
         book_part = f"● {book}{_book_progress(state['uid'], book)}" if book else "no active book"
-        return f"  {model}  │  {mode_part}  │  {book_part}  │  {today}  "
+        text = f"  {model}  │  {mode_part} {run_mode}  │  {book_part}  │  {today}  "
+        if "⚠ review" in book_part:
+            # A stalled run silently waiting is wasted wall-clock - make it loud.
+            from prompt_toolkit.formatted_text import HTML
+            return HTML(f'<style bg="ansired" fg="ansiwhite">{text}- type `run` to resolve  </style>')
+        return text
 
     _DIM_HEX = "#6b6b6b"  # prompt_toolkit needs hex; Rich's "grey42" ≈ #6b6b6b
     pt_style = Style.from_dict({
