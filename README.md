@@ -424,11 +424,16 @@ Disable if needed: `/set use_headroom false`
 
 When `use_images` is on, every section/chapter gets a generated diagram saved to `images/` and embedded in the manuscript.
 
-- **860 × 520 px** canvas, publication-quality
-- Flowcharts, concept maps, timelines, comparison tables, process loops
+- **860 × 520 px** canvas, publication-quality: archetypes (pipeline, layered lanes,
+  decision flow, comparison, timeline, cycle), a typography hierarchy, labeled edge
+  pills, on-figure metric annotations, and exactly one focal emphasis
 - Accent palette: `#4f8ef7` (blue) · `#34c98a` (green) · `#ff6719` (orange) · `#a78bfa` (purple)
-- Arrowhead markers, labelled nodes with actual topic concepts - not placeholders
-- Routed to DeepSeek Flash (not the reasoning model) so all tokens go to SVG output
+- Drawn by **DeepSeek V4 Pro** (16k budget so the SVG fits after its reasoning), with an
+  automatic **Flash fallback** when the pro tier emits no SVG - a figure always ships
+- A deterministic **fill guard** forces `fill="none"` onto every connector path (a missed
+  one renders as a solid black polygon - models forget this constantly)
+- PDF export renders the SVGs as **vector art** via xhtml2pdf's svglib (no extra deps);
+  cairosvg is used instead when installed (adds arrowhead fidelity)
 
 ---
 
@@ -522,7 +527,9 @@ src/book_agent/
 | Node | Model | Why |
 |---|---|---|
 | planner, writer, consolidation | DeepSeek V4 Pro | Highest prose quality |
-| critic, summarizer, humanizer, researcher, toc, chat, diagram | DeepSeek V4 Flash | Fast, cost-efficient, no reasoning overhead |
+| critic | DeepSeek V4 Pro | Insight scoring + thesis checks need real judgment |
+| diagram | DeepSeek V4 Pro (Flash fallback) | Pro composes far better figures; 16k budget covers its reasoning, Flash steps in if no SVG comes back |
+| summarizer, humanizer, researcher, toc, chat | DeepSeek V4 Flash | Fast, cost-efficient, no reasoning overhead |
 
 Override any node live: `/model writer openai/gpt-4o`
 
@@ -549,7 +556,7 @@ Every node returns valid placeholder output - lets you verify the pipeline loop,
 | Skill retrieval | Lexical (BM25) by default | No dependency on embeddings; clean seam to swap in `use_embeddings: true` |
 | Article layout | Flat `articles/<id>/` | No subdirs; `manuscript.md` + `images/` only after cleanup |
 | Compression | headroom-ai on by default | 60–95% fewer tokens with zero accuracy loss |
-| Diagram model | Flash (not Pro/reasoning) | Reasoning tokens don't produce SVG; Flash puts all budget into output |
+| Diagram model | Pro with a 16k budget + Flash fallback | Pro composes better figures; the larger budget absorbs its reasoning, and Flash guarantees a figure if Pro emits no SVG |
 
 ---
 

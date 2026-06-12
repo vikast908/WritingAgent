@@ -443,7 +443,8 @@ nodes:
   learner:       deepseek/deepseek-v4-flash
   researcher:    deepseek/deepseek-v4-flash
   humanizer:     deepseek/deepseek-v4-flash    # surgical line edits only
-  diagram:       deepseek/deepseek-v4-flash    # SVG / mermaid generation
+  diagram:       deepseek/deepseek-v4-pro      # SVG figures: pro composes better; 16k budget
+  diagram_fallback: deepseek/deepseek-v4-flash # draws the figure if pro emits no SVG
 temperature:                                   # DeepSeek accepts sampling params
   toc:        0.4
   critic:     0.2
@@ -579,7 +580,8 @@ Durable decisions from the hardening pass. All thresholds are tunable config.
 | **Length control** | `target_words` per chapter (TOC) / section (outline; falls back to an even share of `target_word_count`). The writer gets a target note; the critic gets the actual word count and flags >±40% misses as blocking. |
 | **Article cohesion** | `article_cohesion` (default on): a whole-article smoothing pass over the assembled sections (transitions, cross-section repetition, terminology) before References. Guarded - if the edit shrinks the body >40% or loses headings, the original is kept. |
 | **Long-range retrieval** | `assemble_context` augments canon + dependency summaries with FTS5 excerpts from *other* committed chapters matched on the blueprint's key terms (`store.search_excerpts`). Timeline events are recorded under the actual committing chapter (LLM-reported numbers were unreliable). |
-| **Export fidelity** | All exporters resolve relative `images/` references against the project root: PDF rasterizes SVG via cairosvg when installed (else drops the tag, keeps the caption), EPUB packages images as items, DOCX passes `--resource-path` to pandoc, HTML inlines images as data URIs. |
+| **Export fidelity** | All exporters resolve relative `images/` references against the project root: PDF renders SVG as **vector art via xhtml2pdf's svglib** (always available - it's a hard dep; arrow markers degrade to plain lines), preferring **cairosvg rasterization** when installed (full marker fidelity); EPUB packages images as items, DOCX passes `--resource-path` to pandoc, HTML inlines images as data URIs. |
+| **Diagram quality** | The `diagram` node runs the **pro tier with a 16k budget** (reasoning shares the completion cap - a starved cap returns no SVG) under an information-design prompt (archetypes, type hierarchy, edge-label pills, lanes, metric annotations, one focal emphasis, bounded deliberation). Deterministic guards do what prompts can't promise: `_svg_fill_guard` forces `fill="none"` on every connector (a missed one renders as a solid black polygon), and a **flash-tier `diagram_fallback`** draws the figure when pro emits no SVG, so a placeholder never ships. Diagrams are disk-cached by (model, heading, context) - a prompt change alone does not invalidate the cache. |
 
 ### 15.2 Deep multi-source researcher (`deep_research`, off by default)
 

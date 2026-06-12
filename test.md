@@ -1,8 +1,24 @@
 # Test record - WRITING AGENT
 
-Verification log for the 2026-06-12 session-10 work (review fixes + Linux CI unblock).
-The living suite is `tests/` (run `pytest -q` with `BOOK_AGENT_FAKE=1`); this file records
-what was executed, where, and what it proved.
+Verification log for recent sessions (newest first). The living suite is `tests/`
+(run `pytest -q` with `BOOK_AGENT_FAKE=1`); this file records what was executed,
+where, and what it proved.
+
+## 2026-06-13 (session 12): diagrams + export images
+
+| Check | How | Result |
+|---|---|---|
+| Full suite | `pytest -q` (Windows) | **218 passed, 1 skipped**; ruff clean |
+| v4-pro emits SVG with 16k budget | live call, real DeepSeek | 9.4k-char valid SVG (34 labels, 11 arrows) |
+| Black-blob root cause | rendered the SVG in a browser | connector `<path>` without `fill="none"` fills solid black; fixed by deterministic `_svg_fill_guard` (+ unit test) |
+| Flash fallback when pro emits no SVG | monkeypatched unit test | fallback model called, figure returned (`test_quality.py`) |
+| PDF was image-less | counted `/Subtype /Image` in the exported PDF | 0 images → cairosvg-or-drop path confirmed; after fix, figure renders as vector art (verified by rasterizing the PDF with pypdfium2) |
+| HTML "overlapping text" | Edge headless screenshots of the article's SVGs | overlap was diagram-internal (old flash diagrams); all 3 regenerated with the new prompt and re-verified visually - lanes, legends, no overlaps |
+| Dashboard "26 errors" / model `m` | inspected `.index/telemetry` JSONL | all test fixtures leaked by retry tests (no `tmp_brain`); autouse isolation added, real telemetry scrubbed → 65 real records, 0 errors |
+
+Live-call spend for the session's diagram validation: a handful of v4 calls (~$0.05).
+
+## 2026-06-12 (session 10): review fixes + Linux CI unblock
 
 ## Summary
 

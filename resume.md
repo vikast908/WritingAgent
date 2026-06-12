@@ -5,11 +5,19 @@
 
 ## Current status
 
-- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **211 tests
-  pass** (+1 opt-in live skip); ruff clean on Windows AND Linux (WSL-verified). **CI is unblocked:**
-  it had been red on every Ubuntu job since the workflow first landed (2026-06-10) - svglib 1.6.0
-  (transitive via xhtml2pdf) requires rlpycairo→pycairo, which has no Linux wheels; pinned
-  `svglib<1.6`. Repo is now **public**, so Actions status is checkable headlessly (no gh auth).
+- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **218 tests
+  pass** (+1 opt-in live skip); ruff clean on Windows AND Linux (WSL-verified). **CI green on all
+  12 matrix jobs** since session 10's `svglib<1.6` pin (1.6.0 pulls pycairo, which has no Linux
+  wheels). `gh` is authenticated on this machine (keyring), so CI stays checkable headlessly even
+  after the repo goes private again.
+- **New (2026-06-13, session 12 - diagrams + exports):** diagram node → **v4-pro** (16k budget,
+  information-design prompt, deterministic `fill="none"` guard, flash fallback); **PDF exports
+  render SVG figures as vector art** via svglib (were image-less without cairosvg); the voicebot
+  article's 3 diagrams regenerated + re-exported and visually verified; telemetry test-pollution
+  fixed (autouse brain/index isolation) and the real `.index/telemetry` scrubbed.
+- **New (2026-06-12, session 11 - TUI):** compact welcome (66→33 lines, banner stays on screen),
+  `/features` command, bottom toolbar removed, red FAKE-mode launch warning, animated run
+  dashboard (live clock + stage spinner between log events).
 - **New (2026-06-12, session 10 - review fixes + Linux CI unblocked):** revise-critic parity
   (book + article), chat stream errors no longer masquerade as prose, SSRF/robots/politeness gate
   on the deep fetcher, Wikimedia formatversion=2 parse fix, +55 tests (incl. a coverage pass over
