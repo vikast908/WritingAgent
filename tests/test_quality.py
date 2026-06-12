@@ -209,3 +209,36 @@ def test_praise_saves_section_to_voice_dir(tmp_brain, fake_llm):
     files = list(brain.voice_dir("u").glob("praised-*.md"))
     assert len(files) == 1
     assert orchestrator._praised_passages("u")    # learner sees it
+
+
+# ── SVG diagrams: fill guard + flash fallback ─────────────────────────────────
+def test_svg_fill_guard_kills_black_blobs():
+    """A connector <path> without fill renders as a solid black polygon (SVG fills
+    paths by default). The guard forces fill="none"; declared fills are untouched."""
+    svg = ('<svg><path d="M 0 0 L 10 0 L 10 10" stroke="#555"/>'
+           '<path d="M 1 1" fill="#fff" stroke="#000"/>'
+           '<polyline points="0,0 5,5"/></svg>')
+    out = nodes._svg_fill_guard(svg)
+    assert out.count('fill="none"') == 2          # bare path + polyline fixed
+    assert 'fill="#fff"' in out                   # explicit fill preserved
+
+
+def test_diagram_falls_back_to_flash_when_pro_emits_no_svg(tmp_brain, monkeypatch):
+    """A reasoning model can burn the whole budget and emit no SVG - the node must
+    retry on the flash tier instead of shipping the text-only placeholder."""
+    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    cfg = load_config()
+    calls = []
+
+    def fake_complete(model, system, user, **_kw):
+        calls.append(model)
+        if len(calls) == 1:
+            return "I thought about it a lot but here is prose, not SVG."
+        return '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>'
+    monkeypatch.setattr(nodes, "complete_text", fake_complete)
+
+    out = nodes.generate_svg_diagram(cfg, "topic heading", context="ctx")
+    assert out.startswith("<svg") and "<rect/>" in out
+    assert calls[0] == cfg.model_for("diagram")
+    assert calls[1] == cfg.model_for("diagram_fallback")
+    assert calls[0] != calls[1]

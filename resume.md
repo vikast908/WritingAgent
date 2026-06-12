@@ -168,6 +168,42 @@
 
 ## Session log
 
+### 2026-06-13 (12) - Diagrams to v4-pro + export image fixes + telemetry hygiene
+
+User asked to upgrade the diagram model/prompt to v4-pro, then reported the real
+article's exports: PDF had NO images, HTML diagrams had overlapping text, and a
+regenerated diagram showed black blobs. All diagnosed live and fixed. **218 tests pass.**
+
+- **Diagram node → DeepSeek V4 Pro** (`models.yaml`), 16k token budget (reasoning shares
+  the cap - 6k starved it in 2026-06-09's attempt), plus a rewritten `DIAGRAM_SYS`
+  (information-design craft: archetypes, type hierarchy with tspan wrapping, elbow edges
+  with labeled pills, lanes, on-figure metric annotations, reserved legend corner, ONE
+  focal emphasis). Deliberation explicitly bounded - "plan briefly, budget goes to SVG" -
+  after the first version sent v4-pro into reasoning spirals that emptied the budget.
+- **Black blobs:** multi-segment connector <path>s without fill="none" render as solid
+  black polygons (SVG fills paths by default). `nodes._svg_fill_guard` now forces
+  fill="none" onto every connector deterministically on every generated diagram.
+- **Flash fallback** (`diagram_fallback` node): when pro emits no SVG, flash draws the
+  figure instead of shipping the text-only placeholder.
+- **PDF images fixed:** the exporter rasterized SVG via cairosvg-or-DROP; cairosvg isn't
+  installed by default → image-less PDFs. xhtml2pdf renders SVG natively via its svglib
+  dep (vector!), so the absolute path is passed through instead (cairosvg still preferred
+  when present; svglib ignores arrow markers). Verified by rasterizing the real PDF.
+- **"Overlapping text on every image" (HTML):** diagram-internal - the old flash diagrams
+  printed label pairs on top of each other. All 3 diagrams of the voicebot article
+  regenerated with the new prompt (verified visually: lanes, legends clear, no overlaps).
+- **Dashboard "26 errors" + model "m" explained (user question):** test_hardening's retry
+  tests call the real llm path (stubbed client, model "m", "401 bad key") and were
+  appending toy records to the REAL `.index/telemetry` on every local pytest run. Brain +
+  index isolation is now an **autouse** conftest fixture; polluted records scrubbed
+  (65 real records remain, 0 errors). Blank project "-" in /dashboard = calls outside a
+  run (chat, one-off scripts) - expected.
+- **Gotcha noted:** a `(model, heading, context)` disk cache means a *prompt* change
+  doesn't invalidate cached diagrams; regeneration scripts must not "placeholder-detect"
+  by substring (a real diagram legitimately contained height="120" - detect by length).
+- **Next:** regenerate diagrams is manual today (one-off script); consider a
+  `rediagram [--chapter N]` command if diagram iteration becomes common.
+
 ### 2026-06-12 (11) - TUI: compact welcome, /features, toolbar removed, FAKE-mode warning
 
 User feedback from a real launch: the startup screen was so long the wordmark scrolled

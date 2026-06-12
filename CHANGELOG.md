@@ -23,6 +23,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Interactive TUI** - escalation picker (fix/instruct/approve-as-is/go-autonomous/read on a
   stalled unit), manual divergent-variant picking, outline+thesis approval gate after `new`,
   post-run summary card + terminal bell, and a draft-opening glimpse in the dashboard.
+- **Diagram quality overhaul** - the `diagram` node moved to DeepSeek V4 Pro with a
+  16k budget and a rewritten information-design prompt (archetypes, typography
+  hierarchy, edge-label pills, lane layouts, on-figure metric annotations, legend
+  placement, one focal emphasis). A deterministic **SVG fill guard** forces
+  `fill="none"` onto every connector path (a missed one renders as a giant black
+  polygon), and a **flash-tier fallback** (`diagram_fallback` node) draws the figure
+  when the pro tier reasons itself out of budget and emits no SVG.
 - **Animated run dashboard** - the dashboard is now a live Rich renderable
   (auto-refreshed ~8×/s), so the elapsed clock ticks and active stages
   (drafting/critiquing/humanising…) show a spinner with moving dots during long
@@ -96,6 +103,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Wikimedia image search silently returned no results against the live API:
   the code requested `formatversion=2` (pages as a list) but parsed the v1 dict
   shape, and the network-error guard swallowed the resulting exception.
+- **PDF exports had no images** when cairosvg isn't installed (i.e. by default):
+  the exporter dropped every SVG figure. xhtml2pdf's bundled svglib now renders
+  SVG diagrams as vector art directly (cairosvg still preferred when present;
+  svglib drops arrowheads but keeps the figure); svglib's per-label font
+  warnings are silenced during export.
+- **The test suite polluted real telemetry**: retry tests exercising the real
+  LLM call path appended toy records (model "m", "401 bad key") to the
+  developer's `.index/telemetry`, surfacing as phantom errors in `/dashboard`.
+  Brain + index isolation is now autouse for every test.
 
 ### Changed
 - **`use_researcher` now defaults on** - citations are unverifiable otherwise; with it off the

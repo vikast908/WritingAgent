@@ -16,7 +16,11 @@ nodes:
   researcher:    deepseek/deepseek-v4-flash    # optional shallow research brief (off by default)
   humanizer:     deepseek/deepseek-v4-flash    # strip AI tells from committed prose
   chat:          deepseek/deepseek-v4-flash    # TUI conversational assistant
-  diagram:       deepseek/deepseek-v4-flash    # SVG diagram generation (no reasoning needed)
+  diagram:       deepseek/deepseek-v4-pro      # SVG diagrams: pro plans layout/composition far
+                                               # better; paired with a 16k token budget so the
+                                               # SVG fits after reasoning (6k starved it once)
+  diagram_fallback: deepseek/deepseek-v4-flash # when pro reasons itself out of budget and
+                                               # emits no SVG, flash reliably draws *something*
 
 temperature:
   toc:        0.4

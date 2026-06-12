@@ -3,11 +3,24 @@ from __future__ import annotations
 
 import json
 import os
+import re as _re
 
 from . import prompts as P
 from . import schemas as S
 from .config import ModelConfig
 from .llm import complete_structured, complete_text
+
+# SVG fills paths BLACK by default: a multi-segment connector that doesn't declare
+# fill="none" renders as a solid black polygon over the diagram (the "random black
+# blob"). Models forget this constantly, so it's enforced deterministically on every
+# generated diagram rather than trusted to the prompt.
+_SVG_CONNECTOR_RE = _re.compile(r"<(path|polyline)\b((?:(?!fill=)[^>])*?)(\s*/?)>",
+                                _re.IGNORECASE)
+
+
+def _svg_fill_guard(svg: str) -> str:
+    return _SVG_CONNECTOR_RE.sub(lambda m: f'<{m.group(1)}{m.group(2)} fill="none"{m.group(3)}>',
+                                 svg)
 
 
 def _ctx(obj) -> str:
@@ -483,7 +496,7 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "") -> s
 
     Returns raw SVG XML (starts with <svg ...). On failure returns a minimal placeholder SVG.
     """
-    model = cfg.model_for("diagram")  # Flash - reasoning model wastes tokens on thinking, not SVG
+    model = cfg.model_for("diagram")  # pro by default; the 16k budget leaves room for reasoning
     _diagram_key = (model, heading, context[:900])
     _fake = bool(os.getenv("BOOK_AGENT_FAKE"))
     if not _fake:
@@ -493,6 +506,7 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "") -> s
             return cached
 
     def _store(result: str) -> str:
+        result = _svg_fill_guard(result)
         if not _fake:
             from . import cache
             cache.put("diagram", _diagram_key, result)
@@ -501,39 +515,53 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "") -> s
     ctx_block = f"\nContext (use this to choose specific labels/concepts for nodes):\n{context[:900]}" if context else ""
     user = (
         f"Topic: {heading}{ctx_block}\n\n"
-        "Produce a detailed, publication-quality SVG diagram that visually explains a key concept "
-        "from this topic. Pick the diagram type that best fits: flowchart, concept map, two-column "
-        "comparison, timeline, or process loop.\n\n"
+        "Produce a publication-quality SVG diagram that visually explains the ONE most "
+        "diagram-worthy idea in this topic. Pick the archetype that fits: pipeline, layered "
+        "architecture, decision flow, comparison, timeline, or cycle.\n\n"
         "CRITICAL:\n"
         "- First character of your response must be '<' - no preamble, no fences, no explanation.\n"
         "- Use the ACTUAL concepts from the topic as node/label text - not generic placeholders.\n"
-        "- Every node/box must have a readable text label.\n"
-        "- Include connecting arrows (use the #arrow marker from <defs>).\n"
+        "- Real numbers from the context (latencies, budgets, percentages) belong on the "
+        "diagram as annotations.\n"
+        "- Every node/box must have a readable text label; every arrow the #arrow marker.\n"
         "- Canvas: 860 × 520 px.\n"
     )
     import re
-    svg = complete_text(model, P.DIAGRAM_SYS, user, max_tokens=6000, temperature=0.4)
-    svg = svg.strip()
 
-    # 1. Try a proper greedy match (SVG is fully closed)
-    m = re.search(r"(<svg\b[\s\S]+</svg>)", svg, re.IGNORECASE)
-    if m:
-        return _store(m.group(1))
-
-    # 2. Model wrapped in a code fence but may not have closed </svg>
-    #    Extract from <svg to the last > in the file, then force-close.
-    m2 = re.search(r"(<svg\b[\s\S]+)", svg, re.IGNORECASE)
-    if m2:
+    def _extract(raw: str) -> str | None:
+        raw = (raw or "").strip()
+        # 1. A proper greedy match (SVG is fully closed)
+        m = re.search(r"(<svg\b[\s\S]+</svg>)", raw, re.IGNORECASE)
+        if m:
+            return m.group(1)
+        # 2. Model wrapped in a code fence but may not have closed </svg> -
+        #    extract from <svg to the last >, strip stray fences, force-close.
+        m2 = re.search(r"(<svg\b[\s\S]+)", raw, re.IGNORECASE)
+        if not m2:
+            return None
         content = m2.group(1)
-        # Drop anything after the last XML-like closing tag
         last_gt = content.rfind(">")
         if last_gt != -1:
             content = content[:last_gt + 1]
-        # Strip trailing code fence / prose that crept in before the last >
         content = re.sub(r"```[\s\S]*$", "", content).rstrip()
         if not re.search(r"</svg\s*>", content, re.IGNORECASE):
             content += "\n</svg>"
-        return _store(content)
+        return content
+
+    # 16k budget: with a reasoning-tier model the thinking tokens come out of the same
+    # cap, and a starved cap returns no SVG at all (the original v4-pro failure mode).
+    out = _extract(complete_text(model, P.DIAGRAM_SYS, user, max_tokens=16000,
+                                 temperature=0.4))
+    if out is None and not _fake:
+        # The pro tier occasionally reasons itself out of budget and emits no SVG.
+        # A flash-tier retry reliably produces *a* diagram - a plainer figure beats
+        # the text-only placeholder that would otherwise ship in the export.
+        fallback = cfg.model_for("diagram_fallback")
+        if fallback != model:
+            out = _extract(complete_text(fallback, P.DIAGRAM_SYS, user,
+                                         max_tokens=8000, temperature=0.4))
+    if out is not None:
+        return _store(out)
 
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" width="860" height="120">'

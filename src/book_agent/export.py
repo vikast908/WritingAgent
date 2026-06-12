@@ -35,9 +35,12 @@ def _inline_images(html_body: str, base_dir: Path | None) -> str:
 
 
 def _pdf_prepare_images(html_body: str, base_dir: Path | None) -> str:
-    """Make images renderable by xhtml2pdf: local paths become absolute; SVGs are
-    rasterized via cairosvg when installed, else the <img> is dropped (xhtml2pdf
-    cannot render SVG) and the figure caption text survives on its own."""
+    """Make images renderable by xhtml2pdf: local paths become absolute. SVGs are
+    rasterized via cairosvg when installed (full fidelity incl. arrow markers);
+    otherwise the absolute .svg path is passed through and xhtml2pdf renders it as
+    VECTOR art via its svglib dependency (svglib ignores marker-end, so arrowheads
+    degrade to plain lines - still far better than the old behavior of dropping
+    the figure entirely, which produced image-less PDFs)."""
     def repl(m):
         src = m.group(1)
         p = _resolve_local(src, base_dir)
@@ -50,7 +53,7 @@ def _pdf_prepare_images(html_body: str, base_dir: Path | None) -> str:
                 uri = "data:image/png;base64," + base64.b64encode(png).decode()
                 return m.group(0).replace(src, uri)
             except Exception:  # noqa: BLE001 - cairosvg absent or bad SVG
-                return ""
+                pass
         return m.group(0).replace(src, str(p))
     return _IMG_TAG.sub(repl, html_body)
 
@@ -245,8 +248,15 @@ code { font-family: 'DejaVu Sans Mono', Consolas, monospace; word-wrap: break-wo
 # ── PDF ───────────────────────────────────────────────────────────────────────
 def markdown_to_pdf(md_text: str, out_path, title: str = "Manuscript", base_dir=None):
     """Render Markdown to a paginated PDF. New page per chapter (## heading)."""
+    import logging
+
     import markdown
     from xhtml2pdf import pisa
+
+    # svglib (xhtml2pdf's SVG renderer) logs a warning per <text> element whose
+    # font-family it can't map (e.g. system-ui) before falling back to Helvetica -
+    # dozens of identical lines per diagram that would spam the export output.
+    logging.getLogger("svglib").setLevel(logging.ERROR)
 
     md_text = _preprocess(md_text, diagrams=True, base_dir=Path(base_dir) if base_dir else None)
     html_body = _pre_linebreaks(markdown.markdown(md_text, extensions=["extra", "sane_lists"]))
