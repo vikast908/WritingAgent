@@ -189,6 +189,13 @@ launched `writing-agent` from the same PowerShell window where a test command ha
   test env var can no longer silently can every model call.
 - Guard tests: welcome height budget (≤14 lines, the regression that started this),
   fake-warning presence, /features + /help tables render (`test_ui.py`, +3).
+- **Run dashboard animates (user feedback on a live run):** the `Live` previously got a
+  static `dash.render()` snapshot, re-rendered only on log events - during one long
+  critic call the stage text AND the elapsed clock froze for minutes. The dash object is
+  now the renderable (`__rich_console__`), so Live's auto-refresh (8/s) re-renders it
+  continuously: clock ticks, and active stages (`…`) get a braille spinner + cycling
+  dots (`⠹ critiquing..`). Settled stages (reviewed/committed) stay static. +1 test
+  (animation frames differ; dash is print-able). **215 tests pass.**
 - **Next step:** user re-runs `writing-agent` in a clean terminal (no BOOK_AGENT_FAKE) and
   retries the live article: chat-propose → "go ahead" → run.
 

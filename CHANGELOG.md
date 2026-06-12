@@ -23,6 +23,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Interactive TUI** - escalation picker (fix/instruct/approve-as-is/go-autonomous/read on a
   stalled unit), manual divergent-variant picking, outline+thesis approval gate after `new`,
   post-run summary card + terminal bell, and a draft-opening glimpse in the dashboard.
+- **Animated run dashboard** - the dashboard is now a live Rich renderable
+  (auto-refreshed ~8×/s), so the elapsed clock ticks and active stages
+  (drafting/critiquing/humanising…) show a spinner with moving dots during long
+  model calls instead of freezing until the next log event.
 - **Compact welcome screen** - the startup screen shrank from ~66 to ~33 lines so the
   wordmark stays visible at the first prompt; the full command list moved to `/help` and
   the feature board to a new **`/features`** command (one-line feature status in the

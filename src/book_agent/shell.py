@@ -1055,7 +1055,14 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
 
 class _RunDashboard:
     """Live, multi-line view for `run`: header (elapsed + live tokens), a chapter
-    progress bar, the current unit + stage, and a short scroll of recent events."""
+    progress bar, the current unit + stage, and a short scroll of recent events.
+
+    The dashboard object itself is handed to rich.Live (it renders via
+    __rich_console__), so the auto-refresh thread re-renders it ~8x/s - the
+    elapsed clock ticks and active stages animate even when the pipeline is deep
+    inside one long LLM call and no log event arrives for minutes."""
+
+    _SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"   # braille spinner, same family as console.status "dots"
 
     def __init__(self, book_id: str, total: int, done: int, brief: str = ""):
         self.book_id = book_id
@@ -1071,6 +1078,19 @@ class _RunDashboard:
     def _elapsed(self) -> str:
         s = int(time.time() - self.start)
         return f"{s // 60:02d}:{s % 60:02d}"
+
+    def _stage_label(self) -> str:
+        """Active stages (ending in …) get a spinner + cycling dots so a long
+        model call visibly works instead of looking hung."""
+        if not self.stage.endswith("…"):
+            return self.stage
+        now = time.monotonic()
+        spin = self._SPIN[int(now * 8) % len(self._SPIN)]
+        dots = "." * (1 + int(now * 2.5) % 3)
+        return f"{spin} {self.stage[:-1]}{dots}"
+
+    def __rich_console__(self, console, options):
+        yield self.render()
 
     def render(self):
         from rich.console import Group
@@ -1101,7 +1121,7 @@ class _RunDashboard:
         stage = Text("  ")
         if self.unit:
             stage.append(self.unit + "  ", style=PARCH)
-        stage.append("· " + self.stage, style=f"italic {INK}")
+        stage.append("· " + self._stage_label(), style=f"italic {INK}")
         if self.verdict:
             stage.append("   " + self.verdict, style=DIM)
         rows = [head, *rows_brief, bar, stage]
@@ -1289,11 +1309,12 @@ def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = Fa
             total, done_so_far = 1, 0
 
         dash = _RunDashboard(book_id, total, done_so_far, brief=brief)
-        with Live(dash.render(), console=console, refresh_per_second=8,
+        # The dash object (not a snapshot) is the renderable: Live's auto-refresh
+        # re-renders it 8x/s, so the clock + stage spinner animate between events.
+        with Live(dash, console=console, refresh_per_second=8,
                   transient=False, vertical_overflow="visible") as live:
-            def _log(msg: str, dash=dash, live=live) -> None:   # bind: defined in a loop
-                dash.log(msg)
-                live.update(dash.render())
+            def _log(msg: str, dash=dash) -> None:   # bind: defined in a loop
+                dash.log(msg)   # auto-refresh picks the mutation up within ~125ms
 
             def _ask(prompt: str) -> str:
                 # Pause the live render, take input, resume - prompting inside a Live
@@ -1307,7 +1328,6 @@ def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = Fa
 
             state = orchestrator.run(cfg, uid, book_id, force=force, autonomous=autonomous,
                                      log=_log, ask=_ask if interactive else None)
-            live.update(dash.render())
         force, autonomous = False, None   # one-shot flags; later passes resume plainly
 
         if state.get("phase") == "done":

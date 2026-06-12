@@ -57,6 +57,26 @@ def test_run_dashboard_log_parsing():
     d.render()                                  # builds a renderable without raising
 
 
+def test_run_dashboard_stage_animates(monkeypatch):
+    """Active stages (…) must visibly move between log events: Live re-renders the
+    dash object, and the label changes frame-to-frame. Terminal stages stay static."""
+    import time as _time
+
+    from book_agent.shell import _RunDashboard
+    d = _RunDashboard("b", total=1, done=0)
+    d.stage = "critiquing…"
+    monkeypatch.setattr(_time, "monotonic", lambda: 0.0)
+    first = d._stage_label()
+    monkeypatch.setattr(_time, "monotonic", lambda: 0.5)
+    second = d._stage_label()
+    assert first != second                      # spinner/dots advanced
+    assert "critiquing" in first
+    d.stage = "committed"
+    assert d._stage_label() == "committed"      # no spinner on settled stages
+    # The dash itself is a Rich renderable (handed to Live directly).
+    _record_console().print(d)
+
+
 def _record_console():
     import io
 
