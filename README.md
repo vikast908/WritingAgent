@@ -182,8 +182,9 @@ The shell is a full editorial workspace, not a bare prompt:
   left-aligned. Ten built-in themes (`/theme`) change *everything*: palette, the wordmark's
   figlet face, glyphs, and text tint - from the blue-ink `editorial` default to `kazama`
   (Tekken flame), `fallout` (Pip-Boy CRT), `vercel` (monochrome), and more. [Full list ↓](#themes)
-- **Welcome screen** - commands, slash list, your projects with live phase/progress, and a
-  feature board showing what's on/off, all rendered on launch.
+- **Welcome screen** - compact by design so the wordmark is still on screen at the first
+  prompt: how to start, your projects with live phase/progress, and a one-line feature
+  status. The full command list is `/help`; the feature board is `/features`.
 - **`write` interview flow** - one batch of tailored questions upfront (each with a default you
   accept by pressing Enter), then it runs to a finished exported file with zero interruptions.
 - **Live run dashboard** - progress bar, current chapter/section and stage, elapsed time, live

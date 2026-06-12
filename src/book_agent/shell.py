@@ -47,6 +47,7 @@ _MAX_HISTORY = 10  # max messages kept for multi-turn context (5 user + 5 assist
 
 _SLASH_HELP = [
     ("/help", "this panel + the full command list"),
+    ("/features", "feature toggles - what's on/off and what each does"),
     ("/model", "show per-agent model routing"),
     ("/model <slug>", "route ALL agents to a model (any OpenRouter slug)"),
     ("/model <agent> <slug>", "set one agent (e.g. /model critic openai/gpt-4o)"),
@@ -418,8 +419,16 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     projects = brain.list_projects(uid)
     mode = settings.mode
     is_article = mode == "article"
+    # Loud guard: a leftover test env var otherwise makes every model call return
+    # canned text with zero indication why (chat replies with the same boilerplate,
+    # runs "succeed" with placeholder prose).
+    fake = os.getenv("BOOK_AGENT_FAKE", "").lower() in ("1", "true", "yes")
+    fake_msg = ("⚠ FAKE MODE is on (BOOK_AGENT_FAKE env var) - no real AI calls; chat and runs "
+                "return canned text. Fix: Remove-Item Env:BOOK_AGENT_FAKE  then restart.")
 
     if not console:
+        if fake:
+            print(fake_msg)
         print("commands: new run status review read export memory consolidate produce list")
         print("slash:    /help /model /set /skills /use /auto /config /clear /exit")
         print(f"mode:     {mode}   run: {'autonomous' if settings.autonomous else 'manual'}")
@@ -432,96 +441,31 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
 
     from rich.text import Text
 
-    # ── Commands ──────────────────────────────────────────────────────────────
-    _section(console, "COMMANDS")
-    if is_article:
-        new_desc = "start an article - topic → angles → outline + sections"
-    else:
-        new_desc = "start a book - idea → directions → plan + TOC"
-    export_desc = "pdf · epub · html · docx · txt · md  (prompts if format omitted)"
-    _cmd_table(console, [
-        ("write --abstract \"...\"", "★ ask a few questions upfront, then autonomously "
-                                     "research → write → export a finished file"),
-        ("new --abstract \"...\"", new_desc + "  (then `run`)"),
-        ("run", "write it - draft · critique · humanise · commit per section" if is_article
-                else "write it - draft · critique · humanise · commit per chapter"),
-        ("status · review", "where the project stands · answer escalations"),
-        ("revise --chapter N ...", "rewrite one committed section/chapter to your instruction"),
-        ("brief · versions · eval", "the goal · draft history · quality scorecard"),
-        ("tableread [--as \"...\"]", "skeptical-reader report on the finished piece"),
-        ("read", "section (--chapter N) · --summary · --manuscript" if is_article
-                 else "chapter (--chapter N) · --summary · --manuscript"),
-        ("export [--format <fmt>]", export_desc),
-        ("memory · skills · list", "canon & timeline · craft skills · all projects"),
-        ("delete [--yes]", "permanently delete a project"),
-        ("/mode book", "switch to book mode (chapters, novel/nonfiction)") if is_article
-        else ("/mode article", "switch to article mode (single long-form piece)"),
-    ])
+    # Compact by design: the wordmark must still be on screen when the prompt
+    # appears (the old screen was ~45 lines and scrolled the banner away on a
+    # standard 30-row terminal). Full lists live behind /help and /features.
+    if fake:
+        console.print(Text(f"  {fake_msg}", style=f"bold {ERR}"))
 
-    # ── Slash commands ────────────────────────────────────────────────────────
-    _section(console, "SLASH  &  CHAT")
-    _cmd_table(console, [
-        ("/model [agent] <slug>", "switch any model to any OpenRouter slug"),
-        ("/set <key> <value>", "change a setting live (e.g. /set use_researcher true)"),
-        ("/theme [<name>]", "switch theme - palette + wordmark font (10 built-in)"),
-        ("/dashboard [<project>]", "usage telemetry - calls · tokens · cost · errors"),
-        ("/update [changes]", "describe your changes - AI reviews and advises"),
-        ("/use <project> · /books", "set active project · list projects"),
-        ("/auto [on|off]", "autonomous (never pause) vs manual (review each unit)"),
-        ("/skills · /seed-skills", "browse skills · install built-ins"),
-        ("/retry · /reset · /compact", "retry last message · clear memory · compress memory"),
-        ("/help · /clear · /exit", "full slash list · clear · quit"),
-        ("", ""),
-        ("💬 free chat", "type anything - the assistant will guide you"),
-    ])
-
-    # ── Getting started (first time) OR book/article status ──────────────────
+    # ── Start here ────────────────────────────────────────────────────────────
+    _section(console, "START")
+    unit = "section" if is_article else "chapter"
+    start_rows = [
+        ("write --abstract \"...\"", "★ one command - a few questions upfront, then it "
+                                     "researches, writes, and exports the finished file"),
+        ("new --abstract \"...\"", f"step-by-step - outline → `run` (write · critique · "
+                                   f"humanise per {unit}) → `export`"),
+    ]
     if not projects:
-        _section(console, "GETTING STARTED")
-        if is_article:
-            _cmd_table(console, [
-                ("Easiest", 'write --abstract "How Python async/await actually works"'),
-                ("", "  → answers a few questions upfront, then writes + exports it all"),
-                ("", ""),
-                ("Manual", "new …  →  run  →  export   (review at each step)"),
-                ("Tip", "/set use_researcher true  for real web sources + citations"),
-                ("Tip", "/mode book  to switch back to full-book mode"),
-            ])
-        else:
-            _cmd_table(console, [
-                ("Easiest", 'write --abstract "A thriller set on Mars in 2089"'),
-                ("", "  → answers a few questions upfront, then writes + exports it all"),
-                ("", ""),
-                ("Manual", "new …  →  run  →  export   (review at each step)"),
-                ("Tip", "/set num_chapters 12  to change the book length (default 8)"),
-                ("Tip", "/mode article  to write a single long-form article instead"),
-            ])
-    else:
-        _section(console, "YOUR PROJECTS")
-        rows = _book_status_rows(uid, projects)
-        _cmd_table(console, rows)
-        _cmd_table(console, [("", ""), ("/use <project>", "set active project to skip --book-id")])
+        example = ("How Python async/await actually works" if is_article
+                   else "A thriller set on Mars in 2089")
+        start_rows.append(("try it", f'write --abstract "{example}"'))
+    _cmd_table(console, start_rows)
 
-    # ── Features ──────────────────────────────────────────────────────────────
-    _section(console, "FEATURES")
-    _cmd_table(console, [
-        _feat_row("humanize   ", settings.humanize,
-                  "strip AI tells from prose (em-dashes, AI phrasing)"),
-        _feat_row("researcher ", settings.use_researcher,
-                  "web search per section - real facts + inline citations" if is_article
-                  else "DuckDuckGo web search per chapter - grounds facts"),
-        _feat_row("deep search", settings.deep_research,
-                  "multi-query fan-out + full-page fetch + cross-source synthesis "
-                  "(needs researcher)"),
-        _feat_row("embeddings ", settings.use_embeddings,
-                  "semantic skill retrieval (all-MiniLM-L6-v2, local)"),
-        _feat_row("images     ", settings.use_images,
-                  "Wikimedia Commons images for illustrated/technical content"),
-        _feat_row("cohesion   ", settings.article_cohesion,
-                  "whole-article smoothing pass before References (articles)"),
-        ("", ""),
-        ("/set <key> true/false", "toggle any feature above and save instantly"),
-    ])
+    # ── Projects ──────────────────────────────────────────────────────────────
+    if projects:
+        _section(console, "YOUR PROJECTS")
+        _cmd_table(console, _book_status_rows(uid, projects))
 
     # ── Footer ────────────────────────────────────────────────────────────────
     console.print()
@@ -541,18 +485,89 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     foot.append(f"   {len(skl)} skills   {n_proj} project{'s' if n_proj != 1 else ''}   {uid}",
                 style=DIM)
     console.print(foot)
+    feats = [("humanize", settings.humanize), ("researcher", settings.use_researcher),
+             ("deep search", settings.deep_research), ("embeddings", settings.use_embeddings),
+             ("images", settings.use_images), ("cohesion", settings.article_cohesion)]
+    on = " · ".join(k for k, v in feats if v) or "none"
+    off = " · ".join(k for k, v in feats if not v) or "none"
+    console.print(Text(f"  features on: {on}   off: {off}", style=DIM))
     console.print(Text(
-        "  type a command · /help for slash commands · or just chat in plain English",
+        "  /help all commands · /features toggles · /theme looks · or just chat in plain English",
         style=DIM,
     ))
 
 
-def _slash_help(console) -> None:
+def _commands_table(console, settings: Settings) -> None:
+    """The full project-command list (lives under /help; was the welcome screen)."""
+    is_article = settings.mode == "article"
+    if is_article:
+        new_desc = "start an article - topic → angles → outline + sections"
+    else:
+        new_desc = "start a book - idea → directions → plan + TOC"
+    export_desc = "pdf · epub · html · docx · txt · md  (prompts if format omitted)"
+    rows = [
+        ("write --abstract \"...\"", "★ ask a few questions upfront, then autonomously "
+                                     "research → write → export a finished file"),
+        ("new --abstract \"...\"", new_desc + "  (then `run`)"),
+        ("run", "write it - draft · critique · humanise · commit per section" if is_article
+                else "write it - draft · critique · humanise · commit per chapter"),
+        ("status · review", "where the project stands · answer escalations"),
+        ("revise --chapter N ...", "rewrite one committed section/chapter to your instruction"),
+        ("brief · versions · eval", "the goal · draft history · quality scorecard"),
+        ("tableread [--as \"...\"]", "skeptical-reader report on the finished piece"),
+        ("read", "section (--chapter N) · --summary · --manuscript" if is_article
+                 else "chapter (--chapter N) · --summary · --manuscript"),
+        ("export [--format <fmt>]", export_desc),
+        ("memory · skills · list", "canon & timeline · craft skills · all projects"),
+        ("delete [--yes]", "permanently delete a project"),
+        ("/mode book", "switch to book mode (chapters, novel/nonfiction)") if is_article
+        else ("/mode article", "switch to article mode (single long-form piece)"),
+    ]
+    if not console:
+        for a, b in rows:
+            print(f"  {_MARKUP.sub('', a):<28} {_MARKUP.sub('', b)}")
+        return
+    _section(console, "COMMANDS")
+    _cmd_table(console, rows)
+
+
+def _features_table(console, settings: Settings) -> None:
+    """Feature toggles with live state (lives under /features; was the welcome screen)."""
+    is_article = settings.mode == "article"
+    rows = [
+        _feat_row("humanize   ", settings.humanize,
+                  "strip AI tells from prose (em-dashes, AI phrasing)"),
+        _feat_row("researcher ", settings.use_researcher,
+                  "web search per section - real facts + inline citations" if is_article
+                  else "DuckDuckGo web search per chapter - grounds facts"),
+        _feat_row("deep search", settings.deep_research,
+                  "multi-query fan-out + full-page fetch + cross-source synthesis "
+                  "(needs researcher)"),
+        _feat_row("embeddings ", settings.use_embeddings,
+                  "semantic skill retrieval (all-MiniLM-L6-v2, local)"),
+        _feat_row("images     ", settings.use_images,
+                  "Wikimedia Commons images for illustrated/technical content"),
+        _feat_row("cohesion   ", settings.article_cohesion,
+                  "whole-article smoothing pass before References (articles)"),
+        ("", ""),
+        ("/set <key> true/false", "toggle any feature above and save instantly"),
+    ]
+    if not console:
+        for a, b in rows:
+            print(f"  {_MARKUP.sub('', a):<28} {_MARKUP.sub('', b)}")
+        return
+    _section(console, "FEATURES")
+    _cmd_table(console, rows)
+
+
+def _slash_help(console, settings: Settings | None = None) -> None:
     if not console:
         for name, desc in _SLASH_HELP:
             print(f"  {name:<28} {desc}")
         return
     from rich.text import Text
+    if settings is not None:
+        _commands_table(console, settings)
     _section(console, "SLASH COMMANDS")
     _cmd_table(console, _SLASH_HELP)
     console.print(Text(f"  agents: {', '.join(_NODES)}", style=DIM))
@@ -1625,27 +1640,6 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
 
 # ── Prompt state indicator ────────────────────────────────────────────────────
 
-def _book_progress(uid: str, book: str) -> str:
-    """Short ' ch 3/8' / ' sec 2/6' / ' ⚠ review' / ' ✓ done' suffix for the toolbar."""
-    if not book:
-        return ""
-    try:
-        from .brain import ArticlePaths, BookPaths
-        art = ArticlePaths(book, uid)
-        if art.run_state.exists():
-            st, unit, cur, tot = brain.read_json(art.run_state), "sec", "current_section", "num_sections"
-        else:
-            st, unit, cur, tot = brain.read_json(BookPaths(book, uid).run_state), "ch", "current_chapter", "num_chapters"
-        if not st:
-            return ""
-        if st.get("pending_review"):
-            return "  ⚠ review"
-        if st.get("phase") == "done":
-            return "  ✓ done"
-        return f"  {unit} {st.get(cur, '?')}/{st.get(tot, '?')}"
-    except Exception:
-        return ""
-
 
 def _prompt_state(state: dict) -> str:
     """Return a short Rich-markup suffix for the shell prompt."""
@@ -1681,7 +1675,9 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
     if name in _EXIT:
         return False
     if name in ("help", "h", "?"):
-        _slash_help(console)
+        _slash_help(console, settings)
+    elif name == "features":
+        _features_table(console, settings)
     elif name in ("clear", "cls"):
         if console:
             console.clear()
@@ -1821,7 +1817,8 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
 
 # Flat list of (slash-name, description) for the completion dropdown
 _SLASH_COMPLETIONS = [
-    ("help",        "show all slash commands"),
+    ("help",        "show all commands + slash commands"),
+    ("features",    "feature toggles - on/off + what each does"),
     ("model",       "show / set model routing"),
     ("set",         "change a setting  e.g. /set use_researcher true"),
     ("skills",      "list craft skills"),
@@ -1852,7 +1849,6 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
     """
     try:
         import dataclasses
-        import datetime
 
         from prompt_toolkit import PromptSession
         from prompt_toolkit.completion import Completer, Completion
@@ -1944,19 +1940,9 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                 elif "--format".startswith(cur) and "--format" not in words:
                     yield _comp("--format", -len(cur))
 
-    def _toolbar():
-        model = cfg.model_for("writer").split("/")[-1]
-        today = datetime.date.today().strftime("%Y-%m-%d")
-        mode_part = "[article]" if settings.mode == "article" else "[book]"
-        run_mode = "auto" if settings.autonomous else "manual"
-        book = state.get("book") or ""
-        book_part = f"● {book}{_book_progress(state['uid'], book)}" if book else "no active book"
-        text = f"  {model}  │  {mode_part} {run_mode}  │  {book_part}  │  {today}  "
-        if "⚠ review" in book_part:
-            # A stalled run silently waiting is wasted wall-clock - make it loud.
-            from prompt_toolkit.formatted_text import HTML
-            return HTML(f'<style bg="ansired" fg="ansiwhite">{text}- type `run` to resolve  </style>')
-        return text
+    # (No bottom toolbar: the persistent status strip read as visual noise - mode/
+    # model/project state lives in the prompt prefix and the welcome footer instead.
+    # A pending review still surfaces via the prompt suffix and the escalation picker.)
 
     _DIM_HEX = "#6b6b6b"  # prompt_toolkit needs hex; Rich's "grey42" ≈ #6b6b6b
     pt_style = Style.from_dict({
@@ -1965,9 +1951,6 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
         "completion-menu.completion.current":        f"bg:{RULE} fg:{GOLD_HI} bold",
         "completion-menu.meta.completion":           f"bg:#111111 fg:{_DIM_HEX}",
         "completion-menu.meta.completion.current":   f"bg:{RULE} fg:{PARCH}",
-        # Bottom toolbar (ember on near-black; RULE is too dark for small text)
-        "bottom-toolbar":                            f"bg:#0a0a0a fg:{INK}",
-        "bottom-toolbar.text":                       f"bg:#0a0a0a fg:{INK}",
         # Prompt
         "":                                          f"fg:{PARCH}",
     })
@@ -1982,7 +1965,6 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
         session = PromptSession(
             completer=_BWCompleter(),
             history=history,
-            bottom_toolbar=_toolbar,
             style=pt_style,
             complete_while_typing=True,
             mouse_support=False,

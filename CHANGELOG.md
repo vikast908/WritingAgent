@@ -22,8 +22,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **`eval`** quality report (judged 5-dimension rubric + deterministic metrics → `eval_report.md`).
 - **Interactive TUI** - escalation picker (fix/instruct/approve-as-is/go-autonomous/read on a
   stalled unit), manual divergent-variant picking, outline+thesis approval gate after `new`,
-  post-run summary card + terminal bell, draft-opening glimpse in the dashboard, and a red
-  toolbar when a review is pending.
+  post-run summary card + terminal bell, and a draft-opening glimpse in the dashboard.
+- **Compact welcome screen** - the startup screen shrank from ~66 to ~33 lines so the
+  wordmark stays visible at the first prompt; the full command list moved to `/help` and
+  the feature board to a new **`/features`** command (one-line feature status in the
+  footer). The bottom status toolbar was removed (state lives in the prompt + footer),
+  and a red warning fires at launch when `BOOK_AGENT_FAKE` is set so test mode can't
+  silently swallow real runs.
 - **Run-mode toggle** - `/auto [on|off]` (aliases `/autonomous`, `/manual`) and
   `run --autonomous`/`--manual`, which also clear a stalled per-unit review when going autonomous.
 - **Export overhaul** - PDF code/diagram wrapping (no more right-edge clipping), Mermaid blocks

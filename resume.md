@@ -168,6 +168,30 @@
 
 ## Session log
 
+### 2026-06-12 (11) - TUI: compact welcome, /features, toolbar removed, FAKE-mode warning
+
+User feedback from a real launch: the startup screen was so long the wordmark scrolled
+off (66 rendered lines vs a ~30-row terminal), and the bottom toolbar strip was "annoying".
+Also debugged a live failure: chat kept replying with canned boilerplate - the user had
+launched `writing-agent` from the same PowerShell window where a test command had set
+`BOOK_AGENT_FAKE=1`, and nothing in the TUI indicated fake mode. **214 tests pass** (+3).
+
+- **Welcome screen 66 → 33 lines** (banner 21 + welcome 12): START (write/new + a try-it
+  example when no projects), YOUR PROJECTS (compact), status footer + one-line feature
+  status + discovery line. The full COMMANDS table moved under **`/help`** (now renders
+  commands + slash list); the FEATURES board moved to a new **`/features`** command.
+- **Bottom toolbar removed** (`bottom_toolbar`, `_toolbar`, `_book_progress`, toolbar
+  styles): state lives in the prompt prefix and welcome footer; a pending review still
+  surfaces via the prompt suffix + escalation picker (the toolbar-turns-red behavior went
+  with it - plan §13 updated).
+- **FAKE-mode guard:** `_welcome` prints a red warning when `BOOK_AGENT_FAKE` is set
+  (rich + plain paths) with the exact `Remove-Item Env:BOOK_AGENT_FAKE` fix - a leftover
+  test env var can no longer silently can every model call.
+- Guard tests: welcome height budget (≤14 lines, the regression that started this),
+  fake-warning presence, /features + /help tables render (`test_ui.py`, +3).
+- **Next step:** user re-runs `writing-agent` in a clean terminal (no BOOK_AGENT_FAKE) and
+  retries the live article: chat-propose → "go ahead" → run.
+
 ### 2026-06-12 (10) - Review fixes (revise parity, stream errors, fetch gate) + Linux CI unblocked
 
 Full pending/improvable review (resume+plan backlog, code review of the 269192c..9653244 pull,

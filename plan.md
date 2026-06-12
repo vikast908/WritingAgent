@@ -474,9 +474,13 @@ and canon in any editor):
 
 - **Interactive shell - the WRITING AGENT TUI.** Run `writing-agent` / `book` / `python book.py`
   with no command (see `shell.py`). Themed masthead (gradient-filled ANSI Shadow wordmark; theme
-  also sets palette/figlet/glyphs - `ui.THEMES`), welcome screen with project status + feature
-  board, live run dashboard (progress, stage, tokens vs budget, USD cost), `/dashboard` telemetry
-  rollup, autocomplete + persistent history, and a `❧ <model>` prompt. Type book commands without
+  also sets palette/figlet/glyphs - `ui.THEMES`), a **compact welcome** (START + your projects +
+  a status footer - sized so the wordmark is still on screen at the first prompt on a 30-row
+  terminal; the full command list lives under `/help`, the feature board under `/features`; a
+  red warning fires when `BOOK_AGENT_FAKE` is set so test mode can't silently eat real runs),
+  live run dashboard (progress, stage, tokens vs budget, USD cost), `/dashboard` telemetry
+  rollup, autocomplete + persistent history, and a `❧ <model>` prompt. No bottom toolbar (it
+  read as noise; state lives in the prompt prefix + welcome footer). Type book commands without
   the `book` prefix; lines starting with `/` are slash commands; anything else is free chat.
 - **One-shot CLI** - `python book.py <command> ...` (same commands), for scripting.
 
@@ -520,8 +524,8 @@ Run modes: **interactive** (prompts inline on escalation via the picker, §7), *
 stays visible in the header; each attempt logs a one-line draft *glimpse* (the opening sentence,
 so a run going wrong can be cancelled before it costs more); a finished run rings the terminal
 bell and shows a **summary card** (units · words · elapsed · tokens · cost · avg insight +
-clarity/structure/evidence scorecard + pointers to `eval` / `tableread`). The bottom toolbar turns
-**red** when a review is pending so a silently-stalled run can't hide.
+clarity/structure/evidence scorecard + pointers to `eval` / `tableread`). A pending review
+surfaces via the prompt suffix and the escalation picker (the bottom toolbar was removed).
 
 ---
 

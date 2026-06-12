@@ -55,3 +55,45 @@ def test_run_dashboard_log_parsing():
     assert d.done == 1                          # advanced on commit
     assert d.unit.startswith("Chapter 1")
     d.render()                                  # builds a renderable without raising
+
+
+def _record_console():
+    import io
+
+    from rich.console import Console
+    return Console(file=io.StringIO(), force_terminal=True, width=110)
+
+
+def test_welcome_is_compact(tmp_brain, monkeypatch):
+    """The welcome must leave the banner on screen: banner (~21 rows) + welcome must
+    fit a standard 35-row terminal. The 45-line welcome was the regression this guards."""
+    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    from book_agent import shell
+    from book_agent.config import load_config, load_settings
+    console = _record_console()
+    shell._welcome(console, load_config(), load_settings(), "u")
+    assert len(console.file.getvalue().splitlines()) <= 14
+
+
+def test_welcome_warns_on_fake_mode(tmp_brain, monkeypatch):
+    """A leftover BOOK_AGENT_FAKE otherwise silently cans every model call."""
+    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    from book_agent import shell
+    from book_agent.config import load_config, load_settings
+    console = _record_console()
+    shell._welcome(console, load_config(), load_settings(), "u")
+    assert "FAKE MODE" in console.file.getvalue()
+
+
+def test_features_and_commands_tables_render(tmp_brain):
+    """/features and /help content moved out of the welcome - they must still render."""
+    from book_agent import shell
+    from book_agent.config import load_settings
+    settings = load_settings()
+    console = _record_console()
+    shell._features_table(console, settings)
+    out = console.file.getvalue()
+    assert "humanize" in out and "/set" in out
+    console = _record_console()
+    shell._commands_table(console, settings)
+    assert "write --abstract" in console.file.getvalue()
