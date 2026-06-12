@@ -134,6 +134,98 @@ def test_ask_reaches_variant_picker_in_manual_run(tmp_brain, fake_llm):
     assert "Variant drafts ready" in asked.get("prompt", "")
 
 
+# ── version snapshots ─────────────────────────────────────────────────────────
+def test_versions_saved_through_run(tmp_brain, fake_llm):
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "verart", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    vdir = ArticlePaths(aid, "u").root / "versions"
+    files = sorted(vdir.glob("section_01.v*.md"))
+    assert len(files) >= 2                                  # variants + committed final
+    assert any("committed" in f.read_text(encoding="utf-8").splitlines()[0]
+               for f in files)
+    # survives article cleanup (run completed -> cleanup already happened)
+    assert not list(ArticlePaths(aid, "u").root.glob("section_*.md"))
+
+
+def test_save_version_numbering(tmp_brain):
+    paths = ArticlePaths("vnum", "u").ensure()
+    assert orchestrator._save_version(paths, "section_01", "one") == 1
+    assert orchestrator._save_version(paths, "section_01", "two") == 2
+    assert orchestrator._save_version(paths, "ch01", "other-unit") == 1
+
+
+# ── revise confirm gate ───────────────────────────────────────────────────────
+def test_revise_confirm_reject_changes_nothing(tmp_brain, fake_llm, monkeypatch):
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "revno", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    paths = ArticlePaths(aid, "u")
+    before = brain.read_text(paths.manuscript)
+    monkeypatch.setattr(nodes, "write_article_section",
+                        lambda *a, **k: "## H\n\nRejected text.")
+    monkeypatch.setattr(nodes, "critique_article_section", lambda *a, **k: _crit())
+    orchestrator.revise_unit(cfg, "u", aid, 1, "x", log=_silent,
+                             confirm=lambda old, new, s: False)
+    assert brain.read_text(paths.manuscript) == before
+    assert "Rejected text." not in brain.read_text(paths.manuscript)
+
+
+def test_revise_confirm_accept_applies(tmp_brain, fake_llm, monkeypatch):
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "revyes", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    seen = {}
+    monkeypatch.setattr(nodes, "write_article_section",
+                        lambda *a, **k: "## H\n\nAccepted text.")
+    monkeypatch.setattr(nodes, "critique_article_section", lambda *a, **k: _crit())
+
+    def confirm(old, new, summary):
+        seen["summary"] = summary
+        return True
+    orchestrator.revise_unit(cfg, "u", aid, 1, "x", log=_silent, confirm=confirm)
+    assert "Accepted text." in brain.read_text(ArticlePaths(aid, "u").manuscript)
+    assert "summary" in seen                                # semantic summary was produced
+
+
+# ── table read personas + eval ────────────────────────────────────────────────
+def test_tableread_persona_writes_named_report(tmp_brain, fake_llm):
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "trp", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    out = orchestrator.run_table_read(cfg, "u", aid, persona="a CTO evaluating vendors",
+                                      log=_silent)
+    assert out.name == "table_read_a-cto-evaluating-vendors.md"
+    assert out.exists()
+
+
+def test_evaluate_project_scores_and_report(tmp_brain, fake_llm):
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "evart", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    result = orchestrator.evaluate_project(cfg, "u", aid, log=_silent)
+    assert set(result["scores"]) == {"insight", "clarity", "structure",
+                                     "evidence", "persuasiveness"}
+    assert all(v == 5 for v in result["scores"].values())   # fake passes everything
+    assert result["metrics"]["words"] > 0
+    assert result["report_path"].exists()
+    assert "## Scores" in result["report_path"].read_text(encoding="utf-8")
+
+
+def test_scores_tracked_in_state(tmp_brain, fake_llm):
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "scor", 1, 1, autonomous=True)
+    state = orchestrator.run(cfg, "u", aid, log=_silent)
+    assert state.get("scores") == [{"insight": 5, "clarity": 5,
+                                    "structure": 5, "evidence": 5}]
+
+
 # ── insights + table read ─────────────────────────────────────────────────────
 def test_insights_tracked_and_table_read_written(tmp_brain, fake_llm):
     cfg, settings = load_config(), load_settings()

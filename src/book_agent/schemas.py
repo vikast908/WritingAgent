@@ -86,8 +86,11 @@ class Critique(BaseModel):
     nits: list[str]
     # Quality (not correctness): 5 = specific, contestable argument a generic piece
     # wouldn't contain; 3 = competent but predictable; 1 = could appear on any site.
-    # Default keeps old eval JSON files loadable (the field didn't exist before).
+    # Defaults keep old eval JSON files loadable (the fields didn't exist before).
     insight: int = 3
+    clarity: int = 3     # readable, jargon grounded, no re-read sentences
+    structure: int = 3   # paragraphs earn their order; transitions carry weight
+    evidence: int = 3    # claims carried by specifics (names, numbers, examples)
 
     @field_validator("confidence")
     @classmethod
@@ -212,6 +215,18 @@ class ArticleResearchBrief(BaseModel):
     facts: list[str]
     style_cues: list[str]
     sources: list[Source]
+
+
+# ── Manuscript evaluation (`eval` command - post-hoc quality report) ──────────
+class ManuscriptEval(BaseModel):
+    insight: int          # 1-5: contestable argument vs generic coverage
+    clarity: int          # 1-5: readable, concepts grounded
+    structure: int        # 1-5: order earns itself, transitions carry weight
+    evidence: int         # 1-5: claims carried by specifics
+    persuasiveness: int   # 1-5: would the target reader change their mind / act
+    strengths: list[str]      # specific, with short quotes
+    weaknesses: list[str]     # specific, with short quotes
+    summary: str              # two-sentence verdict
 
 
 # ── Surgical humanizer (per-sentence line edits, plan: anti-slop) ─────────────

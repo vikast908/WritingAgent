@@ -313,6 +313,8 @@ def _fake_value(annotation, field_name: str = ""):
                 except ValueError:
                     pass
             return 5
+        if field_name in ("clarity", "structure", "evidence", "persuasiveness"):
+            return 5   # quality scores read as passing in offline runs
         return 1
     if annotation is float:
         if field_name == "confidence":

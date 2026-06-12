@@ -400,20 +400,144 @@ def cmd_review(args, cfg, settings, uid):
           f"--book-id {book_id}")
 
 
+def _print_diff(old: str, new: str) -> None:
+    """Colored unified diff (plain text when Rich is unavailable)."""
+    import difflib
+    lines = list(difflib.unified_diff(old.splitlines(), new.splitlines(),
+                                      fromfile="before", tofile="after", lineterm=""))
+    console = _console()
+    for ln in lines[:400]:   # cap - a total rewrite would flood the terminal
+        if console:
+            style = (ui.ON_CLR if ln.startswith("+") else
+                     ui.ERR if ln.startswith("-") else ui.DIM)
+            console.print(f"[{style}]{ln}[/]", highlight=False, markup=True)
+        else:
+            print(ln)
+    if len(lines) > 400:
+        print(f"  ... diff truncated ({len(lines) - 400} more lines)")
+
+
 def cmd_revise(args, cfg, settings, uid):
     """Post-completion revision: rewrite one committed chapter/section to an instruction."""
     if args.chapter is None or not args.instruction:
         sys.exit('revise needs --chapter and --instruction (e.g. revise --chapter 3 '
                  '--instruction "more technical, add a benchmark table")')
     book_id = _resolve_book(uid, args.book_id)
-    orchestrator.revise_unit(cfg, uid, book_id, args.chapter, args.instruction)
+
+    confirm = None
+    if sys.stdin.isatty():
+        def confirm(old, new, summary):  # noqa: ARG001 - summary already logged upstream
+            _print_diff(old, new)
+            ans = input("\napply this revision? [Y/n] ").strip().lower()
+            return ans in ("", "y", "yes")
+    orchestrator.revise_unit(cfg, uid, book_id, args.chapter, args.instruction,
+                             confirm=confirm)
+
+
+def cmd_versions(args, cfg, settings, uid):
+    """List draft snapshots (every variant, revision, committed final, revise output)."""
+    paths = _paths_for(uid, _resolve_book(uid, args.book_id))
+    d = paths.root / "versions"
+    files = sorted(d.glob("*.md")) if d.exists() else []
+    if args.chapter:
+        tags = (f"section_{args.chapter:02d}", f"ch{args.chapter:02d}")
+        files = [f for f in files if f.name.startswith(tags)]
+    if not files:
+        print("(no versions yet - drafts are snapshotted as they are written)")
+        return
+    import datetime
+    for f in files:
+        text = f.read_text(encoding="utf-8")
+        first = text.splitlines()[0].strip("<!- >") if text.startswith("<!--") else ""
+        words = len(text.split())
+        ts = datetime.datetime.fromtimestamp(f.stat().st_mtime).strftime("%H:%M:%S")
+        print(f"  {f.stem:<22} {words:>6} words   {ts}   {first}")
+    print("\nread one:  read --chapter N --v K")
+
+
+def cmd_brief(args, cfg, settings, uid):
+    """The goal panel: what this piece is supposed to be. Writers forget the brief."""
+    book_id = _resolve_book(uid, args.book_id)
+    art = ArticlePaths(book_id, uid)
+    lines = [f"# Brief - {book_id}", ""]
+    if art.run_state.exists():
+        outline = brain.read_json(art.outline_json) or {}
+        lines += [f"**Title:** {outline.get('title', '?')}",
+                  f"**Angle:** {outline.get('angle', '?')}",
+                  f"**Target length:** ~{outline.get('target_word_count', '?')} words", ""]
+        thesis = brain.read_text(art.root / "thesis.md")
+        if thesis:
+            lines += ["## Thesis", thesis, ""]
+        intake = brain.read_text(art.root / "intake.md")
+        if intake:
+            lines += ["## Author requirements", intake, ""]
+    else:
+        plan = brain.read_json(BookPaths(book_id, uid).root / "plan.json") or {}
+        lines += [f"**Title:** {plan.get('title', '?')}",
+                  f"**Genre / tone:** {plan.get('genre', '?')} · {plan.get('tone', '?')}",
+                  f"**Audience:** {plan.get('audience', '?')}",
+                  f"**Premise:** {plan.get('premise', '?')}", ""]
+    voice = brain.voice_exemplars(uid, max_chars=1)
+    watch = brain.read_text(brain.watch_list(uid))
+    lines.append(f"_voice exemplars: {'on' if voice else 'none'} · "
+                 f"watch-list: {'active' if watch else 'none'}_")
+    text = "\n".join(lines)
+    console = _console()
+    if console:
+        from rich.markdown import Markdown
+        console.print(Markdown(text))
+    else:
+        print(text)
+
+
+def cmd_tableread(args, cfg, settings, uid):
+    """On-demand skeptical-reader pass, optionally as a specific persona."""
+    book_id = _resolve_book(uid, args.book_id)
+    out = orchestrator.run_table_read(cfg, uid, book_id, persona=getattr(args, "persona", None))
+    text = brain.read_text(out) or ""
+    console = _console()
+    if console:
+        from rich.markdown import Markdown
+        console.print(Markdown(text))
+    else:
+        print(text)
+
+
+def cmd_eval(args, cfg, settings, uid):
+    """Quality report: deterministic metrics + judged 5-dimension rubric."""
+    book_id = _resolve_book(uid, args.book_id)
+    result = orchestrator.evaluate_project(cfg, uid, book_id)
+    console = _console()
+    if not console:
+        for k, v in result["scores"].items():
+            print(f"  {k:<15} {v}/5")
+        print(f"\n{result['summary']}\nreport: {result['report_path']}")
+        return
+    from rich.table import Table
+    t = Table(box=None, show_header=False, padding=(0, 3, 0, 2))
+    t.add_column(style=f"bold {ui.GOLD}", no_wrap=True)
+    t.add_column(style=ui.PARCH)
+    for k, v in result["scores"].items():
+        bar = "█" * v + "░" * (5 - v)
+        clr = ui.ON_CLR if v >= 4 else (ui.PARCH if v >= 3 else ui.ERR)
+        t.add_row(k, f"[{clr}]{bar}[/]  {v}/5")
+    m = result["metrics"]
+    console.print(t)
+    console.print(f"  [dim]{m['words']:,} words · {m['ai_tells']} AI-tell sentences · "
+                  f"{m['citations']} citations ({m['verified_sources']} verified)[/]")
+    console.print(f"\n  {result['summary']}")
+    console.print(f"  [dim]full report: {result['report_path']}[/]")
 
 
 def cmd_read(args, cfg, settings, uid):
     # Articles and books store a manuscript/sections at different paths; pick the
     # right one so `read --manuscript` works for both project types.
     paths = _paths_for(uid, _resolve_book(uid, args.book_id))
-    if args.manuscript:
+    if getattr(args, "v", None):
+        n = args.chapter or 1
+        tag = (f"section_{n:02d}" if isinstance(paths, ArticlePaths) else f"ch{n:02d}")
+        target = paths.root / "versions" / f"{tag}.v{args.v:02d}.md"
+    elif args.manuscript:
         target = paths.manuscript
     elif args.summary:
         target = paths.ch_summary(args.chapter or 1)
@@ -553,7 +677,8 @@ def cmd_config(args, cfg, settings, uid):
 
 _COMMANDS = {
     "new": cmd_new, "write": cmd_write, "run": cmd_run, "status": cmd_status, "review": cmd_review,
-    "revise": cmd_revise,
+    "revise": cmd_revise, "versions": cmd_versions, "brief": cmd_brief,
+    "tableread": cmd_tableread, "eval": cmd_eval,
     "read": cmd_read, "memory": cmd_memory, "produce": cmd_produce,
     "consolidate": cmd_consolidate, "skills": cmd_skills, "config": cmd_config,
     "list": cmd_list, "export": cmd_export, "seed-skills": cmd_seed_skills,
@@ -615,6 +740,21 @@ def build_parser(settings):
     p_read.add_argument("--chapter", type=int)
     p_read.add_argument("--summary", action="store_true")
     p_read.add_argument("--manuscript", action="store_true")
+    p_read.add_argument("--v", type=int, help="Read draft version K of the chapter (see `versions`)")
+
+    p_versions = sub.add_parser("versions", parents=[common],
+                                help="List draft snapshots (variants, revisions, finals)")
+    p_versions.add_argument("--chapter", type=int, help="Only this chapter/section")
+
+    sub.add_parser("brief", parents=[common], help="Show the goal: thesis, audience, length")
+
+    p_tr = sub.add_parser("tableread", parents=[common],
+                          help="Skeptical-reader pass over the finished piece")
+    p_tr.add_argument("--as", dest="persona",
+                      help='Read as a specific persona (e.g. "a CTO evaluating vendors")')
+
+    sub.add_parser("eval", parents=[common],
+                   help="Quality report: judged rubric + deterministic metrics")
 
     sub.add_parser("memory", parents=[common], help="Inspect canon + graph")
     sub.add_parser("produce", parents=[common], help="Run Production (front/back matter + assembly)")

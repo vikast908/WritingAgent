@@ -140,7 +140,10 @@ CRITIC_SYS = (
     "Separately from correctness, score 'insight' 1-5: 5 = the chapter takes risks and "
     "contains specifics (images, turns, observations) a generic treatment would not; "
     "3 = competent but predictable; 1 = any paragraph could appear unchanged elsewhere. "
-    "Judge insight independently - a chapter can be flawless and still score 1."
+    "Judge insight independently - a chapter can be flawless and still score 1. "
+    "Also score 1-5 (5 exceptional · 3 competent · 1 poor), each independent of the verdict: "
+    "'clarity' (no re-read sentences, ideas land on first pass), 'structure' (scenes/"
+    "paragraphs earn their order), 'evidence' (concrete detail carries the telling)."
 )
 
 SUMMARIZER_SYS = (
@@ -344,7 +347,11 @@ ARTICLE_CRITIC_SYS = (
     "independently - a section can be flawless and still score 1. If DETERMINISTIC STYLE "
     "METRICS are provided, treat egregious values (near-uniform paragraph lengths, heavy "
     "rule-of-three density, very low specificity) as evidence toward a lower insight score "
-    "and report the worst as nits."
+    "and report the worst as nits. "
+    "Also score 1-5 (5 exceptional · 3 competent · 1 poor), each independent of the verdict: "
+    "'clarity' (ideas land on first pass, jargon grounded), 'structure' (paragraphs earn "
+    "their order, transitions carry weight), 'evidence' (claims carried by names, numbers, "
+    "and worked examples rather than assertion)."
 )
 
 ARTICLE_RESEARCHER_SYS = (
@@ -379,6 +386,30 @@ TABLE_READ_SYS = (
     "Be specific - quote actual phrases. If a section genuinely has no entries, write "
     "'(nothing)'. No praise padding; this report exists to find problems a per-section "
     "editor cannot see."
+)
+
+MANUSCRIPT_EVAL_SYS = (
+    "You are an exacting writing evaluator producing a quality report on a FINISHED "
+    "manuscript. Score each dimension 1-5 (5 = exceptional, 3 = competent/publishable, "
+    "1 = poor), judging against the best published writing in this genre, not against "
+    "other AI output:\n"
+    "- insight: does it argue something contestable, or merely cover the topic?\n"
+    "- clarity: do ideas land on the first read; is jargon grounded?\n"
+    "- structure: does each part earn its position; do transitions carry weight?\n"
+    "- evidence: are claims carried by names, numbers, and worked examples?\n"
+    "- persuasiveness: would the target reader change their mind or act?\n"
+    "List the strongest strengths and the most damaging weaknesses - each SPECIFIC, "
+    "quoting a short phrase from the text as proof. No generic feedback ('could be more "
+    "engaging' is banned). Finish with a two-sentence summary verdict. Be calibrated: "
+    "competent-but-generic work scores 3, not 4."
+)
+
+CHANGE_SUMMARY_SYS = (
+    "You compare two versions of the same passage and report the SEMANTIC changes - "
+    "meaning, not formatting. Output exactly three short Markdown sections: "
+    "'**Added:**' (new claims, examples, or material), '**Removed:**' (dropped content), "
+    "'**Improved:**' (same content, better execution). Max 3 bullets each; write "
+    "'(nothing)' for an empty section. Be specific; never pad."
 )
 
 DIAGRAM_SYS = """\

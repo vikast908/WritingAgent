@@ -95,7 +95,11 @@ COMMANDS  (type these directly in this shell - no 'book' prefix needed):
   revise --chapter N \\
     --instruction "..."      Rewrite ONE committed chapter/section of a finished piece
                              (e.g. "make section 3 more technical") and re-assemble
-  read [--chapter N]         Read a chapter; add --summary or --manuscript for those views
+  read [--chapter N]         Read a chapter; add --summary, --manuscript, or --v K (a version)
+  versions [--chapter N]     List draft snapshots (variants, revisions, committed finals)
+  brief                      Show the goal: thesis, audience, target length
+  tableread [--as "..."]     Skeptical-reader pass over the finished piece (optional persona)
+  eval                       Quality report: 5-dim judged rubric + deterministic metrics
   export [--format <fmt>]    Export: pdf · epub · html · docx · txt · md  (prompts if omitted)
   memory                     Inspect characters, timeline, entity graph
   skills                     List learned craft skills + efficacy
@@ -443,6 +447,8 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
                 else "write it - draft · critique · humanise · commit per chapter"),
         ("status · review", "where the project stands · answer escalations"),
         ("revise --chapter N ...", "rewrite one committed section/chapter to your instruction"),
+        ("brief · versions · eval", "the goal · draft history · quality scorecard"),
+        ("tableread [--as \"...\"]", "skeptical-reader report on the finished piece"),
         ("read", "section (--chapter N) · --summary · --manuscript" if is_article
                  else "chapter (--chapter N) · --summary · --manuscript"),
         ("export [--format <fmt>]", export_desc),
@@ -829,7 +835,8 @@ def _print_skill(console, uid: str, rest: list[str]) -> None:
 # ── NL → command execution helpers ───────────────────────────────────────────
 
 _NEEDS_PROJECT = {"run", "status", "read", "export", "review", "revise", "memory",
-                   "delete", "produce", "consolidate"}
+                   "delete", "produce", "consolidate", "versions", "brief",
+                   "tableread", "eval"}
 
 # The chat assistant must NOT silently auto-execute destructive or
 # config/tenant-changing commands - the human has to type these. (The model may
@@ -1035,10 +1042,11 @@ class _RunDashboard:
     """Live, multi-line view for `run`: header (elapsed + live tokens), a chapter
     progress bar, the current unit + stage, and a short scroll of recent events."""
 
-    def __init__(self, book_id: str, total: int, done: int):
+    def __init__(self, book_id: str, total: int, done: int, brief: str = ""):
         self.book_id = book_id
         self.total = max(total, 1)
         self.done = done
+        self.brief = brief      # the thesis claim / premise - the goal, always visible
         self.unit = ""
         self.stage = "starting…"
         self.verdict = ""
@@ -1063,6 +1071,12 @@ class _RunDashboard:
         cost_sfx = f" · ${cost:.4f}" if cost > 0 else ""
         head.append(f"     {self._elapsed()} elapsed · {toks} tokens{cost_sfx}",
                     style=DIM)
+        rows_brief = []
+        if self.brief:
+            brief = Text("  ")
+            brief.append("goal ", style=DIM)
+            brief.append(self.brief[:96], style=f"italic {INK}")
+            rows_brief.append(brief)
         w = 24
         filled = min(w, round(self.done / self.total * w))
         bar = Text()
@@ -1075,7 +1089,7 @@ class _RunDashboard:
         stage.append("· " + self.stage, style=f"italic {INK}")
         if self.verdict:
             stage.append("   " + self.verdict, style=DIM)
-        rows = [head, bar, stage]
+        rows = [head, *rows_brief, bar, stage]
         if self.events:
             rows.append(Text("─" * 48, style=RULE))
             rows.extend(self.events)
@@ -1143,6 +1157,19 @@ def _summary_card(console, dash, state: dict, uid: str, book_id: str) -> None:
         avg = sum(insights) / len(insights)
         clr = ON_CLR if avg >= 4 else (PARCH if avg >= 3 else ERR)
         body.append(f"   ·   insight {avg:.1f}/5", style=f"bold {clr}")
+    scores = [s for s in (state.get("scores") or []) if isinstance(s, dict)]
+    if scores:
+        body.append("\n")
+        for dim in ("clarity", "structure", "evidence"):
+            vals = [s.get(dim) for s in scores if isinstance(s.get(dim), int)]
+            if vals:
+                avg = sum(vals) / len(vals)
+                clr = ON_CLR if avg >= 4 else (PARCH if avg >= 3 else ERR)
+                body.append(f"{dim} ", style=DIM)
+                body.append(f"{avg:.1f}", style=clr)
+                body.append("   ", style=DIM)
+        body.append("\nfull report:  eval   ·   reader pass:  tableread [--as \"persona\"]",
+                    style=DIM)
     if is_article and (paths.root / "table_read.md").exists():
         body.append("\n📋 table read ready - a skeptical reader's report: ", style=PARCH)
         body.append("read it, then  revise --chapter N --instruction \"...\"", style=f"bold {GOLD}")
@@ -1227,6 +1254,7 @@ def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = Fa
 
     interactive = bool(console) and _sys.stdin.isatty()
     while True:
+        brief = ""
         try:
             art = ArticlePaths(book_id, uid)
             st = (_brain.read_json(art.run_state) if art.run_state.exists()
@@ -1234,10 +1262,18 @@ def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = Fa
             total = (max(st.get("num_sections", 1), 1) if st.get("mode") == "article"
                      else max(st.get("num_chapters", 1), 1))
             done_so_far = st.get("committed", 0)
+            # Goal line: the thesis claim (articles) or premise (books), always visible.
+            if art.run_state.exists():
+                t = _brain.read_text(art.root / "thesis.md") or ""
+                claim = next((ln for ln in t.splitlines() if ln.startswith("**Claim:**")), "")
+                brief = claim.replace("**Claim:**", "").strip()
+            else:
+                plan = _brain.read_json(BookPaths(book_id, uid).root / "plan.json") or {}
+                brief = (plan.get("premise") or "").strip()
         except Exception:
             total, done_so_far = 1, 0
 
-        dash = _RunDashboard(book_id, total, done_so_far)
+        dash = _RunDashboard(book_id, total, done_so_far, brief=brief)
         with Live(dash.render(), console=console, refresh_per_second=8,
                   transient=False, vertical_overflow="visible") as live:
             def _log(msg: str, dash=dash, live=live) -> None:   # bind: defined in a loop

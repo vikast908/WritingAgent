@@ -5,8 +5,29 @@
 
 ## Current status
 
-- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **149 tests
+- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **156 tests
   pass**; ruff clean.
+- **New (2026-06-12, session 9c - trust machinery: versions, diffs, brief, eval):**
+  Audited the TUI against a 20-point writing-agent framework; built the 5-item cut + eval:
+  - **Version snapshots** ("git for writing"): every generated draft (divergent variants
+    with temps, revisions, committed finals, revise outputs) saved under
+    `<project>/versions/<unit>.vNN.md` with a label header; survives article cleanup.
+    `versions [--chapter N]` lists; `read --chapter N --v K` reads one.
+  - **Semantic + text diff on `revise`**: flash-model Added/Removed/Improved summary +
+    colored unified diff shown BEFORE applying; `[Y/n]` accept/reject in TTY (discard
+    touches nothing). `revise_unit(confirm=)` callback keeps orchestrator UI-agnostic.
+  - **`brief` command + dashboard goal line**: thesis claim (articles) / premise (books)
+    shown in the live run header; `brief` prints thesis/audience/length/intake/voice state.
+  - **`tableread [--as "persona"]`**: on-demand skeptical-reader pass, persona-swappable
+    (books supported via pseudo-outline); reports saved per-persona.
+  - **Scorecard-lite**: Critique gains clarity/structure/evidence (1-5) judged per unit,
+    tracked in `state["scores"]`, averaged on the summary card.
+  - **`eval` command**: post-hoc quality report - deterministic metrics (words, AI-tell
+    scan via the humanizer lexicon, structural metrics, citation/source coverage) + a
+    pro-model 5-dimension rubric with quote-backed strengths/weaknesses -> `eval_report.md`
+    + a bar scorecard in the TUI. The framework's verdict was right: version comparison
+    is where trust is won; deliberately skipped document-first layout / sentence-level
+    suggestions as a different product (co-editor, not autonomous pipeline).
 - **New (2026-06-12, session 9b - TUI/UX batch + headroom actually installed):**
   - **Escalation picker**: a stalled run now shows the critic's blocking issues and prompts
     `[f]ix · [i]nstruct · [a]pprove as-is · [g]o autonomous · [r]ead draft · [s]top` - one

@@ -81,6 +81,20 @@ def _crit_better(a: S.Critique, b: S.Critique) -> bool:
 _DIVERGENT_TEMPS = (0.7, 1.0, 1.2)
 
 
+def _save_version(paths, unit_tag: str, text: str, label: str = "") -> int:
+    """Append a draft snapshot under <project>/versions/ - git-for-writing.
+
+    Every generated draft (divergent variant, revision, committed final, revise
+    output) gets the next number for its unit. Survives article cleanup (which only
+    sweeps the project root), so `versions` / `read --v` work after completion.
+    """
+    d = paths.root / "versions"
+    k = len(list(d.glob(f"{unit_tag}.v*.md"))) + 1 if d.exists() else 1
+    header = f"<!-- v{k}{' · ' + label if label else ''} -->\n"
+    brain.write_text(d / f"{unit_tag}.v{k:02d}.md", header + text)
+    return k
+
+
 def _draft_glimpse(draft: str) -> str:
     """First prose line of a draft, for the dashboard - what is it actually writing?"""
     return next((ln.strip() for ln in draft.splitlines()
@@ -561,6 +575,7 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
             length_note=_length_note(len(d.split()), blueprint.target_words))
 
     n_div = max(1, int(state.get("divergent_drafts", 1) or 1))
+    _unit_tag = f"ch{n:02d}"
     log(f"\n== Chapter {n}: {blueprint.title} ==")
     for attempt in range(max_rev + 1):
         if attempt == 0 and n_div > 1 and not base_draft:
@@ -575,6 +590,8 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
             log("   critiquing variants...")
             crits = concurrency.gather(
                 {k: (lambda d=d: _critique(d)) for k, d in drafts.items()}, strict=True)
+            for i, d in enumerate(drafts.values()):
+                _save_version(paths, _unit_tag, d, label=f"variant temp={temps[i]}")
             picker_ask = None if state.get("autonomous") else ask
             draft, crit = _pick_variant(drafts, crits, picker_ask, log)
             log(f"   picked variant ({sum(1 for c in crits.values() if c.verdict == 'approve')}"
@@ -582,6 +599,8 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         else:
             log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
             draft = _write(fix_notes, base_draft)
+            _save_version(paths, _unit_tag, draft,
+                          label="draft" if attempt == 0 else f"revision {attempt}")
             log("   critiquing...")
             crit = _critique(draft)
         glimpse = _draft_glimpse(draft)
@@ -619,6 +638,9 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
                 f"(blocking={len(crit.blocking)}, confidence={crit.confidence:.2f})")
         first_pass = approved_attempt == 0 and instruction is None
         state.setdefault("insights", []).append(crit.insight)   # quality history for the summary card
+        state.setdefault("scores", []).append(
+            {"insight": crit.insight, "clarity": crit.clarity,
+             "structure": crit.structure, "evidence": crit.evidence})
         _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass,
                 log, humanize=bool(state.get("humanize")), sources=ch_sources)
         paths.ch_draft(n).unlink(missing_ok=True)   # escalation draft resolved
@@ -645,8 +667,10 @@ def _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pas
         tasks["humanized"] = lambda: humanizer.humanize(cfg, draft)
     out = concurrency.gather(tasks, strict=True)
 
-    brain.write_text(paths.ch(n), out.get("humanized") or draft)
+    final = out.get("humanized") or draft
+    brain.write_text(paths.ch(n), final)
     brain.write_text(paths.ch_summary(n), out["summary"])
+    _save_version(paths, f"ch{n:02d}", final, label="committed")
     extraction = out["extraction"]
     store.update_from_extraction(n, extraction)
     store.render_canon(paths, names=[ch.name for ch in extraction.characters])
@@ -1010,15 +1034,121 @@ def _replace_manuscript_section(ms: str, idx: int, new_body: str) -> str | None:
     return None
 
 
+def _confirm_revision(cfg, old: str, new: str, confirm, log) -> bool:
+    """Show the semantic change summary, then let `confirm` gate the write.
+    No callback (CLI/non-TTY/chat) = auto-accept, with the summary still logged."""
+    summary = ""
+    try:
+        summary = nodes.change_summary(cfg, old, new)
+    except Exception:  # noqa: BLE001 - the summary is informative, never blocking
+        pass
+    if summary:
+        log("   what changed (semantic):\n" + summary)
+    if confirm is not None and not confirm(old, new, summary):
+        log("[i] revision discarded - nothing was changed.")
+        return False
+    return True
+
+
+def run_table_read(cfg: ModelConfig, uid: str, book_id: str, persona: str | None = None,
+                   *, log=print):
+    """On-demand table read of a finished manuscript, optionally as a specific persona.
+    Returns the report path. Works for articles and (via a pseudo-outline) books."""
+    llm.set_project(book_id)
+    art = ArticlePaths(book_id, uid)
+    if art.run_state.exists():
+        paths = art
+        outline = S.ArticleOutline(**brain.read_json(art.outline_json))
+    else:
+        paths = BookPaths(book_id, uid)
+        plan = S.BookPlan(**(brain.read_json(paths.root / "plan.json") or {}))
+        outline = S.ArticleOutline(title=plan.title, angle=f"{plan.premise} ({plan.audience})",
+                                   target_word_count=0, sections=[])
+    body = brain.read_text(paths.manuscript)
+    if not body:
+        raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
+    log(f"   table read{' as: ' + persona if persona else ''}...")
+    report = nodes.table_read(cfg, outline, body, persona=persona)
+    name = f"table_read_{brain.slugify(persona)}.md" if persona else "table_read.md"
+    out = paths.root / name
+    brain.write_text(out, report)
+    log(f"[OK] reader report -> {out}")
+    return out
+
+
+def evaluate_project(cfg: ModelConfig, uid: str, book_id: str, *, log=print) -> dict:
+    """Post-hoc quality report (`eval`): deterministic metrics + a pro-model rubric.
+
+    Deterministic side: words, AI-tell count (the humanizer's lexicon as a scanner),
+    structural style metrics, citation/source coverage. Judged side: 5-dimension
+    rubric with quote-backed strengths/weaknesses. Writes eval_report.md and returns
+    {"scores": {...}, "metrics": {...}, "report_path": Path}."""
+    llm.set_project(book_id)
+    art = ArticlePaths(book_id, uid)
+    is_article = art.run_state.exists()
+    paths = art if is_article else BookPaths(book_id, uid)
+    body = brain.read_text(paths.manuscript)
+    if not body:
+        raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
+
+    if is_article:
+        outline = S.ArticleOutline(**brain.read_json(art.outline_json))
+        context = f"{outline.title} - {outline.angle}"
+        thesis = brain.read_text(art.root / "thesis.md")
+        if thesis:
+            context += "\n\nThesis:\n" + thesis
+    else:
+        plan = S.BookPlan(**(brain.read_json(paths.root / "plan.json") or {}))
+        context = f"{plan.title} ({plan.genre}) - {plan.premise}; audience: {plan.audience}"
+
+    # Deterministic metrics - free, reproducible, no judge noise.
+    tells = humanizer.find_tell_sentences(body, cap=999)
+    citations = len(set(re.findall(r"\[(\d+)\]", body)))
+    sources = len(brain.read_json(paths.sources_json) or [])
+    metrics = {
+        "words": len(body.split()),
+        "ai_tells": len(tells),
+        "citations": citations,
+        "verified_sources": sources,
+        "structural": humanizer.structural_report(body),
+    }
+
+    log("   judging against the rubric (pro model, whole manuscript)...")
+    ev = nodes.evaluate_manuscript(cfg, context, body)
+    scores = {"insight": ev.insight, "clarity": ev.clarity, "structure": ev.structure,
+              "evidence": ev.evidence, "persuasiveness": ev.persuasiveness}
+
+    lines = [f"# Quality report - {book_id}", "",
+             "## Scores (1-5, judged against published work in genre)", ""]
+    lines += [f"- **{k}**: {v}/5" for k, v in scores.items()]
+    lines += ["", "## Deterministic metrics", "",
+              f"- words: {metrics['words']:,}",
+              f"- AI-tell sentences remaining: {metrics['ai_tells']}",
+              f"- citations: {metrics['citations']} in text · "
+              f"{metrics['verified_sources']} verified sources",
+              metrics["structural"], "",
+              "## Strengths", *(f"- {s}" for s in ev.strengths), "",
+              "## Weaknesses", *(f"- {w}" for w in ev.weaknesses), "",
+              "## Verdict", ev.summary, "",
+              "_Act on weaknesses with:  revise --chapter N --instruction \"...\"_"]
+    report_path = paths.root / "eval_report.md"
+    brain.write_text(report_path, "\n".join(lines))
+    log(f"[OK] eval report -> {report_path}")
+    return {"scores": scores, "metrics": metrics, "report_path": report_path,
+            "strengths": ev.strengths, "weaknesses": ev.weaknesses, "summary": ev.summary}
+
+
 def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: str,
-                *, log=print) -> None:
+                *, log=print, confirm=None) -> None:
     """Rewrite ONE chapter/section of a finished (or in-progress) piece to the human's
     instruction, re-critique once, and patch the committed file + assembled manuscript.
     Closes the gap between 'pipeline done' and 'author satisfied' without a full re-run.
 
-    Books: the chapter file is rewritten and production re-assembles the manuscript.
-    Canon is NOT re-extracted (a post-completion polish must not mutate the knowledge
-    base later chapters were already written against)."""
+    `confirm(old, new, semantic_summary) -> bool`, when given, gates the write: the
+    caller shows a diff and the human accepts or discards (nothing is touched on
+    discard). Books: the chapter file is rewritten and production re-assembles the
+    manuscript. Canon is NOT re-extracted (a post-completion polish must not mutate
+    the knowledge base later chapters were already written against)."""
     llm.reset_usage()
     llm.set_project(book_id)
     voice = brain.voice_exemplars(uid)
@@ -1057,6 +1187,9 @@ def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: s
             log("   humanizing...")
             draft = humanizer.humanize(cfg, draft)
         draft = _strip_section_prefix(draft).strip()
+        if not _confirm_revision(cfg, base, draft, confirm, log):
+            return
+        _save_version(art, f"section_{n:02d}", draft, label="revise")
         if brain.read_text(art.section(n)) is not None:
             brain.write_text(art.section(n), draft)
         if ms:
@@ -1089,6 +1222,9 @@ def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: s
     if state.get("humanize"):
         log("   humanizing...")
         draft = humanizer.humanize(cfg, draft)
+    if not _confirm_revision(cfg, base, draft, confirm, log):
+        return
+    _save_version(paths, f"ch{n:02d}", draft, label="revise")
     brain.write_text(paths.ch(n), draft)
     brain.append_text(paths.revision_log, f"## Chapter {n} post-completion revision\n{instruction}")
     if brain.read_text(paths.manuscript):
@@ -1430,6 +1566,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             length_note=_length_note(len(d.split()), target))
 
     n_div = max(1, int(state.get("divergent_drafts", 1) or 1))
+    _unit_tag = f"section_{n:02d}"
     log(f"\n== Section {n}: {section.heading} ==")
     for attempt in range(max_rev + 1):
         if attempt == 0 and n_div > 1 and not base_draft:
@@ -1444,6 +1581,8 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             log("   critiquing variants...")
             crits = concurrency.gather(
                 {k: (lambda d=d: _critique(d)) for k, d in drafts.items()}, strict=True)
+            for i, d in enumerate(drafts.values()):
+                _save_version(paths, _unit_tag, d, label=f"variant temp={temps[i]}")
             picker_ask = None if state.get("autonomous") else ask
             draft, crit = _pick_variant(drafts, crits, picker_ask, log)
             log(f"   picked variant ({sum(1 for c in crits.values() if c.verdict == 'approve')}"
@@ -1451,6 +1590,8 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
         else:
             log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
             draft = _write(fix_notes, base_draft)
+            _save_version(paths, _unit_tag, draft,
+                          label="draft" if attempt == 0 else f"revision {attempt}")
             log("   critiquing...")
             crit = _critique(draft)
         glimpse = _draft_glimpse(draft)
@@ -1486,6 +1627,9 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
                 f"(blocking={len(crit.blocking)}, confidence={crit.confidence:.2f})")
         first_pass = approved_attempt == 0 and instruction is None
         state.setdefault("insights", []).append(crit.insight)   # quality history for the summary card
+        state.setdefault("scores", []).append(
+            {"insight": crit.insight, "clarity": crit.clarity,
+             "structure": crit.structure, "evidence": crit.evidence})
         _commit_section(cfg, paths, section, n, draft, skill_names, sources, first_pass,
                         log, humanize=bool(state.get("humanize")))
         paths.section_draft(n).unlink(missing_ok=True)
@@ -1513,8 +1657,10 @@ def _commit_section(cfg, paths: ArticlePaths, section, n, draft, skill_names, so
         tasks["humanized"] = lambda: humanizer.humanize(cfg, draft)
     out = concurrency.gather(tasks, strict=True)
 
-    brain.write_text(paths.section(n), out.get("humanized") or draft)
+    final = out.get("humanized") or draft
+    brain.write_text(paths.section(n), final)
     brain.write_text(paths.section_summary(n), out["summary"])
+    _save_version(paths, f"section_{n:02d}", final, label="committed")
 
     skills_mod.record_chapter(paths.uid, skill_names, first_pass)
     brain.append_text(paths.revision_log,

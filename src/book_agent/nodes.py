@@ -428,17 +428,39 @@ def summarize_section(cfg: ModelConfig, section: S.ArticleSection, prose: str) -
                          max_tokens=600, temperature=cfg.temperature_for("summarizer"))
 
 
-def table_read(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str) -> str:
+def table_read(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str,
+               persona: str | None = None) -> str:
     """Whole-piece cold read as a skeptical target-audience reader (not a line editor).
 
     Catches problems no per-section critic can see: boredom curves, trust breaks,
-    concepts never grounded, missing answers. Returns a Markdown report; the caller
-    saves it for the human - it never auto-rewrites anything.
+    concepts never grounded, missing answers. `persona` swaps the default reader for
+    a specific one ("a CTO evaluating vendors", "a recruiter skimming in 90 seconds").
+    Returns a Markdown report; the caller saves it - it never auto-rewrites anything.
     """
     model = cfg.model_for("consolidation")   # whole-piece reasoning = pro tier
-    user = (f"Article outline (who it is for, what it promised):\n{_ctx(outline)}\n\n"
-            f"The finished article:\n{body_md}\n\nGive your reader report.")
-    return complete_text(model, P.TABLE_READ_SYS, user, max_tokens=2000, temperature=0.4)
+    parts = [f"Article outline (who it is for, what it promised):\n{_ctx(outline)}"]
+    if persona:
+        parts.append(f"READ AS THIS SPECIFIC PERSONA (override the default audience): {persona}")
+    parts.append(f"The finished article:\n{body_md}\n\nGive your reader report.")
+    return complete_text(model, P.TABLE_READ_SYS, "\n\n".join(parts),
+                         max_tokens=2000, temperature=0.4)
+
+
+def evaluate_manuscript(cfg: ModelConfig, context: str, body_md: str) -> S.ManuscriptEval:
+    """Post-hoc quality rubric over a finished manuscript (the `eval` command)."""
+    model = cfg.model_for("consolidation")   # whole-piece judgment = pro tier
+    user = (f"What the piece set out to be:\n{context}\n\n"
+            f"The finished manuscript:\n{body_md}\n\nProduce the quality report.")
+    return complete_structured(model, P.MANUSCRIPT_EVAL_SYS, user, S.ManuscriptEval,
+                               max_tokens=3000, temperature=0.2)
+
+
+def change_summary(cfg: ModelConfig, old: str, new: str) -> str:
+    """Semantic Added/Removed/Improved comparison of two versions of one passage."""
+    model = cfg.model_for("summarizer")
+    user = f"BEFORE:\n{old}\n\nAFTER:\n{new}\n\nReport the semantic changes."
+    return complete_text(model, P.CHANGE_SUMMARY_SYS, user,
+                         max_tokens=600, temperature=0.0)
 
 
 def cohesion_edit(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str) -> str:
