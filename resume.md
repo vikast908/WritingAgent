@@ -7,6 +7,25 @@
 
 - **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **156 tests
   pass**; ruff clean.
+- **New (2026-06-12, session 9d - live validation + docs sync + tooling):**
+  - **LIVE end-to-end validation of the quality+trust machinery** (real DeepSeek, not fake):
+    2-section article "Why most RAG evaluation metrics mislead teams". Full chain fired -
+    thesis (genuinely contestable, with steelman+rebuttal), divergent drafts (1/2 approved per
+    section, best picked), versions saved (v01/v02 variants + v03 committed per section),
+    surgical humanizer (only **2** AI-tell sentences left in 3,448 words), table read + eval +
+    learner (+4 skills). Critic insight 5/4; eval insight 5 · clarity 5 · structure 5 ·
+    evidence 4 · persuasiveness 5; honestly flagged missing named sources (researcher was off).
+    **Cost: $0.15 / 15 calls / 84k tokens** for the 2-section run. **Watch item:** v4-pro critic
+    (same family as writer) scored 4-5 on first/second variants - one good-topic run can't tell
+    if the insight bar is too easy; eval did show critical capacity (evidence 4 + flagged
+    sources). Tune `min_insight` once a deliberately-weak topic is run.
+  - **Docs synced** (commit e78060e): plan.md §5/§7/§13/§12.1 + new §15.4 (quality machinery)
+    and §15.5 (trust machinery); README command/slash tables + self-correction diagram +
+    not-slop section; CHANGELOG [Unreleased] Added/Changed.
+  - **Tooling:** installed GitHub CLI (`gh` 2.93) and pandoc (3.10) via winget - DOCX export now
+    works; `gh` still needs a one-time interactive `gh auth login` before CI status is queryable.
+    CI gates reproduced locally (ruff clean + `pytest -q` fake-mode all pass on 3.11; compiles on
+    3.12). Repo is private so Actions status couldn't be checked headlessly.
 - **New (2026-06-12, session 9c - trust machinery: versions, diffs, brief, eval):**
   Audited the TUI against a 20-point writing-agent framework; built the 5-item cut + eval:
   - **Version snapshots** ("git for writing"): every generated draft (divergent variants

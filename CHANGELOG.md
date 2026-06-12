@@ -7,6 +7,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Quality machinery (originality over slop-absence)** - a per-article **thesis** (contestable
+  claim + steelmanned counterargument/rebuttal) injected into every writer/critic call and
+  enforced by the critic; **voice exemplars** (`brain/users/<id>/voice/`, fed by `/praise`)
+  matched on every draft; **divergent first drafts** (best-of-N at varied temperatures, critic-
+  or human-picked); an **insight score** (1-5) with a `min_insight` approval gate plus
+  clarity/structure/evidence scores and deterministic structural style metrics; a **surgical
+  humanizer** that detects AI tells deterministically and rewrites only flagged sentences
+  (citations/numbers/length guarded) instead of re-generating approved prose.
+- **Trust machinery** - **version snapshots** (`<project>/versions/`, every variant/revision/
+  final) with `versions` and `read --v K`; **`revise --chapter N --instruction`** to rewrite one
+  committed unit of a finished piece with a semantic + text diff to accept/reject; **`brief`**
+  (goal panel) and a dashboard goal line; **`tableread [--as "persona"]`** skeptical-reader pass;
+  **`eval`** quality report (judged 5-dimension rubric + deterministic metrics → `eval_report.md`).
+- **Interactive TUI** - escalation picker (fix/instruct/approve-as-is/go-autonomous/read on a
+  stalled unit), manual divergent-variant picking, outline+thesis approval gate after `new`,
+  post-run summary card + terminal bell, draft-opening glimpse in the dashboard, and a red
+  toolbar when a review is pending.
+- **Run-mode toggle** - `/auto [on|off]` (aliases `/autonomous`, `/manual`) and
+  `run --autonomous`/`--manual`, which also clear a stalled per-unit review when going autonomous.
+- **Export overhaul** - PDF code/diagram wrapping (no more right-edge clipping), Mermaid blocks
+  rendered to PNG via mermaid.ink with a per-project disk cache (offline re-exports), EPUB packages
+  diagrams as real image items, U+2011/U+202F glyph normalization, `[AUTHOR NAME]` placeholder and
+  `Section N:` prefix cleanup, and per-section reference consolidation + renumbering.
 - **`write` command** - one-shot autonomous flow: an upfront interview (LLM-generated
   clarifying questions on audience, depth, length, tone, must-includes, byline, output
   format) followed by a fully autonomous run to a finished, exported file. Answers are
@@ -47,6 +70,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `read --manuscript` resolves article paths (was hardcoded to books).
 
 ### Changed
+- **`use_researcher` now defaults on** - citations are unverifiable otherwise; with it off the
+  critic flags specific stats/attributions as fabrication risks and production warns.
+- **Critic routed to `deepseek-v4-pro`** - insight scoring and thesis checks need the pro tier's
+  judgment (was flash). Writer temperature set explicit (0.9); humanizer dropped to 0.3.
+- PDF page size A5 → A4 so code fits.
 - Hardened LLM calls: classified retry with exponential backoff, fail-fast on 4xx,
   request timeout, and a real structured-output repair retry.
 - Atomic, resumable on-disk state; durable against crashes mid-run.
