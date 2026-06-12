@@ -60,6 +60,31 @@ def test_chat_stream_keeps_partial_on_cancel(tmp_brain, monkeypatch):
     assert "First chunk kept." in out      # partial text still shown once
 
 
+def test_chat_stream_error_is_not_prose(tmp_brain, monkeypatch):
+    """A mid-stream error renders as an error (not assistant prose): the partial
+    text is shown, history is NOT polluted, and no commands are parsed from it."""
+    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+
+    def fake_stream(model, system, message, *, history=None, max_tokens=400, temperature=0.7):
+        yield "Partial reply with a half command: ```ru"
+        raise RuntimeError("connection reset")
+    monkeypatch.setattr("book_agent.llm.stream_text", fake_stream)
+    executed = []
+    monkeypatch.setattr(shell, "_execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
+
+    cfg, settings = load_config(), load_settings()
+    console = _console()
+    state = _state()
+    state["_known_commands"] = {"run"}
+    shell._chat_respond("hi", console, cfg, settings, state)
+
+    out = console.file.getvalue()
+    assert "Partial reply" in out                      # partial text still shown
+    assert "assistant unavailable" in out              # error surfaced as an error
+    assert state["chat_history"] == []                 # half reply not saved
+    assert executed == []                              # nothing command-parsed
+
+
 def _stream_new_and_run(model, system, message, *, history=None, max_tokens=400,
                         temperature=0.7):
     yield 'On it!\n\n```new --abstract "voice agents"```\n```run```\n'

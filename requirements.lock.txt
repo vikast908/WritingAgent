@@ -25,7 +25,6 @@ EbookLib==0.20
 fake-useragent==2.2.0
 fastuuid==0.14.0
 filelock==3.29.1
-freetype-py==2.5.1
 frozenlist==1.8.0
 fsspec==2026.4.0
 greenlet==3.5.1
@@ -64,7 +63,6 @@ pluggy==1.6.0
 primp==1.3.1
 prompt_toolkit==3.0.52
 propcache==0.5.2
-pycairo==1.29.0
 pycparser==3.0
 pydantic==2.13.4
 pydantic_core==2.46.4
@@ -83,7 +81,6 @@ regex==2026.5.9
 reportlab==4.5.1
 requests==2.34.2
 rich==15.0.0
-rlPyCairo==0.4.0
 rpds-py==2026.5.1
 scrapo @ git+https://github.com/vikast908/Scrapo@f4816cd6e79c50192922c4e31f63e814b88c7678
 selectolax==0.4.10
@@ -93,7 +90,7 @@ sniffio==1.3.1
 socksio==1.0.0
 soupsieve==2.8.4
 structlog==26.1.0
-svglib==1.6.0
+svglib==1.5.1
 tiktoken==0.13.0
 tinycss2==1.5.1
 tokenizers==0.23.1

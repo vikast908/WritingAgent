@@ -20,12 +20,17 @@ failure degrades to the stdlib path, a snippet, or an empty result, never an exc
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import os
 import re
+import socket
 import threading
+import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from html.parser import HTMLParser
+from urllib import robotparser
 from urllib.parse import urlparse
 
 from . import cache, concurrency
@@ -36,6 +41,8 @@ _FETCH_TIMEOUT = 12.0               # per-page network timeout (s) for the stdli
 _SCRAPO_TIMEOUT = 25.0              # Scrapo may escalate to a browser tier - give it more room
 _MAX_DOC_CHARS = 6000               # cap extracted text stored per page
 _MAX_BYTES = 2_000_000             # never read more than 2 MB off the wire per page
+_ROBOTS_TIMEOUT = 5.0               # robots.txt fetch timeout (s)
+_HOST_MIN_INTERVAL = 1.0            # politeness: min seconds between requests to one host
 _UA = ("Mozilla/5.0 (compatible; WritingAgent/1.0 research; "
        "+https://github.com/vikast908/WritingAgent)")
 
@@ -198,6 +205,114 @@ def _fetch_via_scrapo(url: str, *, max_chars: int, timeout: float = _SCRAPO_TIME
     return (text or "").strip()[:max_chars]
 
 
+# ── Fetch safety: SSRF guard, robots.txt, per-host politeness ──────────────────
+# Search results (and the LLM's query expansion behind them) decide which URLs get
+# fetched, so the fetcher must not be steerable at internal services. The guard
+# resolves the host and requires every address to be globally routable; the stdlib
+# path re-checks each redirect hop. robots.txt is honored per host (unreachable or
+# missing robots = allow, the wide-web convention; BOOK_AGENT_IGNORE_ROBOTS=1 skips
+# the check), and requests to one host are spaced at least _HOST_MIN_INTERVAL apart.
+# The Scrapo backend does its own fetching - it has SCRAPO_RESPECT_ROBOTS for robots,
+# and the initial-URL guard here still applies to it.
+def _is_public_host(host: str) -> bool:
+    """True when the host resolves and every resolved address is globally routable."""
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False    # unresolvable - a real fetch would fail anyway
+    addrs = {info[4][0] for info in infos}
+    if not addrs:
+        return False
+    for a in addrs:
+        try:
+            if not ipaddress.ip_address(a).is_global:
+                return False    # loopback / private / link-local / reserved
+        except ValueError:
+            return False
+    return True
+
+
+def url_is_safe(url: str) -> bool:
+    """http(s) URL whose host resolves only to public addresses (SSRF guard)."""
+    try:
+        p = urlparse(url)
+    except Exception:  # noqa: BLE001
+        return False
+    if p.scheme not in ("http", "https") or not p.hostname:
+        return False
+    return _is_public_host(p.hostname)
+
+
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-validate every redirect target - a public page must not be able to bounce
+    the fetcher onto an internal address."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not url_is_safe(newurl):
+            raise urllib.error.HTTPError(newurl, code, "unsafe redirect target",
+                                         headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_opener = urllib.request.build_opener(_SafeRedirectHandler)
+
+_ROBOTS_UNSET = object()
+_robots_lock = threading.Lock()
+_robots_cache: dict[str, robotparser.RobotFileParser | None] = {}
+
+
+def _robots_allows(url: str, *, timeout: float = _ROBOTS_TIMEOUT) -> bool:
+    """robots.txt verdict for `url`, cached per scheme://host for the process.
+    No reachable/parsable robots.txt means allow. BOOK_AGENT_IGNORE_ROBOTS=1 skips."""
+    if os.getenv("BOOK_AGENT_IGNORE_ROBOTS", "").lower() in ("1", "true", "yes"):
+        return True
+    try:
+        p = urlparse(url)
+        base = f"{p.scheme}://{p.netloc}"
+    except Exception:  # noqa: BLE001
+        return False
+    with _robots_lock:
+        rp = _robots_cache.get(base, _ROBOTS_UNSET)
+    if rp is _ROBOTS_UNSET:
+        rp = None
+        try:
+            req = urllib.request.Request(base + "/robots.txt",
+                                         headers={"User-Agent": _UA})
+            with _opener.open(req, timeout=timeout) as resp:
+                body = resp.read(200_000).decode("utf-8", errors="replace")
+            parser = robotparser.RobotFileParser()
+            parser.parse(body.splitlines())
+            rp = parser
+        except Exception:  # noqa: BLE001 - no robots.txt -> allow
+            rp = None
+        with _robots_lock:
+            _robots_cache[base] = rp
+    return True if rp is None else rp.can_fetch(_UA, url)
+
+
+def _fetch_permitted(url: str) -> bool:
+    """SSRF guard + robots.txt, the gate every uncached fetch passes through."""
+    return url_is_safe(url) and _robots_allows(url)
+
+
+_host_lock = threading.Lock()
+_host_last: dict[str, float] = {}
+
+
+def _throttle(host: str, *, min_interval: float = _HOST_MIN_INTERVAL) -> None:
+    """Block until at least `min_interval` seconds since this host was last fetched."""
+    if not host:
+        return
+    while True:
+        with _host_lock:
+            now = time.monotonic()
+            wait = min_interval - (now - _host_last.get(host, -min_interval))
+            if wait <= 0:
+                _host_last[host] = now
+                return
+        time.sleep(min(wait, min_interval))
+
+
 def _fetch_via_urllib(url: str, *, max_chars: int, timeout: float = _FETCH_TIMEOUT) -> str:
     """Stdlib fetch + HTML->text extraction. '' on any failure or non-HTML response."""
     try:
@@ -206,7 +321,7 @@ def _fetch_via_urllib(url: str, *, max_chars: int, timeout: float = _FETCH_TIMEO
             "Accept": "text/html,application/xhtml+xml",
             "Accept-Language": "en",
         })
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - http(s) enforced by caller
+        with _opener.open(req, timeout=timeout) as resp:  # noqa: S310 - guarded by _fetch_permitted
             ctype = (resp.headers.get("Content-Type") or "").lower()
             if ctype and "html" not in ctype and "text" not in ctype:
                 return ""   # binary/PDF - nothing useful to extract
@@ -223,15 +338,19 @@ def fetch_text(url: str, *, timeout: float = _FETCH_TIMEOUT,
     """Fetch a URL and return its page content (markdown or text, capped). '' on failure.
 
     Prefers the Scrapo backend when installed, falling back to a stdlib urllib +
-    html.parser fetch. Only http(s) is followed; non-HTML responses (PDFs, images) are
-    skipped by the stdlib path. Non-empty results are cached on disk so resumes and
-    overlapping sections don't refetch.
+    html.parser fetch. Only http(s) to publicly-routable hosts is fetched (SSRF
+    guard, re-checked per redirect on the stdlib path), robots.txt is honored, and
+    per-host requests are rate-limited. Non-empty results are cached on disk so
+    resumes and overlapping sections don't refetch.
     """
     if urlparse(url).scheme not in ("http", "https"):
         return ""
     cached = cache.get("fetch", (url, max_chars), max_age_s=_FETCH_TTL_S)
     if cached is not None:
         return cached
+    if not _fetch_permitted(url):
+        return ""
+    _throttle(urlparse(url).hostname or "")
     text = (_fetch_via_scrapo(url, max_chars=max_chars)
             or _fetch_via_urllib(url, max_chars=max_chars, timeout=timeout))
     if text:

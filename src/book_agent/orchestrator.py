@@ -1168,21 +1168,31 @@ def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: s
                 raise FileNotFoundError(f"Section {n} not found in the manuscript.")
             base = bodies[n - 1]
         thesis_md = brain.read_text(art.root / "thesis.md")
+        # The critic gets the same context the pipeline critic had: prior-section
+        # summaries (empty after cleanup - acceptable), watch-list, intake, length.
+        watch = brain.read_text(brain.watch_list(uid))
+        requirements = (state.get("intake") or "").strip() or None
+        target = section.target_words or (
+            outline.target_word_count // max(1, len(outline.sections))
+            if outline.target_word_count else 0)
         log(f"== Revising section {n}: {section.heading} ==")
         log("   rewriting to your instruction...")
         draft = nodes.write_article_section(
             cfg, outline, section, fix_notes=instruction, base_draft=base,
-            thesis=thesis_md, voice=voice,
-            requirements=(state.get("intake") or "").strip() or None)
+            thesis=thesis_md, voice=voice, requirements=requirements)
         log("   critiquing...")
         crit = nodes.critique_article_section(
             cfg, outline, section, draft, thesis=thesis_md,
-            research_on=bool(state.get("use_researcher")))
+            context=_assemble_article_context(art, n) or None,
+            watch_list=watch, requirements=requirements,
+            research_on=bool(state.get("use_researcher")),
+            length_note=_length_note(len(draft.split()), target))
         if crit.blocking and crit.verdict != "approve":
             log(f"   {len(crit.blocking)} blocking issue(s) - one fix pass...")
             draft = nodes.write_article_section(
                 cfg, outline, section, fix_notes=_merge_fix_notes(instruction, crit),
-                base_draft=draft, thesis=thesis_md, voice=voice)
+                base_draft=draft, thesis=thesis_md, voice=voice,
+                requirements=requirements)
         if state.get("humanize"):
             log("   humanizing...")
             draft = humanizer.humanize(cfg, draft)
@@ -1207,18 +1217,31 @@ def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: s
     base = brain.read_text(paths.ch(n))
     if base is None:
         raise FileNotFoundError(f"Chapter {n} has not been committed yet - use `review` instead.")
+    # Same context the pipeline critic had: canon + dependency summaries + excerpts,
+    # watch-list, intake, length target.
+    watch = brain.read_text(brain.watch_list(uid))
+    requirements = (state.get("intake") or "").strip() or None
+    store = Store.open(paths)
+    try:
+        context = retrieval.assemble_context(store, paths, blueprint)
+    finally:
+        store.close()
     log(f"== Revising chapter {n}: {blueprint.title} ==")
     log("   rewriting to your instruction...")
     draft = nodes.write_chapter(cfg, plan, blueprint, fix_notes=instruction,
                                 base_draft=base, voice=voice,
-                                requirements=(state.get("intake") or "").strip() or None)
+                                requirements=requirements)
     log("   critiquing...")
-    crit = nodes.critique_chapter(cfg, plan, blueprint, draft)
+    crit = nodes.critique_chapter(
+        cfg, plan, blueprint, draft, context=context, watch_list=watch,
+        requirements=requirements,
+        length_note=_length_note(len(draft.split()), blueprint.target_words))
     if crit.blocking and crit.verdict != "approve":
         log(f"   {len(crit.blocking)} blocking issue(s) - one fix pass...")
         draft = nodes.write_chapter(cfg, plan, blueprint,
                                     fix_notes=_merge_fix_notes(instruction, crit),
-                                    base_draft=draft, voice=voice)
+                                    base_draft=draft, voice=voice,
+                                    requirements=requirements)
     if state.get("humanize"):
         log("   humanizing...")
         draft = humanizer.humanize(cfg, draft)

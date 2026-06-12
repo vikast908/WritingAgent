@@ -87,7 +87,13 @@ def _fetch_info(titles: list[str]) -> list[ImageResult]:
         "iiextmetadatafilter": "LicenseShortName|Artist|ImageDescription|LicenseUrl",
     })
     results: list[ImageResult] = []
-    for page in (data.get("query") or {}).get("pages", {}).values():
+    # formatversion=2 returns `pages` as a list; v1 as an id-keyed dict. The dict
+    # parse against the real (v2) API raised, and search_wikimedia's net-error guard
+    # silently turned every live image search into [].
+    pages = (data.get("query") or {}).get("pages", [])
+    if isinstance(pages, dict):
+        pages = pages.values()
+    for page in pages:
         ii = (page.get("imageinfo") or [{}])[0]
         url = ii.get("url", "")
         if not url or not _IMG_EXT.search(url):

@@ -380,6 +380,8 @@ so the run dashboard reads at a glance.
 
 **Prompt-injection defense:** all web-fetched text (search snippets, full page text) is fenced as data-only with spoof-resistant markers before it ever enters a prompt - a hostile page can't issue instructions to the writer.
 
+**Polite, SSRF-safe fetching:** the deep researcher only fetches `http(s)` URLs whose hosts resolve to public addresses (loopback/private/link-local/cloud-metadata blocked, redirects re-checked per hop), honors each site's `robots.txt` (`BOOK_AGENT_IGNORE_ROBOTS=1` to opt out), and spaces requests to the same host at least a second apart.
+
 ---
 
 ## Writing Quality Guardrails

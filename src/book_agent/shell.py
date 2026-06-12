@@ -1574,26 +1574,29 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
         cancelled = True  # stop streaming, keep partial text, stay in the shell
         console.print(Text("  (cancelled)", style=DIM))
     except Exception as e:  # noqa: BLE001
-        error = f"_(assistant unavailable: {e})_\n\nType `/help` to see all commands."
+        error = f"(assistant unavailable: {e}) - type /help to see all commands"
 
     # The only thing committed to the scrollback: the complete reply, formatted
     # once. (The streaming preview above was transient, so there's nothing to
     # duplicate.) On cancel we still render whatever partial text we collected.
+    # An error renders in the error style, clearly apart from assistant prose.
     full = "".join(chunks)
     if full:
         console.print(Padding(Markdown(full), pad=(0, 2)))
-    elif error:
+    if error:
         console.print(Text(f"  {error}", style=ERR))
 
-    # 4. Save history
-    if full:
+    # 4. Save history (not on error - a half-streamed reply would mislead the model)
+    if full and not error:
         state["last_chat"] = message
         _trim_history(history, {"role": "user", "content": message},
                       {"role": "assistant", "content": full})
 
     # 6. Execute any commands the model included in code blocks
-    #    (skip when cancelled - a half-streamed response may carry a partial command)
-    cmds = _commands_in_response(full, state.get("_known_commands", set())) if full and not cancelled else []
+    #    (skip when cancelled or errored - a half-streamed response may carry a
+    #    partial command)
+    cmds = (_commands_in_response(full, state.get("_known_commands", set()))
+            if full and not cancelled and not error else [])
     # Hard gate: creating a project from chat needs the user's explicit go-ahead.
     # If the model jumped straight to `new` on a turn where the user didn't confirm,
     # hold the WHOLE batch (a trailing `run` would otherwise hit the previously

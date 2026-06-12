@@ -96,6 +96,58 @@ def test_revise_unit_patches_finished_manuscript(tmp_brain, fake_llm, monkeypatc
     assert "## References" in ms          # rest of the manuscript survived
 
 
+def test_revise_unit_article_critic_gets_pipeline_context(tmp_brain, fake_llm, monkeypatch):
+    """The revise-path critic must see what the pipeline critic saw: watch-list,
+    intake requirements, and a length note - else a revision that violates them
+    sails through (the regression this guards against)."""
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "revctx", 1, 1, autonomous=True,
+                                     intake="audience: senior engineers")
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    brain.write_text(brain.watch_list("u"), "- starts sections with rhetorical questions")
+
+    seen = {}
+
+    def crit_spy(cfg, outline, section, draft, **kw):
+        seen.update(kw)
+        return _crit()
+    monkeypatch.setattr(nodes, "critique_article_section", crit_spy)
+    monkeypatch.setattr(nodes, "write_article_section",
+                        lambda *a, **k: "## H\n\nRevised body.")
+    orchestrator.revise_unit(cfg, "u", aid, 1, "tighter", log=_silent)
+
+    assert seen.get("requirements") == "audience: senior engineers"
+    assert "rhetorical questions" in (seen.get("watch_list") or "")
+    assert "length_note" in seen          # computed from the section's word target
+
+
+def test_revise_unit_book_critic_gets_pipeline_context(tmp_brain, fake_llm, monkeypatch):
+    """Book revise path: critic sees canon context, watch-list, and requirements."""
+    cfg, settings = load_config(), load_settings()
+    chosen = S.Direction(title="D", premise="p", tone="dark", themes=["x"],
+                         hook="h", why_it_works="w")
+    bid = orchestrator.start_book(cfg, settings, "u", "abstract", chosen,
+                                  "revbookctx", 1, 1, autonomous=True,
+                                  intake="tone: clinical")
+    orchestrator.run(cfg, "u", bid, log=_silent)
+    brain.write_text(brain.watch_list("u"), "- overuses the rule of three")
+
+    seen = {}
+
+    def crit_spy(cfg, plan, blueprint, draft, **kw):
+        seen.update(kw)
+        return _crit()
+    monkeypatch.setattr(nodes, "critique_chapter", crit_spy)
+    monkeypatch.setattr(nodes, "write_chapter", lambda *a, **k: "Revised chapter body.")
+    orchestrator.revise_unit(cfg, "u", bid, 1, "tighter", log=_silent)
+
+    assert seen.get("requirements") == "tone: clinical"
+    assert "rule of three" in (seen.get("watch_list") or "")
+    assert "context" in seen              # canon + dependency summaries
+    assert "length_note" in seen
+
+
 def test_revise_unit_out_of_range(tmp_brain, fake_llm):
     cfg, settings = load_config(), load_settings()
     aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),

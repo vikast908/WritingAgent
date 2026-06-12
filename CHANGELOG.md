@@ -50,6 +50,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   [<project>]` renders the rollup in the TUI with per-model and per-unit breakdowns.
 - **Prompt-injection defense** - all web-fetched content is fenced as data-only
   (spoof-neutralized markers + standing instruction) at every research → prompt path.
+- **Fetch safety gate** - the deep-research fetcher now enforces an SSRF guard (hosts
+  must resolve to globally-routable addresses only; redirects re-validated per hop),
+  honors robots.txt per host (`BOOK_AGENT_IGNORE_ROBOTS=1` to skip), and rate-limits
+  requests per host (1s politeness interval).
 - Open-source scaffolding: `LICENSE` (MIT), `CONTRIBUTING.md`, `SECURITY.md`,
   `CODE_OF_CONDUCT.md`, issue/PR templates, GitHub Actions CI (Linux/macOS/Windows
   × Python 3.10–3.13), ruff config, and pre-commit hooks.
@@ -68,6 +72,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Long streamed chat replies duplicated themselves into the terminal scrollback
   (non-transient Live + overflow); the reply is now rendered exactly once.
 - `read --manuscript` resolves article paths (was hardcoded to books).
+- Post-completion `revise` critiqued with less context than the pipeline (no
+  watch-list, intake requirements, prior-unit context, or length target), so a
+  revision violating them could pass; both book and article revise paths now
+  critique with pipeline-parity context.
+- A chat stream error mid-reply was rendered as assistant prose, saved to chat
+  history, and command-parsed; it now renders as an error and the half-streamed
+  reply is discarded from history.
+- **CI was red on every Ubuntu job since the workflow landed** (install-time, all
+  Python versions): svglib 1.6.0 (transitive via xhtml2pdf) hard-requires
+  rlpycairo → pycairo, which has no Linux wheels and fails to build on a bare
+  runner. Pinned `svglib<1.6` (xhtml2pdf only uses svg2rlg, not the cairo
+  rasterizer) - Linux `pip install` works again with no system packages.
+- Wikimedia image search silently returned no results against the live API:
+  the code requested `formatversion=2` (pages as a list) but parsed the v1 dict
+  shape, and the network-error guard swallowed the resulting exception.
 
 ### Changed
 - **`use_researcher` now defaults on** - citations are unverifiable otherwise; with it off the
@@ -85,6 +104,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The conversational assistant can no longer auto-execute `delete` / `/user` /
   `/set`; project/user ids are validated and deletes are confined to the brain dir.
 - Exported HTML is sanitized (script/iframe/event handlers stripped).
+- Deep-research fetches are SSRF-guarded (public-address-only hosts, redirect
+  re-validation), robots.txt-respecting, and per-host rate-limited.
 
 ### Removed
 - Dead vertical-slice prototype (`run.py`, `src/book_agent/slice.py`).

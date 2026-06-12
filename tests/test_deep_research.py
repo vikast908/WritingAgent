@@ -131,6 +131,7 @@ def test_fetch_text_prefers_scrapo_backend(tmp_brain, monkeypatch):
         async def scrape(self, url, schema=None):
             return _Res()
 
+    monkeypatch.setattr(dr, "_fetch_permitted", lambda u: True)  # offline: no DNS/robots
     monkeypatch.setattr(dr, "_scrapo", lambda: _FakeScrapo())
     monkeypatch.setattr(dr, "_fetch_via_urllib",
                         lambda *a, **k: pytest.fail("stdlib path must not run when Scrapo succeeds"))
@@ -143,9 +144,72 @@ def test_fetch_text_prefers_scrapo_backend(tmp_brain, monkeypatch):
 
 def test_fetch_text_falls_back_to_urllib(tmp_brain, monkeypatch):
     """If Scrapo yields nothing, the stdlib path is used."""
+    monkeypatch.setattr(dr, "_fetch_permitted", lambda u: True)  # offline: no DNS/robots
     monkeypatch.setattr(dr, "_fetch_via_scrapo", lambda *a, **k: "")
     monkeypatch.setattr(dr, "_fetch_via_urllib", lambda *a, **k: "stdlib extracted text")
     assert dr.fetch_text("https://example.com/y") == "stdlib extracted text"
+
+
+# ── fetch safety: SSRF guard, robots.txt, throttle ──────────────────────────────
+def test_url_is_safe_blocks_private_and_loopback(monkeypatch):
+    """Hosts resolving to non-global addresses are rejected; public ones pass."""
+    resolved = {"internal.example": "10.0.0.5", "public.example": "93.184.216.34",
+                "localhost": "127.0.0.1"}
+
+    def fake_getaddrinfo(host, *_a, **_k):
+        if host not in resolved:
+            raise OSError("unresolvable")
+        return [(None, None, None, None, (resolved[host], 0))]
+
+    monkeypatch.setattr(dr.socket, "getaddrinfo", fake_getaddrinfo)
+    assert dr.url_is_safe("https://public.example/page")
+    assert not dr.url_is_safe("http://internal.example/admin")
+    assert not dr.url_is_safe("http://localhost:8080/")
+    assert not dr.url_is_safe("http://169.254.169.254/latest/meta-data")  # cloud metadata
+    assert not dr.url_is_safe("http://nosuchhost.example/")               # unresolvable
+    assert not dr.url_is_safe("ftp://public.example/x")                   # scheme
+    assert not dr.url_is_safe("not a url")
+
+
+def test_fetch_text_blocks_unsafe_url(tmp_brain, monkeypatch):
+    monkeypatch.setattr(dr, "url_is_safe", lambda u: False)
+    monkeypatch.setattr(dr, "_fetch_via_urllib",
+                        lambda *a, **k: pytest.fail("unsafe URL must not be fetched"))
+    monkeypatch.setattr(dr, "_fetch_via_scrapo",
+                        lambda *a, **k: pytest.fail("unsafe URL must not be fetched"))
+    assert dr.fetch_text("https://internal.example/secret") == ""
+
+
+def test_robots_disallow_blocks_fetch(tmp_brain, monkeypatch):
+    """A parsed robots.txt Disallow rule for our UA blocks the page fetch."""
+    rp = dr.robotparser.RobotFileParser()
+    rp.parse(["User-agent: *", "Disallow: /private/"])
+    monkeypatch.setattr(dr, "url_is_safe", lambda u: True)
+    monkeypatch.setattr(dr, "_throttle", lambda *a, **k: None)  # no 1s pacing in tests
+    monkeypatch.setitem(dr._robots_cache, "https://site.example", rp)
+    monkeypatch.setattr(dr, "_fetch_via_urllib",
+                        lambda *a, **k: pytest.fail("disallowed URL must not be fetched"))
+    monkeypatch.setattr(dr, "_fetch_via_scrapo", lambda *a, **k: "")
+    assert dr.fetch_text("https://site.example/private/x") == ""
+    # Allowed path on the same host goes through to the backends.
+    monkeypatch.setattr(dr, "_fetch_via_urllib", lambda *a, **k: "ok body")
+    assert dr.fetch_text("https://site.example/public/x") == "ok body"
+
+
+def test_robots_ignored_via_env(monkeypatch):
+    monkeypatch.setenv("BOOK_AGENT_IGNORE_ROBOTS", "1")
+    assert dr._robots_allows("https://anything.example/x")
+
+
+def test_throttle_spaces_same_host(monkeypatch):
+    dr._host_last.clear()
+    t0 = dr.time.monotonic()
+    dr._throttle("slow.example", min_interval=0.2)   # first hit: no wait
+    dr._throttle("other.example", min_interval=0.2)  # different host: no wait
+    assert dr.time.monotonic() - t0 < 0.15
+    dr._throttle("slow.example", min_interval=0.2)   # same host again: waits
+    assert dr.time.monotonic() - t0 >= 0.2
+    dr._host_last.clear()
 
 
 def test_fetch_via_scrapo_returns_empty_when_unavailable(monkeypatch):

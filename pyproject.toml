@@ -29,6 +29,11 @@ dependencies = [
   "python-dotenv>=1.0",
   "markdown>=3.5",
   "xhtml2pdf>=0.2.11",
+  # Transitive via xhtml2pdf. svglib 1.6.0 hard-requires rlpycairo -> pycairo, and
+  # pycairo ships no Linux wheels - a bare `pip install` on Linux then fails trying to
+  # build it from source (needs pkg-config + libcairo2-dev). 1.5.x has no cairo chain;
+  # xhtml2pdf only needs svglib's svg2rlg, not the cairo rasterizer.
+  "svglib<1.6",
   "rich>=13.0",
   "pyfiglet>=1.0",
   "prompt_toolkit>=3.0",

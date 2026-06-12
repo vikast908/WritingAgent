@@ -407,7 +407,9 @@ def stream_text(
 
     history: optional list of prior {"role": ..., "content": ...} dicts for multi-turn context.
     In fake mode yields the placeholder text as a single chunk (no network).
-    On any error during streaming, yields an error message chunk and stops.
+    Errors (including mid-stream) propagate to the caller, who already holds the
+    partial chunks. Yielding the error as a text chunk would let it pass for
+    assistant prose - saved to chat history and command-parsed.
     """
     if _fake_mode():
         yield _FAKE_TEXT
@@ -420,14 +422,11 @@ def stream_text(
     kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages, "stream": True}
     if temperature is not None:
         kwargs["temperature"] = temperature
-    try:
-        stream = _get_client().chat.completions.create(**kwargs)
-        for chunk in stream:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
-    except Exception as e:  # noqa: BLE001
-        yield f"\n_(stream error: {e})_"
+    stream = _get_client().chat.completions.create(**kwargs)
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
 
 
 @functools.cache

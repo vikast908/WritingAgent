@@ -5,8 +5,15 @@
 
 ## Current status
 
-- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **156 tests
-  pass**; ruff clean.
+- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **211 tests
+  pass** (+1 opt-in live skip); ruff clean on Windows AND Linux (WSL-verified). **CI is unblocked:**
+  it had been red on every Ubuntu job since the workflow first landed (2026-06-10) - svglib 1.6.0
+  (transitive via xhtml2pdf) requires rlpycairo→pycairo, which has no Linux wheels; pinned
+  `svglib<1.6`. Repo is now **public**, so Actions status is checkable headlessly (no gh auth).
+- **New (2026-06-12, session 10 - review fixes + Linux CI unblocked):** revise-critic parity
+  (book + article), chat stream errors no longer masquerade as prose, SSRF/robots/politeness gate
+  on the deep fetcher, Wikimedia formatversion=2 parse fix, +55 tests (incl. a coverage pass over
+  store/retrieval/skills/cache/search/images/embeddings). Details in the session-log entry.
 - **New (2026-06-12, session 9d - live validation + docs sync + tooling):**
   - **LIVE end-to-end validation of the quality+trust machinery** (real DeepSeek, not fake):
     2-section article "Why most RAG evaluation metrics mislead teams". Full chain fired -
@@ -145,7 +152,7 @@
   - Removed dead `run.py`/`slice.py`; new shared `ui.py` (palette + helpers). 44 tests (added `tests/test_hardening.py`, `tests/test_ui.py`).
 - **Source of truth:** `plan.md` (spec + implementation status); `README.md` = how to run.
 - **How to run:** `writing-agent` (after `pip install -e .`) or `python book.py` → interactive shell; `python book.py <cmd> ...` for one-shot. Needs `OPENROUTER_API_KEY` in `.env`.
-- **Next up (all optional):** (a) live end-to-end deep-research run through the full article/book pipeline (fetch path validated live; full pipeline only run offline); (b) LangGraph wrapper; (c) multi-user / server mode; (d) `robots.txt`/politeness + per-host rate-limit for the deep fetcher if usage grows (Scrapo has `SCRAPO_RESPECT_ROBOTS`).
+- **Next up (all optional):** (a) live end-to-end deep-research run through the full article/book pipeline (fetch path validated live; full pipeline only run offline); (b) LangGraph wrapper; (c) multi-user / server mode; (d) book↔article dedup refactor in orchestrator/shell (~800 duplicated lines - the revise-critic drift was a symptom). robots.txt/SSRF/rate-limit: **done** (session 10).
 - **Stack:** Python; durable on-disk state machine; markdown brain + SQLite/FTS5; OpenRouter + DeepSeek V4 Pro/Flash per-node; Rich TUI + prompt_toolkit.
 - **Platforms:** **Linux · macOS · Windows** - all code is portable (pathlib, atomic `os.replace`, `Path.as_uri()` links, OS-aware optional headroom) and CI runs the suite on all three × Python 3.10–3.13.
 - **Open-source ready:** MIT `LICENSE`, full `pyproject` metadata (dist renamed `writing-agent`), `CONTRIBUTING.md` / `SECURITY.md` / `CODE_OF_CONDUCT.md` / `CHANGELOG.md`, GitHub Actions CI, issue/PR templates, ruff + pre-commit.
@@ -160,6 +167,48 @@
   duplicate.
 
 ## Session log
+
+### 2026-06-12 (10) - Review fixes (revise parity, stream errors, fetch gate) + Linux CI unblocked
+
+Full pending/improvable review (resume+plan backlog, code review of the 269192c..9653244 pull,
+codebase health scan), then "fix all of it". **211 tests pass** (+55); ruff clean; **CI green on
+all 12 matrix jobs** after the fix below. All testing this session is recorded in **`test.md`**.
+
+- **CI was never green on Ubuntu** (every run since the workflow landed 2026-06-10 failed at
+  `pip install -e ".[dev]"`, all 4 Python versions; macOS/Windows always passed). Repo went
+  public this session → diagnosed headlessly via the Actions API, reproduced in WSL Ubuntu:
+  svglib 1.6.0 (transitive via xhtml2pdf) hard-requires rlpycairo→**pycairo, which ships no
+  Linux wheels** and fails to build on a bare runner (no pkg-config/libcairo2-dev). Fix: pin
+  **`svglib<1.6`** in pyproject (xhtml2pdf only uses svg2rlg, never the cairo rasterizer);
+  lockfile updated (svglib 1.5.1; pycairo/rlPyCairo/freetype-py dropped). Verified in WSL:
+  install OK + full suite + ruff green on Linux.
+- **revise_unit critic parity** (the code-review finding, conf 82): both revise paths critiqued
+  with LESS context than the pipeline - no watch-list, no intake requirements, no prior-unit
+  context, no length note (book path passed nothing at all) - so a post-completion revision
+  violating them could sail through. Both now mirror the pipeline critic call (books open the
+  Store for canon context); fix-pass rewrites also carry `requirements`. Regression tests for
+  both paths.
+- **Chat stream errors no longer masquerade as prose:** `llm.stream_text` used to yield the
+  error as a text chunk - it rendered as assistant Markdown, was saved to chat history, and was
+  command-parsed. Now it raises; the shell shows partial text + a styled error and discards the
+  half-streamed reply from history/command parsing.
+- **Deep-fetcher safety gate** (backlog item, now built): every uncached fetch passes an SSRF
+  guard (host must resolve only to globally-routable addresses; stdlib path re-validates each
+  redirect hop), per-host robots.txt (process-cached; missing/unreachable = allow;
+  `BOOK_AGENT_IGNORE_ROBOTS=1` skips), and a 1s per-host politeness interval. Spec row in plan
+  §15.2; README hardening section updated.
+- **Wikimedia image search was silently dead live:** `_call` requests `formatversion=2` (pages
+  = LIST) but `_fetch_info` parsed the v1 dict shape → AttributeError → swallowed by the
+  net-error guard → always `[]`. Found by the new-coverage agent; now parses both shapes.
+- **Coverage pass (+47 tests):** new `test_store.py`, `test_retrieval.py`, `test_skills.py`,
+  `test_support.py` (cache/search/images/embeddings) - previously zero dedicated coverage for
+  the learning loop's promotion logic, FTS retrieval, and the support modules.
+- **Deliberately deferred** (own session): the ~800-line book↔article duplication in
+  orchestrator/shell - a restructuring, not a fix; the revise-parity bug was drift between the
+  duplicated paths, which is the argument for doing it.
+- **Next step:** push went out with CI watched to green; user flips the repo private again
+  (headless Actions checks then stop working - that's fine, CI gates reproduce locally + WSL).
+  Then: live weak-topic `min_insight` calibration run + live chat-gate UX check (user-triggered).
 
 ### 2026-06-12 (8) - Hard go-ahead gate: chat can no longer create+run without the user's ok
 
