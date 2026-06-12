@@ -236,14 +236,30 @@ Output: `brain/users/<user>/books/<id>/manuscript.md` + front/back matter
 Every drafted section/chapter goes through:
 
 ```
-Draft  →  Critic (approve | revise | escalate)
+Thesis (per article: a contestable claim, injected everywhere)
+   │
+N divergent drafts (varied temps)  →  Critic ranks  →  best is refined
+   │                                   (or you pick, in manual mode)
+Draft  →  Critic (approve | revise | escalate) + insight/clarity/structure/evidence scores
               │
          revise ──▶ up to max_revisions (default 2)
               │
-         cap reached ──▶ escalate to human (pending_review = true)
+         low insight ──▶ "sharpen the argument" pass
               │
-         approved ──▶ Humanizer ──▶ commit
+         cap reached ──▶ escalate (TUI picker: fix / instruct / approve / go-auto / read)
+              │
+         approved ──▶ surgical Humanizer (only flagged sentences) ──▶ commit
+              │
+         (article done) ──▶ table read (skeptical reader) ──▶ eval scorecard
 ```
+
+**Not-slop, by design.** The pipeline guarantees the *floor* (banned-word/continuity checks)
+**and** pushes the *ceiling*: a per-article **thesis** the Critic enforces, **voice exemplars**
+(`brain/users/<id>/voice/`, fed by `/praise`) matched on every draft, an **insight score** that
+gates approval, **divergent drafts** selected for strength, and a **surgical humanizer** that
+edits only the sentences with AI tells (never re-generating approved prose). `eval` scores the
+finished piece against published work; `versions` + `revise` give you git-style history and
+one-unit rewrites.
 
 ---
 
@@ -262,10 +278,15 @@ Draft  →  Critic (approve | revise | escalate)
 |---|---|
 | `write --abstract "..."` | **One-shot:** upfront interview (audience, depth, length, tone, must-includes, byline, format) → fully autonomous run → exported finished file. No mid-run pauses. |
 | `new --abstract "..."` | Start a project - picks angles/directions, builds outline/TOC. `--autonomous` / `--no-autonomous` override the `autonomous` setting |
-| `run` | Drive the pipeline: draft → critique → humanise → commit |
+| `run` | Drive the pipeline: draft → critique → humanise → commit. `--autonomous` / `--manual` flips run mode (and unblocks a stalled review) as it resumes |
 | `status` | Show phase, section/chapter progress, pending escalations |
-| `review --chapter N --instruction "..."` | Answer an escalation; `run` resumes from that point |
-| `read [--chapter N] [--summary] [--manuscript]` | Read any section, summary, or the full manuscript |
+| `review --chapter N --instruction "..."` | Answer an escalation; `run` resumes from that point. (In the TUI a stalled run shows an interactive picker: fix / instruct / approve / go-autonomous / read.) |
+| `revise --chapter N --instruction "..."` | Rewrite **one** committed section/chapter of a finished piece (e.g. "make section 3 more technical"); shows a diff to accept/reject, then patches the manuscript |
+| `read [--chapter N] [--summary] [--manuscript] [--v K]` | Read any section, summary, full manuscript, or **draft version K** |
+| `versions [--chapter N]` | List draft snapshots - every variant, revision, and committed final (git-for-writing) |
+| `brief` | The goal panel: thesis / premise, audience, target length, your requirements |
+| `tableread [--as "persona"]` | Skeptical-reader cold read of the finished piece - boredom, trust, gaps (optional persona) |
+| `eval` | Quality scorecard: judged 5-dimension rubric + deterministic metrics → `eval_report.md` |
 | `export [--format <fmt>]` | Export (interactive picker if format omitted) |
 | `memory` | Inspect canon - characters, timeline, entity graph |
 | `skills` | Browse learned craft skills and efficacy scores |
@@ -278,6 +299,8 @@ Draft  →  Critic (approve | revise | escalate)
 | Slash | What it does |
 |---|---|
 | `/update [description]` | Describe your changes - AI reviews and advises on next steps |
+| `/auto [on\|off]` | Autonomous (never pause) ↔ manual (review each unit) run mode |
+| `/praise [N]` | Mark a committed chapter/section as great writing - saved as a voice exemplar + fed to the learner |
 | `/mode [book\|article]` | Show or set writing mode |
 | `/use <project>` | Set active project (no `--book-id` needed on follow-up commands) |
 | `/books` · `/list` | List all projects with type and phase |

@@ -224,6 +224,24 @@ nits + a confidence + a verdict**.
 - Dimensions checked: continuity, character integrity, plot progress, style match, clarity,
   setup/payoff, memory alignment. (Kept as *checks*, not as scored sub-totals.)
 
+**Quality scores (added 2026-06-12) - the ceiling, not just the floor.** Blocking/nits above
+guarantee the *floor* (no slop symptoms, no continuity breaks). Originality needs a separate
+signal, so the Critic also returns four independent 1-5 scores - `insight`, `clarity`,
+`structure`, `evidence` (5 = a contestable argument a generic piece wouldn't contain; 3 =
+competent but predictable; 1 = could appear unchanged on any site). Judged *separately from
+the verdict* - a chapter can be flawless and score 1.
+- **`min_insight` gate** (default 3): `approve` also requires `insight >= min_insight`; a
+  correct-but-generic draft gets a "sharpen the argument" revision pass, not a pass.
+- **Thesis-advancement check** (articles): a section that merely *covers* the topic without
+  advancing the piece's thesis (§15.4) is a BLOCKING issue.
+- **Deterministic style metrics** feed the Critic as computed evidence (paragraph-length
+  uniformity, rule-of-three density, wrap-up tells, specificity density) - structural tells a
+  lexicon can't catch.
+- **Best-of-N:** with `divergent_drafts > 1` the first attempt samples N drafts at varied
+  temperatures; the Critic ranks them (`_crit_better`: approve > fewer-blocking >
+  higher-insight > higher-confidence) and the winner is refined. In manual interactive runs
+  the human picks instead.
+
 ---
 
 ## 6. Orchestrator state machine
@@ -257,8 +275,17 @@ PLAN ──(human picks direction)──▶ TOC ──▶ ┌─ per chapter ─
 Escalation triggers:
 - Revision cap hit.
 - Critic low confidence (numeric gate: `confidence < escalate_below_confidence`, default 0.5).
+- Low insight after the sharpening pass (`insight < min_insight`); see §5, §15.4.
 - Irreconcilable contradiction (plan says X, the chapter needs Y).
 - Structural decision (kill a character, change the ending).
+
+**Escalation picker (TUI, added 2026-06-12) - resolution is interactive, not a printed hint.**
+When a unit stalls, the shell shows the Critic's blocking issues and offers one keypress:
+`[f]ix automatically` (records the critique as the instruction) · `[i]nstruct in your words` ·
+`[a]pprove as-is` (commits the stalled draft via the normal commit path - `approve_escalation()`)
+· `[g]o autonomous & finish` (flips the project to autonomous and runs to the end) ·
+`[r]ead draft` · `[s]top`. Every choice resumes the run itself. The file queue + `review`
+command remain the non-interactive path.
 
 Escalation contract:
 1. Orchestrator **checkpoints** (LangGraph interrupt) and records a pending review.
@@ -282,6 +309,21 @@ generalizes; a diff only tells you what changed in one chapter.
 the `write` command front-loads all questions into a single interview and then runs fully
 autonomously (no mid-run escalation). The mid-run human-as-exception-handler model above is the
 default for `new`/`run`; `write` is the opt-in one-shot path.
+
+**Run-mode toggle (added 2026-06-12):** `/auto on|off` (aliases `/autonomous`, `/manual`) and
+`run --autonomous` / `run --manual` switch a project between autonomous (never pause, commit the
+best draft) and manual (human-in-the-loop) at any time - `orchestrator.apply_autonomous()`
+rewrites the run-state and *clears a pending per-unit review* when switching to autonomous, so a
+stalled run finishes. An **outline gate** (manual mode, TTY only) shows the outline + thesis claim
+after `new` for `[Enter] write · r regenerate · g regenerate-with-guidance` before any prose.
+
+**Post-completion revision (added 2026-06-12):** `revise --chapter N --instruction "..."`
+rewrites ONE committed unit of a *finished* piece (write → critique → optional fix pass →
+humanize), shows a semantic Added/Removed/Improved summary + a unified diff, and on accept patches
+the section file *and* the assembled manuscript (`_replace_manuscript_section`); books re-run
+production. Canon is **not** re-extracted - a polish must not mutate the knowledge base later
+units were written against. This closes the gap between "pipeline done" and "author satisfied"
+without a full re-run.
 
 ---
 
@@ -395,15 +437,19 @@ nodes:
   writer:        deepseek/deepseek-v4-pro      # prose quality
   consolidation: deepseek/deepseek-v4-pro      # global reasoning across the whole book
   toc:           deepseek/deepseek-v4-flash
-  critic:        deepseek/deepseek-v4-flash    # independent judge - a different model than the writer
+  critic:        deepseek/deepseek-v4-pro      # insight scoring + thesis checks need real judgment
   summarizer:    deepseek/deepseek-v4-flash    # summaries + canon extraction
   production:    deepseek/deepseek-v4-flash
   learner:       deepseek/deepseek-v4-flash
   researcher:    deepseek/deepseek-v4-flash
+  humanizer:     deepseek/deepseek-v4-flash    # surgical line edits only
+  diagram:       deepseek/deepseek-v4-flash    # SVG / mermaid generation
 temperature:                                   # DeepSeek accepts sampling params
   toc:        0.4
   critic:     0.2
   summarizer: 0.0
+  writer:     0.9   # base; divergent first drafts sample 0.7 / 1.0 / 1.2
+  humanizer:  0.3   # surgical - must not get creative
 ```
 
 Defaults route **DeepSeek V4 Pro** to Writer/Planner/Consolidation (the high-leverage nodes) and
@@ -413,7 +459,11 @@ OpenAI SDK (`OPENROUTER_API_KEY`); structured node outputs use **JSON mode + Pyd
 
 **Recommendation:** use a *different* model (or family) for the **Critic** than the **Writer**.
 A model tends to be a lenient judge of its own output; an independent critic catches more. This
-is the architectural reason the Critic is a separate node in the first place.
+is the architectural reason the Critic is a separate node in the first place. *(Current default
+keeps the Critic on `deepseek-v4-pro` - same family as the writer - because insight scoring and
+thesis checks needed the pro tier's judgment more than cross-family independence; the watch-list,
+deterministic style metrics, and `/praise` are the compensating defenses. Route `critic` to any
+non-DeepSeek slug to restore a cross-family judge.)*
 
 ---
 
@@ -434,17 +484,24 @@ and canon in any editor):
 |---|---|
 | `write` | One-shot (§15.3): topic → upfront interview → fully autonomous run → exported finished file. Flags: `--abstract`, `--chapters N`, `--max-revisions N`, `--no-humanize` |
 | `new` | Abstract → directions (human/auto pick) → plan + TOC. Flags: `--autonomous` / `--no-autonomous` (else `settings.autonomous`), `--no-humanize`, `--chapters N`, `--max-revisions N`, `--pick K` |
-| `run` | Drive write → critique → humanize → commit → consolidate → produce → learn. `--force` passes a consolidation review |
+| `run` | Drive write → critique → humanize → commit → consolidate → produce → learn. `--force` passes a consolidation review; `--autonomous` / `--manual` flips run mode as it resumes (also clears a stalled review) |
 | `status` | Where the book is; pending escalations |
 | `review --chapter K --instruction "..."` | Answer an escalation; resume on next `run` |
-| `read [--chapter K] [--summary] [--manuscript]` | Print a chapter / summary / assembled book |
-| `export` | Render the manuscript to PDF |
+| `revise --chapter K --instruction "..."` | Rewrite ONE committed unit of a *finished* piece (diff + accept/reject), patch the manuscript (§7) |
+| `read [--chapter K] [--summary] [--manuscript] [--v N]` | Print a chapter / summary / assembled book / draft **version** N (§15.5) |
+| `versions [--chapter K]` | List draft snapshots (variants, revisions, committed finals) - git-for-writing (§15.5) |
+| `brief` | The goal panel: thesis / premise, audience, target length, intake, voice/watch state |
+| `tableread [--as "persona"]` | Skeptical-reader cold read of the finished piece (optional persona) (§15.4) |
+| `eval` | Quality report: judged 5-dim rubric + deterministic metrics → `eval_report.md` (§15.5) |
+| `export` | Render the manuscript: pdf · epub · html · docx · txt · md |
 | `memory` | Inspect canon (characters/timeline) + entity graph |
 | `consolidate` · `produce` | Run those passes on demand |
 | `skills` · `seed-skills` | List skills + efficacy · install built-in craft skills |
 | `list` · `config` | List books · show model routing + settings |
 
-**Slash commands (shell only):** `/help`, `/model [<agent>] <slug>` (switch any model, per agent,
+**Slash commands (shell only):** `/help`, `/auto [on|off]` (autonomous ↔ manual run mode; aliases
+`/autonomous`, `/manual`), `/praise [N]` (mark a committed unit as great → saved to `voice/`,
+feeds the writer + learner; §15.4), `/model [<agent>] <slug>` (switch any model, per agent,
 persisted to `config/models.yaml`), `/skills`, `/skill <name>`, `/seed-skills`, `/use <book>`,
 `/books`, `/user <id>`, `/config`, `/theme [<name>]` (themes change *everything* - palette,
 wordmark figlet face, fleuron, gradient; each a distinct hue family. `editorial` blue-ink default
@@ -455,9 +512,16 @@ incl. `FONT`/`WORDS`/`SHEAR`, persisted via `settings.theme`), `/dashboard [<pro
 rollup - calls/tokens/cost/latency/errors; per-unit breakdown when a project is named; reads the
 JSONL call log, §15.1), `/clear`, `/exit`.
 
-Run modes: **interactive** (prompts inline on escalation), **autonomous** (`--autonomous`: never
-pauses; commits the best draft + auto-repairs contradictions), **async** (background; resume via
-`run` / `review` - the on-disk state is the checkpoint).
+Run modes: **interactive** (prompts inline on escalation via the picker, §7), **autonomous**
+(`--autonomous` / `/auto on`: never pauses; commits the best draft + auto-repairs contradictions),
+**async** (background; resume via `run` / `review` - the on-disk state is the checkpoint).
+
+**Live run dashboard (writing-centric, 2026-06-12):** the goal line (thesis claim / book premise)
+stays visible in the header; each attempt logs a one-line draft *glimpse* (the opening sentence,
+so a run going wrong can be cancelled before it costs more); a finished run rings the terminal
+bell and shows a **summary card** (units · words · elapsed · tokens · cost · avg insight +
+clarity/structure/evidence scorecard + pointers to `eval` / `tableread`). The bottom toolbar turns
+**red** when a review is pending so a silently-stalled run can't hide.
 
 ---
 
@@ -539,6 +603,63 @@ run via the **`write`** command (the `new`→`run`→`export` path is unchanged 
 | **Intake threading** | Answers ("intake") are (a) folded into the planner/outline prompt so structure/length/audience reflect them, and (b) injected into every writer/critic call as a high-priority `requirements` block (new kwarg). A clear violation (wrong audience/length/tone, missing must-include) is BLOCKING. Persisted to `run_state` + `intake.md`. |
 | **Hard-blocker facts** | Author/byline name is captured in the interview and written to `user/profile.md` (`_record_author`, never clobbers an existing profile), so Production fills bylines/copyright instead of escalating. Contradictions are auto-repaired (autonomous). Net effect: the run does not pause. |
 | **Autonomous resolution** | `--autonomous` is tri-state (`--autonomous`/`--no-autonomous`/unset); unset falls back to `settings.autonomous`. (Previously a `store_true` default of `False` silently shadowed the setting, forcing non-autonomous runs that escalated repeatedly - the bug this flow's users hit.) |
+
+### 15.4 Quality machinery - originality over slop-absence (2026-06-12)
+
+A code review concluded the pipeline guaranteed the *floor* (no banned words, no continuity
+breaks) but had no machinery for the *ceiling* (a thesis, a voice, a risk). Every node optimized
+for the absence of negatives; none for the presence of a take. The fix, in order of leverage:
+
+- **Thesis node** (`generate_thesis`, articles): one structured call at `start_article` produces a
+  contestable `claim` + `stakes` + supporting arguments + a steelmanned `counterargument`/
+  `rebuttal` + `non_goals`. Persisted as `thesis.md`/`.json`; injected into every writer and Critic
+  call. The Critic blocks sections that cover the topic without advancing it.
+- **Voice exemplars** (`brain/users/<uid>/voice/`): admired paragraphs (user-dropped, or saved by
+  `/praise`) are injected into every writer call as *register to match* - showing voice beats
+  describing it. The learner also reads `/praise`d passages as positive exemplars (not only the
+  watch-list of negatives).
+- **Surgical humanizer** (replaced the wholesale rewrite): tells are detected deterministically
+  (the NO_SLOP lexicon as a regex scanner), only flagged sentences are rewritten, and each rewrite
+  is guarded (inline citations + numbers preserved, length sane, tell actually gone) before
+  splicing. Approved prose is never re-generated end-to-end, so a Flash paraphrase can't drift
+  facts or regress the whole unit toward that model's mean. `mechanical_clean` always runs last.
+- **Divergent first drafts** (`divergent_drafts`, default 2): see §5 (best-of-N).
+- **Insight gate** (`min_insight`, default 3) + deterministic style metrics: see §5.
+- **Table read** (`table_read`, default on): a whole-piece cold read by a *skeptical
+  target-audience reader* (not a line editor) → `table_read.md` (where I got bored / stopped
+  trusting it / didn't understand / what's missing). Report-only; feeds `revise`. `tableread
+  --as "persona"` runs it on demand as a specific reader.
+- **Researcher on by default** (`use_researcher: true`): citations are unverifiable otherwise.
+  With it off, the Critic treats specific stats/attributions as fabrication risks (BLOCKING), and
+  production warns when in-text `[n]` markers exist with an empty source registry.
+- **Critic = deepseek-v4-pro** (insight scoring + thesis checks need real judgment). Same family
+  as the writer shares its blind spots - the watch-list, deterministic metrics, and `/praise` are
+  the defenses; route `critic` to any other slug in `models.yaml` for a cross-family judge.
+
+### 15.5 Trust machinery - version history, diffs, eval (2026-06-12)
+
+Audited the TUI against a 20-point writing-agent framework. Its core claim - *"the equivalent of
+a coding agent's diff viewer is a writing agent's version comparison system; that's where trust is
+won or lost"* - was exactly our weakest spot (we discarded drafts after commit). Built:
+
+- **Version snapshots** ("git for writing"): every generated draft - divergent variants (labeled
+  with temperature), each revision, the committed final, every `revise` output - is saved under
+  `<project>/versions/<unit>.vNN.md`. Survives article cleanup. `versions [--chapter N]` lists;
+  `read --chapter N --v K` reads one.
+- **Semantic + text diff on `revise`**: a Flash Added/Removed/Improved summary + a colored unified
+  diff are shown *before* applying; `[Y/n]` accept/reject in a TTY (discard touches nothing).
+- **`brief`** + the dashboard goal line (§13): the goal is always visible.
+- **Scorecard-lite**: clarity/structure/evidence (§5) tracked per commit, averaged on the summary
+  card.
+- **`eval`**: a post-hoc quality report combining deterministic metrics (words, AI-tell-sentence
+  scan via the humanizer lexicon, structural metrics, citation vs. verified-source coverage) with
+  a pro-model 5-dimension rubric (insight/clarity/structure/evidence/persuasiveness) whose
+  strengths/weaknesses must quote the text. Calibrated against published work, not other AI output.
+  Writes `eval_report.md`; weaknesses are designed to feed straight into `revise`.
+
+**Deliberately NOT built** (a different product - a co-editor, not an autonomous pipeline):
+document-first 70-80% layout, and sentence-level inline-suggestion accept/reject (our acceptance
+unit is the section/chapter, correct for long-form).
 
 ### Still post-v1 (deliberately deferred)
 
