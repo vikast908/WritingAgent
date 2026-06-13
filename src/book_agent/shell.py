@@ -43,31 +43,49 @@ _NODES = ["planner", "toc", "writer", "critic", "judge", "verifier", "summarizer
           "consolidation", "production", "learner", "researcher", "humanizer",
           "diagram", "diagram_fallback", "chat"]
 _EXIT = {"exit", "quit", "q", ":q"}
+# Plain-English synonyms for the two project modes (used by /mode and /set mode).
+_MODE_ALIASES = {
+    "essay": "article", "blog": "article", "post": "article", "piece": "article",
+    "op-ed": "article", "oped": "article", "longform": "article", "long-form": "article",
+    "story": "book", "novel": "book", "manuscript": "book", "nonfiction": "book",
+}
 _NIB = "✒"             # the brand glyph: a pen nib (matches the logo)
 _FLEURON = _NIB            # used for the prompt + section/status markers
 _MAX_HISTORY = 10  # max messages kept for multi-turn context (5 user + 5 assistant)
 
+# Slash-command manual, grouped by category (single source for /help; the
+# completion dropdown derives from _SLASH_COMPLETIONS below). Each group is
+# (category-header, [(usage, description), ...]); headers render dimmed.
 _SLASH_HELP = [
-    ("/help", "this panel + the full command list"),
-    ("/features", "feature toggles - what's on/off and what each does"),
-    ("/model", "show per-agent model routing"),
-    ("/model <slug>", "route ALL agents to a model (any OpenRouter slug)"),
-    ("/model <agent> <slug>", "set one agent (e.g. /model critic openai/gpt-4o)"),
-    ("/set <key> <value>", "change a setting live (e.g. /set use_researcher true)"),
-    ("/skills · /skill <name>", "list skills · show one skill"),
-    ("/seed-skills", "install the built-in craft skills"),
-    ("/use <book> · /books", "set active book · list books"),
-    ("/user <id> · /config", "switch user · show config"),
-    ("/update [changes]", "describe your changes - AI reviews and advises on next steps"),
-    ("/retry", "resend the last chat message"),
-    ("/auto [on|off]", "autonomous (never pause) vs manual (review each unit)"),
-    ("/praise [N]", "mark a committed chapter/section as great - feeds voice + learner"),
-    ("/mode [book|article]", "show or set the project mode (default: book)"),
-    ("/theme [<name>]", "list or switch themes - each changes palette, wordmark font, and glyphs"),
-    ("/dashboard [<project>]", "telemetry rollup - calls, tokens, cost, latency, errors (per project: per-unit breakdown)"),
-    ("/reset", "clear the assistant's conversation memory (fresh context)"),
-    ("/compact", "summarize conversation memory to save context space"),
-    ("/clear · /exit", "clear screen · quit"),
+    ("session", [
+        ("/use <book> · /books", "set active book · list books"),
+        ("/mode [book|article]", "show or set the project mode (default: book)"),
+        ("/path [...]", "where exports are saved - default or per-project, with move"),
+        ("/auto [on|off]", "autonomous (never pause) vs manual (review each unit)"),
+        ("/retry", "resend the last chat message"),
+        ("/reset · /compact", "clear · summarize the assistant's conversation memory"),
+    ]),
+    ("configuration", [
+        ("/features", "interactive toggle grid - ↑↓ move · space toggle · ↵ save"),
+        ("/set <key> <value>", "change one setting live (e.g. /set use_researcher true)"),
+        ("/provider [<id>]", "list or switch the model host (openrouter, deepseek, openai, ollama, ...)"),
+        ("/model [<agent>] <slug>", "show / set per-agent model routing (slugs for the active host)"),
+        ("/theme [<name>]", "list or switch themes - palette, wordmark font, and glyphs"),
+    ]),
+    ("craft & skills", [
+        ("/skills · /skill <name>", "list skills · show one skill"),
+        ("/seed-skills", "install the built-in craft skills"),
+        ("/praise [N]", "mark a committed chapter/section as great - feeds voice + learner"),
+    ]),
+    ("project & telemetry", [
+        ("/user <id> · /config", "switch user · show config"),
+        ("/update [changes]", "describe your changes - AI reviews and advises on next steps"),
+        ("/dashboard [<project>]", "telemetry rollup - calls, tokens, cost, latency, errors"),
+    ]),
+    ("info", [
+        ("/help", "this panel + the full command list"),
+        ("/clear · /exit", "clear screen · quit"),
+    ]),
 ]
 _MARKUP = re.compile(r"\[/?[^\]]*\]")
 # Matches fenced code blocks: ```cmd``` or ```lang\ncmd\n```. The info string
@@ -103,7 +121,7 @@ COMMANDS  (type these directly in this shell - no 'book' prefix needed):
   brief                      Show the goal: thesis, audience, target length
   tableread [--as "..."]     Skeptical-reader pass over the finished piece (optional persona)
   eval                       Quality report: 5-dim judged rubric + deterministic metrics
-  export [--format <fmt>]    Export: pdf · epub · html · docx · txt · md  (prompts if omitted)
+  export [fmt ...]           Export: pdf · epub · html · docx · txt · md · all  (prompts if omitted)
   memory                     Inspect characters, timeline, entity graph
   skills                     List learned craft skills + efficacy
   list                       List all your books
@@ -130,7 +148,7 @@ SLASH COMMANDS  (start with /):
 TYPICAL FIRST SESSION:
   1.  new --abstract "A thriller about a forger in 1920s Paris"
   2.  run
-  3.  export   (then pick: pdf / epub / html / docx / txt / md)
+  3.  export   (pick: pdf / epub / html / docx / txt / md, or `export all`)
 
 NATURAL LANGUAGE → COMMAND EXECUTION:
 You can understand plain English and convert it into commands that run automatically.
@@ -160,9 +178,16 @@ The session context below always shows the ACTIVE PROJECT. Check it first.
                               ```/use my-article```
                               ```run```
 
-  active project: my-project  →  Safe to run commands directly - no /use needed.
+  active project: my-project  →  Run commands DIRECTLY. Do NOT emit `/use` - the active
+                              project is already correct, and a `/use` risks switching to the
+                              wrong one. Example - user says "export to epub":
+                              ```export epub```
+                              Only emit `/use` when the user EXPLICITLY asks to open a DIFFERENT
+                              project that appears by name in "all projects".
 
-  DO NOT ask "which project?" in text. Just pick the most recent/relevant one from context and use it.
+  NEVER invent or guess a project id. Copy it EXACTLY from "all projects" - the id only,
+  WITHOUT the "(type: article)" tag. If you're unsure which project, use the active one.
+  DO NOT ask "which project?" in text. Just pick the most relevant one from context and use it.
   The shell auto-routes to the right project type for the current mode.
 
 RESOLVING AN ESCALATION (when SESSION CONTEXT shows "ESCALATION PENDING"):
@@ -506,7 +531,7 @@ def _commands_table(console, settings: Settings) -> None:
         new_desc = "start an article - topic → angles → outline + sections"
     else:
         new_desc = "start a book - idea → directions → plan + TOC"
-    export_desc = "pdf · epub · html · docx · txt · md  (prompts if format omitted)"
+    export_desc = "pdf · epub · html · docx · txt · md · all  (prompts if omitted)"
     rows = [
         ("write --abstract \"...\"", "★ ask a few questions upfront, then autonomously "
                                      "research → write → export a finished file"),
@@ -519,7 +544,7 @@ def _commands_table(console, settings: Settings) -> None:
         ("tableread [--as \"...\"]", "skeptical-reader report on the finished piece"),
         ("read", "section (--chapter N) · --summary · --manuscript" if is_article
                  else "chapter (--chapter N) · --summary · --manuscript"),
-        ("export [--format <fmt>]", export_desc),
+        ("export [fmt ... | all]", export_desc),
         ("memory · skills · list", "canon & timeline · craft skills · all projects"),
         ("delete [--yes]", "permanently delete a project"),
         ("/mode book", "switch to book mode (chapters, novel/nonfiction)") if is_article
@@ -572,27 +597,173 @@ def _features_table(console, settings: Settings) -> None:
     _cmd_table(console, rows)
 
 
+# Live-toggleable feature booleans for the interactive /features grid. Mirrors
+# the static table above; (settings attribute, label, one-line description).
+_FEATURE_KEYS = [
+    ("humanize",          "humanize",    "strip AI tells from prose (em-dashes, AI phrasing)"),
+    ("use_researcher",    "researcher",  "web search per unit - real facts + inline citations"),
+    ("deep_research",     "deep search", "multi-query fan-out + full-page fetch (needs researcher)"),
+    ("use_embeddings",    "embeddings",  "semantic skill retrieval (all-MiniLM-L6-v2, local)"),
+    ("use_images",        "images",      "Wikimedia Commons images for illustrated content"),
+    ("article_cohesion",  "cohesion",    "whole-article smoothing pass before References"),
+    ("tournament_judge",  "tournament",  "best-of-N judge: pick the strongest divergent draft"),
+    ("verify_claims",     "verify",      "check each cited claim against its source"),
+    ("table_read",        "table read",  "skeptical whole-piece reader pass (articles)"),
+    ("table_read_revise", "reader-loop", "autonomous: apply the reader's top fix as one revision"),
+]
+
+
+def _toggle_grid(console, settings: Settings) -> bool:
+    """Interactive feature-toggle grid: ↑↓ move · space toggle · ↵ save · esc cancel.
+
+    Flips boolean settings in one keyboard-driven view instead of one /set at a
+    time. Edits apply and persist only on ↵ (esc discards). Returns True if
+    anything was saved. Falls back to the static /features table (returns False)
+    when there's no interactive TTY or prompt_toolkit is unavailable - so it
+    degrades cleanly under pipes, CI, and dumb terminals.
+    """
+    import sys as _sys
+    try:
+        if not _sys.stdin.isatty():
+            raise RuntimeError("no tty")
+        from prompt_toolkit.application import Application
+        from prompt_toolkit.key_binding import KeyBindings
+        from prompt_toolkit.layout import Layout, Window
+        from prompt_toolkit.layout.controls import FormattedTextControl
+        from prompt_toolkit.styles import Style
+    except Exception:
+        _features_table(console, settings)
+        return False
+
+    rows = [{"key": k, "label": lbl, "desc": d, "on": bool(getattr(settings, k, False))}
+            for k, lbl, d in _FEATURE_KEYS]
+    sel = {"i": 0}
+    _OFF = "#6b6b6b"   # pt needs hex; ui.OFF_CLR/DIM are Rich names ("grey50"/"grey42")
+
+    def render():
+        frags = [("class:title", f" {_NIB}  FEATURES"),
+                 ("class:hint", "    space toggle · ↑↓ move · ↵ save · esc cancel"),
+                 ("", "\n\n")]
+        for i, r in enumerate(rows):
+            cur = i == sel["i"]
+            frags.append(("class:ptr", "  › " if cur else "    "))
+            frags.append(("class:on" if r["on"] else "class:off",
+                          "● " if r["on"] else "○ "))
+            frags.append(("class:cur" if cur else "class:lbl", f"{r['label']:<12}"))
+            frags.append(("class:desc", f"  {r['desc']}"))
+            if i < len(rows) - 1:
+                frags.append(("", "\n"))
+        return frags
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    @kb.add("c-p")
+    def _(_e):
+        sel["i"] = (sel["i"] - 1) % len(rows)
+
+    @kb.add("down")
+    @kb.add("c-n")
+    def _(_e):
+        sel["i"] = (sel["i"] + 1) % len(rows)
+
+    @kb.add("space")
+    def _(_e):
+        rows[sel["i"]]["on"] = not rows[sel["i"]]["on"]
+
+    @kb.add("enter")
+    def _(e):
+        e.app.exit(result=True)
+
+    @kb.add("escape")
+    @kb.add("c-c")
+    @kb.add("q")
+    def _(e):
+        e.app.exit(result=False)
+
+    control = FormattedTextControl(render, focusable=True, show_cursor=False)
+    layout = Layout(Window(control, height=len(rows) + 2))
+    style = Style.from_dict({
+        "title": f"bold {GOLD}",
+        "hint":  _OFF,
+        "ptr":   GOLD_HI,
+        "on":    ON_CLR if str(ON_CLR).startswith("#") else "#6aaa5c",
+        "off":   _OFF,
+        "lbl":   PARCH,
+        "cur":   f"bold {GOLD_HI}",
+        "desc":  _OFF,
+    })
+    try:
+        saved = Application(layout=layout, key_bindings=kb, style=style,
+                            full_screen=False, mouse_support=False).run()
+    except Exception:
+        _features_table(console, settings)
+        return False
+
+    if not saved:
+        _out(console, "[dim]features unchanged[/]")
+        return False
+    changed = []
+    for r in rows:
+        if bool(getattr(settings, r["key"], False)) != r["on"]:
+            setattr(settings, r["key"], r["on"])
+            changed.append((r["label"].strip(), r["on"]))
+    if not changed:
+        _out(console, "[dim]features unchanged[/]")
+        return False
+    save_settings(settings)
+    parts = " · ".join(f"[{ON_CLR if on else OFF_CLR}]{lbl} {'on' if on else 'off'}[/]"
+                       for lbl, on in changed)
+    _out(console, f"[{GOLD}]saved[/]  {parts}")
+    return True
+
+
 def _slash_help(console, settings: Settings | None = None) -> None:
     if not console:
-        for name, desc in _SLASH_HELP:
-            print(f"  {name:<28} {desc}")
+        for cat, group in _SLASH_HELP:
+            print(f"\n  {cat}")
+            for name, desc in group:
+                print(f"    {name:<26} {desc}")
         return
     from rich.text import Text
     if settings is not None:
         _commands_table(console, settings)
     _section(console, "SLASH COMMANDS")
-    _cmd_table(console, _SLASH_HELP)
+    for cat, group in _SLASH_HELP:
+        console.print(Text(f"  {cat}", style=DIM))
+        _cmd_table(console, group)
     console.print(Text(f"  agents: {', '.join(_NODES)}", style=DIM))
 
 
 # ── Slash handlers ────────────────────────────────────────────────────────────
 
+def _model_catalog(console) -> None:
+    """Browse popular models (`/model list`). Any slug works; this is just discovery."""
+    from . import providers
+    if console:
+        _section(console, "POPULAR MODELS")
+        rows = [(fam if i == 0 else "", s)               # family shown once; one slug per line
+                for fam, slugs in providers.POPULAR_MODELS
+                for i, s in enumerate(slugs)]
+        _cmd_table(console, rows)
+        _out(console, "  [dim]OpenRouter slugs (the default host) - set with /model <agent> <slug> "
+                      "or /model <slug> for all. Full list: openrouter.ai/models · other hosts: /provider[/]")
+    else:
+        for fam, slugs in providers.POPULAR_MODELS:
+            print(f"  {fam}: {', '.join(slugs)}")
+
+
 def _cmd_model(console, cfg: ModelConfig, rest: list[str]) -> None:
+    if rest and rest[0].lower() in ("list", "catalog", "popular", "browse"):
+        _model_catalog(console)
+        return
     if not rest:
         rows = [("default", cfg.default)] + [(n, cfg.model_for(n)) for n in _NODES]
         if console:
             _section(console, "MODELS")
             _cmd_table(console, rows)
+            _out(console, "  [dim]change: /model <agent> <slug> · all: /model <slug> · "
+                          "browse: /model list · other hosts: /provider[/]")
         else:
             for a, b in rows:
                 print(f"  {a:<14} {b}")
@@ -603,23 +774,266 @@ def _cmd_model(console, cfg: ModelConfig, rest: list[str]) -> None:
         _out(console, f"all agents -> [{GOLD}]{rest[0]}[/] [dim](saved)[/]")
         return
     node, slug = rest[0], rest[1]
-    if node != "default" and node not in _NODES:
-        _out(console, f"[{ERR}]unknown agent '{node}'[/] - agents: {', '.join(_NODES)}")
+    match, cands = ui.smart_match(node, ["default", *_NODES])
+    if not match:
+        tail = f"matches: {', '.join(cands)}" if cands else f"agents: {', '.join(_NODES)}"
+        _out(console, f"[{ERR}]unknown agent '{node}'[/] - {tail}")
         return
+    node = match
     cfg.set_default(slug) if node == "default" else cfg.set_node(node, slug)
     save_config(cfg)
     _out(console, f"[{GOLD}]{node}[/] -> [{GOLD}]{slug}[/] [dim](saved)[/]")
 
 
+def _cmd_provider(console, settings: Settings, rest: list[str]) -> None:
+    """Show or switch the model host. `/provider` lists every provider with a
+    key/local marker; `/provider <id>` switches, persists, and rebuilds the client."""
+    from . import llm, providers
+    if not rest:
+        active = providers.resolve(settings.provider)
+        rows = []
+        for pid in providers.names():
+            p = providers.REGISTRY[pid]
+            if p.local:
+                mark, tag = ON_CLR, "local"
+            elif providers.has_credentials(p):
+                mark, tag = ON_CLR, "key set"
+            else:
+                mark, tag = OFF_CLR, "no key"
+            dot = "●" if pid == active else "○"
+            rows.append((f"[{mark}]{dot} {pid:<11}[/]",
+                         f"[{PARCH}]{p.name}[/]  [dim]{tag} · {p.notes}[/]"))
+        if console:
+            _section(console, "PROVIDERS")
+            _cmd_table(console, rows)
+            _out(console, "  [dim]switch: /provider <id>  ·  set the key in .env or your shell[/]")
+        else:
+            for a, b in rows:
+                print(f"  {_MARKUP.sub('', a):<16} {_MARKUP.sub('', b)}")
+        return
+
+    p = providers.get(rest[0])                    # exact id or alias
+    if not p:                                      # then a partial/typo
+        match, cands = ui.smart_match(rest[0], providers.names())
+        if match:
+            p = providers.REGISTRY[match]
+        elif cands:
+            _out(console, f"[{ERR}]'{rest[0]}' matches several:[/] [dim]{', '.join(cands)}[/]")
+            return
+        else:
+            _out(console, f"[{ERR}]unknown provider '{rest[0]}'[/] [dim](see /provider for the list)[/]")
+            return
+    settings.provider = p.id
+    save_settings(settings)
+    try:
+        llm.configure_provider(p.id)
+    except ValueError as e:
+        _out(console, f"[{ERR}]{e}[/]")
+        return
+    note = ""
+    if not providers.has_credentials(p):
+        envs = " or ".join(p.key_env) or "(none)"
+        note = f" · [{ERR}]no key yet[/][dim] - set {envs}[/]"
+    elif p.id != "openrouter":
+        note = " · [dim]models use this host's slugs - set them with /model[/]"
+    _out(console, f"provider -> [{GOLD}]{p.id}[/] [dim]({p.name}, saved)[/]{note}")
+
+
+def _norm_dir(raw: str):
+    from pathlib import Path
+    raw = (raw or "").strip().strip('"').strip("'")
+    p = Path(raw).expanduser()
+    try:
+        return p.resolve()
+    except (OSError, RuntimeError):
+        return p
+
+
+def _ensure_dir(d) -> tuple[bool, str]:
+    try:
+        if d.exists() and not d.is_dir():
+            return False, "that path is a file, not a folder"
+        d.mkdir(parents=True, exist_ok=True)
+        return True, ""
+    except OSError as e:
+        return False, str(e)
+
+
+def _print_path_status(console, settings: Settings, uid: str) -> None:
+    rows = [("default", settings.export_dir.strip() or "[dim]each project's own folder[/]")]
+    for pid, _ptype in brain.list_projects(uid):
+        ov = brain.get_project_export_dir(uid, pid)
+        if ov:
+            rows.append((pid, ov))
+    if console:
+        _section(console, "SAVE PATHS")
+        _cmd_table(console, rows)
+        _out(console, "  [dim]change: /path (menu) · /path default <dir> · /path <project> <dir>[/]")
+    else:
+        for a, b in rows:
+            print(f"  {a:<16} {_MARKUP.sub('', b)}")
+
+
+def _set_default_path(console, settings: Settings, raw: str) -> None:
+    d = _norm_dir(raw)
+    ok, err = _ensure_dir(d)
+    if not ok:
+        _out(console, f"[{ERR}]can't use that folder:[/] {err}")
+        return
+    settings.export_dir = str(d)
+    save_settings(settings)
+    _out(console, f"default save path -> [{GOLD}]{d}[/] "
+                  f"[dim](saved · for projects without their own path)[/]")
+
+
+def _set_project_path(console, settings: Settings, uid: str, pid: str, raw: str,
+                      *, ask_move: bool = True) -> None:
+    d = _norm_dir(raw)
+    ok, err = _ensure_dir(d)
+    if not ok:
+        _out(console, f"[{ERR}]can't use that folder:[/] {err}")
+        return
+    old = brain.resolve_export_dir(uid, pid)
+    brain.set_project_export_dir(uid, pid, str(d))
+    new = brain.resolve_export_dir(uid, pid)
+    _out(console, f"[{GOLD}]{pid}[/] save path -> [{GOLD}]{new}[/] [dim](saved)[/]")
+    existing = [f for f in brain.EXPORT_DELIVERABLES if (old / f).exists()]
+    if old.resolve() == new.resolve() or not existing:
+        return
+    do_move = True
+    if ask_move and console:
+        ans = console.input(
+            f"  [{INK}]move {len(existing)} existing export(s) from[/] [dim]{old}[/] "
+            f"[{DIM}][Y/n][/] ")
+        do_move = ui.is_affirmative(ans, default=True)
+    if do_move:
+        moved = brain.move_exports(old, new)
+        _out(console, f"[{ON_CLR}]moved {len(moved)} file(s)[/] [dim]{', '.join(moved)}[/]")
+    else:
+        _out(console, "[dim]left existing exports where they are[/]")
+
+
+def _cmd_path(console, settings: Settings, state: dict, rest: list[str]) -> None:
+    """Choose where finished writing is saved: a global default plus per-project
+    folders, with the option to move a project's existing exports to the new home."""
+    uid = state["uid"]
+    if rest:
+        head, low = rest[0], rest[0].lower()
+        if low == "show":
+            _print_path_status(console, settings, uid)
+        elif low == "default":
+            if len(rest) >= 2:
+                _set_default_path(console, settings, " ".join(rest[1:]))
+            elif console:
+                raw = console.input("  default save folder: ").strip()
+                if raw:
+                    _set_default_path(console, settings, raw)
+            else:
+                _out(console, "usage: /path default <dir>")
+        elif low == "clear":
+            if len(rest) >= 2:
+                brain.set_project_export_dir(uid, rest[1], None)
+                _out(console, f"cleared save path for [{GOLD}]{rest[1]}[/] [dim](back to default)[/]")
+            else:
+                settings.export_dir = ""
+                save_settings(settings)
+                _out(console, "cleared default save path [dim](exports go to each project's folder)[/]")
+        else:                                         # head is (or should be) a project id
+            pid, cands = brain.resolve_project(uid, head)
+            if not pid:
+                if cands:
+                    _out(console, f"[{ERR}]'{head}' matches several:[/] [dim]{', '.join(cands)}"
+                                  f" - be more specific[/]")
+                else:
+                    sug = ui.did_you_mean(head, [p[0] for p in brain.list_projects(uid)])
+                    hint = f"did you mean '{sug}'?" if sug else "see /path show"
+                    _out(console, f"[{ERR}]no project '{head}'[/] [dim]({hint})[/]")
+            elif len(rest) >= 2:
+                _set_project_path(console, settings, uid, pid, " ".join(rest[1:]))
+            elif console:
+                raw = console.input(f"  save folder for '{pid}': ").strip()
+                if raw:
+                    _set_project_path(console, settings, uid, pid, raw)
+            else:
+                _out(console, f"usage: /path {pid} <dir>")
+        return
+
+    # No args -> the interactive menu (default vs. a project, then move-or-not).
+    _print_path_status(console, settings, uid)
+    if not console:
+        _out(console, "usage: /path default <dir> | /path <project> <dir> | /path show")
+        return
+    console.print()
+    console.print(f"  [{GOLD}][1][/] set the [bold]default[/] save path  "
+                  f"[dim]- all projects without their own[/]")
+    console.print(f"  [{GOLD}][2][/] set a path for [bold]one project[/]  "
+                  f"[dim]- and optionally move its exports[/]")
+    choice = console.input(f"  [{INK}]choose[/] [dim][1/2, enter to cancel][/] ").strip()
+    if choice == "1":
+        raw = console.input("  default save folder: ").strip()
+        if raw:
+            _set_default_path(console, settings, raw)
+    elif choice == "2":
+        projects = brain.list_projects(uid)
+        if not projects:
+            _out(console, "[dim](no projects yet - create one first)[/]")
+            return
+        console.print()
+        for i, (pid, ptype) in enumerate(projects, 1):
+            ov = brain.get_project_export_dir(uid, pid)
+            tag = f"  [dim]-> {ov}[/]" if ov else ""
+            console.print(f"  [{GOLD}][{i}][/] {pid} [dim][{ptype}][/]{tag}")
+        sel = console.input(f"  [{INK}]project number[/] [dim][enter to cancel][/] ").strip()
+        if not sel.isdigit() or not (1 <= int(sel) <= len(projects)):
+            _out(console, "[dim]cancelled[/]")
+            return
+        pid = projects[int(sel) - 1][0]
+        raw = console.input(f"  save folder for '{pid}': ").strip()
+        if raw:
+            _set_project_path(console, settings, uid, pid, raw)
+    else:
+        _out(console, "[dim]cancelled[/]")
+
+
+def _use_project(console, uid: str, query: str, state: dict) -> None:
+    """Set the active project from a name, an excerpt, or a typo - presenting a
+    numbered picker when several match (see brain.resolve_project)."""
+    resolved, cands = brain.resolve_project(uid, query)
+    if resolved:
+        state["book"] = resolved
+        _out(console, f"active book -> [{GOLD}]{resolved}[/]")
+        return
+    if cands:
+        if console:
+            _out(console, f"[dim]{len(cands)} projects match '{query}':[/]")
+            for i, c in enumerate(cands, 1):
+                console.print(f"  [{GOLD}][{i}][/] {c}")
+            sel = console.input(f"  [{INK}]pick a number[/] [dim][enter to cancel][/] ").strip()
+            if sel.isdigit() and 1 <= int(sel) <= len(cands):
+                state["book"] = cands[int(sel) - 1]
+                _out(console, f"active book -> [{GOLD}]{state['book']}[/]")
+            else:
+                _out(console, "[dim]cancelled[/]")
+        else:
+            _out(console, "matches: " + ", ".join(cands))
+        return
+    valid = [p[0] for p in brain.list_projects(uid)]
+    sug = ui.did_you_mean(query, valid)
+    tail = (f"did you mean '{sug}'?" if sug
+            else "available: " + (", ".join(sorted(valid)) or "(none yet)"))
+    _out(console, f"[{ERR}]no project matching '{query}'[/] [dim]{tail}[/]")
+
+
 def _cmd_dashboard(console, uid: str, rest: list[str]) -> None:
     """/dashboard [project] - telemetry rollup: calls, tokens, cost, latency, errors."""
     from . import telemetry
-    project = rest[0] if rest else None
+    project = " ".join(rest) if rest else None
     if project and project not in {p[0] for p in brain.list_projects(uid)}:
-        sug = ui.did_you_mean(project, [p[0] for p in brain.list_projects(uid)])
-        hint = f"did you mean '{sug}'?" if sug else "see /books"
-        _out(console, f"[{ERR}]no project '{project}'[/] [dim]({hint})[/]")
-        return
+        project, cands = brain.resolve_project(uid, project)
+        if not project:
+            tail = (f"matches: {', '.join(cands)}" if cands else "see /books")
+            _out(console, f"[{ERR}]no project '{' '.join(rest)}'[/] [dim]({tail})[/]")
+            return
     s = telemetry.summarize(project)
     t = s["totals"]
     scope = project or "all projects"
@@ -700,17 +1114,28 @@ def _cmd_set(console, settings: Settings, rest: list[str]) -> None:
         _out(console, f"usage: /set <key> <value>\nkeys: [dim]{fields}[/]")
         return
     key, raw = rest[0], rest[1]
+    field_map = {f.name: f for f in dataclasses.fields(settings)}
+    if key not in field_map:                       # resolve a partial/typo to a real key
+        match, cands = ui.smart_match(key, list(field_map))
+        if match:
+            key = match
+        elif cands:
+            _out(console, f"[{ERR}]'{rest[0]}' matches several:[/] [dim]{', '.join(cands)}[/]")
+            return
+        else:
+            valid = "  ".join(sorted(field_map))
+            _out(console, f"[{ERR}]unknown setting '{rest[0]}'[/]\nvalid keys: [dim]{valid}[/]")
+            return
     if key == "theme":   # needs the apply/sync side-effect, not just the setattr
-        if raw.lower() in ui.THEMES:
-            _set_theme(raw.lower(), console, settings)
+        tname, _c = ui.smart_match(raw, ui.THEMES)
+        if tname:
+            _set_theme(tname, console, settings)
         else:
             _out(console, f"[{ERR}]unknown theme '{raw}'[/] [dim]- themes: "
                           f"{' · '.join(ui.THEMES)}[/]")
         return
-    field_map = {f.name: f for f in dataclasses.fields(settings)}
-    if key not in field_map:
-        valid = "  ".join(sorted(field_map))
-        _out(console, f"[{ERR}]unknown setting '{key}'[/]\nvalid keys: [dim]{valid}[/]")
+    if key == "provider":   # needs the client rebuild, not just the setattr
+        _cmd_provider(console, settings, [raw])
         return
     default = field_map[key].default
     try:
@@ -855,8 +1280,18 @@ def _print_skill(console, uid: str, rest: list[str]) -> None:
     if not rest:
         _out(console, "usage: /skill <name>")
         return
-    text = brain.read_text(brain.skills_dir(uid) / f"{brain.slugify(rest[0])}.md")
-    _out(console, text if text else f"[dim](no skill '{rest[0]}')[/]")
+    sdir = brain.skills_dir(uid)
+    query = brain.slugify(" ".join(rest))
+    text = brain.read_text(sdir / f"{query}.md")
+    if not text and sdir.exists():                 # fuzzy: let users name a skill loosely
+        names = [p.stem for p in sdir.glob("*.md")]
+        match, cands = ui.smart_match(query, names)
+        if match:
+            text = brain.read_text(sdir / f"{match}.md")
+        elif cands:
+            _out(console, f"[dim]several skills match: {', '.join(cands)}[/]")
+            return
+    _out(console, text if text else f"[dim](no skill '{' '.join(rest)}')[/]")
 
 
 # ── NL → command execution helpers ───────────────────────────────────────────
@@ -979,6 +1414,26 @@ def _commands_in_response(text: str, known_commands: set) -> list[str]:
     return cmds
 
 
+def _chat_use_project(cmd_line: str, console, state: dict) -> None:
+    """Chat-safe `/use`: switch only on a STRONG match, else do nothing.
+
+    The model sometimes invents an id or copies the '[article]' display tag; a junk
+    id must never error in the user's face or clobber the already-correct active
+    project. We require a high-confidence match (the model should be copying a real
+    id) - a vague resemblance to a hallucinated title is ignored, active stays."""
+    parts = cmd_line.split(None, 1)
+    query = re.sub(r"\s*\[(?:article|book)\]\s*$", "", parts[1]).strip() if len(parts) > 1 else ""
+    if not query or query == state.get("book"):
+        return
+    ranked = brain.match_projects(state["uid"], query)
+    if ranked and (ranked[0][2] >= 0.8 or ranked[0][0].lower() == query.lower()):
+        pid = ranked[0][0]
+        if pid != state.get("book"):
+            state["book"] = pid
+            _out(console, f"[dim]active project -> {pid}[/]")
+    # else: unknown/ambiguous/hallucinated id - keep the active project, stay quiet.
+
+
 def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
     """Execute one command string emitted by the chat assistant.
 
@@ -986,8 +1441,13 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
     filtering in `_commands_in_response`) - the human must type those directly.
     """
     if cmd_line.startswith("/"):
-        if cmd_line.lstrip("/").split()[0].lower() in _CHAT_BLOCKED_SLASH:
-            _out(console, f"[dim](skipped /{cmd_line.lstrip('/').split()[0]} - type it yourself)[/]")
+        slash = cmd_line.lstrip("/").split()
+        head = slash[0].lower() if slash else ""
+        if head in _CHAT_BLOCKED_SLASH:
+            _out(console, f"[dim](skipped /{head} - type it yourself)[/]")
+            return
+        if head in ("use", "open", "switch"):
+            _chat_use_project(cmd_line, console, state)
             return
         _handle_slash(cmd_line, console, cfg, settings, state)
         return
@@ -1013,17 +1473,6 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
     # so it doesn't block waiting for user input in the middle of a chat response.
     if first == "new" and "--pick" not in argv:
         argv += ["--pick", "1"]
-
-    # `export` with no --format: show Rich-styled format picker in TUI
-    if first == "export" and "--format" not in argv and console:
-        from .cli import _EXPORT_FORMATS
-        choices_str = "  ·  ".join(_EXPORT_FORMATS)
-        console.print(f"  [{GOLD}]formats[/]  [dim]{choices_str}[/]")
-        fmt = console.input(f"  [{INK}]format[/] [dim][pdf]:[/] ").strip().lower() or "pdf"
-        if fmt not in _EXPORT_FORMATS:
-            _out(console, f"[{ERR}]unknown format '{fmt}'[/] - choose from: {choices_str}")
-            return
-        argv += ["--format", fmt]
 
     stderr_buf = io.StringIO()
     try:
@@ -1388,7 +1837,10 @@ def _build_chat_system(settings: Settings, state: dict) -> str:
         "ACTIVE PROJECT: (none set)  ← DO NOT execute run/status/read without /use <project> first"
     )
     today = datetime.date.today().strftime("%Y-%m-%d")
-    all_proj = ", ".join(f"{p[0]}[{p[1]}]" for p in projects) if projects else "(none yet)"
+    # One per line, id clearly separated from its (type) tag - the model must copy
+    # the id ONLY (it used to paste "id[article]" straight into commands).
+    all_proj = ("\n" + "\n".join(f"    - {p[0]}   (type: {p[1]})" for p in projects)
+                if projects else "(none yet)")
     run_mode = ("autonomous (never pauses for review)" if settings.autonomous
                 else "manual (pauses for review at each unit)")
     ctx = (
@@ -1710,13 +2162,17 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
         return False
     if name in ("help", "h", "?"):
         _slash_help(console, settings)
-    elif name == "features":
-        _features_table(console, settings)
+    elif name in ("features", "toggle"):
+        _toggle_grid(console, settings)
     elif name in ("clear", "cls"):
         if console:
             console.clear()
     elif name in ("model", "models"):
         _cmd_model(console, cfg, rest)
+    elif name in ("provider", "providers"):
+        _cmd_provider(console, settings, rest)
+    elif name in ("path", "paths"):
+        _cmd_path(console, settings, state, rest)
     elif name == "set":
         _cmd_set(console, settings, rest)
     elif name == "skills":
@@ -1731,18 +2187,7 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
         _out(console, "\n".join(lines) or "[dim](no projects yet)[/]")
     elif name == "use":
         if rest:
-            target = rest[0]
-            valid = {p[0] for p in brain.list_projects(uid)}
-            if target in valid:
-                state["book"] = target
-                _out(console, f"active book -> [{GOLD}]{target}[/]")
-            else:
-                sug = ui.did_you_mean(target, valid)
-                if sug:
-                    tail = f"did you mean '{sug}'?"
-                else:
-                    tail = "available: " + (", ".join(sorted(valid)) or "(none yet)")
-                _out(console, f"[{ERR}]no project '{target}'[/] [dim]{tail}[/]")
+            _use_project(console, uid, " ".join(rest), state)
         else:
             _out(console, f"active book -> [{GOLD}]{state['book'] or '(none)'}[/]")
     elif name == "user":
@@ -1819,12 +2264,14 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
     elif name == "mode":
         if not rest:
             _out(console, f"mode: [{GOLD}]{settings.mode}[/] [dim](book | article)[/]")
-        elif rest[0] in ("book", "article"):
-            settings.mode = rest[0]
-            save_settings(settings)
-            _out(console, f"mode -> [{GOLD}]{rest[0]}[/] [dim](saved - next `new` will use this mode)[/]")
         else:
-            _out(console, f"[{ERR}]unknown mode '{rest[0]}'[/] - valid: book  article")
+            m, _c = ui.smart_match(rest[0], ("book", "article"), aliases=_MODE_ALIASES)
+            if m:
+                settings.mode = m
+                save_settings(settings)
+                _out(console, f"mode -> [{GOLD}]{m}[/] [dim](saved - next `new` will use this mode)[/]")
+            else:
+                _out(console, f"[{ERR}]unknown mode '{rest[0]}'[/] - valid: book  article")
     elif name == "dashboard":
         _cmd_dashboard(console, uid, rest)
     elif name in ("theme", "themes"):
@@ -1835,11 +2282,15 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
                 swatch = "".join(f"[{c}]█[/]" for c in t["STOPS"])
                 _out(console, f"  [{t['GOLD']}]{mark} {tname:<13}[/] {swatch}  [dim]{t['DESC']}[/]")
             _out(console, "  [dim]switch: /theme <name>[/]")
-        elif rest[0].lower() in ui.THEMES:
-            _set_theme(rest[0].lower(), console, settings)
         else:
-            names = " · ".join(ui.THEMES)
-            _out(console, f"[{ERR}]unknown theme '{rest[0]}'[/] [dim]- themes: {names}[/]")
+            tname, cands = ui.smart_match(rest[0], ui.THEMES)
+            if tname:
+                _set_theme(tname, console, settings)
+            elif cands:
+                _out(console, f"[{ERR}]'{rest[0]}' matches several:[/] [dim]{' · '.join(cands)}[/]")
+            else:
+                names = " · ".join(ui.THEMES)
+                _out(console, f"[{ERR}]unknown theme '{rest[0]}'[/] [dim]- themes: {names}[/]")
     else:
         sug = ui.did_you_mean(name, [s[0] for s in _SLASH_COMPLETIONS])
         hint = f"did you mean /{sug}?" if sug else "try /help"
@@ -1852,13 +2303,15 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
 # Flat list of (slash-name, description) for the completion dropdown
 _SLASH_COMPLETIONS = [
     ("help",        "show all commands + slash commands"),
-    ("features",    "feature toggles - on/off + what each does"),
+    ("features",    "interactive feature-toggle grid (space toggles · ↵ saves)"),
     ("model",       "show / set model routing"),
+    ("provider",    "list / switch the model host (openrouter, deepseek, ollama, ...)"),
     ("set",         "change a setting  e.g. /set use_researcher true"),
     ("skills",      "list craft skills"),
     ("skill",       "show one skill by name"),
     ("seed-skills", "install built-in craft skills"),
     ("use",         "set active book / article"),
+    ("path",        "where finished writing is saved - default + per-project"),
     ("books",       "list all projects"),
     ("user",        "switch user"),
     ("config",      "show model + settings config"),
@@ -1916,10 +2369,32 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                     for pid, ptype in brain.list_projects(state["uid"]):
                         if pid.startswith(cur):
                             yield _comp(pid, -len(cur), ptype)
-                elif sub in ("model", "models") and len(words) <= (1 if ends_space else 2):
-                    for a in ["default", *_NODES]:
-                        if a.startswith(cur):
-                            yield _comp(a, -len(cur), "agent")
+                elif sub in ("model", "models"):
+                    from . import providers
+                    if len(words) <= (1 if ends_space else 2):       # agent | all-agents slug | list
+                        for a in ["default", "list", *_NODES]:
+                            if a.startswith(cur):
+                                yield _comp(a, -len(cur), "browse" if a == "list" else "agent")
+                        for slug in providers.model_slugs():
+                            if slug.startswith(cur):
+                                yield _comp(slug, -len(cur), "model")
+                    else:                                            # the slug for a chosen agent
+                        for slug in providers.model_slugs():
+                            if slug.startswith(cur):
+                                yield _comp(slug, -len(cur), "model")
+                elif sub in ("provider", "providers"):
+                    from . import providers
+                    for pid in providers.names():
+                        if pid.startswith(cur):
+                            tag = "local" if providers.REGISTRY[pid].local else "host"
+                            yield _comp(pid, -len(cur), tag)
+                elif sub in ("path", "paths") and len(words) <= (1 if ends_space else 2):
+                    for kw in ("default", "show", "clear"):
+                        if kw.startswith(cur):
+                            yield _comp(kw, -len(cur), "option")
+                    for pid, ptype in brain.list_projects(state["uid"]):
+                        if pid.startswith(cur):
+                            yield _comp(pid, -len(cur), ptype)
                 elif sub == "set":
                     fields = {f.name: f for f in dataclasses.fields(settings)}
                     if len(words) <= (1 if ends_space else 2):   # the key
@@ -1936,6 +2411,11 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                             for v in ui.THEMES:
                                 if v.startswith(cur):
                                     yield _comp(v, -len(cur), "theme")
+                        elif key == "provider":
+                            from . import providers
+                            for pid in providers.names():
+                                if pid.startswith(cur):
+                                    yield _comp(pid, -len(cur), "host")
                 elif sub == "skill":
                     sdir = brain.skills_dir(state["uid"])
                     if sdir.exists():
@@ -1964,15 +2444,20 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                     if c.startswith(cur):
                         yield _comp(c, -len(cur), "command")
                 return
-            if words[0] == "export":                             # → --format <fmt>
+            if words[0] == "export":                             # formats (positional) + --format
                 from .cli import _EXPORT_FORMATS
+                opts = [*_EXPORT_FORMATS, "all"]
                 prior = words[-1] if ends_space else (words[-2] if len(words) >= 2 else "")
                 if prior == "--format":
-                    for f in _EXPORT_FORMATS:
+                    for f in opts:
                         if f.startswith(cur):
                             yield _comp(f, -len(cur))
-                elif "--format".startswith(cur) and "--format" not in words:
-                    yield _comp("--format", -len(cur))
+                else:
+                    for f in opts:
+                        if f.startswith(cur):
+                            yield _comp(f, -len(cur), "format")
+                    if "--format".startswith(cur) and "--format" not in words:
+                        yield _comp("--format", -len(cur))
 
     # (No bottom toolbar: the persistent status strip read as visual noise - mode/
     # model/project state lives in the prompt prefix and the welcome footer instead.
@@ -2134,9 +2619,8 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
                 elif first == "delete" and console and not getattr(args, "yes", False):
                     book_id = getattr(args, "book_id", None) or state["book"] or ""
                     answer = console.input(
-                        f"  [{ERR}]Delete '{book_id}' permanently?[/] [{DIM}][y/N][/] "
-                    ).strip().lower()
-                    if answer in ("y", "yes"):
+                        f"  [{ERR}]Delete '{book_id}' permanently?[/] [{DIM}][y/N][/] ")
+                    if ui.is_affirmative(answer):
                         args.yes = True
                         commands[args.command](args, cfg, settings, user)
                         if state.get("book") == book_id:

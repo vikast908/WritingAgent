@@ -473,6 +473,28 @@ deterministic style metrics, and `/praise` are the compensating defenses. Route 
 `judge`/`verifier` nodes (§15.6) - to any non-DeepSeek slug to restore cross-family independence
 where it matters most.)*
 
+### 12.2 Provider selection (the model host)
+
+The pipeline speaks **one** wire format - OpenAI chat-completions (text + JSON-mode structured
+output, no tool-calls or thinking-block replay) - so it talks to any OpenAI-compatible host through
+a **single transport**. `providers.py` is a small frozen-dataclass registry (`id`, `name`,
+`base_url`, key env vars, optional `*_BASE_URL` override, `reports_cost`, extra headers, `local`).
+**OpenRouter is the default** (and the only host that reports real USD `usage.cost`); also built in:
+DeepSeek, OpenAI, Google Gemini (compat endpoint), xAI, Groq, Mistral, Moonshot/Kimi, Qwen/DashScope,
+Zhipu GLM, NVIDIA NIM, Together/Fireworks/DeepInfra aggregators, **Ollama** and **LM Studio** (local,
+no key), and a `custom` escape hatch (`BOOK_AGENT_BASE_URL`). Aliases resolve shorthand (`grok→xai`,
+`ds→deepseek`, `kimi→moonshot`, …). Adding a provider is **one registry entry**, nothing else.
+
+Switch with **`/provider <id>`** (lists every host with a key/local/no-key marker, persists to
+`settings.provider`, rebuilds the client), `/set provider <id>`, or **`BOOK_AGENT_PROVIDER`**.
+Credentials are resolved lazily - switching to a key-less host never crashes startup; the clear
+"set `XAI_API_KEY`" error only fires on the first real call. Each host reads its own key env var; a
+`*_BASE_URL` var points any provider at a proxy/self-hosted gateway. *Deliberately out of scope
+(Hermes has them; a writing pipeline doesn't need them): Anthropic-native / Bedrock / Codex-Responses
+transports (all reachable via OpenRouter or a compat shim), a `NormalizedResponse` layer (one wire
+format ⇒ nothing to normalize), and OAuth-device/AWS-SDK auth. Model **slugs are not auto-translated**
+across hosts - set them per host with `/model`.*
+
 ---
 
 ## 13. CLI design (the UI)
@@ -505,7 +527,7 @@ and canon in any editor):
 | `brief` | The goal panel: thesis / premise, audience, target length, intake, voice/watch state |
 | `tableread [--as "persona"]` | Skeptical-reader cold read of the finished piece (optional persona) (§15.4) |
 | `eval` | Quality report: judged 5-dim rubric + deterministic metrics → `eval_report.md` (§15.5) |
-| `export` | Render the manuscript: pdf · epub · html · docx · txt · md |
+| `export [fmt ... \| all]` | Render the manuscript: pdf · epub · html · docx · txt · md. Takes one format, a list (`export pdf epub`), or **`all`**; one failing format never aborts the rest (§16.5) |
 | `memory` | Inspect canon (characters/timeline) + entity graph |
 | `consolidate` · `produce` | Run those passes on demand |
 | `skills` · `seed-skills` | List skills + efficacy · install built-in craft skills |
@@ -522,7 +544,8 @@ with semantic status colors; alternates `kazama` (flame, sheared) · `supabase` 
 `fallout` (CRT amber) · `mimi` (rose pastels) · `astrovista` (mars rust); registry in `ui.THEMES`
 incl. `FONT`/`WORDS`/`SHEAR`, persisted via `settings.theme`), `/dashboard [<project>]` (telemetry
 rollup - calls/tokens/cost/latency/errors; per-unit breakdown when a project is named; reads the
-JSONL call log, §15.1), `/clear`, `/exit`.
+JSONL call log, §15.1), `/provider [<id>]` (switch the model host, §12.2), `/features` (interactive
+toggle grid), `/path` (where exports are saved, §16.5), `/set <key> <value>`, `/clear`, `/exit`.
 
 Run modes: **interactive** (prompts inline on escalation via the picker, §7), **autonomous**
 (`--autonomous` / `/auto on`: never pauses; commits the best draft + auto-repairs contradictions),
@@ -779,6 +802,53 @@ any required-but-missing item. It never fabricates author/publishing facts.
 Production does **not** re-judge chapter prose - that's the Critic's job, done per chapter. Its
 only prose work is the matter it generates plus light *global* consistency (heading styles,
 formatting, front/back-matter coherence). No re-litigating the body.
+
+### 16.5 Save location (where exports land)
+
+The brain working dir (drafts, `manuscript.md` source, run-state) is the source of truth and never
+moves. Separately, the **rendered deliverables** an `export` produces - `manuscript.{pdf,epub,html,
+docx,txt}` and `manuscript_export.md` - can be written to a folder the writer chooses, while
+`base_dir` (image/diagram resolution) stays the brain root. Resolution order (`brain.resolve_export_dir`):
+**per-project override** (a `export_dir.txt` sidecar in the project root) → **global default**
+(`settings.export_dir`, namespaced by project id) → **the project's brain root** (the original
+behaviour; the empty default). An unwritable target silently falls back to the root - an export
+never crashes on a bad path.
+
+Driven by **`/path`**: no-arg opens a menu (set the default, or pick a project from the ongoing
+list → enter a folder → it offers to **move** that project's existing deliverables to the new home,
+source file untouched). Direct forms: `/path default <dir>`, `/path <project> <dir>`, `/path show`,
+`/path clear [<project>]`. The move only ever relocates the rendered files in `EXPORT_DELIVERABLES`.
+
+### 16.6 References, citations & figures (deterministic polish, `polish.py`)
+
+The **producer owns** references and figures; the writer must not. `ARTICLE_WRITER_SYS` forbids the
+model from drawing diagrams (mermaid/ASCII/charts), self-numbering `Figure N`/`Listing N`, writing
+figure captions, or emitting bare `[N] Author…` reference lines - it only places inline `[N]` markers
+in prose. At assembly (`_assemble_article`) the deterministic `polish.py` pass then:
+
+- **References, end-only, ranked.** `score_sources` rates each source's *influence* = how often it's
+  actually cited in the body (weighted) + title overlap with the thesis/headings; `build_references`
+  emits one `## References` list **sorted most-influential first**, each line `N. **score** · date ·
+  [title](url)` (0–100). Dates normalized (`n.d.` when unknown). Zero-influence noise is pruned only
+  when there's signal to rank against. `rank_references` setting (default on).
+- **Citations stripped.** `strip_inline_citations` (setting, default on) removes every `[N]` from the
+  prose *after* scoring, so the body reads clean and all sourcing lives in the end list.
+- **Stray dumps removed.** `strip_reference_dumps` pulls writer-emitted reference lists out of the
+  body (headed blocks *and* bare `[N] …` runs) - references never appear mid-article.
+- **Figures de-duped.** `strip_model_figures` (going forward) drops any diagram the model still drew;
+  `dedupe_figures` (for existing manuscripts) removes the model's `Figure N.N` caption-heading and a
+  redundant embedded SVG when a diagram is already present, so a figure never appears twice.
+
+**`polish` command / `repolish_manuscript(uid, id, settings)`** re-applies all of the above to an
+*existing* manuscript with **no LLM call** (≈0 tokens) and refreshes the exports - the cheap way to
+fix an already-generated article.
+
+**Figure engine.** `diagram_engine: auto` (the default) now uses the **built-in** engine - it measures
+text and lays out compactly (a ~590px figure with title, lane headers, readable boxes), and the
+comparison archetype **de-duplicates repeated relationship labels** (`provides`×3 → ×1) so edge labels
+never stack/overlap. **D2+ELK is explicit opt-in** (`diagram_engine: d2`) - it tends to render very
+wide (~1700px), hard-to-read figures, so it is no longer auto-selected just because the `d2` binary is
+present.
 
 ---
 

@@ -191,6 +191,62 @@ def did_you_mean(word: str, options, cutoff: float = 0.6) -> str | None:
     return m[0] if m else None
 
 
+# Slang-tolerant yes/no so confirmations accept "yeah", "yep", "sure", "nah".
+_AFFIRM = frozenset({
+    "y", "yes", "yeah", "yep", "yup", "ya", "yah", "yas", "sure", "ok", "okay",
+    "k", "kk", "aye", "affirmative", "absolutely", "definitely", "please", "do",
+    "fine", "true", "1", "on", "go",
+})
+_NEGATE = frozenset({
+    "n", "no", "nope", "nah", "naw", "nay", "never", "negative", "dont", "stop",
+    "cancel", "abort", "false", "0", "off",
+})
+
+
+def is_affirmative(text: str, *, default: bool = False) -> bool:
+    """Whether `text` reads as yes (slang-tolerant). Empty input -> `default`,
+    so a bare Enter respects the prompt's [Y/n] vs [y/N] hint."""
+    t = (text or "").strip().lower().strip(".!,")
+    if not t:
+        return default
+    if t in _AFFIRM or t.split()[0] in _AFFIRM:    # "do it", "go ahead", "yes please"
+        return True
+    if t in _NEGATE or t.split()[0] in _NEGATE:
+        return False
+    return default
+
+
+def smart_match(query, options, *, aliases=None, cutoff: float = 0.6):
+    """Resolve `query` to one of `options`, returning (match | None, candidates).
+
+    Tries, in order: alias table -> exact -> unique prefix -> unique substring ->
+    fuzzy. When several options tie, `match` is None and `candidates` holds them
+    for the caller to offer. Lets users type a short, approximate name instead of
+    the exact one. `aliases` maps a typed word to a canonical option."""
+    opts = list(options)
+    q = (query or "").strip().lower()
+    if not q:
+        return None, []
+    if aliases and q in aliases:
+        return aliases[q], []
+    lower = {o.lower(): o for o in opts}
+    if q in lower:
+        return lower[q], []
+    pre = [o for o in opts if o.lower().startswith(q)]
+    if len(pre) == 1:
+        return pre[0], []
+    sub = [o for o in opts if q in o.lower()]
+    if len(sub) == 1:
+        return sub[0], []
+    if len(pre) > 1:
+        return None, pre
+    if len(sub) > 1:
+        return None, sub
+    m = difflib.get_close_matches(q, list(lower), n=3, cutoff=cutoff)
+    cands = [lower[x] for x in m]
+    return (cands[0], []) if len(cands) == 1 else (None, cands)
+
+
 def word_count(text: str | None) -> int:
     return len(text.split()) if text else 0
 

@@ -5,6 +5,79 @@
 
 ## Current status
 
+- **New (2026-06-13, session 16 - export quality: references/citations/figures overhaul):** root
+  cause of the bad PDFs = the **writer model authors its own figures (mermaid), figure numbers,
+  captions, listings, inline `[N]` citations, and bare per-section reference dumps**, which collide
+  with the pipeline's own SVG figure + final References list (duplicate figures, double captions,
+  mid-article references, mismatched numbering). Fixes: new **`polish.py`** (pure, deterministic, no
+  LLM): `strip_inline_citations`, `strip_reference_dumps` (headed blocks + bare `[N]` runs),
+  `strip_model_figures`/`dedupe_figures`, `score_sources` (influence = body-citation count + thesis/
+  heading title-overlap) + `build_references` (one end list, `N. **score** · date · [title](url)`,
+  sorted high→low, dates normalized, zero-influence pruned only when there's signal). Wired into
+  `_assemble_article` (going forward) gated by two new settings **`strip_inline_citations`** (default
+  on) + **`rank_references`** (default on), threaded into article run-state. `ARTICLE_WRITER_SYS` now
+  FORBIDS model-drawn figures/mermaid/`Figure N`/`Listing N`/captions/bare-ref-lines. New
+  **`repolish_manuscript()`** + **`polish` CLI command** re-fix an EXISTING manuscript with ~0 tokens
+  and re-export. **Ran it on the voicebot article**: inline `[N]` 29→0, mid-article ref lines 9→0,
+  figure-heading 1→0, redundant SVG embed removed (figure-twice fixed), References rebuilt = 47 ranked/
+  dated/scored (DraftKings demoted to #10). Re-exported md/txt/html/epub/docx (pdf was file-locked -
+  user had it open; `manuscript.md.bak` saved). +7 tests (`test_polish.py`).
+  **Phase 3 (figure render quality) - DONE for the pipeline engine:** Playwright render of the
+  section_05 spec proved the **built-in engine ≫ D2** (D2+ELK = 1744px-wide unreadable; built-in =
+  compact 592px with title/lane-headers/readable boxes). (1) `nodes.generate_svg_diagram`: **`auto`
+  now = built-in** (was: D2 whenever the d2 binary is installed - exactly why the user's runs looked
+  bad); D2 is explicit opt-in. (2) built-in **comparison** edge-label **de-dup** (`_edge_label(...,
+  seen)`): repeated relations (`provides`×3) render ONCE instead of overlapping in the column gap; gap
+  90→120. Flipped local `settings.yaml` `diagram_engine: d2 → auto`. +1 test (`test_diagram.py`).
+  **All 305 tests pass; ruff clean.** **Still open (smaller):** the EXISTING voicebot article's figures
+  are model **mermaid** (the SVG was deduped out; prose references the mermaid), rendered via
+  mermaid.ink (clipped pie title) - only fixable by regenerating that article's diagrams (small
+  diagram-node token cost; offered to the user). Going forward every figure is a clean built-in SVG.
+
+
+- **New (2026-06-13, session 15 - multi-provider model hosts + slash-menu polish):** two
+  Hermes-inspired asks, each pruned to what a single-wire-format writing pipeline actually needs.
+  **(A) Multi-provider routing** (plan §12.2): new `providers.py` registry (frozen `Provider`
+  dataclass; `id`/`name`/`base_url`/key-envs/`*_BASE_URL` override/`reports_cost`/`headers`/`local`)
+  with 17 OpenAI-compatible hosts (OpenRouter default + cost; DeepSeek, OpenAI, Gemini-compat, xAI,
+  Groq, Mistral, Moonshot, DashScope, Zhipu, NVIDIA, Together/Fireworks/DeepInfra, Ollama + LM Studio
+  local, `custom`) and an alias table. `llm.py` rewired: `_get_client` resolves the active provider
+  (lazy creds - key-less switch never crashes; clear "set XAI_API_KEY" only on first real call),
+  `configure_provider`/`active_provider` added, cost-ask gated per provider. `settings.provider`
+  (default `openrouter`) + `BOOK_AGENT_PROVIDER` env; wired at startup (`cli._apply_provider`,
+  `api._apply_runtime`). Shell: `/provider [id]` (list with key/local markers · switch · did-you-mean),
+  `/set provider` side-effect, completer + `/help` config group. **Deliberately dropped from the spec:**
+  the 3 non-OpenAI transports, `NormalizedResponse`, `api_mode` heuristics, OAuth/Bedrock/Codex auth,
+  cross-host slug translation. +10 tests (`test_providers.py`). **(B) Slash-menu**: `/features` is now
+  an interactive prompt_toolkit **toggle grid** (`_toggle_grid`; ↑↓ · space · ↵ save · esc cancel;
+  falls back to the static table off-TTY), and `/help` is **grouped by category** (`_SLASH_HELP` is
+  now category-keyed). +3 tests (`test_ui.py`). **(C) Configurable save location** (plan §16.5):
+  exports can now be written wherever the writer wants. New `settings.export_dir` (global default,
+  `""` = each project's own folder) + per-project override (a `export_dir.txt` sidecar in the project
+  root). `brain.resolve_export_dir`/`project_root`/`get|set_project_export_dir`/`move_exports` +
+  `EXPORT_DELIVERABLES`; `orchestrator._export_paths_and_title` now also returns `out_dir` and all 6
+  exporters write the rendered file there while `base_dir` stays the brain root (so images/diagrams
+  still resolve). Shell **`/path`**: no-arg menu (default · or pick an ongoing project → enter folder →
+  offer to **move** existing deliverables; the `manuscript.md` SOURCE never moves), plus `/path
+  default <dir>`, `/path <project> <dir>`, `/path show`, `/path clear`. Completer + `/help` session
+  group + dispatch. +8 tests (`test_export_path.py`). **(D) Export to many formats + NL parsing**:
+  `export` now takes one format, a list (`export pdf epub`), or **`all`**; positional arg + dropped the
+  argparse `choices` lock; one failing format never aborts the rest (per-format try/except + summary).
+  `cli._resolve_formats` understands commas/semicolons/·/&/+, connector words ("pdf, epub **and** word"),
+  and synonyms (word→docx, markdown→md, ebook→epub, everything→all). `write` interview returns a list
+  too. Centralised the styled prompt in `cmd_export` (removed the duplicate picker in `_execute_cmd`).
+  +7 tests (`test_export_formats.py`). **(E) Smart, forgiving input everywhere** (the "make it
+  intelligent" sweep): `brain.match_projects`/`resolve_project` (excerpt/typo/word-order tolerant, with
+  a clear-leader rule + ambiguous→options) wired into `/use` (numbered picker), `/path`, `/dashboard`,
+  and `cli._resolve_book`. New `ui.is_affirmative` (slang yes/no: yeah/yep/sure/nah/"do it") applied to
+  all 4 confirm prompts; `ui.smart_match` (alias→exact→prefix→substring→fuzzy) applied to `/theme`,
+  `/mode` (+essay/novel synonyms), `/model` agent, `/set` key, `/provider`, `/skill`. **(F) Chat `/use`
+  guardrail**: the assistant was inventing a `/use <hallucinated-id>[article]` for "export to epub" and
+  erroring; now `_chat_use_project` strips the `[type]` tag and switches only on a STRONG match, else
+  keeps the active project silently. Context now lists projects one-per-line (id separated from the
+  type tag) + prompt rules: no `/use` when a project is active, never invent ids. +9 tests
+  (`test_smart_input.py`). **All 297 tests pass; ruff clean. Nothing committed yet.** Next: optional
+  `/theme` list-picker; README/docs-site note; the deferred Hermes-transport tier (user said "wait").
 - **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **263 tests
   pass** (+1 opt-in live skip +1 d2-binary skip); ruff clean on Windows AND Linux (WSL-verified). **CI green on all
   12 matrix jobs** since session 10's `svglib<1.6` pin (1.6.0 pulls pycairo, which has no Linux

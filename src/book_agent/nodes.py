@@ -582,7 +582,10 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "",
     if _fake:                       # offline: no model, just a valid placeholder figure
         return _dgm.placeholder(heading[:100] or "Diagram")
     eng = (engine or "auto").lower()
-    use_d2 = eng == "d2" or (eng == "auto" and _dgm.find_d2())
+    # The built-in engine measures text and lays out compactly (no overflow/overlap);
+    # D2+ELK tends to render very wide, hard-to-read figures. So 'auto' = built-in, and
+    # D2 is an explicit opt-in for users who prefer it.
+    use_d2 = eng == "d2"
     from . import cache
     _diagram_key = (model, heading, context[:900], "d2" if use_d2 else "builtin")
     cached = cache.get("diagram", _diagram_key)

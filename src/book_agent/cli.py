@@ -4,6 +4,7 @@ new, run, status, review, read, memory, produce, consolidate, skills, config.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 
 from . import brain, nodes, orchestrator, ui
@@ -61,6 +62,13 @@ def _resolve_book(uid: str, book_id: str | None) -> str:
     if book_id:
         if not brain.is_safe_id(book_id):
             sys.exit(f"Invalid --book-id '{book_id}' (use letters, digits, - . _).")
+        # Exact id wins; otherwise resolve an excerpt/typo to a confident single
+        # project ("--book-id voicebot" -> the full slug). Ambiguous/unknown falls
+        # through unchanged, so downstream errors exactly as before.
+        if book_id not in {p[0] for p in brain.list_projects(uid)}:
+            resolved, _cands = brain.resolve_project(uid, book_id)
+            if resolved:
+                return resolved
         return book_id
     projects = brain.list_projects(uid)
     if len(projects) == 1:
@@ -269,17 +277,17 @@ def _conduct_interview(cfg, settings, uid, topic, mode, console):
     default_fmt = "docx" if mode == "article" else "pdf"
     qa_items = [(q.question, q.suggestion or "") for q in iv]
     qa_items.append(("Your name for the byline / author credit (Enter to skip)", ""))
-    qa_items.append((f"Output file format ({' / '.join(_EXPORT_FORMATS)})", default_fmt))
+    qa_items.append((f"Output file format ({' / '.join(_EXPORT_FORMATS)}, or 'all')", default_fmt))
     answers = _ask_batch(
         console, "A few questions - then I'll research, write, self-edit, and hand you "
                  "the finished piece. No more interruptions:", qa_items)
 
-    fmt = (answers[-1] or default_fmt).strip().lower()
-    if fmt not in _EXPORT_FORMATS:
-        fmt = default_fmt
+    fmts, _bad = _resolve_formats(answers[-1] or default_fmt)
+    if not fmts:                       # empty or all-unrecognised -> the mode default
+        fmts = [default_fmt]
     author = answers[-2].strip()
     qa_pairs = list(zip([q.question for q in iv], answers[:-2], strict=False))
-    return chosen, _render_intake(topic, approach_items[idx - 1], qa_pairs, author), fmt, author
+    return chosen, _render_intake(topic, approach_items[idx - 1], qa_pairs, author), fmts, author
 
 
 def cmd_write(args, cfg, settings, uid):
@@ -292,7 +300,7 @@ def cmd_write(args, cfg, settings, uid):
         sys.exit("No topic provided.")
     console = _console()
 
-    chosen, intake_md, fmt, author = _conduct_interview(cfg, settings, uid, topic, mode, console)
+    chosen, intake_md, fmts, author = _conduct_interview(cfg, settings, uid, topic, mode, console)
 
     units = args.chapters or (settings.num_sections if mode == "article"
                               else settings.num_chapters)
@@ -321,22 +329,19 @@ def cmd_write(args, cfg, settings, uid):
     else:
         orchestrator.run(cfg, uid, pid, log=print)
 
-    try:
-        out = _EXPORT_FNS[fmt](uid, pid)
-    except Exception as e:  # noqa: BLE001
-        print(f"[!] Couldn't export {fmt}: {e}\n"
-              f"    The manuscript is finished - run `export` to retry.")
-        return pid
-    if console and out is not None:
+    exported = []
+    for fmt in fmts:
         try:
-            uri = out.resolve().as_uri()
-        except ValueError:
-            uri = str(out)
-        kb = out.stat().st_size / 1024
-        console.print(f"\n  [bold {ui.ON_CLR}]✓ done[/]  [link={uri}]{out}[/]  "
-                      f"[{ui.DIM}]({kb:.0f} KB)[/]")
-    else:
-        print(f"[OK] {fmt} -> {out}")
+            out = _EXPORT_FNS[fmt](uid, pid)
+        except Exception as e:  # noqa: BLE001 - one format failing must not lose the rest
+            print(f"[!] Couldn't export {fmt}: {e}\n"
+                  f"    The manuscript is finished - run `export {fmt}` to retry.")
+            continue
+        exported.append(out)
+        _report_export(console, fmt, out)
+    if exported and console:
+        tail = f"exported {len(exported)} formats" if len(exported) > 1 else "finished"
+        console.print(f"\n  [bold {ui.ON_CLR}]✓ done[/]  [{ui.DIM}]{tail}[/]")
     return pid
 
 
@@ -428,8 +433,7 @@ def cmd_revise(args, cfg, settings, uid):
     if sys.stdin.isatty():
         def confirm(old, new, summary):  # noqa: ARG001 - summary already logged upstream
             _print_diff(old, new)
-            ans = input("\napply this revision? [Y/n] ").strip().lower()
-            return ans in ("", "y", "yes")
+            return ui.is_affirmative(input("\napply this revision? [Y/n] "), default=True)
     orchestrator.revise_unit(cfg, uid, book_id, args.chapter, args.instruction,
                              confirm=confirm)
 
@@ -618,17 +622,64 @@ _EXPORT_FNS = {
 }
 
 
-def cmd_export(args, cfg, settings, uid):
-    book_id = _resolve_book(uid, args.book_id)
-    fmt = getattr(args, "format", None)
-    if not fmt:
-        choices = "  ".join(_EXPORT_FORMATS)
-        print(f"\nExport formats:  {choices}")
-        fmt = input("Format [pdf]: ").strip().lower() or "pdf"
-        if fmt not in _EXPORT_FORMATS:
-            sys.exit(f"Unknown format '{fmt}'. Choose from: {', '.join(_EXPORT_FORMATS)}")
-    out = _EXPORT_FNS[fmt](uid, book_id)
-    console = _console()
+# Split a format request on any reasonable separator: whitespace, comma,
+# semicolon, slash, middot, ampersand, plus.
+_FMT_SEP = re.compile(r"[\s,;/·&+]+")
+# Connector/filler words ignored in plain-English requests ("pdf, epub and word",
+# "give me pdf or docx please") - they're noise, not unknown formats.
+_FMT_FILLER = frozenset({
+    "and", "or", "plus", "also", "then", "the", "a", "an", "to", "in", "into", "as",
+    "with", "of", "format", "formats", "file", "files", "version", "versions",
+    "please", "me", "i", "want", "need", "would", "like", "export", "exports", "give",
+})
+# "all" and its plain-English synonyms expand to every format.
+_FMT_ALL = frozenset({"all", "everything", "every", "each", "both"})
+# Synonyms so natural words resolve to a format id.
+_FMT_ALIASES = {
+    "word": "docx", "doc": "docx", "msword": "docx", "ms-word": "docx",
+    "markdown": "md", "mkd": "md",
+    "text": "txt", "plain": "txt", "plaintext": "txt",
+    "web": "html", "webpage": "html", "website": "html", "htm": "html",
+    "ebook": "epub", "e-book": "epub",
+}
+_FMT_STRIP = ".,;:!?'\"()[]{}"
+
+
+def _resolve_formats(raw: str) -> tuple[list[str], list[str]]:
+    """Parse an export request into (formats, unknown).
+
+    Understands a single format, a list in any separator (comma, semicolon, slash,
+    ·, &, +, or just spaces), 'all', and plain English - "pdf, epub and word",
+    "give me markdown & pdf please", "everything". Connector words are ignored;
+    common synonyms (word→docx, markdown→md, ebook→epub) are mapped. Order is
+    preserved, duplicates removed - so even the whole 'pdf · epub · …' choices line
+    resolves to every format."""
+    out: list[str] = []
+    bad: list[str] = []
+    seen: set[str] = set()
+
+    def add(fmt: str) -> None:
+        if fmt not in seen:
+            seen.add(fmt)
+            out.append(fmt)
+
+    for tok in _FMT_SEP.split((raw or "").strip().lower()):
+        tok = tok.strip(_FMT_STRIP)
+        if not tok or tok in _FMT_FILLER:
+            continue
+        if tok in _FMT_ALL:
+            for f in _EXPORT_FORMATS:
+                add(f)
+        elif tok in _EXPORT_FORMATS:
+            add(tok)
+        elif tok in _FMT_ALIASES:
+            add(_FMT_ALIASES[tok])
+        else:
+            bad.append(tok)
+    return out, bad
+
+
+def _report_export(console, fmt: str, out) -> None:
     if console and out is not None:
         kb = out.stat().st_size / 1024
         # Rich renders an OSC-8 hyperlink in terminals that support it.
@@ -643,6 +694,80 @@ def cmd_export(args, cfg, settings, uid):
         print(f"[OK] {fmt} -> {out}")
 
 
+def cmd_export(args, cfg, settings, uid):
+    book_id = _resolve_book(uid, args.book_id)
+    console = _console()
+    # Request can come positionally (`export all`, `export pdf epub`) or via --format.
+    raw = " ".join(getattr(args, "formats", None) or [])
+    if getattr(args, "format", None):
+        raw = f"{raw} {args.format}".strip()
+    if not raw:
+        choices = "  ·  ".join(_EXPORT_FORMATS)
+        if console:
+            console.print(f"  [{ui.GOLD}]formats[/]  [dim]{choices}  ·  all[/]")
+            raw = console.input(f"  [{ui.INK}]format[/] [dim][pdf, or 'all']:[/] ").strip() or "pdf"
+        else:
+            print(f"\nExport formats:  {choices}  ·  all")
+            raw = input("Format [pdf]: ").strip() or "pdf"
+    formats, bad = _resolve_formats(raw)
+    if bad:
+        valid = ", ".join(_EXPORT_FORMATS)
+        note = f"unknown format(s): {', '.join(bad)} - choose from {valid}, or 'all'"
+        if console:
+            console.print(f"  [{ui.ERR}]{note}[/]")
+        elif not formats:
+            sys.exit(f"Unknown format(s): {', '.join(bad)}. Choose from {valid}, or 'all'.")
+    if not formats:
+        if console:
+            console.print(f"  [{ui.ERR}]nothing to export[/]")
+            return
+        sys.exit("No formats to export.")
+    ok = 0
+    for fmt in formats:
+        try:
+            out = _EXPORT_FNS[fmt](uid, book_id)
+        except Exception as e:  # noqa: BLE001 - one bad format must not abort the others
+            if console:
+                console.print(f"  [bold {ui.ERR}]✗ {fmt}[/]  [dim]{type(e).__name__}: {e}[/]")
+            else:
+                print(f"[FAIL] {fmt}: {e}")
+            continue
+        ok += 1
+        _report_export(console, fmt, out)
+    if len(formats) > 1:
+        line = f"exported {ok}/{len(formats)} formats"
+        console.print(f"  [{ui.DIM}]{line}[/]") if console else print(line)
+
+
+_DELIVERABLE = {"pdf": "manuscript.pdf", "epub": "manuscript.epub",
+                "html": "manuscript.html", "docx": "manuscript.docx",
+                "txt": "manuscript.txt", "md": "manuscript_export.md"}
+
+
+def cmd_polish(args, cfg, settings, uid):
+    """Deterministically re-fix an existing manuscript (references, citations,
+    figures) with no LLM call, then refresh its exports."""
+    book_id = _resolve_book(uid, args.book_id)
+    console = _console()
+    log = (lambda m: console.print(m)) if console else print
+    orchestrator.repolish_manuscript(uid, book_id, settings, log=log)
+    out_dir = brain.resolve_export_dir(uid, book_id)
+    raw = getattr(args, "format", None)
+    if raw:
+        formats, _bad = _resolve_formats(raw)
+    else:   # refresh whatever deliverables already exist; nothing -> just the .md source
+        formats = [f for f, name in _DELIVERABLE.items() if (out_dir / name).exists()]
+    if console:
+        console.print(f"  [bold {ui.ON_CLR}]✓ polished[/]  [dim]{book_id}[/]")
+    for fmt in formats:
+        try:
+            out = _EXPORT_FNS[fmt](uid, book_id)
+        except Exception as e:  # noqa: BLE001 - one format must not abort the rest
+            (console.print(f"  [dim]skip {fmt}: {e}[/]") if console else print(f"skip {fmt}: {e}"))
+            continue
+        _report_export(console, fmt, out)
+
+
 def cmd_seed_skills(args, cfg, settings, uid):
     n = skills_mod.seed_builtin(uid)
     print(f"Seeded {n} new built-in skill(s) for user '{uid}'.")
@@ -653,8 +778,7 @@ def cmd_delete(args, cfg, settings, uid):
         args.book_id = args.name
     book_id = _resolve_book(uid, args.book_id)
     if not getattr(args, "yes", False):
-        confirm = input(f"Delete '{book_id}' permanently? [y/N] ").strip().lower()
-        if confirm not in ("y", "yes"):
+        if not ui.is_affirmative(input(f"Delete '{book_id}' permanently? [y/N] ")):
             print("Aborted.")
             return
     orchestrator.delete_book(uid, book_id)
@@ -682,7 +806,7 @@ _COMMANDS = {
     "read": cmd_read, "memory": cmd_memory, "produce": cmd_produce,
     "consolidate": cmd_consolidate, "skills": cmd_skills, "config": cmd_config,
     "list": cmd_list, "export": cmd_export, "seed-skills": cmd_seed_skills,
-    "delete": cmd_delete,
+    "delete": cmd_delete, "polish": cmd_polish,
 }
 
 
@@ -762,14 +886,41 @@ def build_parser(settings):
     sub.add_parser("skills", parents=[common], help="List learned skills + efficacy")
     sub.add_parser("config", parents=[common], help="Show model routing + settings")
     sub.add_parser("list", parents=[common], help="List books for the user")
-    p_export = sub.add_parser("export", parents=[common], help="Export the manuscript (pdf/epub/html/docx/txt/md)")
-    p_export.add_argument("--format", choices=_EXPORT_FORMATS, default=None,
-                          help="Output format - omit to choose interactively")
+    p_export = sub.add_parser("export", parents=[common],
+                              help="Export the manuscript (pdf/epub/html/docx/txt/md, or all)")
+    p_export.add_argument("formats", nargs="*",
+                          help="Format(s): pdf epub html docx txt md, or 'all' "
+                               "(omit to choose interactively)")
+    p_export.add_argument("--format", default=None,
+                          help="Output format(s), e.g. 'pdf' or 'all' (alternative to the positional)")
+
+    p_polish = sub.add_parser("polish", parents=[common],
+                              help="Re-fix an existing manuscript (references, citations, figures) - no LLM, then re-export")
+    p_polish.add_argument("--format", default=None,
+                          help="Formats to re-export (default: those already present, or 'all')")
     sub.add_parser("seed-skills", parents=[common], help="Install built-in craft skills")
     p_del = sub.add_parser("delete", parents=[common], help="Permanently delete a book")
     p_del.add_argument("name", nargs="?", help="Book ID to delete (positional shorthand)")
     p_del.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
     return ap
+
+
+def _apply_provider(llm_mod, settings) -> None:
+    """Select the model host from BOOK_AGENT_PROVIDER (if set) or settings.provider.
+
+    An unknown id is a warning, not a crash - configure_provider leaves the default
+    (OpenRouter) in place, so a typo never bricks startup."""
+    import os
+    choice = os.getenv("BOOK_AGENT_PROVIDER") or settings.provider
+    try:
+        llm_mod.configure_provider(choice)
+    except ValueError as e:
+        print(f"warning: {e}", file=sys.stderr)
+        if choice != settings.provider:
+            try:
+                llm_mod.configure_provider(settings.provider)
+            except ValueError:
+                pass
 
 
 def main() -> None:
@@ -790,6 +941,7 @@ def main() -> None:
     from . import llm as _llm
     _llm.configure_headroom(settings.use_headroom)
     _llm.configure_timeout(settings.request_timeout)
+    _apply_provider(_llm, settings)
     if len(sys.argv) == 1:  # bare `book` / `python book.py` -> interactive shell (TUI)
         from .shell import run_shell
         run_shell(build_parser(settings), _COMMANDS, cfg, settings)

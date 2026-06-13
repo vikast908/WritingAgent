@@ -95,10 +95,10 @@ def test_conduct_interview_builds_intake_no_console(tmp_brain, fake_llm, monkeyp
     # approach pick, then every question answered with Enter (take defaults).
     answers = iter(["", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda *_a: next(answers, ""))
-    chosen, intake_md, fmt, author = cli._conduct_interview(
+    chosen, intake_md, fmts, author = cli._conduct_interview(
         cfg, settings, "u", "how X works", "article", None)
     assert isinstance(chosen, S.ArticleAngle)
-    assert fmt == "docx"                       # the article default
+    assert fmts == ["docx"]                     # the article default (now a list; supports 'all')
     assert "# Author requirements" in intake_md
 
 

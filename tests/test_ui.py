@@ -117,3 +117,34 @@ def test_features_and_commands_tables_render(tmp_brain):
     console = _record_console()
     shell._commands_table(console, settings)
     assert "write --abstract" in console.file.getvalue()
+
+
+def test_slash_help_is_grouped_by_category(tmp_brain):
+    """/help groups commands under dimmed category headers (the registry is
+    category-keyed, not a flat list)."""
+    from book_agent import shell
+    from book_agent.config import load_settings
+    # Structure: [(category, [(usage, desc), ...]), ...]
+    cats = [c for c, _ in shell._SLASH_HELP]
+    assert "configuration" in cats and "session" in cats
+    for _cat, group in shell._SLASH_HELP:
+        for row in group:
+            assert len(row) == 2 and row[0].startswith("/")
+    console = _record_console()
+    shell._slash_help(console, load_settings())
+    out = console.file.getvalue()
+    assert "configuration" in out and "/features" in out and "/theme" in out
+
+
+def test_feature_keys_match_settings_and_table(tmp_brain):
+    """Every grid toggle maps to a real bool setting, and the no-TTY path falls
+    back to the static table (returns False, never opens an app under pytest)."""
+    from book_agent import shell
+    from book_agent.config import Settings, load_settings
+    s = Settings()
+    for key, _label, _desc in shell._FEATURE_KEYS:
+        assert isinstance(getattr(s, key), bool), f"{key} is not a bool setting"
+    console = _record_console()
+    # pytest has no interactive stdin -> _toggle_grid degrades to the table.
+    assert shell._toggle_grid(console, load_settings()) is False
+    assert "humanize" in console.file.getvalue()

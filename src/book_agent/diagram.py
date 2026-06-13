@@ -217,10 +217,19 @@ def _box_edge(cx: float, cy: float, hw: float, hh: float, tx: float, ty: float) 
     return (cx + dx * s, cy + dy * s)
 
 
-def _edge_label(x: float, y: float, text: str, placed: list) -> str:
-    """A white pill behind an edge label, nudged vertically to avoid earlier pills."""
+def _edge_label(x: float, y: float, text: str, placed: list, seen: set | None = None) -> str:
+    """A white pill behind an edge label, nudged vertically to avoid earlier pills.
+
+    `seen` (when given) de-duplicates repeated relationship labels: a comparison
+    figure with three 'provides' edges should show 'provides' once, not stack three
+    overlapping pills in the column gap."""
     if not text.strip():
         return ""
+    if seen is not None:
+        key = text.strip().lower()
+        if key in seen:
+            return ""
+        seen.add(key)
     w = _text_w(text, EDGE_SIZE) + 12
     h = 17
     for _ in range(6):
@@ -510,7 +519,7 @@ def _render_comparison(spec, nodes, edges) -> str:
         if nd not in left and nd not in right:
             (left if len(left) <= len(right) else right).append(nd)
 
-    gap = 90
+    gap = 120
     top = SUB_TOP + 26 if (spec.subtitle or "").strip() else TITLE_TOP + 30
     head_y = top + 4
     body_top = top + 30
@@ -536,6 +545,7 @@ def _render_comparison(spec, nodes, edges) -> str:
                    f'stroke="{c}" stroke-width="2"/>')
 
     placed: list = []
+    seen_lbl: set = set()                                  # repeated relations shown once
     for e in edges:                                        # any cross-column relations
         if e.source not in pos or e.target not in pos:
             continue
@@ -547,7 +557,7 @@ def _render_comparison(spec, nodes, edges) -> str:
         tp = _box_edge(*t_c, box_w / 2, box_h / 2, *s_c)
         out.append(_path(f"M {sp[0]:.0f} {sp[1]:.0f} L {tp[0]:.0f} {tp[1]:.0f}"))
         out.append(_arrow_at(tp[0], tp[1], math.atan2(tp[1] - sp[1], tp[0] - sp[0])))
-        out.append(_edge_label((sp[0] + tp[0]) / 2, (sp[1] + tp[1]) / 2, e.label, placed))
+        out.append(_edge_label((sp[0] + tp[0]) / 2, (sp[1] + tp[1]) / 2, e.label, placed, seen_lbl))
 
     for nd in nodes:
         if nd.id not in pos:

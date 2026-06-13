@@ -1,11 +1,14 @@
-"""Thin LLM wrapper over OpenRouter (OpenAI-compatible API).
+"""Thin LLM wrapper over any OpenAI-compatible provider.
 
 - Text: chat.completions -> message content.
 - Structured: JSON mode + Pydantic validation, with one repair retry (portable across
   models; DeepSeek has no Anthropic-style messages.parse).
 - Fake mode (BOOK_AGENT_FAKE): returns valid placeholder output, no network. Used by tests.
 
-Set OPENROUTER_API_KEY. Models are configured per node in config/models.yaml.
+The active provider (OpenRouter by default) comes from `providers.py`; switch it
+with `/provider`, the `provider` setting, or BOOK_AGENT_PROVIDER. Each provider
+reads its own key env var (OPENROUTER_API_KEY, DEEPSEEK_API_KEY, ...). Models are
+configured per node in config/models.yaml.
 """
 from __future__ import annotations
 
@@ -23,11 +26,13 @@ from typing import Literal, TypeVar, Union, get_args, get_origin
 from openai import OpenAI
 from pydantic import BaseModel
 
+from . import providers
+
 T = TypeVar("T", bound=BaseModel)
 
 _log = logging.getLogger(__name__)
 
-_BASE_URL = "https://openrouter.ai/api/v1"
+_provider_id = providers.DEFAULT   # active provider id; see configure_provider
 _client: OpenAI | None = None
 _client_lock = threading.Lock()
 _include_cost = False   # ask OpenRouter to report usage.cost (set when client builds)
@@ -45,6 +50,27 @@ def configure_timeout(seconds: float) -> None:
     global _request_timeout, _client
     _request_timeout = seconds
     _client = None  # force the client to be rebuilt with the new timeout
+
+
+def configure_provider(provider_id: str) -> None:
+    """Select the active model host (called at startup and on `/provider`).
+
+    Accepts a canonical id or alias (see providers.py). Rebuilds the client lazily
+    on the next call; credentials are only required when a real request is made,
+    so switching to a key-less provider never fails here (or in fake mode)."""
+    global _provider_id, _client, _include_cost
+    pid = providers.resolve(provider_id)
+    if pid not in providers.REGISTRY:
+        valid = ", ".join(providers.names())
+        raise ValueError(f"unknown provider '{provider_id}' - valid: {valid}")
+    _provider_id = pid
+    _include_cost = providers.REGISTRY[pid].reports_cost
+    _client = None  # rebuild against the new base_url/key on next use
+
+
+def active_provider() -> providers.Provider:
+    """The Provider currently in effect."""
+    return providers.REGISTRY[_provider_id]
 
 
 # ── Headroom context compression (optional) ──────────────────────────────────
@@ -264,14 +290,24 @@ def _get_client() -> OpenAI:
     if _client is None:
         with _client_lock:
             if _client is None:
-                base_url = os.getenv("OPENROUTER_BASE_URL", _BASE_URL)
-                # OpenRouter reports real USD cost in usage when asked; other
-                # OpenAI-compatible hosts may reject the extra body field.
-                _include_cost = "openrouter" in base_url
+                p = providers.REGISTRY[_provider_id]
+                base_url = providers.base_url_for(p)
+                if not base_url:
+                    raise RuntimeError(
+                        f"provider '{p.id}' has no base URL - set {p.base_url_env}")
+                key = providers.api_key_for(p)
+                if key is None and not p.local:
+                    envs = " or ".join(p.key_env) or "(none)"
+                    raise RuntimeError(
+                        f"no API key for {p.name} - set {envs} "
+                        f"(or switch provider with /provider)")
+                # Only OpenRouter reports real USD cost in usage; other hosts may
+                # reject the extra body field, so the cost ask is gated per provider.
+                _include_cost = p.reports_cost
                 _client = OpenAI(
                     base_url=base_url,
-                    api_key=os.environ["OPENROUTER_API_KEY"],
-                    default_headers={"X-Title": "Writing Agent"},
+                    api_key=key or "not-needed",   # local servers ignore the key
+                    default_headers=dict(p.headers) or None,
                     timeout=_request_timeout,   # a hung connection must not block forever
                     max_retries=0,              # we own retries (classified backoff below)
                 )

@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -251,6 +252,86 @@ def list_articles(uid: str = "default") -> list[str]:
     return sorted(p.name for p in base.iterdir() if p.is_dir())
 
 
+def project_root(uid: str, project_id: str) -> Path:
+    """The brain working dir for a project - article scope if it has run_state, else book."""
+    art = user_dir(uid) / "articles" / project_id
+    if (art / "run_state.json").exists():
+        return art
+    return user_dir(uid) / "books" / project_id
+
+
+# ── Export save location (where rendered deliverables land; see /path) ─────────
+# The rendered files an export produces. NOT the brain's `manuscript.md` source -
+# that and every other working file stay in the project root; only these move.
+EXPORT_DELIVERABLES = (
+    "manuscript.pdf", "manuscript.epub", "manuscript.html",
+    "manuscript.docx", "manuscript.txt", "manuscript_export.md",
+)
+_EXPORT_DIR_SIDECAR = "export_dir.txt"   # one line: the per-project save folder
+
+
+def get_project_export_dir(uid: str, project_id: str) -> str | None:
+    """The per-project save-folder override, or None if unset."""
+    f = project_root(uid, project_id) / _EXPORT_DIR_SIDECAR
+    try:
+        val = f.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return val or None
+
+
+def set_project_export_dir(uid: str, project_id: str, path: str | None) -> None:
+    """Set (or clear, with falsy `path`) a project's save-folder override."""
+    f = project_root(uid, project_id) / _EXPORT_DIR_SIDECAR
+    if path and path.strip():
+        _atomic_write(f, path.strip())
+    else:
+        f.unlink(missing_ok=True)
+
+
+def resolve_export_dir(uid: str, project_id: str) -> Path:
+    """Where rendered exports for this project are written, and ensured to exist.
+
+    Priority: per-project override (sidecar) > global default `settings.export_dir`
+    namespaced by project id > the project's own brain root (the original behaviour).
+    An unwritable target falls back to the brain root so an export never crashes."""
+    root = project_root(uid, project_id)
+    override = get_project_export_dir(uid, project_id)
+    if override:
+        target = Path(override).expanduser()
+    else:
+        base = ""
+        try:                       # lazy: avoid an import cycle and import-time cost
+            from .config import load_settings
+            base = (load_settings().export_dir or "").strip()
+        except Exception:
+            base = ""
+        target = (Path(base).expanduser() / project_id) if base else root
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return root
+    return target
+
+
+def move_exports(old_dir, new_dir) -> list[str]:
+    """Move existing rendered deliverables from old_dir to new_dir. Returns the
+    basenames moved (empty if the dirs are the same or nothing was there)."""
+    old_dir, new_dir = Path(old_dir), Path(new_dir)
+    if old_dir.resolve() == new_dir.resolve():
+        return []
+    new_dir.mkdir(parents=True, exist_ok=True)
+    moved: list[str] = []
+    for name in EXPORT_DELIVERABLES:
+        src = old_dir / name
+        if src.exists():
+            dst = new_dir / name
+            dst.unlink(missing_ok=True)   # overwrite a stale copy at the destination
+            shutil.move(str(src), str(dst))
+            moved.append(name)
+    return moved
+
+
 def list_projects(uid: str = "default") -> list[tuple[str, str]]:
     """Return [(id, type)] for all books and articles, sorted by id.
 
@@ -267,6 +348,69 @@ def list_projects(uid: str = "default") -> list[tuple[str, str]]:
         ptype = (rs.get("mode") or "article") if rs else "article"
         items.append((aid, ptype))
     return sorted(items, key=lambda x: x[0])
+
+
+# ── Fuzzy project lookup (slugs are long; users type excerpts) ─────────────────
+def _project_match_score(query: str, qtokens: list[str], pid: str) -> float:
+    """Heuristic match in [0,1] between a (lowercased) query and a project id."""
+    import difflib
+    pl = pid.lower()
+    ptoks = [t for t in pl.split("-") if t]
+    if pl == query:
+        return 1.0
+    qhyph = "-".join(qtokens)
+    if qhyph and qhyph in pl:                          # a contiguous slug fragment
+        return 0.9 + 0.1 * (len(qhyph) / len(pl))
+    if qtokens and query.replace(" ", "") in pl.replace("-", ""):
+        return 0.86                                    # fragment ignoring separators
+    if qtokens and all(any(qt in pt for pt in ptoks) for qt in qtokens):
+        return 0.78                                    # every query word lands in some id word
+    overlap = (len(set(qtokens) & set(ptoks)) / len(qtokens)) if qtokens else 0.0
+    # per-token typo tolerance: average best fuzzy match of each query word to an
+    # id word ("voicebott"->"voicebot"), which a whole-slug ratio washes out.
+    if qtokens and ptoks:
+        tok_fuzzy = sum(max(difflib.SequenceMatcher(None, qt, pt).ratio() for pt in ptoks)
+                        for qt in qtokens) / len(qtokens)
+    else:
+        tok_fuzzy = 0.0
+    ratio = difflib.SequenceMatcher(None, query, pl).ratio()
+    return max(overlap * 0.75, ratio * 0.6, tok_fuzzy * 0.9)
+
+
+def match_projects(uid: str, query: str, limit: int = 8) -> list[tuple[str, str, float]]:
+    """Rank a user's projects by how well each matches `query`, best first.
+    Returns [(id, type, score)] - tolerant of excerpts, typos, and word order."""
+    q = (query or "").strip().lower()
+    qtokens = [t for t in re.split(r"[^a-z0-9]+", q) if t]
+    scored = [(pid, ptype, _project_match_score(q, qtokens, pid))
+              for pid, ptype in list_projects(uid)]
+    scored.sort(key=lambda x: (x[2], -len(x[0])), reverse=True)
+    return scored[:limit]
+
+
+def resolve_project(uid: str, query: str, *, threshold: float = 0.5) -> tuple[str | None, list[str]]:
+    """Smart project resolution. Returns (resolved_id, candidates):
+
+    - `resolved_id` when one match is confident (exact id, a clear fragment, or a
+      sole plausible hit) - so `/use voicebot` lands the right project;
+    - else `candidates` = ranked plausible ids for the caller to offer as options;
+    - `(None, [])` when nothing is close enough.
+    """
+    scored = match_projects(uid, query)
+    if not scored:
+        return None, []
+    if scored[0][2] >= 0.999:                          # exact id always wins
+        return scored[0][0], []
+    cands = [(pid, s) for pid, _t, s in scored if s >= threshold]
+    if not cands:
+        return None, []
+    if len(cands) == 1:
+        return cands[0][0], []
+    # A clear leader (strong, and well ahead of the runner-up) resolves outright;
+    # otherwise hand back the close field as options to choose from.
+    if cands[0][1] >= 0.8 and cands[0][1] - cands[1][1] >= 0.12:
+        return cands[0][0], []
+    return None, [pid for pid, _s in cands[:8]]
 
 
 # ── IO helpers ───────────────────────────────────────────────────────────────

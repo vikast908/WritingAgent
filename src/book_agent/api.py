@@ -236,6 +236,10 @@ class Agent:
         """Sync process-global LLM knobs to this agent's settings before a call."""
         llm.configure_headroom(self.settings.use_headroom)
         llm.configure_timeout(self.settings.request_timeout)
+        try:
+            llm.configure_provider(self.settings.provider)
+        except ValueError:
+            pass  # unknown id -> keep the current/default host
 
     def _resolve_approach(self, topic: str, mode: str, approach: Any) -> Any:
         """Return the raw schema object for the chosen direction/angle."""

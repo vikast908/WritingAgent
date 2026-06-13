@@ -178,6 +178,23 @@ def test_comparison_renders_two_labelled_columns():
     assert len({r[0] for r in rects}) == 2
 
 
+def test_comparison_dedupes_repeated_edge_labels():
+    """Repeated relationship labels (3x 'provides') must render ONCE, not stack and
+    overlap in the column gap (the reported figure-overlap defect)."""
+    spec = S.DiagramSpec(
+        title="A vs B", archetype="comparison",
+        nodes=[S.DiagramNode(id="a", label="A", group="Left"),
+               S.DiagramNode(id="b", label="B", group="Left"),
+               S.DiagramNode(id="x", label="X", group="Right"),
+               S.DiagramNode(id="y", label="Y", group="Right")],
+        edges=[S.DiagramEdge(source="a", target="x", label="provides"),
+               S.DiagramEdge(source="a", target="y", label="provides"),
+               S.DiagramEdge(source="b", target="x", label="lacks"),
+               S.DiagramEdge(source="b", target="y", label="lacks")])
+    svg = diagram.render_spec(spec)
+    assert svg.count(">provides<") == 1 and svg.count(">lacks<") == 1
+
+
 def test_cycle_and_comparison_degrade_to_flow_when_underspecified():
     # cycle with < 3 nodes -> flow (still valid, no crash)
     tiny = S.DiagramSpec(title="t", archetype="cycle",
