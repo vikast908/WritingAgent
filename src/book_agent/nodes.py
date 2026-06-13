@@ -156,6 +156,44 @@ def critique_chapter(
                                max_tokens=8000, temperature=cfg.temperature_for("critic"))
 
 
+# ── Variant tournament judge (best-of-N, plan §5) ─────────────────────────────
+def rank_variants(
+    cfg: ModelConfig, unit_desc: str, drafts: dict[str, str], thesis: str | None = None
+) -> S.VariantRanking:
+    """Pick the strongest of several divergent drafts by reading them SIDE BY SIDE.
+
+    Far more reliable than comparing each draft's absolute 1-5 self-score (a model is
+    a jittery, lenient judge of its own output in isolation). Routed to the `judge`
+    node - route it cross-family in models.yaml for an independent comparison.
+    """
+    model = cfg.model_for("judge")
+    parts = [f"You are choosing the strongest among {len(drafts)} drafts of: {unit_desc}."]
+    if thesis:
+        parts.append("ARTICLE THESIS (weight how hard each draft advances it):\n" + thesis)
+    for label, body in drafts.items():
+        parts.append(f"━━ DRAFT [{label}] ━━\n{body}")
+    parts.append("Rank the drafts best to worst and name the winner.")
+    return complete_structured(model, P.VARIANT_JUDGE_SYS, "\n\n".join(parts),
+                               S.VariantRanking, max_tokens=2000,
+                               temperature=cfg.temperature_for("critic"))
+
+
+# ── Claim verification (evidence as fact, plan §15.4) ─────────────────────────
+def verify_claims(cfg: ModelConfig, draft: str, sources_block: str) -> S.ClaimAudit:
+    """Check each in-text [N]-cited specific claim against its cited source text.
+
+    Turns the critic's `evidence` opinion into a structural check: a cited statistic,
+    date, quote, or attribution the source does not actually contain is flagged, and
+    the loop treats it as BLOCKING. Routed to `verifier` (defaults to the pro tier).
+    """
+    model = cfg.model_for("verifier")
+    user = ("Numbered source material:\n" + P.wrap_untrusted(sources_block)
+            + "\n\nDraft to verify (inline [N] citations):\n" + draft
+            + "\n\nCheck every specific cited claim against the source it cites.")
+    return complete_structured(model, P.CLAIM_VERIFY_SYS, user, S.ClaimAudit,
+                               max_tokens=3000, temperature=cfg.temperature_for("critic"))
+
+
 # ── Summary + extraction (commit) ─────────────────────────────────────────────
 def summarize_chapter(cfg: ModelConfig, blueprint: S.ChapterBlueprint, prose: str) -> str:
     model = cfg.model_for("summarizer")
@@ -277,13 +315,16 @@ def deep_research_article(
 # ── Learner (plan §8) ─────────────────────────────────────────────────────────
 def learn(
     cfg: ModelConfig, plan: S.BookPlan, instructions: str, critic_findings: str,
-    existing_skills: str, praised: str = ""
+    existing_skills: str, praised: str = "", preferences: str = ""
 ) -> S.LearnerOutput:
     model = cfg.model_for("learner")
     user = (f"Book plan (for genre):\n{_ctx(plan)}\n\n"
             f"Human directed revision instructions (strongest signal):\n{instructions or '(none)'}\n\n"
             f"Passages the human PRAISED (positive exemplars - distill what makes them "
             f"work, not just what to avoid):\n{praised or '(none)'}\n\n"
+            f"PREFERENCE DATA (model-judged, secondary - which draft won a side-by-side "
+            f"judging and why, and which revisions fixed a flaw; distill the generalizable "
+            f"craft principle, not the one-off detail):\n{preferences or '(none)'}\n\n"
             f"Recurring critic findings (secondary):\n{critic_findings or '(none)'}\n\n"
             f"Existing skills (do not duplicate):\n{existing_skills or '(none)'}\n\n"
             "Distill reusable skills + a watch-list.")
@@ -358,7 +399,10 @@ def write_article_section(
                      f"every point exactly):\n{requirements}")
     if thesis:
         parts.append("ARTICLE THESIS - every section must ADVANCE this argument (argue it, "
-                     "evidence it, or set it up), not merely cover the topic:\n" + thesis)
+                     "evidence it, or set it up), not merely cover the topic. Where this section "
+                     "naturally meets the strongest counterargument named below, ENGAGE it "
+                     "head-on - concede what is true, then answer it - rather than dodging:\n"
+                     + thesis)
     if voice:
         parts.append("VOICE EXEMPLARS - passages in the register to MATCH. Imitate their "
                      "rhythm, diction, and stance; do NOT copy their content:\n\n" + voice)
@@ -459,6 +503,20 @@ def table_read(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str,
                          max_tokens=2000, temperature=0.4)
 
 
+def reader_report(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str) -> S.ReaderReport:
+    """Structured cold read for the closed table-read loop (plan §15.4).
+
+    Same skeptical-target-reader lens as table_read(), but machine-actionable: it names
+    the single highest-impact fix and the section it targets, so an autonomous run can
+    apply one bounded revision instead of only printing a report a human must act on.
+    """
+    model = cfg.model_for("consolidation")   # whole-piece reasoning = pro tier
+    user = (f"Article outline (who it is for, what it promised):\n{_ctx(outline)}\n\n"
+            f"The finished article:\n{body_md}\n\nGive your structured reader report.")
+    return complete_structured(model, P.READER_REPORT_SYS, user, S.ReaderReport,
+                               max_tokens=2000, temperature=0.4)
+
+
 def evaluate_manuscript(cfg: ModelConfig, context: str, body_md: str) -> S.ManuscriptEval:
     """Post-hoc quality rubric over a finished manuscript (the `eval` command)."""
     model = cfg.model_for("consolidation")   # whole-piece judgment = pro tier
@@ -491,82 +549,54 @@ def cohesion_edit(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str) -> 
                          max_tokens=16000, temperature=cfg.temperature_for("writer"))
 
 
-def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "") -> str:
-    """Generate a detailed, self-contained SVG diagram for the given heading/topic.
+def _diagram_spec(cfg: ModelConfig, model: str, heading: str, context: str) -> S.DiagramSpec | None:
+    """Ask the model for a STRUCTURED diagram spec (nodes/edges/labels). The model is good
+    at this; it is bad at SVG geometry, so layout is done deterministically downstream."""
+    ctx_block = (f"\n\nContext (draw specific labels/metrics from here):\n{context[:900]}"
+                 if context else "")
+    user = (f"Topic: {heading}{ctx_block}\n\nSpecify the figure that best explains the ONE "
+            "most diagram-worthy idea here.")
+    try:
+        spec = complete_structured(model, P.DIAGRAM_SPEC_SYS, user, S.DiagramSpec,
+                                   max_tokens=4000, temperature=0.3)
+    except Exception:  # noqa: BLE001 - fall through to the fallback model / placeholder
+        return None
+    return spec if spec.nodes else None
 
-    Returns raw SVG XML (starts with <svg ...). On failure returns a minimal placeholder SVG.
+
+def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "",
+                         engine: str = "auto") -> str:
+    """Produce a self-contained SVG figure for a topic.
+
+    The model only chooses the figure's CONTENT (a structured `DiagramSpec`); LAYOUT is done
+    by a renderer, so labels can't overflow and edges can't collide (the raw-SVG failure mode).
+    `engine`: 'd2' (the d2 CLI, ELK layout - best for complex graphs), 'builtin' (the zero-dep
+    Python engine - carries title/legend/metrics), or 'auto' (d2 when the binary is present,
+    else builtin). Returns SVG starting with '<svg'; a placeholder on total failure.
     """
-    model = cfg.model_for("diagram")  # pro by default; the 16k budget leaves room for reasoning
-    _diagram_key = (model, heading, context[:900])
+    from . import diagram as _dgm
+    model = cfg.model_for("diagram")
     _fake = bool(os.getenv("BOOK_AGENT_FAKE"))
-    if not _fake:
-        from . import cache
-        cached = cache.get("diagram", _diagram_key)
-        if cached:
-            return cached
+    if _fake:                       # offline: no model, just a valid placeholder figure
+        return _dgm.placeholder(heading[:100] or "Diagram")
+    eng = (engine or "auto").lower()
+    use_d2 = eng == "d2" or (eng == "auto" and _dgm.find_d2())
+    from . import cache
+    _diagram_key = (model, heading, context[:900], "d2" if use_d2 else "builtin")
+    cached = cache.get("diagram", _diagram_key)
+    if cached:
+        return cached
 
-    def _store(result: str) -> str:
-        result = _svg_fill_guard(result)
-        if not _fake:
-            from . import cache
-            cache.put("diagram", _diagram_key, result)
-        return result
-
-    ctx_block = f"\nContext (use this to choose specific labels/concepts for nodes):\n{context[:900]}" if context else ""
-    user = (
-        f"Topic: {heading}{ctx_block}\n\n"
-        "Produce a publication-quality SVG diagram that visually explains the ONE most "
-        "diagram-worthy idea in this topic. Pick the archetype that fits: pipeline, layered "
-        "architecture, decision flow, comparison, timeline, or cycle.\n\n"
-        "CRITICAL:\n"
-        "- First character of your response must be '<' - no preamble, no fences, no explanation.\n"
-        "- Use the ACTUAL concepts from the topic as node/label text - not generic placeholders.\n"
-        "- Real numbers from the context (latencies, budgets, percentages) belong on the "
-        "diagram as annotations.\n"
-        "- Every node/box must have a readable text label; every arrow the #arrow marker.\n"
-        "- Canvas: 860 × 520 px.\n"
-    )
-    import re
-
-    def _extract(raw: str) -> str | None:
-        raw = (raw or "").strip()
-        # 1. A proper greedy match (SVG is fully closed)
-        m = re.search(r"(<svg\b[\s\S]+</svg>)", raw, re.IGNORECASE)
-        if m:
-            return m.group(1)
-        # 2. Model wrapped in a code fence but may not have closed </svg> -
-        #    extract from <svg to the last >, strip stray fences, force-close.
-        m2 = re.search(r"(<svg\b[\s\S]+)", raw, re.IGNORECASE)
-        if not m2:
-            return None
-        content = m2.group(1)
-        last_gt = content.rfind(">")
-        if last_gt != -1:
-            content = content[:last_gt + 1]
-        content = re.sub(r"```[\s\S]*$", "", content).rstrip()
-        if not re.search(r"</svg\s*>", content, re.IGNORECASE):
-            content += "\n</svg>"
-        return content
-
-    # 16k budget: with a reasoning-tier model the thinking tokens come out of the same
-    # cap, and a starved cap returns no SVG at all (the original v4-pro failure mode).
-    out = _extract(complete_text(model, P.DIAGRAM_SYS, user, max_tokens=16000,
-                                 temperature=0.4))
-    if out is None and not _fake:
-        # The pro tier occasionally reasons itself out of budget and emits no SVG.
-        # A flash-tier retry reliably produces *a* diagram - a plainer figure beats
-        # the text-only placeholder that would otherwise ship in the export.
+    spec = _diagram_spec(cfg, model, heading, context)
+    if spec is None:                # pro reasoned itself out / returned nothing -> flash retry
         fallback = cfg.model_for("diagram_fallback")
         if fallback != model:
-            out = _extract(complete_text(fallback, P.DIAGRAM_SYS, user,
-                                         max_tokens=8000, temperature=0.4))
-    if out is not None:
-        return _store(out)
+            spec = _diagram_spec(cfg, fallback, heading, context)
+    if spec is None:
+        return _dgm.placeholder(heading[:100] or "Diagram")
 
-    return (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="860" height="120">'
-        '<rect width="860" height="120" fill="#f8f9fb" rx="8"/>'
-        f'<text x="430" y="67" text-anchor="middle" font-family="system-ui,sans-serif" '
-        f'font-size="16" fill="#333">{heading[:100]}</text>'
-        "</svg>"
-    )
+    svg = _dgm.render_d2(spec) if use_d2 else None       # ELK layout; None if d2 missing/errors
+    if svg is None:                                      # built-in fallback (always available)
+        svg = _svg_fill_guard(_dgm.render_spec(spec))    # guard is a no-op safety net here
+    cache.put("diagram", _diagram_key, svg)
+    return svg

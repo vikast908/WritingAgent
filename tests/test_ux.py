@@ -159,16 +159,20 @@ def test_revise_unit_out_of_range(tmp_brain, fake_llm):
 
 # ── variant picking ───────────────────────────────────────────────────────────
 def test_pick_variant_human_choice_and_default():
+    cfg = load_config()
     drafts = {"v0": "## A\n\nAlpha body.", "v1": "## B\n\nBeta body."}
     crits = {"v0": _crit(insight=5), "v1": _crit(insight=2)}
-    # human picks 2 despite the critic preferring v0
-    d, c = orchestrator._pick_variant(drafts, crits, lambda _p: "2", _silent)
+    # scalar fallback (use_judge=False): critic prefers v0 by insight; human overrides to v1
+    d, _c, _n, _p = orchestrator._pick_variant(cfg, "unit", None, drafts, crits,
+                                               lambda _p: "2", _silent, use_judge=False)
     assert d == drafts["v1"]
-    # Enter (empty) → critic's pick
-    d, c = orchestrator._pick_variant(drafts, crits, lambda _p: "", _silent)
+    # Enter (empty) → recommended (the scalar pick)
+    d, _c, _n, _p = orchestrator._pick_variant(cfg, "unit", None, drafts, crits,
+                                               lambda _p: "", _silent, use_judge=False)
     assert d == drafts["v0"]
-    # no ask → critic's pick
-    d, c = orchestrator._pick_variant(drafts, crits, None, _silent)
+    # no ask → recommended
+    d, _c, _n, _p = orchestrator._pick_variant(cfg, "unit", None, drafts, crits,
+                                               None, _silent, use_judge=False)
     assert d == drafts["v0"]
 
 

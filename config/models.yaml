@@ -10,6 +10,11 @@ nodes:
   toc:           deepseek/deepseek-v4-flash
   critic:        deepseek/deepseek-v4-pro      # pro-tier judge: insight scoring + thesis checks
                                                # need real judgment, worth the extra cost/latency
+  judge:         deepseek/deepseek-v4-pro      # ranks divergent drafts side-by-side (best-of-N).
+                                               # Route to a NON-DeepSeek slug for an independent,
+                                               # cross-family judge (decorrelated blind spots).
+  verifier:      deepseek/deepseek-v4-pro      # checks each cited claim against its source text;
+                                               # cross-family routing here also helps
   summarizer:    deepseek/deepseek-v4-flash    # chapter summaries + canon extraction
   production:    deepseek/deepseek-v4-flash    # front/back matter + assembly
   learner:       deepseek/deepseek-v4-flash    # distill skills from a finished book
@@ -25,6 +30,8 @@ nodes:
 temperature:
   toc:        0.4
   critic:     0.2
+  judge:      0.2   # ranking drafts is a judgment call - low temp for stable, repeatable picks
+  verifier:   0.2   # claim checking must be consistent, not creative
   summarizer: 0.0
   humanizer:  0.3   # surgical line edits - low temp; it must not get creative
   writer:     0.9   # explicit base temp; divergent first drafts sample 0.7/1.0/1.2

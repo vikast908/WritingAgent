@@ -39,8 +39,9 @@ def _sync_palette() -> None:
               "ON_CLR", "OFF_CLR"):
         g[k] = getattr(ui, k)
     g["_FLEURON"] = ui.FLEURON
-_NODES = ["planner", "toc", "writer", "critic", "summarizer", "consolidation",
-          "production", "learner", "researcher", "humanizer", "chat"]
+_NODES = ["planner", "toc", "writer", "critic", "judge", "verifier", "summarizer",
+          "consolidation", "production", "learner", "researcher", "humanizer",
+          "diagram", "diagram_fallback", "chat"]
 _EXIT = {"exit", "quit", "q", ":q"}
 _FLEURON = ui.FLEURON
 _MAX_HISTORY = 10  # max messages kept for multi-turn context (5 user + 5 assistant)
@@ -549,7 +550,17 @@ def _features_table(console, settings: Settings) -> None:
                   "Wikimedia Commons images for illustrated/technical content"),
         _feat_row("cohesion   ", settings.article_cohesion,
                   "whole-article smoothing pass before References (articles)"),
+        _feat_row("tournament ", settings.tournament_judge,
+                  "pick the best divergent draft side-by-side (best-of-N judge)"),
+        _feat_row("verify     ", settings.verify_claims,
+                  "check each cited claim vs its source (blocks under deep research)"),
+        _feat_row("table read ", settings.table_read,
+                  "skeptical whole-piece reader pass (articles)"),
+        _feat_row("reader-loop", settings.table_read_revise,
+                  "autonomous: apply the reader's top fix as one revision"),
         ("", ""),
+        ("quality knobs",
+         f"divergent_drafts={settings.divergent_drafts}, min_insight={settings.min_insight}/5"),
         ("/set <key> true/false", "toggle any feature above and save instantly"),
     ]
     if not console:
@@ -1367,6 +1378,8 @@ def _build_chat_system(settings: Settings, state: dict) -> str:
         ("deep-research", settings.deep_research),
         ("embeddings", settings.use_embeddings),
         ("images", settings.use_images),
+        ("tournament-judge", settings.tournament_judge),
+        ("verify-claims", settings.verify_claims),
     ] if v) or "none"
     active_line = (
         f"ACTIVE PROJECT: {active}  ← safe to run/status/read/export"

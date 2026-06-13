@@ -197,6 +197,202 @@ def test_crit_better_prefers_higher_insight():
     assert not orchestrator._crit_better(b, a)
 
 
+def _approve(insight=5):
+    return S.Critique(verdict="approve", confidence=0.9, blocking=[], nits=[], insight=insight)
+
+
+# ── #1 Adversarial side-by-side judge (best-of-N tournament) ──────────────────
+def test_pick_variant_uses_side_by_side_judge(monkeypatch):
+    """The judge reads the drafts together and can override the critic's scalar pick:
+    here the scalar pick is v0 (insight 5) but the judge chooses variant 2 (v1)."""
+    def fake_rank(cfg, unit_desc, drafts, thesis=None):
+        return S.VariantRanking(winner=2, ranking=[2, 1], reason="sharper, less hedged claim",
+                                winner_weakness="ending is thin")
+    monkeypatch.setattr(nodes, "rank_variants", fake_rank)
+    drafts = {"v0": "## A\n\nAlpha.", "v1": "## B\n\nBeta."}
+    crits = {"v0": _approve(5), "v1": _approve(2)}
+    d, _c, note, pref = orchestrator._pick_variant(
+        load_config(), "section 1", "THESIS", drafts, crits, None, _silent, use_judge=True)
+    assert d == drafts["v1"]                 # judge overrode the scalar (insight) pick
+    assert note == "ending is thin"          # weakness fed to the refine pass
+    assert "sharper" in pref                 # preference breadcrumb for the learner
+
+
+def test_pick_variant_judge_error_falls_back_to_scalar(monkeypatch):
+    def boom(*_a, **_k):
+        raise RuntimeError("judge unavailable")
+    monkeypatch.setattr(nodes, "rank_variants", boom)
+    drafts = {"v0": "## A\n\nAlpha.", "v1": "## B\n\nBeta."}
+    crits = {"v0": _approve(5), "v1": _approve(2)}
+    d, _c, note, pref = orchestrator._pick_variant(
+        load_config(), "u", None, drafts, crits, None, _silent, use_judge=True)
+    assert d == drafts["v0"] and note == "" and pref == ""   # scalar pick, no crash
+
+
+def test_tournament_judge_setting_off_skips_judge(tmp_brain, fake_llm, monkeypatch):
+    calls = {"n": 0}
+    real = nodes.rank_variants
+
+    def spy(*a, **k):
+        calls["n"] += 1
+        return real(*a, **k)
+    monkeypatch.setattr(nodes, "rank_variants", spy)
+    cfg, settings = load_config(), load_settings()
+    settings.divergent_drafts = 2
+    settings.tournament_judge = False
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "nojudge", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    assert calls["n"] == 0
+
+
+# ── #2 Claim <-> source verification ──────────────────────────────────────────
+def _unsupported_audit(*_a, **_k):
+    return S.ClaimAudit(checks=[
+        S.ClaimCheck(claim="Sales doubled in 2024", source=1,
+                     supported="unsupported", note="the source reports 10% growth"),
+        S.ClaimCheck(claim="A supported one", source=2, supported="supported"),
+    ])
+
+
+def test_verify_claims_gate_blocks_on_deep_research(monkeypatch):
+    """Full-text ground truth (deep research): unsupported -> BLOCKING + revision."""
+    monkeypatch.setattr(nodes, "verify_claims", _unsupported_audit)
+    crit = _approve(5)
+    draft = "Sales doubled in 2024 [1]. Another claim [2]."
+    out, note = orchestrator._verify_claims_gate(
+        load_config(), {"verify_claims": True, "deep_research": True}, draft,
+        "SOURCE TEXT", crit, _silent)
+    assert out.verdict == "revise"                       # approve downgraded
+    assert any(b.type == "evidence" for b in out.blocking)
+    assert "Sales doubled" in note                       # revision note names the bad claim
+
+
+def test_verify_claims_gate_shallow_is_advisory_only(monkeypatch):
+    """Thin snippets (shallow research): unsupported -> nits, never blocking."""
+    monkeypatch.setattr(nodes, "verify_claims", _unsupported_audit)
+    crit = _approve(5)
+    draft = "Sales doubled in 2024 [1]. Another claim [2]."
+    out, note = orchestrator._verify_claims_gate(
+        load_config(), {"verify_claims": True}, draft, "SNIPPET TEXT", crit, _silent)
+    assert out.verdict == "approve"                      # NOT downgraded on weak evidence
+    assert not out.blocking
+    assert any("Sales doubled" in nit for nit in out.nits)
+    assert note == ""
+
+
+def test_verify_claims_gate_noops(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_verify(*_a, **_k):
+        calls["n"] += 1
+        return S.ClaimAudit(checks=[])
+    monkeypatch.setattr(nodes, "verify_claims", fake_verify)
+    cfg = load_config()
+    deep = {"verify_claims": True, "deep_research": True}
+    # no source text → skip
+    o, n = orchestrator._verify_claims_gate(cfg, deep, "x [1]", "", _approve(), _silent)
+    assert o.verdict == "approve" and n == ""
+    # no inline citations → skip
+    o, n = orchestrator._verify_claims_gate(cfg, deep, "no cites", "SRC", _approve(), _silent)
+    assert o.verdict == "approve" and n == ""
+    # disabled → skip
+    o, n = orchestrator._verify_claims_gate(
+        cfg, {"verify_claims": False, "deep_research": True}, "x [1]", "SRC", _approve(), _silent)
+    assert o.verdict == "approve" and n == ""
+    assert calls["n"] == 0                                # node never called in any skip case
+
+
+# ── #4 Counterargument engagement + closed table-read loop ────────────────────
+def test_writer_thesis_block_demands_counterargument_engagement(monkeypatch):
+    seen = {}
+
+    def cap(model, system, user, **_kw):
+        seen["user"] = user
+        return "## S\n\nBody."
+    monkeypatch.setattr(nodes, "complete_text", cap)
+    nodes.write_article_section(
+        load_config(),
+        S.ArticleOutline(title="T", angle="a", target_word_count=0, sections=[]),
+        S.ArticleSection(number=1, heading="H", purpose="p",
+                         include_code=False, include_image=False),
+        thesis="**Claim:** X\n**Strongest counterargument:** Y")
+    assert "ENGAGE it head-on" in seen["user"]
+
+
+def test_apply_top_reader_fix_revises_target_section(tmp_brain, fake_llm, monkeypatch):
+    cfg, settings = load_config(), load_settings()
+    settings.divergent_drafts = 1
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "readerfix", 2, 1, autonomous=True)
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    paths = ArticlePaths(aid, "u")
+    outline = S.ArticleOutline(**brain.read_json(paths.outline_json))
+    state = brain.read_json(paths.run_state)
+
+    def fake_report(cfg, outline, body):
+        return S.ReaderReport(bored=[], distrust=[], confusing=[], missing=[],
+                              top_fix="Open with a concrete example.", top_fix_section=1)
+    monkeypatch.setattr(nodes, "reader_report", fake_report)
+    orchestrator._apply_top_reader_fix(cfg, paths, outline, state, log=_silent)
+    versions = list((paths.root / "versions").glob("section_01.v*.md"))
+    assert any("reader-fix" in v.read_text(encoding="utf-8") for v in versions)
+    assert "reader-loop revision" in (brain.read_text(paths.revision_log) or "")
+
+
+def test_apply_top_reader_fix_noop_when_section_out_of_range(tmp_brain, fake_llm, monkeypatch):
+    cfg, settings = load_config(), load_settings()
+    settings.divergent_drafts = 1
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "readernoop", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    paths = ArticlePaths(aid, "u")
+    outline = S.ArticleOutline(**brain.read_json(paths.outline_json))
+    state = brain.read_json(paths.run_state)
+
+    def fake_report(cfg, outline, body):
+        return S.ReaderReport(bored=[], distrust=[], confusing=[], missing=[],
+                              top_fix="whole-piece tone", top_fix_section=0)   # 0 = whole-piece
+    monkeypatch.setattr(nodes, "reader_report", fake_report)
+    orchestrator._apply_top_reader_fix(cfg, paths, outline, state, log=_silent)
+    assert "reader-loop revision" not in (brain.read_text(paths.revision_log) or "")
+
+
+# ── #3 Compounding learner from preference data ───────────────────────────────
+def test_preferences_recorded_and_fed_to_learner(tmp_brain, fake_llm, monkeypatch):
+    seen = {}
+    real_learn = nodes.learn
+
+    def learn_spy(cfg, plan, instructions, findings, existing, praised="", preferences=""):
+        seen["preferences"] = preferences
+        return real_learn(cfg, plan, instructions, findings, existing,
+                          praised=praised, preferences=preferences)
+    monkeypatch.setattr(nodes, "learn", learn_spy)
+    cfg, settings = load_config(), load_settings()
+    settings.divergent_drafts = 2          # a tournament -> records a preference signal
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "prefart", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    assert "Tournament" in (seen.get("preferences") or "")
+    # the breadcrumb file survives until the learner reads it
+    paths = ArticlePaths(aid, "u")
+    assert orchestrator._read_preferences(paths)
+
+
+def test_models_yaml_nodes_are_selectable_in_shell():
+    """Every node routed in models.yaml must be selectable via the shell `/model` command
+    (`shell._NODES`), or the documented per-agent override - e.g. routing the `judge`/
+    `verifier` cross-family - is silently rejected as an 'unknown agent'."""
+    import yaml
+
+    from book_agent import shell
+    from book_agent.config import _MODELS
+    routed = set((yaml.safe_load(_MODELS.read_text(encoding="utf-8")) or {}).get("nodes", {}))
+    assert {"judge", "verifier"} <= set(shell._NODES)        # the new quality nodes
+    missing = routed - set(shell._NODES)
+    assert not missing, f"models.yaml nodes not selectable via /model: {sorted(missing)}"
+
+
 # ── /praise ───────────────────────────────────────────────────────────────────
 def test_praise_saves_section_to_voice_dir(tmp_brain, fake_llm):
     from book_agent.shell import _cmd_praise
@@ -223,22 +419,25 @@ def test_svg_fill_guard_kills_black_blobs():
     assert 'fill="#fff"' in out                   # explicit fill preserved
 
 
-def test_diagram_falls_back_to_flash_when_pro_emits_no_svg(tmp_brain, monkeypatch):
-    """A reasoning model can burn the whole budget and emit no SVG - the node must
-    retry on the flash tier instead of shipping the text-only placeholder."""
+def test_diagram_falls_back_to_flash_when_pro_returns_no_spec(tmp_brain, monkeypatch):
+    """The pro tier can return an empty (node-less) spec - the node must retry on the flash
+    tier and render that, instead of shipping a placeholder."""
     monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
     cfg = load_config()
     calls = []
 
-    def fake_complete(model, system, user, **_kw):
+    def fake_spec(model, system, user, schema, **_kw):
         calls.append(model)
         if len(calls) == 1:
-            return "I thought about it a lot but here is prose, not SVG."
-        return '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>'
-    monkeypatch.setattr(nodes, "complete_text", fake_complete)
+            return S.DiagramSpec(title="x", nodes=[], edges=[])          # empty -> None
+        return S.DiagramSpec(title="Pipeline", archetype="flow",
+                             nodes=[S.DiagramNode(id="a", label="Capture"),
+                                    S.DiagramNode(id="b", label="Process")],
+                             edges=[S.DiagramEdge(source="a", target="b")])
+    monkeypatch.setattr(nodes, "complete_structured", fake_spec)
 
     out = nodes.generate_svg_diagram(cfg, "topic heading", context="ctx")
-    assert out.startswith("<svg") and "<rect/>" in out
+    assert out.startswith("<svg") and "Capture" in out and "Process" in out
     assert calls[0] == cfg.model_for("diagram")
     assert calls[1] == cfg.model_for("diagram_fallback")
     assert calls[0] != calls[1]

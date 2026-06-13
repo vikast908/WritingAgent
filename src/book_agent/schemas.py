@@ -102,6 +102,42 @@ class Critique(BaseModel):
         return min(1.0, max(0.0, v))
 
 
+# ── Variant tournament judge (best-of-N selection, plan §5) ───────────────────
+# The critic scores each divergent draft in isolation; this judge reads them SIDE
+# BY SIDE and picks a winner - pairwise comparison is far more reliable than
+# comparing jittery absolute 1-5 self-scores (the §12.1 "lenient self-judge" gap).
+class VariantRanking(BaseModel):
+    winner: int            # 1-based index of the strongest draft
+    ranking: list[int]     # all draft indices, best -> worst
+    reason: str            # why the winner beats the runner-up (one sentence)
+    winner_weakness: str   # the winner's biggest remaining flaw, to fix on refine
+
+
+# ── Claim verification (evidence as fact, not opinion - plan §15.4) ───────────
+# The critic's `evidence` score is an opinion; this checks each in-text [N]-cited
+# specific claim against the actual cited source text. Unsupported = BLOCKING.
+class ClaimCheck(BaseModel):
+    claim: str            # the specific factual claim carrying the citation
+    source: int           # the [N] it cites
+    # "supported" first so the fake-mode default (opts[0]) never blocks offline runs.
+    supported: Literal["supported", "partial", "unsupported"]
+    note: str = ""        # what the source actually says / how to fix
+
+
+class ClaimAudit(BaseModel):
+    checks: list[ClaimCheck]
+
+
+# ── Reader report (structured table read, feeds the closed loop - plan §15.4) ──
+class ReaderReport(BaseModel):
+    bored: list[str]          # where attention dropped (quoted)
+    distrust: list[str]       # claims that felt thin / unsupported / salesy
+    confusing: list[str]      # concepts used but never grounded
+    missing: list[str]        # questions a reader expected answered
+    top_fix: str              # the single change that would most improve it
+    top_fix_section: int = 0  # 1-based section the top fix targets (0 = whole-piece)
+
+
 # ── Extraction (canon update on commit, plan §3.4) ───────────────────────────
 class CharacterUpdate(BaseModel):
     name: str
@@ -237,3 +273,28 @@ class LineEdit(BaseModel):
 
 class LineEdits(BaseModel):
     edits: list[LineEdit]
+
+
+# ── Diagram spec (the model picks nodes/edges; Python lays it out - plan §15.1) ─
+class DiagramNode(BaseModel):
+    id: str                # short unique handle the edges reference
+    label: str             # the concept shown in the box
+    detail: str = ""       # optional one-line sub-label (a metric, a role)
+    group: str = ""        # category -> one consistent colour + a legend entry
+    lane: str = ""         # lane name for the 'layered' archetype (else ignored)
+
+
+class DiagramEdge(BaseModel):
+    source: str            # node id the arrow leaves
+    target: str            # node id the arrow enters
+    label: str = ""        # optional: what flows, or the condition
+
+
+class DiagramSpec(BaseModel):
+    title: str
+    subtitle: str = ""
+    # "flow" first so the fake-mode default (opts[0]) is the always-valid layout.
+    archetype: Literal["flow", "layered", "cycle", "comparison"] = "flow"
+    nodes: list[DiagramNode]
+    edges: list[DiagramEdge]
+    focus: str = ""        # id of the one node to emphasize (optional)
