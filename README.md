@@ -5,16 +5,14 @@
 ### an autonomous writing studio - books, articles & more
 
 [![CI](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-writingagent.vercel.app-6f9ed9?style=flat-square)](https://docs-writingagent.vercel.app/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://www.python.org/)
-[![Platforms](https://img.shields.io/badge/platforms-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-informational?style=flat-square)](#setup)
-[![OpenRouter](https://img.shields.io/badge/powered%20by-OpenRouter-orange?style=flat-square)](https://openrouter.ai/)
-[![DeepSeek](https://img.shields.io/badge/model-DeepSeek%20V4-blueviolet?style=flat-square)](https://deepseek.com/)
-[![Headroom](https://img.shields.io/badge/compression-headroom--ai-green?style=flat-square)](https://github.com/chopratejas/headroom)
+[![Platforms](https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-informational?style=flat-square)](#install)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square)](LICENSE)
 
-**self-correcting pipeline · books + articles · 6 export formats · 10 TUI themes · cost guardrails + telemetry · resilient (retry + resumable) · local-first**
+**self-correcting pipeline · books + articles · 6 export formats · cost guardrails · resumable · local-first**
 
-[Setup](#setup) · [Quick Start](#quick-start) · [The TUI](#the-tui) · [How It Works](#how-it-works) · [Commands](#commands) · [Export](#export-formats) · [Features](#features) · [Themes](#themes) · [Architecture](#architecture)
+[Quickstart](#quickstart) · [Install](#install) · [**Documentation ↗**](https://docs-writingagent.vercel.app/) · [Contributing](#contributing)
 
 </div>
 
@@ -22,722 +20,129 @@
 
 ## What it does
 
-Writing Agent is a self-correcting, autonomous writing system that takes a topic and produces a publication-ready manuscript - drafting, critiquing, humanising, and revising in a loop until the work meets quality standards.
+Writing Agent takes a topic and produces a **publication-ready manuscript** — drafting, critiquing,
+humanising, and revising in a loop until the work meets quality standards. It's a **pipeline, not a
+prompt**: a durable state machine with a separate critic in the loop, not a single API call.
 
-- **Books** - multi-chapter narratives with memory, continuity audits, and front/back matter
-- **Articles** - long-form editorial pieces with research, citations, and editorial angles
-- **One-shot `write`** - interviews you once upfront, then researches, writes, self-edits, and exports the finished file with zero mid-run interruptions
-- **Self-correction** - write → critique → revise → humanise → commit, up to a cap, then escalate
-- **Originality, not just slop-absence** - a per-piece **thesis** the critic enforces, a **side-by-side judge** that picks the strongest of N divergent drafts, and **claim↔source verification** that blocks cited claims the source doesn't actually support
-- **Figures that lay themselves out** - the model authors a diagram *spec*; a deterministic engine (or **D2 + ELK** when the binary is installed) measures and places everything, so labels never overflow or collide
-- **Quality guardrails** - hard rules against AI slop baked into every prompt
-- **Context compression** - [headroom-ai](https://github.com/chopratejas/headroom) runs by default; 60–95% fewer tokens, same output quality
-- **Use it your way** - interactive TUI, one-shot CLI, an embeddable Python API (`Agent`/`Project`), or a global **`writingagent`** npm launcher
+- **Books & articles** — multi-chapter narratives with continuity audits, or long-form pieces with research, citations, and editorial angles
+- **One command** — `write` interviews you once upfront, then researches, writes, self-edits, and exports the finished file with zero interruptions
+- **Originality, not just slop-absence** — a per-piece thesis the critic enforces, a side-by-side judge that picks the strongest of N drafts, and claim↔source verification that blocks unsupported citations
+- **Figures that lay themselves out** — the model authors a diagram *spec*; a layout engine (built-in, or D2 + ELK) places it so labels never overflow or collide
+- **Use it your way** — interactive TUI, one-shot CLI, an embeddable Python API, or a global `writingagent` npm launcher
+- **Local-first** — everything is plain markdown + JSON on disk; kill a run and it resumes exactly where it stopped
+
+> 📚 **The full manual lives at [docs-writingagent.vercel.app](https://docs-writingagent.vercel.app/).** This README is just the quick tour.
 
 ---
 
-## Setup
-
-**Requirements:** Python 3.10+ · runs on **Linux · macOS · Windows** · an [OpenRouter API key](https://openrouter.ai/) (free tier works). No API key is needed to install, run the tests, or try the offline demo.
-
-### 1 - Clone
+## Quickstart
 
 ```bash
-git clone https://github.com/vikast908/WritingAgent.git
-cd WritingAgent
+git clone https://github.com/vikast908/WritingAgent && cd WritingAgent
+pip install -e .                     # Python 3.10+, any OS
+cp .env.example .env                 # then set OPENROUTER_API_KEY=sk-or-...
 ```
 
-### 2 - Create & activate a virtualenv
-
-<table>
-<tr><th>Linux / macOS</th><th>Windows (PowerShell)</th></tr>
-<tr><td>
+Launch the interactive studio and give it a topic:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+writing-agent                        # the TUI   (or: python book.py)
 ```
 
-</td><td>
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+```text
+❧  write --abstract "How stoicism applies to modern burnout"
 ```
 
-</td></tr>
-</table>
+`write` asks a few questions upfront (audience, depth, tone, must-includes), then runs fully
+autonomously and hands you an exported file. Prefer to drive each step? `new → run → export`.
+Every command is in the [**command reference ↗**](https://docs-writingagent.vercel.app/reference/commands/).
 
-> **Windows note:** if PowerShell blocks the activate script, run once:
-> `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then re-activate.
-
-### 3 - Install
+**Try it with no API key.** *Fake mode* returns deterministic placeholder output, so you can
+exercise the whole pipeline, state machine, and exports for free:
 
 ```bash
-pip install -e .                 # core (all platforms)
-pip install -e ".[dev]"          # + pytest + ruff (for development)
+BOOK_AGENT_FAKE=1 python book.py new --abstract "test" --pick 1 && python book.py run
 ```
 
-### 4 - (optional) context compression via headroom
+<sub>Windows PowerShell: <code>$env:BOOK_AGENT_FAKE=1; python book.py new --abstract "test" --pick 1; python book.py run</code></sub>
 
-Headroom is optional - the app runs fine without it and degrades gracefully.
+---
 
-| Platform | Command |
+## Install
+
+| | |
 |---|---|
-| **Linux / macOS** | `pip install -e ".[headroom]"` - prebuilt Rust wheels, installs cleanly |
-| **Windows** | `pip install -e ".[headroom]"` then `pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"` - current versions have no Windows wheel, so we use the last pure-Python release (skips the `litellm` dep, whose long paths break installs without long-path support) |
+| **Requirements** | Python 3.10+ · Linux / macOS / Windows · an [OpenRouter API key](https://openrouter.ai/) (free tier works; none needed for fake mode) |
+| **Core** | `pip install -e .` |
+| **Optional extras** | context compression, deep research, DOCX export, D2 diagrams, embeddings — each degrades gracefully when absent |
+| **npm launcher** | `cd writingagent && npm install -g .` → a global `writingagent` command that forwards to the engine |
 
-### 5 - Add your API key
-
-<table>
-<tr><th>Linux / macOS</th><th>Windows (PowerShell)</th></tr>
-<tr><td>
-
-```bash
-cp .env.example .env
-```
-
-</td><td>
-
-```powershell
-copy .env.example .env
-```
-
-</td></tr>
-</table>
-
-Then edit `.env` and set `OPENROUTER_API_KEY=sk-or-...`.
+Virtualenv setup, per-OS notes, and every optional extra are in the
+[**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
 
 ---
 
-## Quick Start
-
-Launch the interactive TUI (works the same on every OS once the venv is active):
-
-```bash
-writing-agent          # or:  python book.py
-```
-
-> **Prefer npm?** A zero-dependency Node launcher lives in [`writingagent/`](writingagent/):
-> `cd writingagent && npm install -g .` gives you a global **`writingagent`** command that forwards
-> to this engine (`writingagent write "..."`, `writingagent run`, `writingagent doctor`). It still
-> needs the Python engine installed (below).
-
-The fastest path is **`write`** - it interviews you once upfront (audience, depth, length,
-tone, must-includes), then runs fully autonomously and hands you a finished, exported file:
-
-```
-❧ deepseek-v4-flash ›  write --abstract "How stoicism applies to modern burnout"
-```
-
-Or drive each step yourself from the `❧` prompt:
-
-```
-❧ deepseek-v4-flash ›  new --abstract "How stoicism applies to modern burnout"
-❧ deepseek-v4-flash ›  run
-❧ deepseek-v4-flash ›  export
-❧ deepseek-v4-flash ›  read --manuscript
-```
-
-Or one-shot from the terminal:
-
-```bash
-python book.py write --abstract "The psychology of decision fatigue"
-# or step by step:
-python book.py new --abstract "The psychology of decision fatigue" --pick 1
-python book.py run
-python book.py export --format pdf
-```
-
-The TUI shows a **live dashboard** while writing, tab-autocompletes everything, and remembers history - the full tour is in [The TUI](#the-tui) below.
-
-### Try it offline first - no API key (fake mode)
-
-Every node returns deterministic placeholder output, so you can verify the full pipeline, state machine, and exports without a key or any token spend.
-
-<table>
-<tr><th>Linux / macOS</th><th>Windows (PowerShell)</th></tr>
-<tr><td>
-
-```bash
-export BOOK_AGENT_FAKE=1
-python book.py new --abstract "test" --pick 1
-python book.py run
-python book.py export --format pdf
-unset BOOK_AGENT_FAKE
-```
-
-</td><td>
-
-```powershell
-$env:BOOK_AGENT_FAKE = "1"
-python book.py new --abstract "test" --pick 1
-python book.py run
-python book.py export --format pdf
-$env:BOOK_AGENT_FAKE = $null
-```
-
-</td></tr>
-</table>
-
----
-
-## The TUI
-
-The shell is a full editorial workspace, not a bare prompt:
-
-- **Masthead & themes** - a gradient-filled ANSI Shadow wordmark framed by gradient rules,
-  left-aligned. Ten built-in themes (`/theme`) change *everything*: palette, the wordmark's
-  figlet face, glyphs, and text tint - from the blue-ink `editorial` default to `kazama`
-  (Tekken flame), `fallout` (Pip-Boy CRT), `vercel` (monochrome), and more. [Full list ↓](#themes)
-- **Welcome screen** - compact by design so the wordmark is still on screen at the first
-  prompt: how to start, your projects with live phase/progress, and a one-line feature
-  status. The full command list is `/help`; the feature board is `/features`.
-- **`write` interview flow** - one batch of tailored questions upfront (each with a default you
-  accept by pressing Enter), then it runs to a finished exported file with zero interruptions.
-- **Live run dashboard** - progress bar, current chapter/section and stage, elapsed time, live
-  token count vs your `max_run_tokens` budget, and real USD cost as it accrues.
-- **`/dashboard` telemetry view** - totals (calls · tokens · $ · avg latency · errors), a
-  per-model table, and recent runs; `/dashboard <project>` breaks it down per chapter/section.
-- **Autocomplete everywhere** - commands, slash commands, project names, settings keys/values,
-  theme names, export formats; persistent history across sessions (↑ to recall).
-- **Free chat** - type plain English and the built-in assistant answers or converts it into
-  commands and runs them (destructive commands are never auto-executed).
-- **Graceful degradation** - `--plain` / `NO_COLOR` for unstyled output; UTF-8 forced on
-  legacy Windows consoles; falls back cleanly when Rich or prompt_toolkit are unavailable.
-
----
-
-## How It Works
-
-### Article mode
-
-```
-topic
-  └─▶ 3 editorial angles  (you pick, or --pick N)
-        └─▶ outline  (4–8 sections)
-              └─▶ per section ──────────────────────────────────────────────┐
-                    web research  →  write  →  critique  →  revise (×N)    │
-                    →  humanise  →  commit                                  │
-              └─▶ assemble manuscript  →  learn skills  →  done ◀──────────┘
-```
-
-Output: `brain/users/<user>/articles/<id>/manuscript.md` + `images/`
-
-### Book mode
-
-```
-abstract
-  └─▶ 3 directions  (you pick, or --pick N)
-        └─▶ plan + chapter blueprints  (TOC)
-              └─▶ per chapter ─────────────────────────────────────────────┐
-                    context slice + skills  →  write  →  critique          │
-                    →  revise (×N)  →  humanise  →  commit                 │
-              └─▶ periodic consolidation  (contradiction audit)            │
-              └─▶ production  (front/back matter, assembly)                │
-              └─▶ learn skills  →  done ◀──────────────────────────────────┘
-```
-
-Output: `brain/users/<user>/books/<id>/manuscript.md` + front/back matter
-
-### Self-correction loop
-
-Every drafted section/chapter goes through:
-
-```
-Thesis (per article: a contestable claim + steelmanned counter, injected everywhere)
-   │
-N divergent drafts (varied temps)  →  side-by-side Judge picks the winner  →  refined
-   │                                   (or you pick, in manual mode)
-Draft  →  Critic (approve | revise | escalate) + insight/clarity/structure/evidence scores
-              │
-         claim check ──▶ each [N]-cited claim verified against its source
-                         (blocks on full-text sources; advisory nit on snippets)
-              │
-         revise ──▶ up to max_revisions (default 2)
-              │
-         low insight ──▶ "sharpen the argument" pass
-              │
-         cap reached ──▶ escalate (TUI picker: fix / instruct / approve / go-auto / read)
-              │
-         approved ──▶ surgical Humanizer (only flagged sentences) ──▶ commit
-              │
-         (article done) ──▶ table read (skeptical reader) ──▶ eval scorecard
-```
-
-**Not-slop, by design.** The pipeline guarantees the *floor* (banned-word/continuity checks)
-**and** pushes the *ceiling*: a per-article **thesis** the Critic enforces (the writer engages its
-steelmanned counterargument head-on), **voice exemplars** (`brain/users/<id>/voice/`, fed by
-`/praise`) matched on every draft, an **insight score** that gates approval, **divergent drafts**
-whose winner a **side-by-side judge** picks (route the `judge`/`verifier` nodes cross-family for an
-independent eye), **claim↔source verification** that makes an unsupported citation blocking, and a
-**surgical humanizer** that edits only the sentences with AI tells (never re-generating approved
-prose). The learner compounds: it distills skills from the model's own **preference data**
-(tournament outcomes + revision fixes), not just human corrections. `eval` scores the finished
-piece against published work; `versions` + `revise` give you git-style history and one-unit rewrites.
-
----
-
-## Commands
-
-### Modes
-
-| Command | Effect |
-|---|---|
-| `/mode article` | Write a long-form article - sections, angles, citations (default) |
-| `/mode book` | Write a full book - chapters, canon, consolidation |
-
-### Core commands
-
-| Command | What it does |
-|---|---|
-| `write --abstract "..."` | **One-shot:** upfront interview (audience, depth, length, tone, must-includes, byline, format) → fully autonomous run → exported finished file. No mid-run pauses. |
-| `new --abstract "..."` | Start a project - picks angles/directions, builds outline/TOC. `--autonomous` / `--no-autonomous` override the `autonomous` setting |
-| `run` | Drive the pipeline: draft → critique → humanise → commit. `--autonomous` / `--manual` flips run mode (and unblocks a stalled review) as it resumes |
-| `status` | Show phase, section/chapter progress, pending escalations |
-| `review --chapter N --instruction "..."` | Answer an escalation; `run` resumes from that point. (In the TUI a stalled run shows an interactive picker: fix / instruct / approve / go-autonomous / read.) |
-| `revise --chapter N --instruction "..."` | Rewrite **one** committed section/chapter of a finished piece (e.g. "make section 3 more technical"); shows a diff to accept/reject, then patches the manuscript |
-| `read [--chapter N] [--summary] [--manuscript] [--v K]` | Read any section, summary, full manuscript, or **draft version K** |
-| `versions [--chapter N]` | List draft snapshots - every variant, revision, and committed final (git-for-writing) |
-| `brief` | The goal panel: thesis / premise, audience, target length, your requirements |
-| `tableread [--as "persona"]` | Skeptical-reader cold read of the finished piece - boredom, trust, gaps (optional persona) |
-| `eval` | Quality scorecard: judged 5-dimension rubric + deterministic metrics → `eval_report.md` |
-| `export [--format <fmt>]` | Export (interactive picker if format omitted) |
-| `memory` | Inspect canon - characters, timeline, entity graph |
-| `skills` | Browse learned craft skills and efficacy scores |
-| `list` | All projects with type and phase |
-| `delete [--yes]` | Permanently delete a project |
-| `consolidate` · `produce` | Continuity audit · front/back matter on demand |
-
-### Slash commands
-
-| Slash | What it does |
-|---|---|
-| `/update [description]` | Describe your changes - AI reviews and advises on next steps |
-| `/auto [on\|off]` | Autonomous (never pause) ↔ manual (review each unit) run mode |
-| `/praise [N]` | Mark a committed chapter/section as great writing - saved as a voice exemplar + fed to the learner |
-| `/mode [book\|article]` | Show or set writing mode |
-| `/use <project>` | Set active project (no `--book-id` needed on follow-up commands) |
-| `/books` · `/list` | List all projects with type and phase |
-| `/model [agent] <slug>` | Switch any agent to any OpenRouter model slug |
-| `/set <key> <value>` | Toggle any setting live (`use_researcher`, `humanize`, `autonomous` …) |
-| `/theme [<name>]` | List or switch the TUI theme - changes the palette **and** the wordmark font ([see Themes](#themes)) |
-| `/dashboard [<project>]` | Telemetry rollup: calls, tokens, cost, latency, errors - all projects, or one project with its per-chapter/section breakdown |
-| `/skills` · `/skill <name>` · `/seed-skills` | Browse / view / install built-in craft skills |
-| `/retry` · `/reset` · `/compact` | Retry last response · clear memory · compress history |
-| `/help` · `/clear` · `/exit` | Full slash list · clear screen · quit |
-
----
-
-## Python API
-
-A stable, import-and-call interface for embedding the pipeline in your own program -
-the same engine the CLI/TUI drive, minus the plumbing. Install once, then import:
-
-```bash
-pip install -e .          # or: pip install writing-agent
-```
-
-**One-shot** - topic in, finished file out:
-
-```python
-from book_agent import write
-
-result = write("How vector databases work", mode="article", export="docx")
-print(result.export_path, result.word_count)
-```
-
-**Full lifecycle** - create → run → inspect → revise → export, all from code:
-
-```python
-from book_agent import Agent
-
-agent   = Agent(autonomous=True)                       # or Agent(user="me", mode="article", ...)
-project = agent.create("How vector databases work", mode="article", units=6,
-                       requirements="audience: senior engineers; ~2000 words")
-project.run(progress=print)                            # blocking; streams log lines
-if project.status().done:
-    project.evaluate()                                 # judged rubric + hard metrics
-    project.export("pdf")                              # -> pathlib.Path
-```
-
-**Human-in-the-loop** - non-autonomous runs pause for review you answer from code:
-
-```python
-project = agent.create("...", autonomous=False)
-st = project.run(progress=print)
-while st.pending_review:
-    project.review(unit=st.unit, instruction="tighten the intro, add a citation")
-    st = project.run(progress=print)
-```
-
-| Object | Key methods |
-|---|---|
-| `Agent(user=, settings=, models=, **overrides)` | `.plan()` · `.create()` · `.write()` · `.open()` · `.projects()` |
-| `Project` | `.run(progress=)` · `.status()` · `.review()` · `.revise()` · `.evaluate()` · `.table_read()` · `.read()` · `.export()` · `.consolidate()` · `.produce()` · `.delete()` |
-
-`Agent(**overrides)` accepts any [setting](#features) (`mode`, `num_sections`, `use_researcher`,
-`humanize`, …). `models=` takes a `ModelConfig` or a slug string to route **every** node to one
-model. Calls are synchronous and network-bound; pass `progress=` for a log callback, and wrap in
-`asyncio.to_thread` if you need to call from async code.
-
-**Stability:** everything re-exported from `book_agent` (and `book_agent.api`) follows semantic
-versioning - names and signatures won't break within a major version. The internal modules
-(`orchestrator`, `nodes`, `brain`, …) carry no such guarantee. Check `book_agent.__version__`.
-
----
-
-## Export Formats
-
-```bash
-export --format pdf      # paginated A5 PDF  (via xhtml2pdf)
-export --format epub     # EPUB with NCX/Nav TOC  (via ebooklib)
-export --format docx     # Word document  (via pandoc - must be on PATH)
-export --format html     # self-contained HTML with embedded CSS
-export --format txt      # clean plain text (Markdown stripped)
-export --format md       # raw Markdown with title header
-```
-
-Just type `export` for an interactive picker.
-
----
-
-## Features
-
-| Feature | Setting | Default |
-|---|---|:---:|
-| Web research per section (DuckDuckGo) | `use_researcher` | ✅ on |
-| Deep research - multi-query fan-out + full-page fetch + cross-source synthesis | `deep_research` | off |
-| └ richer fetch backend ([Scrapo](https://github.com/vikast908/Scrapo); falls back to stdlib) | `pip install '.[deep]'` | optional |
-| Divergent drafts - N first drafts at varied temps, best refined | `divergent_drafts` | 2 |
-| Tournament judge - pick the best draft side-by-side (vs. scalar self-scores) | `tournament_judge` | ✅ on |
-| Insight gate - require a contestable-argument score to approve | `min_insight` | 3 |
-| Claim↔source verification - cited claims checked against source (blocks on full-text, nit on snippets) | `verify_claims` | ✅ on |
-| Closed table-read loop - apply the reader's top fix as one revision (autonomous) | `table_read_revise` | off |
-| Humanizer - strips AI tells | `humanize` | ✅ on |
-| Headroom context compression | `use_headroom` | ✅ on |
-| SVG diagram generation - model authors a spec, Python lays it out (no overlap) | `use_images` | ✅ on |
-| Diagram layout engine - `auto` uses [D2](https://d2lang.com)+ELK if the `d2` binary is present, else built-in | `diagram_engine` | auto |
-| Semantic skill retrieval (embeddings) | `use_embeddings` | off |
-| Fully autonomous (no pauses) | `autonomous` | ✅ on |
-| TUI color + font theme ([see Themes](#themes)) | `theme` | editorial |
-| Run token budget - pause the run past this spend (0 = unlimited) | `max_run_tokens` | 0 |
-| Per-request network timeout (seconds) | `request_timeout` | 60 |
-
-Toggle any feature live in the TUI: `/set use_researcher false`
-
----
-
-## Themes
-
-The TUI ships **10 themes**. A theme changes *everything*: the color palette, the wordmark's
-figlet face, the banner gradient, the section glyph, and the body-text tint. Switch live with
-`/theme <name>` (persisted to `settings.yaml`); bare `/theme` lists them with swatches.
-
-| Theme | Identity | Wordmark face |
-|---|---|---|
-| `editorial` *(default)* | ink & brass - blue-ink accent, semantic status colors (green ok / red error) | ANSI Shadow |
-| `kazama` | Jin Kazama - red → orange → yellow flame, Tekken italic lean | ANSI Shadow (sheared) |
-| `supabase` | emerald on midnight - flat dashboard green | ANSI Regular |
-| `violet-bloom` | royal purple gradient, soft rounded face | mono12 |
-| `t3-chat` | hot pink with a purple second voice | smblock |
-| `starry-night` | gold stars on van Gogh indigo, deco face | elite |
-| `vercel` | monochrome minimal, cyan success | smmono9 |
-| `fallout` | pip-boy CRT - amber phosphor + terminal green, scanline face | pagga |
-| `mimi` | dusky rose, cream and teal pastels | double_blocky |
-| `astrovista` | mars rust over deep-space navy, sci-fi face | delta_corps_priest_1 |
-
-Every theme's accent is a **different hue family** (enforced by a test - no two themes within
-RGB distance 60), and all non-kazama themes keep red/yellow/green reserved for status semantics
-so the run dashboard reads at a glance.
-
-**Reliability:** every LLM call retries transient errors (429/5xx/timeouts) with exponential backoff and a request timeout, and fails fast on auth/bad-request. Run state is written atomically and is **resumable** - a crash mid-run never double-commits a chapter or corrupts the project. Token usage (and real cost, when OpenRouter reports it) is shown live and summarized at run end.
-
-**Observability:** every LLM call appends a structured JSONL record (`.index/telemetry/`) - run, project, chapter/section, model, latency, attempts, tokens, cost, error. Inspect it in the TUI with **`/dashboard`** (all projects) or **`/dashboard <project>`** (per-chapter/section breakdown).
-
-**Cost kill-switch:** set `max_run_tokens` and a run pauses cleanly when its total spend crosses the cap - nothing is lost; run again (or raise the cap) to continue.
-
-**Prompt-injection defense:** all web-fetched text (search snippets, full page text) is fenced as data-only with spoof-resistant markers before it ever enters a prompt - a hostile page can't issue instructions to the writer.
-
-**Polite, SSRF-safe fetching:** the deep researcher only fetches `http(s)` URLs whose hosts resolve to public addresses (loopback/private/link-local/cloud-metadata blocked, redirects re-checked per hop), honors each site's `robots.txt` (`BOOK_AGENT_IGNORE_ROBOTS=1` to opt out), and spaces requests to the same host at least a second apart.
-
----
-
-## Writing Quality Guardrails
-
-Hard rules baked into **every** writer, humaniser, and critic prompt - not optional:
-
-**No AI slop** - 24 explicit bans:
-- Verbs: `delve`, `leverage`, `utilize`, `foster`, `elevate`, `transform`, `unlock`
-- Adjectives: `robust`, `pivotal`, `comprehensive`, `nuanced`, `groundbreaking`
-- Transitions: `furthermore`, `moreover`, `in conclusion`, `it's worth noting`
-- Structure: no em-dashes, no scare quotes, no bullet-point padding
-
-**No fabrications** - no invented stats, quotes, or attributions
-
-**Humanizer pass** - 11 specific rewrite rules applied after every commit:
-removes inflated significance, symbolic language, weak construction verbs, synonym cycling, filler openers, AI transition phrases; varies sentence rhythm
-
-**Critic blocks on slop** - the critic returns `revise` (not `approve`) if any banned pattern appears, forcing a rewrite before commit
-
----
-
-## Context Compression (Headroom)
-
-[Headroom](https://github.com/chopratejas/headroom) is installed automatically and runs by default on every LLM call.
-
-```
-Tool outputs, research results, skill context, conversation history
-  ↓
-headroom (CacheAligner → ContentRouter → SmartCrusher / CodeCompressor)
-  ↓
-LLM  (60–95% fewer tokens - same answers)
-```
-
-Disable if needed: `/set use_headroom false`
-
----
-
-## SVG Diagrams
-
-When `use_images` is on, every section/chapter can get a generated diagram saved to `images/`
-and embedded in the manuscript.
-
-**The key idea: the model never draws.** LLMs are terrible at geometry — they emit absolute
-coordinates blind, so labels overflow their boxes and edges collide no matter how good the prompt
-is (we tried; two prompt rounds didn't fix it). So the model only authors *what* the figure shows
-— a structured **`DiagramSpec`** — and a layout engine decides *where* everything goes. Overlap
-becomes impossible by construction.
+## How it makes good writing (not slop)
+
+Every chapter/section runs a **write → critique → revise → humanise → commit** loop that optimizes
+for a *take*, not just the absence of tells:
+
+- a contestable **thesis** the critic enforces, and a **side-by-side judge** that picks the strongest of N divergent drafts
+- **claim↔source verification** — a cited claim the source doesn't support is blocking
+- a **surgical humanizer** that rewrites only the sentences with AI tells (citations and numbers preserved)
+- figures that **lay themselves out** — the model authors a spec; a deterministic engine places it (no overflow, no overlap):
 
 <div align="center">
 
-<img src="assets/diagram-pipeline.svg" alt="The diagram pipeline: heading and context go to the diagram node (DeepSeek Pro), which authors a DiagramSpec (nodes, edges, groups); the spec is laid out by the built-in engine or D2+ELK into a self-contained SVG, and the spec itself is saved to versions for auditing." width="900">
+<img src="assets/diagram-pipeline.svg" alt="The diagram pipeline: a heading and context go to the diagram node, which authors a DiagramSpec; the spec is laid out by the built-in engine or D2+ELK into a self-contained SVG, with the spec saved for auditing." width="820">
 
-<sub><i>↑ This figure was generated by the system itself — <code>diagram.render_spec(...)</code>, the same built-in engine that draws figures for your books and articles.</i></sub>
+<sub><i>↑ this figure was drawn by the system itself — the same engine that figures your books and articles</i></sub>
 
 </div>
 
-### Two layout engines (`diagram_engine`)
-
-| Value | Engine | Notes |
-|---|---|---|
-| `auto` *(default)* | D2 + ELK **if the `d2` binary is found**, else built-in | Best of both with zero setup |
-| `builtin` | The pure-Python engine | **Zero dependencies**, carries the title + legend + on-figure metrics; always the fallback |
-| `d2` | The [D2](https://d2lang.com) CLI with the **ELK** layout | Superior auto-routing for complex graphs (fan-out/fan-in, lane containers); we inject a color legend so it matches the built-in look |
-
-Enable D2 by putting the `d2` binary on your PATH (or point `BOOK_AGENT_D2` at it). Any D2 failure
-falls back to the built-in engine — CI and unconfigured users are never blocked.
-
-### Four archetypes, each laid out for its shape
-
-```text
- flow — left→right pipeline / DAG          layered — horizontal lanes
-                                           ┌──────────────────────────────┐
-   [Mic]→[ASR]→[LLM]→[TTS]→[Speaker]       client  │ [Browser SPA]
-     ▲________________________│            edge    │ [CDN] → [API gateway]
-          barge-in (back edge)             service │ [Auth]  [Orders]
-                                           data    │ [Postgres]
-                                           └──────────────────────────────┘
-
- cycle — nodes on a ring (feedback)        comparison — two color-headed columns
-            [Plan]                            Monolith         Microservices
-         ↗         ↘                          ──────────       ─────────────
-    [Learn]         [Code]                    [one deploy]     [indep deploys]
-        ↑              ↓                       [in-process]     [network calls]
-    [Observe] ←──── [Build]                    [shared DB]      [DB per service]
-```
-
-(`cycle` needs ≥3 nodes and `comparison` needs ≥2 groups; under those it safely falls back to
-`flow`. A `timeline` archetype currently also renders as `flow`.)
-
-### Why it never overflows or overlaps
-
-- **Text is measured** (per-character widths) → boxes are sized to fit and labels **wrap** before
-  they spill out.
-- **Placement is geometric** — a column grid (flow), lane bands (layered), an evenly-spaced ring
-  (cycle), or two columns (comparison) — so **boxes can't overlap**, ever.
-- **Back edges are detected via DFS** and excluded from ranking, so a feedback arrow (e.g.
-  `Speaker → Mic`) doesn't drag the start node to the end and reverse the whole pipeline.
-- **Arrowheads are explicit polygons**, not SVG `<marker>`s — markers are dropped by the PDF
-  renderer, so marker-only arrows would vanish in PDF. Every connector also carries `fill="none"`
-  (a filled path renders as a solid black blob).
-- One **focal node** is emphasized; **groups** map to a consistent color + a legend.
-
-PDF export renders the SVGs as **vector art** via xhtml2pdf's svglib (no extra deps); cairosvg is
-used instead when installed (adds arrowhead fidelity).
+Deep dives: [Quality machinery ↗](https://docs-writingagent.vercel.app/reference/quality/) ·
+[How it works ↗](https://docs-writingagent.vercel.app/concepts/how-it-works/) ·
+[Architecture ↗](https://docs-writingagent.vercel.app/concepts/architecture/)
 
 ---
 
-## Architecture
+## Documentation
 
-### System overview
+Everything beyond this tour lives at **[docs-writingagent.vercel.app](https://docs-writingagent.vercel.app/)**:
 
-```mermaid
-flowchart TB
-    subgraph IFACE["Interfaces"]
-        TUI["shell.py<br/>interactive TUI (Rich + prompt_toolkit)"]
-        CLI["cli.py / book.py<br/>one-shot CLI"]
-    end
-
-    ORCH["orchestrator.py - durable on-disk state machine<br/>chapters/sections -> consolidate -> production -> learn<br/>prefetches unit n+1's inputs - parallel commit batch"]
-
-    subgraph LLML["LLM layer"]
-        NODES["nodes.py<br/>planner - writer - critic - judge - verifier - summarizer<br/>extractor - humanizer - researcher - learner - diagram"]
-        WRAP["llm.py<br/>retry/backoff - JSON repair retry - token telemetry - headroom"]
-        ORTR["OpenRouter<br/>DeepSeek V4 Pro / Flash<br/>per-node routing (models.yaml)"]
-    end
-
-    subgraph RES["Research (opt-in)"]
-        SRCH["search.py<br/>DuckDuckGo snippets"]
-        DEEP["deep_research.py<br/>multi-query fan-out + full-page fetch<br/>(Scrapo, stdlib fallback)"]
-        IMGS["images.py - Wikimedia Commons<br/>diagram.py - built-in SVG layout + optional D2/ELK"]
-        CCH["cache.py<br/>7-day disk cache"]
-    end
-
-    subgraph BRN["The brain on disk - source of truth"]
-        MDF["brain/ markdown<br/>chapters - summaries - canon - skills - prefs"]
-        RST["run_state.json<br/>atomic writes - resume guard"]
-        FTS["store.py<br/>SQLite FTS5 index + entity graph"]
-    end
-
-    EXP["export.py<br/>PDF - EPUB - DOCX - HTML - TXT - MD"]
-
-    TUI --> ORCH
-    CLI --> ORCH
-    ORCH --> NODES
-    NODES --> WRAP
-    WRAP --> ORTR
-    ORCH --> RES
-    SRCH --> CCH
-    DEEP --> CCH
-    ORCH <--> BRN
-    MDF --> EXP
-```
-
-Every step persists to the brain before the state machine advances, so a run can be
-killed at any point and `run` resumes exactly where it left off. The unit chain
-(chapters/sections) is sequential by design - each unit reads the previous summary for
-continuity - while everything independent of prose (research, images, skills, the
-humanize/summarize/extract commit batch) runs concurrently.
-
-### Layout on disk
-
-```
-brain/users/<user>/
-  profile.md  prefs/  skills/
-  books/<book-id>/
-    plan.json  book_plan.md  toc.json  run_state.json  manuscript.md
-    chapters/  eval/  reviews/  instructions/
-    canon/characters/  world_rules.md  timeline.md
-    frontmatter/  backmatter/  consolidation/
-  articles/<article-id>/
-    outline.json  run_state.json  manuscript.md  sources.json
-    images/                         ← SVG diagrams
-
-config/
-  models.yaml                       ← per-agent model routing
-  settings.yaml                     ← all tunable knobs
-
-seeds/skills/                       ← 9 built-in craft skills
-src/book_agent/
-  llm.py          ← OpenRouter wrapper + headroom compression
-  nodes.py        ← all LLM node functions (planner, writer, critic, …)
-  orchestrator.py ← durable on-disk state machine
-  brain.py        ← BookPaths, ArticlePaths, IO helpers
-  shell.py        ← Rich TUI + prompt_toolkit REPL
-  cli.py          ← one-shot CLI entry points
-  prompts.py      ← all system prompts (NO_SLOP, DIAGRAM_SPEC_SYS, …)
-  diagram.py      ← SVG layout: built-in deterministic engine + optional D2/ELK backend
-  export.py       ← pdf, epub, html, docx, txt, md renderers (HTML sanitized)
-  ui.py           ← theme registry (10 themes) + Rich helpers (stepper, bars, console)
-  concurrency.py  ← thread-pool helper for overlapping independent I/O
-  cache.py        ← on-disk cache for web search + SVG diagrams
-```
-
-### Model routing
-
-| Node | Model | Why |
-|---|---|---|
-| planner, writer, consolidation | DeepSeek V4 Pro | Highest prose quality |
-| critic | DeepSeek V4 Pro | Insight scoring + thesis checks need real judgment |
-| judge, verifier | DeepSeek V4 Pro | Side-by-side draft ranking + claim↔source checks; **route to a non-DeepSeek slug for an independent, cross-family eye** |
-| diagram (+ diagram_fallback) | DeepSeek V4 Pro (Flash fallback) | Authors the figure *spec* (nodes/edges); layout is deterministic, not the model's job. Flash re-authors if Pro returns nothing |
-| summarizer, humanizer, researcher, toc, chat | DeepSeek V4 Flash | Fast, cost-efficient, no reasoning overhead |
-
-Override any node live: `/model writer openai/gpt-4o`
-
----
-
-## Offline / Fake Mode
-
-Test the full pipeline without any API calls:
-
-```bash
-# PowerShell
-$env:BOOK_AGENT_FAKE=1; python book.py new --abstract "test" --pick 1; python book.py run
-```
-
-Every node returns valid placeholder output - lets you verify the pipeline loop, state machine, and exports locally.
-
----
-
-## Design Decisions
-
-| Decision | What we chose | Why |
-|---|---|---|
-| Orchestration | Durable on-disk state machine | Brain on disk = checkpoint; resumable runs without LangGraph overhead |
-| Skill retrieval | Lexical (BM25) by default | No dependency on embeddings; clean seam to swap in `use_embeddings: true` |
-| Article layout | Flat `articles/<id>/` | No subdirs; `manuscript.md` + `images/` only after cleanup |
-| Compression | headroom-ai on by default | 60–95% fewer tokens with zero accuracy loss |
-| Diagram layout | Model authors a spec; Python (or D2/ELK) lays it out | LLMs can't measure text — separating *what* from *where* makes overflow/overlap impossible; built-in engine keeps it zero-dependency |
-
----
-
-## Platform support
-
-WRITING AGENT is **cross-platform** - Linux, macOS, and Windows - and CI runs the full
-test suite on all three (Ubuntu · macOS · Windows) across Python 3.10–3.13 on every push.
-
-| Concern | How it stays portable |
+| | |
 |---|---|
-| Filesystem | `pathlib` everywhere; atomic writes via `os.replace`; ids validated/confined |
-| Console | Rich auto-detects the terminal and degrades; `--plain` / `NO_COLOR` for no styling; UTF-8 is forced on legacy Windows code pages |
-| Export links | clickable `file://` URIs built with `Path.as_uri()` (valid on Windows too) |
-| Compression | `headroom` is an optional extra with a platform marker - real wheels on Linux/macOS, the pure-Python fallback on Windows |
-| External tools | `pandoc` is only needed for **DOCX** export (install separately and put on `PATH`); a clear error is shown if it's missing. All other formats are pure-Python. |
-
-Per-OS install, activation, and offline-demo commands are in [Setup](#setup) and [Quick Start](#quick-start) above.
-
----
-
-## Troubleshooting
-
-- **PowerShell won't run the activate script** → `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then re-activate.
-- **`headroom-ai` fails to build on Windows** → that's expected; install the pure-Python fallback: `pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"`. Headroom is optional and the app runs without it.
-- **`export --format docx` fails** → install [pandoc](https://pandoc.org/installing.html) and ensure it's on your `PATH`. Other formats (pdf/epub/html/txt/md) need no external tools.
-- **Garbled box-drawing / colors** → run with `--plain` or set `NO_COLOR=1`; on Windows use Windows Terminal for best results.
-- **`401 Unauthorized` on a real run** → check `OPENROUTER_API_KEY` in `.env`. To verify everything else without a key, use [fake mode](#try-it-offline-first--no-api-key-fake-mode).
-- **A run was interrupted** → just run again; state is written atomically and resumes where it left off (no double-committed chapters).
-- **Repo lives in OneDrive/Dropbox and writes feel slow (or fail with `PermissionError`)** → set `BOOK_AGENT_HOME` to a non-synced folder (e.g. `$env:BOOK_AGENT_HOME = "$env:LOCALAPPDATA\writing-agent"`). The brain and derived index are then written there instead of inside the repo; sync clients add latency to every save and their file locks can break atomic replaces.
+| [Quickstart ↗](https://docs-writingagent.vercel.app/quickstart/) | from install to a finished article in one command |
+| [The TUI ↗](https://docs-writingagent.vercel.app/guides/tui/) | the interactive shell, live dashboard, 10 themes |
+| [Commands ↗](https://docs-writingagent.vercel.app/reference/commands/) · [Slash commands ↗](https://docs-writingagent.vercel.app/reference/slash-commands/) | every command and flag |
+| [Quality machinery ↗](https://docs-writingagent.vercel.app/reference/quality/) | thesis, judge, claim checks, the learning loop |
+| [Model routing ↗](https://docs-writingagent.vercel.app/reference/models/) · [Settings ↗](https://docs-writingagent.vercel.app/reference/settings/) | per-node models; every tunable |
+| [Python API ↗](https://docs-writingagent.vercel.app/project/api/) | embed the engine — `Agent` / `Project` |
+| [Architecture ↗](https://docs-writingagent.vercel.app/concepts/architecture/) | the markdown memory substrate + state machine |
 
 ---
 
 ## Contributing
 
-Contributions welcome - see **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide.
-
 ```bash
-git clone https://github.com/vikast908/WritingAgent.git && cd WritingAgent
-pip install -e ".[dev]"     # Linux · macOS · Windows
-ruff check .                # lint
-pytest                      # tests (run fully offline)
+git clone https://github.com/vikast908/WritingAgent && cd WritingAgent
+pip install -e ".[dev]"
+ruff check .        # lint
+pytest              # the suite runs fully offline (no API key)
 ```
 
-Full spec in [`plan.md`](plan.md) · session log in [`resume.md`](resume.md) · also see
-[`SECURITY.md`](SECURITY.md) and [`CHANGELOG.md`](CHANGELOG.md).
+Issues and PRs welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**. The design spec is in
+[`plan.md`](plan.md); also [`SECURITY.md`](SECURITY.md) and [`CHANGELOG.md`](CHANGELOG.md).
 
----
+## Author
+
+Built and maintained by [**@vikast908**](https://github.com/vikast908). Questions, ideas, or bugs?
+[Open an issue](https://github.com/vikast908/WritingAgent/issues) — feedback is welcome.
+
+## License
+
+[MIT](LICENSE).
 
 <div align="center">
-  <sub>Built with DeepSeek V4 on OpenRouter · Context compression by <a href="https://github.com/chopratejas/headroom">headroom-ai</a> · Runs on Linux · macOS · Windows</sub>
+  <sub>Built with DeepSeek V4 on OpenRouter · context compression by <a href="https://github.com/chopratejas/headroom">headroom-ai</a> · runs on Linux · macOS · Windows</sub>
 </div>
