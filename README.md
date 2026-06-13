@@ -1,13 +1,6 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.png">
-  <img src="assets/logo-light.png" alt="Writing Agent" width="128">
-</picture>
-
-<img src="assets/writing-agent-banner.svg" alt="Writing Agent - a self-correcting, autonomous writing system that turns a topic into a publication-ready manuscript" width="820">
-
-### an autonomous writing studio - books, articles & more
+<img src="assets/writing-agent-banner.svg" alt="Writing Agent - a self-correcting, autonomous writing system that turns a topic into a publication-ready manuscript" width="860">
 
 [![CI](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-writingagent.vercel.app-6f9ed9?style=flat-square)](https://docs-writingagent.vercel.app/)
