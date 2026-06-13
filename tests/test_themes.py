@@ -43,7 +43,8 @@ def test_shell_sync_palette_follows_theme():
     ui.apply_theme("violet-bloom")
     shell._sync_palette()
     assert shell.GOLD == ui.THEMES["violet-bloom"]["GOLD"]
-    assert shell._FLEURON == ui.THEMES["violet-bloom"]["FLEURON"]
+    # The prompt/marker glyph is the fixed brand nib (matches the logo), not the per-theme fleuron.
+    assert shell._FLEURON == shell._NIB == "✒"
 
 
 def test_themes_are_visually_distinct():

@@ -38,12 +38,13 @@ def _sync_palette() -> None:
     for k in ("GOLD", "GOLD_HI", "INK", "PARCH", "DIM", "RULE", "ERR",
               "ON_CLR", "OFF_CLR"):
         g[k] = getattr(ui, k)
-    g["_FLEURON"] = ui.FLEURON
+    g["_FLEURON"] = _NIB
 _NODES = ["planner", "toc", "writer", "critic", "judge", "verifier", "summarizer",
           "consolidation", "production", "learner", "researcher", "humanizer",
           "diagram", "diagram_fallback", "chat"]
 _EXIT = {"exit", "quit", "q", ":q"}
-_FLEURON = ui.FLEURON
+_NIB = "✒"             # the brand glyph: a pen nib (matches the logo)
+_FLEURON = _NIB            # used for the prompt + section/status markers
 _MAX_HISTORY = 10  # max messages kept for multi-turn context (5 user + 5 assistant)
 
 _SLASH_HELP = [
@@ -2054,7 +2055,7 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
                     pass
             elif global_mode == "article":
                 sfx_plain = " [article]"  # no active book - show global mode
-            prompt_plain = f"\n❧ {slug}{book_part}{sfx_plain} "
+            prompt_plain = f"\n{_NIB} {slug}{book_part}{sfx_plain} "
         elif console:
             mode_tag = f" [{INK}]article[/]" if not book and global_mode == "article" else ""
             prompt_plain = (f"\n[{GOLD}]{_FLEURON}[/] "
