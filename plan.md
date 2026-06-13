@@ -238,9 +238,11 @@ the verdict* - a chapter can be flawless and score 1.
   uniformity, rule-of-three density, wrap-up tells, specificity density) - structural tells a
   lexicon can't catch.
 - **Best-of-N:** with `divergent_drafts > 1` the first attempt samples N drafts at varied
-  temperatures; the Critic ranks them (`_crit_better`: approve > fewer-blocking >
-  higher-insight > higher-confidence) and the winner is refined. In manual interactive runs
-  the human picks instead.
+  temperatures. A dedicated **side-by-side judge** (`tournament_judge`, default on; §15.6) reads
+  the variants together and picks the winner - far more reliable than comparing each draft's
+  isolated 1-5 self-score; the scalar `_crit_better` (approve > fewer-blocking > higher-insight >
+  higher-confidence) is the fallback when the judge is off or errors. The winner is refined against
+  the judge's noted weakness. In manual interactive runs the human picks instead.
 
 ---
 
@@ -341,8 +343,10 @@ positive procedures compose.
 **Signal priority (teacher hierarchy):**
 1. **Human directed-instructions** (gold) → strongest source of new skills/prefs.
 2. **Cross-book recurrence** (≥2 of the user's books, similar genre) → promotes to user scope.
-3. **Critic-only findings** → fix *this book* only; **never auto-promoted** to user learning
-   (training on the Critic's own taste = circular convergence on bland, "safe" writing).
+3. **Critic-only findings** and **model preference data** (tournament winners + revision fixes,
+   §15.6) → fix *this book* only; **never auto-promoted** to user learning (training on the
+   model's own taste = circular convergence on bland, "safe" writing). They enrich the *candidate*
+   pool the efficacy gate then validates - they do not bypass it.
 
 **Promotion rule (kills overfitting):** a lesson leaves book scope for user scope only on a
 human signal *or* cross-book recurrence. A one-book pattern stays book-scoped.
@@ -438,6 +442,8 @@ nodes:
   consolidation: deepseek/deepseek-v4-pro      # global reasoning across the whole book
   toc:           deepseek/deepseek-v4-flash
   critic:        deepseek/deepseek-v4-pro      # insight scoring + thesis checks need real judgment
+  judge:         deepseek/deepseek-v4-pro      # ranks divergent drafts side-by-side (best-of-N, §15.6)
+  verifier:      deepseek/deepseek-v4-pro      # checks cited claims against source text (§15.6)
   summarizer:    deepseek/deepseek-v4-flash    # summaries + canon extraction
   production:    deepseek/deepseek-v4-flash
   learner:       deepseek/deepseek-v4-flash
@@ -463,8 +469,9 @@ A model tends to be a lenient judge of its own output; an independent critic cat
 is the architectural reason the Critic is a separate node in the first place. *(Current default
 keeps the Critic on `deepseek-v4-pro` - same family as the writer - because insight scoring and
 thesis checks needed the pro tier's judgment more than cross-family independence; the watch-list,
-deterministic style metrics, and `/praise` are the compensating defenses. Route `critic` to any
-non-DeepSeek slug to restore a cross-family judge.)*
+deterministic style metrics, and `/praise` are the compensating defenses. Route `critic` - and the
+`judge`/`verifier` nodes (§15.6) - to any non-DeepSeek slug to restore cross-family independence
+where it matters most.)*
 
 ---
 
@@ -581,7 +588,7 @@ Durable decisions from the hardening pass. All thresholds are tunable config.
 | **Article cohesion** | `article_cohesion` (default on): a whole-article smoothing pass over the assembled sections (transitions, cross-section repetition, terminology) before References. Guarded - if the edit shrinks the body >40% or loses headings, the original is kept. |
 | **Long-range retrieval** | `assemble_context` augments canon + dependency summaries with FTS5 excerpts from *other* committed chapters matched on the blueprint's key terms (`store.search_excerpts`). Timeline events are recorded under the actual committing chapter (LLM-reported numbers were unreliable). |
 | **Export fidelity** | All exporters resolve relative `images/` references against the project root: PDF renders SVG as **vector art via xhtml2pdf's svglib** (always available - it's a hard dep; arrow markers degrade to plain lines), preferring **cairosvg rasterization** when installed (full marker fidelity); EPUB packages images as items, DOCX passes `--resource-path` to pandoc, HTML inlines images as data URIs. |
-| **Diagram quality** | The `diagram` node runs the **pro tier with a 16k budget** (reasoning shares the completion cap - a starved cap returns no SVG) under an information-design prompt (archetypes, type hierarchy, edge-label pills, lanes, metric annotations, one focal emphasis, bounded deliberation). Deterministic guards do what prompts can't promise: `_svg_fill_guard` forces `fill="none"` on every connector (a missed one renders as a solid black polygon), and a **flash-tier `diagram_fallback`** draws the figure when pro emits no SVG, so a placeholder never ships. Diagrams are disk-cached by (model, heading, context) - a prompt change alone does not invalidate the cache. |
+| **Diagram quality (spec → deterministic render, 2026-06-13)** | The model no longer emits SVG - it is bad at geometry, so labels overflowed and edge pills collided no matter the prompt (two prompt rounds failed). The `diagram` node now returns a **structured `DiagramSpec`** (nodes/edges/labels/archetype - what an LLM is good at) via `DIAGRAM_SPEC_SYS`, and **`diagram.py` lays it out deterministically**: text is measured (per-char widths) so boxes are sized to fit and labels wrap before overflowing; nodes are placed on a grid (column-ranked DAG for `flow`, stacked bands for `layered`; `cycle`/`comparison` degrade to `flow`) so **boxes can't overlap by construction**; the ranker detects **back edges via DFS and excludes them** so a feedback/loop arrow doesn't reverse a pipeline; edges route as orthogonal elbows (adjacent) or stacked bottom channels (spanning/back) that never cross boxes; edge labels get measured white pills with collision-nudging; groups map to a consistent colour + a bottom legend; one `focus` node is emphasized. **Arrowheads are explicit polygons** (svglib drops `<marker>`, so marker-only arrows vanish in PDF). `_svg_fill_guard` (forces `fill="none"`) stays as a no-op safety net. A node-less spec → **flash-tier `diagram_fallback`** retry → minimal placeholder. Disk-cached by (model, heading, context, engine).<br>**Optional D2 backend (`diagram_engine`, default `auto`).** The same `DiagramSpec` can instead be laid out by the **[D2](https://d2lang.com) CLI with ELK** (`diagram.to_d2` → `d2 --layout elk`), which routes complex graphs (fan-out/fan-in, lane containers) better than the built-in engine - chosen after a side-by-side render comparison. D2 has no legend of its own, so `_inject_d2_legend` extends its outer viewBox and appends a colour legend matching the node borders. `engine`: `auto` (use d2 when the `d2` binary is on PATH or `$BOOK_AGENT_D2`, else built-in), `d2`, or `builtin`. The built-in engine stays the **zero-dependency default** (d2 is an ~18 MB Go binary, not required - CI and unconfigured users get built-in); any d2 failure falls back to it. |
 
 ### 15.2 Deep multi-source researcher (`deep_research`, off by default)
 
@@ -668,6 +675,58 @@ won or lost"* - was exactly our weakest spot (we discarded drafts after commit).
 document-first 70-80% layout, and sentence-level inline-suggestion accept/reject (our acceptance
 unit is the section/chapter, correct for long-form).
 
+### 15.6 Quality machinery II - independence, verification, compounding (2026-06-13)
+
+§15.4 added the *ceiling* (a thesis, a voice, a take). The gap that remained: almost every
+"good/bad" judgment routed through **one model judging its own output** (writer and critic are the
+same family, §12.1), so quality was capped at that model's taste and the learning loop converged
+*toward* it (the §8 "circular convergence on bland safe writing" risk). These four levers break
+that bound - independence, verification, preference-over-score, and a real compounding signal. All
+are tunable config; all fail safe (a judge/verify/loop error degrades to the prior behavior, never
+a broken run).
+
+- **Tournament judge** (`tournament_judge`, default on): when `divergent_drafts > 1`, a dedicated
+  `judge` node (`nodes.rank_variants`) reads all variants **side by side** and picks the winner,
+  replacing the old scalar `_crit_better` comparison of each draft's *isolated* 1-5 self-score
+  (jittery and lenient). It returns a ranking, the reason the winner beats the runner-up, and the
+  winner's biggest remaining weakness - which is fed into the refinement pass. Scalar comparison
+  remains the fallback when the judge is off or errors; in manual runs the human still overrides.
+  Both `judge` and `verifier` run at a **low temperature (0.2)** for stable, repeatable verdicts.
+  **Route `judge`/`verifier` to a non-DeepSeek slug in `models.yaml` for an independent,
+  cross-family comparison** - the cheapest way to decorrelate the critic's blind spots (§12.1).
+  *This is left as a deliberate one-line user opt-in, not a default: the standing decision is
+  DeepSeek-pro/flash-only (no other providers), so the engine does not pull in a second provider on
+  its own.*
+- **Claim ↔ source verification** (`verify_claims`, default on; articles): turns the critic's
+  `evidence` *opinion* into a structural check. After each section draft, `nodes.verify_claims`
+  checks every in-text `[N]`-cited specific claim (a stat, date, quote, attribution) against the
+  actual source text it cites (threaded through `_section_fetch` as `source_text`, never persisted).
+  **Severity is gated on ground-truth strength** so a default-on setting can't tank a good draft on
+  weak evidence: with **deep research** (full page text) an unsupported claim is BLOCKING - it
+  downgrades `approve`→`revise` and seeds a targeted revision note; with **shallow research**
+  (snippets only, where a true claim may simply be absent from the snippet) it is surfaced as a
+  non-blocking **nit**. No-ops entirely when verification is off, research is off (no source
+  material), or the draft has no citations. (Enforcement therefore wants `deep_research: true`;
+  shallow mode is advisory.)
+- **Counterargument engagement** (writer prompt): the thesis already carries a steelmanned
+  `counterargument`/`rebuttal` (§15.4); the article writer is now told to **engage it head-on**
+  (concede what's true, then answer it) where a section naturally meets it, rather than dodging -
+  optimizing for persuasion, not just coverage.
+- **Closed table-read loop** (`table_read_revise`, default **off**; autonomous only): the
+  skeptical-reader pass (§15.4) was report-only. A structured `nodes.reader_report` now also names
+  the single highest-impact fix and the section it targets; when enabled, an autonomous run applies
+  that one fix as a bounded targeted revision (`_targeted_section_revise`: write → critique → fix
+  pass → humanize → patch the section file + manuscript). Default off because it mutates finished
+  content; every draft is version-snapshotted (`reader-fix` label), so it is auditable and
+  reversible. Canon-free (a polish, not a re-run).
+- **Compounding learner** (preference data → skills, §8): every run already generates gold the
+  learner threw away. Tournament outcomes (what won, why, the winner's weakness) and revisions
+  (the blocking issues a fix addressed) are now recorded to `<project>/learning_signals.md` and
+  fed to `nodes.learn` as a new **secondary** signal. Per §8 these are model-judged, so they yield
+  **candidate skills only** - never auto-promoted to user scope (same gate as critic-only findings;
+  human signal or cross-book recurrence still required). This is what makes book 10 better than
+  book 1 instead of equal to it, without overfitting to the critic's taste.
+
 ### Still post-v1 (deliberately deferred)
 
 - **Web UI** - chapter reader, escalation review with side-by-side revision diffs,
@@ -734,6 +793,53 @@ Build work spans multiple Claude sessions, so progress is journaled at the proje
 Rule: at the **start** of a session, read `resume.md` → `plan.md`. At the **end**, prepend a
 dated entry to `resume.md` (changes, decisions, concrete next step) and move any durable
 decision into `plan.md`. Never duplicate content between the two.
+
+---
+
+## 18. Public Python API (stable embedding surface)
+
+**Why:** the internals (`orchestrator`, `nodes`, `brain`, …) are importable but explicitly
+unstable pre-1.0. `book_agent.api` is a thin **facade** that gives integrators a supported,
+semver-guaranteed surface to embed the pipeline in their own programs, while leaving the internals
+free to change. The CLI/TUI and the API are siblings over the same orchestrator - neither wraps the
+other.
+
+**Shape:** an `Agent` + `Project` facade (chosen over a bare one-shot so the *whole* lifecycle -
+create, run, **resume a paused run**, revise, evaluate, export - is reachable from code), with a
+one-shot `write()` convenience layered on top.
+
+- **`Agent(*, user, settings, models, autonomous, **overrides)`** - bundles the per-call plumbing
+  (`user`, `Settings`, `ModelConfig`) so callers don't thread it. `**overrides` are validated
+  against `Settings` fields; `models=` accepts a `ModelConfig` or a slug string (→ `set_all`).
+  Methods: `plan(topic, mode=, n=) -> [Approach]`, `create(...) -> Project`, `write(...) ->
+  WriteResult`, `open(id) -> Project`, `projects() -> [Project]`.
+- **`Project`** - a cheap handle (all state on disk). `run(progress=, autonomous=, force=)`,
+  `status() -> Status`, `review(unit, instruction)` (answers an escalation), `revise(unit,
+  instruction, confirm=)`, `evaluate() -> Evaluation`, `table_read(persona=)`, `read(unit=,
+  manuscript=, summary=, version=)`, `word_count()`, `memory()`, `consolidate()`, `produce()`,
+  `export(fmt) -> Path`, `delete()`.
+- **Value types** (frozen dataclasses, *not* the internal pydantic schemas, so the wire shape is
+  stable): `Approach`, `Status`, `Evaluation`, `WriteResult`. `Status` normalizes the book/article
+  run-state split into `mode/phase/unit/total_units/committed/pending_review/done/open_reviews`
+  (+ `raw`).
+
+**Design decisions:**
+- **Non-interactive by default.** `create`/`write` auto-pick the first creative approach; callers
+  override with `approach=` (a 1-based `int`, an `Approach` from `plan()`, or a
+  `selector(list[Approach]) -> Approach|int` callback). The CLI's interactive "pick a direction"
+  gate is a CLI concern, not the library's.
+- **Sync + `progress` callback**, matching the synchronous, network-bound engine (the orchestrator
+  already takes `log=`). Async is intentionally *not* in the surface - it's a `to_thread` wrapper
+  away if a caller needs it.
+- **`requirements`** (str or dict) is the library's door to the same intake the upfront-interview
+  (§15.3) feeds the writer/critic; `write()` always runs autonomously (a one-shot can't answer a
+  review prompt).
+- **Lazy exports.** `book_agent/__init__.py` resolves the public names via PEP-562 `__getattr__`,
+  so `import book_agent` / `from book_agent import brain` stay cheap and never eagerly pull the
+  whole pipeline.
+- **Versioning.** `book_agent.__version__` (kept in step with `pyproject`'s); the API module's
+  docstring states the no-break-within-major contract. Surface is covered by `tests/test_api.py`
+  (offline, `BOOK_AGENT_FAKE`).
 
 ---
 

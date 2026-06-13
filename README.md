@@ -28,8 +28,11 @@ Writing Agent is a self-correcting, autonomous writing system that takes a topic
 - **Articles** - long-form editorial pieces with research, citations, and editorial angles
 - **One-shot `write`** - interviews you once upfront, then researches, writes, self-edits, and exports the finished file with zero mid-run interruptions
 - **Self-correction** - write → critique → revise → humanise → commit, up to a cap, then escalate
+- **Originality, not just slop-absence** - a per-piece **thesis** the critic enforces, a **side-by-side judge** that picks the strongest of N divergent drafts, and **claim↔source verification** that blocks cited claims the source doesn't actually support
+- **Figures that lay themselves out** - the model authors a diagram *spec*; a deterministic engine (or **D2 + ELK** when the binary is installed) measures and places everything, so labels never overflow or collide
 - **Quality guardrails** - hard rules against AI slop baked into every prompt
 - **Context compression** - [headroom-ai](https://github.com/chopratejas/headroom) runs by default; 60–95% fewer tokens, same output quality
+- **Use it your way** - interactive TUI, one-shot CLI, an embeddable Python API (`Agent`/`Project`), or a global **`writingagent`** npm launcher
 
 ---
 
@@ -114,6 +117,11 @@ Launch the interactive TUI (works the same on every OS once the venv is active):
 ```bash
 writing-agent          # or:  python book.py
 ```
+
+> **Prefer npm?** A zero-dependency Node launcher lives in [`writingagent/`](writingagent/):
+> `cd writingagent && npm install -g .` gives you a global **`writingagent`** command that forwards
+> to this engine (`writingagent write "..."`, `writingagent run`, `writingagent doctor`). It still
+> needs the Python engine installed (below).
 
 The fastest path is **`write`** - it interviews you once upfront (audience, depth, length,
 tone, must-includes), then runs fully autonomously and hands you a finished, exported file:
@@ -237,11 +245,14 @@ Output: `brain/users/<user>/books/<id>/manuscript.md` + front/back matter
 Every drafted section/chapter goes through:
 
 ```
-Thesis (per article: a contestable claim, injected everywhere)
+Thesis (per article: a contestable claim + steelmanned counter, injected everywhere)
    │
-N divergent drafts (varied temps)  →  Critic ranks  →  best is refined
+N divergent drafts (varied temps)  →  side-by-side Judge picks the winner  →  refined
    │                                   (or you pick, in manual mode)
 Draft  →  Critic (approve | revise | escalate) + insight/clarity/structure/evidence scores
+              │
+         claim check ──▶ each [N]-cited claim verified against its source
+                         (blocks on full-text sources; advisory nit on snippets)
               │
          revise ──▶ up to max_revisions (default 2)
               │
@@ -255,12 +266,15 @@ Draft  →  Critic (approve | revise | escalate) + insight/clarity/structure/evi
 ```
 
 **Not-slop, by design.** The pipeline guarantees the *floor* (banned-word/continuity checks)
-**and** pushes the *ceiling*: a per-article **thesis** the Critic enforces, **voice exemplars**
-(`brain/users/<id>/voice/`, fed by `/praise`) matched on every draft, an **insight score** that
-gates approval, **divergent drafts** selected for strength, and a **surgical humanizer** that
-edits only the sentences with AI tells (never re-generating approved prose). `eval` scores the
-finished piece against published work; `versions` + `revise` give you git-style history and
-one-unit rewrites.
+**and** pushes the *ceiling*: a per-article **thesis** the Critic enforces (the writer engages its
+steelmanned counterargument head-on), **voice exemplars** (`brain/users/<id>/voice/`, fed by
+`/praise`) matched on every draft, an **insight score** that gates approval, **divergent drafts**
+whose winner a **side-by-side judge** picks (route the `judge`/`verifier` nodes cross-family for an
+independent eye), **claim↔source verification** that makes an unsupported citation blocking, and a
+**surgical humanizer** that edits only the sentences with AI tells (never re-generating approved
+prose). The learner compounds: it distills skills from the model's own **preference data**
+(tournament outcomes + revision fixes), not just human corrections. `eval` scores the finished
+piece against published work; `versions` + `revise` give you git-style history and one-unit rewrites.
 
 ---
 
@@ -315,6 +329,64 @@ one-unit rewrites.
 
 ---
 
+## Python API
+
+A stable, import-and-call interface for embedding the pipeline in your own program -
+the same engine the CLI/TUI drive, minus the plumbing. Install once, then import:
+
+```bash
+pip install -e .          # or: pip install writing-agent
+```
+
+**One-shot** - topic in, finished file out:
+
+```python
+from book_agent import write
+
+result = write("How vector databases work", mode="article", export="docx")
+print(result.export_path, result.word_count)
+```
+
+**Full lifecycle** - create → run → inspect → revise → export, all from code:
+
+```python
+from book_agent import Agent
+
+agent   = Agent(autonomous=True)                       # or Agent(user="me", mode="article", ...)
+project = agent.create("How vector databases work", mode="article", units=6,
+                       requirements="audience: senior engineers; ~2000 words")
+project.run(progress=print)                            # blocking; streams log lines
+if project.status().done:
+    project.evaluate()                                 # judged rubric + hard metrics
+    project.export("pdf")                              # -> pathlib.Path
+```
+
+**Human-in-the-loop** - non-autonomous runs pause for review you answer from code:
+
+```python
+project = agent.create("...", autonomous=False)
+st = project.run(progress=print)
+while st.pending_review:
+    project.review(unit=st.unit, instruction="tighten the intro, add a citation")
+    st = project.run(progress=print)
+```
+
+| Object | Key methods |
+|---|---|
+| `Agent(user=, settings=, models=, **overrides)` | `.plan()` · `.create()` · `.write()` · `.open()` · `.projects()` |
+| `Project` | `.run(progress=)` · `.status()` · `.review()` · `.revise()` · `.evaluate()` · `.table_read()` · `.read()` · `.export()` · `.consolidate()` · `.produce()` · `.delete()` |
+
+`Agent(**overrides)` accepts any [setting](#features) (`mode`, `num_sections`, `use_researcher`,
+`humanize`, …). `models=` takes a `ModelConfig` or a slug string to route **every** node to one
+model. Calls are synchronous and network-bound; pass `progress=` for a log callback, and wrap in
+`asyncio.to_thread` if you need to call from async code.
+
+**Stability:** everything re-exported from `book_agent` (and `book_agent.api`) follows semantic
+versioning - names and signatures won't break within a major version. The internal modules
+(`orchestrator`, `nodes`, `brain`, …) carry no such guarantee. Check `book_agent.__version__`.
+
+---
+
 ## Export Formats
 
 ```bash
@@ -337,9 +409,15 @@ Just type `export` for an interactive picker.
 | Web research per section (DuckDuckGo) | `use_researcher` | ✅ on |
 | Deep research - multi-query fan-out + full-page fetch + cross-source synthesis | `deep_research` | off |
 | └ richer fetch backend ([Scrapo](https://github.com/vikast908/Scrapo); falls back to stdlib) | `pip install '.[deep]'` | optional |
+| Divergent drafts - N first drafts at varied temps, best refined | `divergent_drafts` | 2 |
+| Tournament judge - pick the best draft side-by-side (vs. scalar self-scores) | `tournament_judge` | ✅ on |
+| Insight gate - require a contestable-argument score to approve | `min_insight` | 3 |
+| Claim↔source verification - cited claims checked against source (blocks on full-text, nit on snippets) | `verify_claims` | ✅ on |
+| Closed table-read loop - apply the reader's top fix as one revision (autonomous) | `table_read_revise` | off |
 | Humanizer - strips AI tells | `humanize` | ✅ on |
 | Headroom context compression | `use_headroom` | ✅ on |
-| SVG diagram generation (per section) | `use_images` | ✅ on |
+| SVG diagram generation - model authors a spec, Python lays it out (no overlap) | `use_images` | ✅ on |
+| Diagram layout engine - `auto` uses [D2](https://d2lang.com)+ELK if the `d2` binary is present, else built-in | `diagram_engine` | auto |
 | Semantic skill retrieval (embeddings) | `use_embeddings` | off |
 | Fully autonomous (no pauses) | `autonomous` | off |
 | TUI color + font theme ([see Themes](#themes)) | `theme` | editorial |
@@ -515,7 +593,8 @@ src/book_agent/
   brain.py        ← BookPaths, ArticlePaths, IO helpers
   shell.py        ← Rich TUI + prompt_toolkit REPL
   cli.py          ← one-shot CLI entry points
-  prompts.py      ← all system prompts (NO_SLOP, DIAGRAM_SYS, …)
+  prompts.py      ← all system prompts (NO_SLOP, DIAGRAM_SPEC_SYS, …)
+  diagram.py      ← SVG layout: built-in deterministic engine + optional D2/ELK backend
   export.py       ← pdf, epub, html, docx, txt, md renderers (HTML sanitized)
   ui.py           ← theme registry (10 themes) + Rich helpers (stepper, bars, console)
   concurrency.py  ← thread-pool helper for overlapping independent I/O
@@ -528,6 +607,7 @@ src/book_agent/
 |---|---|---|
 | planner, writer, consolidation | DeepSeek V4 Pro | Highest prose quality |
 | critic | DeepSeek V4 Pro | Insight scoring + thesis checks need real judgment |
+| judge, verifier | DeepSeek V4 Pro | Side-by-side draft ranking + claim↔source checks; **route to a non-DeepSeek slug for an independent, cross-family eye** |
 | diagram | DeepSeek V4 Pro (Flash fallback) | Pro composes far better figures; 16k budget covers its reasoning, Flash steps in if no SVG comes back |
 | summarizer, humanizer, researcher, toc, chat | DeepSeek V4 Flash | Fast, cost-efficient, no reasoning overhead |
 

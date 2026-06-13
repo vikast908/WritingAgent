@@ -5,11 +5,33 @@
 
 ## Current status
 
-- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **218 tests
-  pass** (+1 opt-in live skip); ruff clean on Windows AND Linux (WSL-verified). **CI green on all
+- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **260 tests
+  pass** (+1 opt-in live skip +1 d2-binary skip); ruff clean on Windows AND Linux (WSL-verified). **CI green on all
   12 matrix jobs** since session 10's `svglib<1.6` pin (1.6.0 pulls pycairo, which has no Linux
   wheels). `gh` is authenticated on this machine (keyring), so CI stays checkable headlessly even
   after the repo goes private again.
+- **New (2026-06-13, session 14 - quality machinery II: independence, verification, compounding):**
+  four levers breaking the "one model judges its own output" ceiling (plan §15.6). (1) **Tournament
+  judge** (`nodes.rank_variants`; `tournament_judge` on) picks the best divergent draft side-by-side
+  instead of by isolated 1-5 self-score; scalar `_crit_better` is the fallback; the winner's noted
+  weakness feeds the refine. (2) **Claim↔source verification** (`nodes.verify_claims`; `verify_claims`
+  on; articles): each `[N]`-cited specific claim checked against its source text (`source_text`
+  threaded through `_section_fetch`); unsupported → BLOCKING `evidence` + a revision note. (3)
+  **Counterargument engagement** (writer prompt) + **closed table-read loop** (`nodes.reader_report`;
+  `table_read_revise` off, autonomous-only): the reader's single top fix applied as a bounded,
+  version-snapshotted (`reader-fix`) targeted revision. (4) **Compounding learner**: tournament +
+  revision signals logged to `<project>/learning_signals.md` and fed to `learn()` as a secondary
+  **candidate-only** signal (efficacy gate unchanged - no auto-promotion). New `judge`/`verifier`
+  model slugs (route cross-family for independence; default stays DeepSeek). `verify_claims` is
+  depth-gated (blocks on deep full-text, advisory nit on shallow snippets). Wired into the user
+  surfaces too (`shell._NODES` for `/model`, `/features` board, chat context, `settings.yaml`).
+  +11 tests (`test_quality.py`); ruff clean.
+- **New (2026-06-13, session 13 - public Python API):** added `book_agent.api` - a stable
+  `Agent` + `Project` facade (plus a one-shot `write()`) over the orchestrator, re-exported from
+  the package root with `__version__` and PEP-562 lazy imports, so `from book_agent import Agent,
+  write` just works after `pip install -e .`. +14 offline tests (`tests/test_api.py`); README
+  "Python API" section + plan.md §18. The internals stay unstable; this is the supported
+  embedding surface.
 - **New (2026-06-13, session 12 - diagrams + exports):** diagram node → **v4-pro** (16k budget,
   information-design prompt, deterministic `fill="none"` guard, flash fallback); **PDF exports
   render SVG figures as vector art** via svglib (were image-less without cairosvg); the voicebot
@@ -175,6 +197,193 @@
   duplicate.
 
 ## Session log
+
+### 2026-06-13 (16) - `writingagent` npm launcher (global CLI over the Python engine)
+
+User asked for an npm package, globally installable, that runs as a CLI command - named
+**`writingagent`** (not `my-agent`), scoped as a **launcher for this Writing Agent** (their pick
+over a standalone/LLM CLI). Built under **`writingagent/`** (zero npm deps, Node ≥16, CommonJS).
+
+- **`lib/launcher.js`** resolves how to invoke the agent and forwards args with `stdio: 'inherit'`
+  (so the TUI works) + propagates the exit code. Resolution order: `$WRITINGAGENT_CMD` →
+  a console script on PATH (`writing-agent`/`bookwriter`/`book`, from `pip install`) →
+  `python book.py` (via `$WRITING_AGENT_HOME` or an upward search). Zero-dep cross-platform
+  helpers: `whichSync` (honors PATHEXT), `findPython` (`py -3`/python3/python), `findProjectDir`.
+  Local commands: `--version`, `--help`, `doctor` (diagnostics); everything else forwards
+  (so `writingagent run --help` shows the agent's help). `bin/writingagent.js` is a 1-line shim.
+- **Verified end-to-end:** `npm test` (5 Node `--test` cases - parse/which/project-discovery/
+  env-override/version) green; `npm install -g .` then `writingagent --version|doctor|list` run
+  from a neutral dir ($TEMP) and correctly resolve via the `writing-agent` console script even
+  when book.py isn't reachable from cwd; forwarded `list` printed the real projects; exit codes
+  propagate (0). The earlier `-1` was just `Select-Object -First` closing the pipe (EPIPE), not a bug.
+- **Naming:** npm `writingagent` (no hyphen) deliberately ≠ the pip console script `writing-agent`
+  (hyphen) so they don't collide on PATH; the launcher calls the hyphenated one under the hood.
+- **Next:** optional `npm publish` (add `repository`/`homepage` first); a `writingagent upgrade`
+  that shells `pip install -U`; consider bundling as an `npx writingagent` one-shot.
+
+### 2026-06-13 (15) - Diagrams rebuilt: structured spec → deterministic SVG renderer
+
+User: "diagram is not good, text is still overlapping." Root cause: `generate_svg_diagram` asked
+the model for **raw SVG with absolute coordinates** - an LLM can't measure text or verify geometry,
+so labels overflow boxes and edge pills collide no matter the prompt (two prior prompt rounds, §12
+sessions, didn't fix it). Fixed by removing layout from the model entirely. **260 tests pass**
+(+19 across the built-in renderer and the optional D2 backend, new `test_diagram.py`); ruff clean.
+**Verified visually** (Playwright screenshots of the rendered specs - flow w/ back-edge, branching
+flow, layered stack, fan-out).
+
+- **New `src/book_agent/diagram.py`** - a pure-Python SVG layout engine. The model returns a
+  structured **`DiagramSpec`** (`schemas.py`: nodes/edges/labels/group/lane/focus + archetype) via
+  the new **`DIAGRAM_SPEC_SYS`** prompt; the engine does the geometry: per-char text measurement →
+  boxes sized to fit + labels wrap (never overflow); **uniform-box grid placement** so boxes can't
+  overlap by construction; `flow` (column-ranked DAG) and `layered` (stacked lane bands) archetypes
+  (`cycle`/`comparison` degrade to `flow`); orthogonal elbow edges (adjacent) or stacked bottom
+  channels (spanning/back) that route around boxes; measured white pills for edge labels with
+  collision-nudging; one colour per `group` + a bottom legend; `focus` node emphasized.
+- **Back-edge bug** (caught in the visual check): a feedback arrow (`spk→mic` "barge-in") dragged
+  the start node to the far right and reversed the whole pipeline. `_ranks` now detects back edges
+  via **iterative DFS** and excludes them from longest-path layering, so forward order survives.
+  Regression test pins it.
+- **Explicit arrowheads** (polygons), not `<marker>` - svglib (the PDF path) drops markers, so a
+  marker-only arrow vanished in PDF. `_svg_fill_guard` stays as a no-op safety net (the renderer
+  already sets `fill="none"`). In fake/offline mode `generate_svg_diagram` returns a placeholder.
+- **Flow**: model picks content (good at that); Python owns layout (model is bad at that). The old
+  `DIAGRAM_SYS` raw-SVG prompt is gone; `generate_svg_diagram` now does spec → `diagram.render_spec`,
+  with a flash-tier `diagram_fallback` retry on a node-less spec, then a placeholder.
+**Follow-up (same session, user "use d2 lang with ELK, or compare side-by-side to choose"):**
+evaluated [D2](https://d2lang.com) as the renderer. Installed d2 v0.7.1 (GitHub release tarball -
+not in winget), wrote a `DiagramSpec → D2` converter, and rendered 4 test specs (flow + back-edge,
+branching, layered, dense fan-out) three ways - **built-in vs D2+dagre vs D2+ELK** - screenshotted
+side by side in a browser. Verdict: **D2+ELK routes complex graphs (fan-out/fan-in, lane
+containers) noticeably better**; the built-in engine wins on zero-dep portability + in-figure
+title/legend/metrics. So both ship: **optional D2 backend** (`diagram_engine: auto|d2|builtin`,
+default `auto`), `diagram.to_d2` + `render_d2` (temp-file subprocess, ELK, never raises → built-in
+fallback), discovered via `$BOOK_AGENT_D2` or `d2` on PATH. **User flagged D2 has no legend** -
+fixed: `_inject_d2_legend` extends d2's outer viewBox and appends a colour legend matching the node
+borders (verified visually). The built-in engine stays the zero-dep default so CI/unconfigured
+users are unaffected. +7 diagram tests (the real-binary one skips without d2). `diagram_engine`
+threaded through settings → run-state → both `generate_svg_diagram` call sites; cache key includes
+the engine.
+
+- **Next:** dedicated `cycle` (ring) and `comparison` (two-column) built-in layouts instead of
+  degrading to flow; consider surfacing the spec in `versions/` for auditability; a `/set
+  diagram_engine d2` live run to see real model-authored specs render through D2+ELK.
+
+### 2026-06-13 (14) - Quality machinery II: independence, verification, compounding
+
+**Ask:** "go deeper on logic/quality, suggest something to improve quality exponentially." Diagnosed
+the structural ceiling (writer + critic are the same family per §12.1, so `insight`/`evidence` are
+one model's self-jittery opinion and the learner converges toward its taste). Proposed five levers;
+user picked four, in order 1→2→4→3. All built, tested, documented. Durable spec: **plan.md §15.6**
+(+ §5, §8, §12.1 updated). **242 tests pass** (+11); ruff clean.
+
+- **#1 Tournament judge** (`tournament_judge`, default on). New `nodes.rank_variants` + `judge`
+  model slug + `VariantRanking` schema + `VARIANT_JUDGE_SYS`. `_pick_variant` now reads the
+  divergent drafts **side by side** and returns `(draft, crit, refine_note, pref)`; the scalar
+  `_crit_better` is the documented fallback (judge off / errors). The winner's `winner_weakness`
+  is injected into the first refinement pass. Wired in **both** loops (book + article). Manual runs
+  still let the human override (Enter = recommended).
+- **#2 Claim↔source verification** (`verify_claims`, default on; **articles**). New
+  `nodes.verify_claims` + `verifier` slug + `ClaimAudit`/`ClaimCheck` schema + `CLAIM_VERIFY_SYS`.
+  `_do_research` now returns a 3-tuple `(prefix, sources, source_text)` (deep = full page text,
+  shallow = snippets; never persisted). New `_verify_claims_gate` runs after each section critique:
+  every `[N]`-cited specific claim is checked against its source; an unsupported one is appended as
+  a BLOCKING `evidence` issue, downgrades `approve`→`revise`, and seeds the revision note. No-ops
+  without source material / citations / when off. (Books deferred - `[N]` citations are an article
+  feature; the node is reusable.)
+- **#4 Counterargument + closed table-read loop.** Writer prompt now tells the article writer to
+  **engage** the thesis's steelmanned counterargument head-on where a section meets it (not dodge).
+  New `nodes.reader_report` (`ReaderReport` schema + `READER_REPORT_SYS`) names the single top fix +
+  the section it targets; `table_read_revise` (default **off**, autonomous-only) applies it via the
+  new `_targeted_section_revise` (write→critique→fix→humanize→patch section + manuscript),
+  version-snapshotted `reader-fix` so it's reversible. Canon-free.
+- **#3 Compounding learner.** `_record_preference`/`_read_preferences` log tournament outcomes
+  (winner + why + weakness) and revision fixes to `<project>/learning_signals.md`; `nodes.learn`
+  gained a `preferences=` arg (new `LEARNER_SYS` clause). Both `_learn`/`_learn_article` feed it.
+  Per §8 these are model-judged → **candidate skills only**, efficacy gate unchanged (no
+  auto-promotion to user scope). This is the only lever that compounds over runs.
+
+**Cost note:** #1 adds 1 judge call per divergent unit; #2 adds 1 verify call per cited section; the
+reader loop adds 1 structured read + ≤1 revision (off by default). All gate cleanly behind settings
+and the run-budget kill-switch; telemetry captures the new `judge`/`verifier` calls.
+
+**Follow-up (same session, user "add what you suggest"):** two refinements to the items I flagged.
+(a) **Independence stays a deliberate user opt-in** - I did NOT switch `judge`/`verifier` to another
+provider (that contradicts the standing DeepSeek-only decision + adds credentials/cost). Instead
+both run at **temperature 0.2** (stable, repeatable verdicts) and the cross-family override is a
+documented one-liner in `models.yaml`. (b) **`verify_claims` is now depth-gated** so default-on is
+safe: with `deep_research` (full page text) an unsupported claim is BLOCKING; with shallow snippets
+(a true claim may just be absent from the snippet) it's a non-blocking **nit**. So enforcement wants
+`deep_research: true`; shallow mode is advisory. +1 test (shallow-advisory path); the blocking test
+now sets `deep_research: True`. **241 tests pass**; ruff clean.
+
+**Surface/consistency pass (user "review other parts to complement"):** the new feature was wired
+into the engine but not all user-facing surfaces. Audited and fixed: (1) **`shell._NODES`** was
+missing `judge`/`verifier` (and the long-missing `diagram`/`diagram_fallback`), so the documented
+`/model judge <slug>` cross-family override would have been rejected as "unknown agent" - now all
+models.yaml-routed nodes are selectable, with a **guard test** (`test_models_yaml_nodes_are_
+selectable_in_shell`) so the list can't drift again. (2) The **`/features` board** and the **chat
+assistant's `features_on` context** now surface the quality toggles (tournament / verify / table
+read / reader-loop + the divergent_drafts/min_insight knobs). (3) **`config/settings.yaml`** (a
+hand-maintained partial file) gained the quality cluster keys with comments, so they're visible and
+editable. Verified the dynamic surfaces need no change: `/set` and `cli.cmd_config` enumerate
+`dataclasses.fields(Settings)`, and `api.Agent(**overrides)` validates against them, so the new
+settings were already accepted there. The **book** research path still returns a 2-tuple (only the
+**article** `_do_research` became a 3-tuple for `source_text`) - no cross-path breakage. **242 tests
+pass** (+11 this session); ruff clean.
+
+**Next:** live (non-fake) article run to (a) sight-check the judge actually diverges from the scalar
+pick on a real topic, (b) confirm `verify_claims` flags a planted unsupported stat against real
+fetched sources (best with `deep_research: true`), and (c) try `table_read_revise: true` end-to-end.
+Then tune: is the verify gate too aggressive on common-knowledge claims? Consider extending claim
+verification to the book path if bibliography-cited books need it.
+
+### 2026-06-13 (13) - Public Python API (stable `Agent` + `Project` facade)
+
+**Goal:** turn the "internals are importable but unstable" state into a supported import-and-call
+interface for embedding the pipeline (the README/plan promised one; now it exists).
+
+**Decision (asked upfront, user picked):** `Agent` + `Project` facade over a bare one-shot - it's
+the only shape that reaches the *whole* lifecycle from code (create, run, **resume a paused run**,
+revise, evaluate, export). One-shot `write()` layered on top. Sync + `progress` callback (matches
+the synchronous, network-bound engine; async is a `to_thread` away and deliberately out of scope).
+
+**What landed:**
+- **`src/book_agent/api.py`** (new) - the facade. `Agent(*, user, settings, models, autonomous,
+  **overrides)` bundles the `cfg`/`settings`/`uid` plumbing the orchestrator functions otherwise
+  demand; `**overrides` validated against `Settings`; `models=` accepts a `ModelConfig` or a slug
+  string (→ `set_all`). `Agent.plan/create/write/open/projects`. `Project` is a cheap on-disk
+  handle: `run/status/review/revise/evaluate/table_read/read/word_count/memory/consolidate/
+  produce/export/delete`. Frozen-dataclass value types (`Approach`, `Status`, `Evaluation`,
+  `WriteResult`) so the wire shape is stable and doesn't leak pydantic. `Status` normalizes the
+  book/article run-state split. `requirements` (str|dict) feeds the §15.3 intake; `write()` forces
+  autonomous (a one-shot can't answer a review).
+- **`src/book_agent/__init__.py`** - `__version__ = "0.1.0"` + PEP-562 `__getattr__` lazy exports,
+  so `import book_agent` and `from book_agent import brain` stay cheap (don't eagerly pull
+  orchestrator/llm/nodes). Public names: `Agent, Project, Approach, Status, Evaluation,
+  WriteResult, write, BookAgentError, ProjectNotFound, EXPORT_FORMATS, MODES, Settings,
+  ModelConfig`.
+- **`tests/test_api.py`** (new, +14) - all offline via `BOOK_AGENT_FAKE` + the autouse temp-brain
+  fixture. Covers lazy exports/version, planning, create→run→status→read, requirements
+  persistence, explicit/Approach/int selection + range error, one-shot `write` (with and without
+  export), open/projects/not-found, export-format + settings-override validation, delete.
+- **Docs:** README "## Python API" section (install one-liner, one-shot, lifecycle,
+  human-in-the-loop, method table, stability note); plan.md **§18**.
+
+**Verified:** `231 passed, 1 skipped` (was 218; +14 here, others unchanged); ruff clean on the new
+files (autofix dropped redundant quoted forward-refs under `from __future__ import annotations`).
+
+**Context discovered en route (the ModernBERT question):** `use_headroom: true` (default) routes
+every LLM call through headroom, whose ContentRouter→**Kompress** compressor loads
+`answerdotai/ModernBERT-base` as a bare `ModernBertModel` encoder - hence the "UNEXPECTED keys"
+load report (MLM head dropped; harmless). Not our `embeddings.py` (that's `all-MiniLM-L6-v2`). No
+code change; noted in case we ever want to gate Kompress off via a `ContentRouterConfig` in
+`llm._compress`.
+
+**Next:** keep `__version__` in step with `pyproject` (currently both 0.1.0 - candidate for a
+single source later). Optional follow-ups: async wrappers if an integrator needs them; expose a
+`ReviewPending`-style signal if callers want exceptions over `Status.pending_review`.
+
+---
 
 ### 2026-06-13 (12) - Diagrams to v4-pro + export image fixes + telemetry hygiene
 

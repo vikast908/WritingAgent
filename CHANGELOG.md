@@ -6,7 +6,34 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Diagrams: structured spec → deterministic renderer.** The model no longer emits SVG
+  (it can't measure text, so labels overflowed and edge pills collided). It now returns a
+  structured `DiagramSpec` (nodes/edges/labels/archetype) and a new pure-Python layout engine
+  (`diagram.py`) measures text, sizes boxes to fit, places nodes on a grid (so boxes can't
+  overlap), routes orthogonal edges, and draws explicit arrowheads (PDF-safe). Back edges are
+  detected via DFS so a feedback arrow no longer reverses a pipeline. `flow` and `layered`
+  archetypes; `cycle`/`comparison` degrade to `flow`.
+- **Optional D2 + ELK diagram backend** (`diagram_engine: auto|d2|builtin`, default `auto`).
+  The same `DiagramSpec` can be laid out by the [D2](https://d2lang.com) CLI with ELK (better
+  routing for complex graphs / lane containers); a colour legend is injected to match the
+  built-in engine. Used automatically when the `d2` binary is found ($BOOK_AGENT_D2 or PATH);
+  the zero-dependency built-in engine remains the default and the fallback.
+
 ### Added
+- **Quality machinery II (independence · verification · compounding)** - breaks the "one model
+  judges its own output" ceiling (plan §15.6). A **side-by-side tournament judge**
+  (`tournament_judge`, on) reads the divergent drafts together and picks the winner instead of
+  comparing each draft's isolated 1-5 self-score (scalar `_crit_better` is the fallback); the
+  winner's noted weakness feeds the refinement pass. **Claim↔source verification**
+  (`verify_claims`, on; articles) checks each in-text `[N]`-cited specific claim against its
+  actual source text and makes an unsupported one BLOCKING. The article writer now **engages the
+  thesis's steelmanned counterargument** head-on rather than dodging it. A **closed table-read
+  loop** (`table_read_revise`, off, autonomous-only) applies the skeptical reader's single
+  highest-impact fix as one bounded, version-snapshotted revision. The **learner** now distills
+  skills from the model's own **preference data** (tournament outcomes + revision fixes, logged to
+  `learning_signals.md`) as a secondary candidate-only signal. New `judge`/`verifier` model slugs
+  (route cross-family for independent judging).
 - **Quality machinery (originality over slop-absence)** - a per-article **thesis** (contestable
   claim + steelmanned counterargument/rebuttal) injected into every writer/critic call and
   enforced by the critic; **voice exemplars** (`brain/users/<id>/voice/`, fed by `/praise`)
