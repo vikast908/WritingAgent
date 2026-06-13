@@ -5,7 +5,7 @@
 
 ## Current status
 
-- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **260 tests
+- **Phase:** **Production-ready.** Books and articles both live-validated end-to-end. **263 tests
   pass** (+1 opt-in live skip +1 d2-binary skip); ruff clean on Windows AND Linux (WSL-verified). **CI green on all
   12 matrix jobs** since session 10's `svglib<1.6` pin (1.6.0 pulls pycairo, which has no Linux
   wheels). `gh` is authenticated on this machine (keyring), so CI stays checkable headlessly even
@@ -197,6 +197,32 @@
   duplicate.
 
 ## Session log
+
+### 2026-06-13 (17) - Diagrams: dedicated cycle (ring) + comparison (two-column) layouts + spec audit
+
+User: "finish the diagrams." The built-in renderer degraded `cycle`/`comparison` to `flow`; now
+both have dedicated layouts. **263 tests pass** (+3 net); ruff clean. **Verified visually**
+(Playwright: a CD-loop cycle and a Monolith-vs-microservices comparison render cleanly).
+
+- **`_render_cycle`** (`diagram.py`): nodes evenly on a ring (radius from `(box_w+gap)/(2·sin(π/n))`
+  so adjacent boxes clear), edges as straight chords clipped to box borders (`_box_edge` ray-box
+  intersection) with **angle-aware arrowheads** (`_arrow_at`); legend + focus as before. The natural
+  shape for a feedback loop instead of a vertical list.
+- **`_render_comparison`**: two colour-headed columns from the first two `group`s ("A vs B"),
+  headers carry the colour (no separate legend); leftover-group nodes balance into the shorter
+  column; cross-column edges drawn if present.
+- **Dispatch** (`render_spec`): `cycle` (≥3 nodes) and `comparison` (≥2 groups) now route to their
+  own layouts; under those thresholds they still degrade to `flow` (guarded, tested). Added
+  `import math` + the two geometry helpers.
+- **Spec audit trail**: `generate_svg_diagram` gained an `on_spec` callback; the orchestrator
+  persists the `DiagramSpec` to `versions/<unit>.diagram.spec.json` (best-effort, never fatal) for
+  both book + article diagram sites — so a figure's structure is inspectable, not just its SVG.
+- **Tests** (`test_diagram.py`, +4 / -1): cycle spreads both axes (ring, not a column) + overlap-free;
+  comparison renders two distinct column x-positions + headers; both degrade to flow when
+  under-specified; `on_spec` receives the built spec. The pre-existing `test_cycle_*` was rewritten.
+- **Next:** `timeline` archetype (horizontal spine) is the one common shape still mapped to flow;
+  consider a `rediagram [--chapter N]` command now that the spec is persisted (re-render from the
+  saved spec without a model call); a live run to see real model-authored cycle/comparison specs.
 
 ### 2026-06-13 (16) - `writingagent` npm launcher (global CLI over the Python engine)
 
