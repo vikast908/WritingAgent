@@ -1,7 +1,7 @@
 {
   "name": "writingagent",
-  "version": "0.1.0",
-  "description": "Global CLI for the Writing Agent — a self-correcting, autonomous writing system (books + articles). `writingagent setup` installs the Python engine; the CLI then drives it.",
+  "version": "0.3.0",
+  "description": "Global CLI for the Writing Agent — a self-correcting, autonomous writing system (books + articles). On first run it installs the whole stack (Python engine, cairosvg, d2) for you, then `writingagent` drives it.",
   "bin": {
     "writingagent": "bin/writingagent.js"
   },

@@ -17,6 +17,7 @@ test("parse classifies launcher flags vs forwarded args", () => {
   assert.equal(L.parse(["-h"]).kind, "help");
   assert.equal(L.parse(["doctor"]).kind, "doctor");
   assert.equal(L.parse(["setup"]).kind, "setup");
+  assert.equal(L.parse(["update"]).kind, "update");
   assert.equal(L.parse(["write", "a topic"]).kind, "forward");
   assert.equal(L.parse(["run", "--help"]).kind, "forward"); // forwards the agent's own --help
 });
@@ -24,6 +25,27 @@ test("parse classifies launcher flags vs forwarded args", () => {
 test("the engine install spec points at the project's GitHub source", () => {
   assert.match(L.ENGINE_PIP_SPEC, /^https:\/\/github\.com\/.+WritingAgent.+\.tar\.gz$/);
   assert.ok(L.HELP.includes("writingagent setup"));
+});
+
+test("the install + bootstrap helpers are exported", () => {
+  for (const fn of [
+    "pipInstall", "installEngine", "installD2", "setupAll",
+    "confirmInstall", "runSetup", "runUpdate", "launchAgent", "d2BinPath",
+  ]) {
+    assert.equal(typeof L[fn], "function", `${fn} should be exported`);
+  }
+});
+
+test("d2BinPath points inside the per-user writingagent dir", () => {
+  const p = L.d2BinPath();
+  assert.ok(p.includes(".writingagent"));
+  assert.ok(p.endsWith(process.platform === "win32" ? "d2.exe" : "d2"));
+});
+
+test("confirmInstall proceeds without prompting on non-interactive stdin", async () => {
+  if (process.stdin.isTTY) return; // a real TTY would block on input — skip
+  const yes = await new Promise((resolve) => L.confirmInstall(resolve));
+  assert.equal(yes, true);
 });
 
 test("whichSync finds an executable on a synthetic PATH (cross-platform)", () => {

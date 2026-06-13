@@ -79,8 +79,10 @@ git clone https://github.com/vikast908/WritingAgent && cd WritingAgent
 pip install -e .                     # gives you the `writing-agent` command (hyphen) directly
 ```
 
-Optional extras (context compression, deep research, DOCX export, D2 diagrams, embeddings) each
-degrade gracefully — see the [**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
+With npm, `setup` is optional — the first run of `writingagent` offers to install the engine for
+you. Later, **`writingagent update`** pulls the latest engine. Optional extras (context compression,
+deep research, DOCX export, D2 diagrams, embeddings) each degrade gracefully — see the
+[**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
 
 ---
 
@@ -105,6 +107,24 @@ for a *take*, not just the absence of tells:
 Deep dives: [Quality machinery ↗](https://docs-writingagent.vercel.app/reference/quality/) ·
 [How it works ↗](https://docs-writingagent.vercel.app/concepts/how-it-works/) ·
 [Architecture ↗](https://docs-writingagent.vercel.app/concepts/architecture/)
+
+---
+
+## Architecture
+
+A **multi-agent pipeline on a durable state machine**, in layers from the surface down to the
+models. Your interface (TUI · CLI · npm · API) drives the **orchestrator**, which runs each unit
+through the **agents** — Writer → Critic → Judge → Humanizer — persists to the **markdown brain**
+(canon · skills · versions), and feeds the **Learner** so the next piece is better. Every agent
+routes to its own model tier on OpenRouter.
+
+<div align="center">
+
+<img src="assets/architecture.svg" alt="Layered architecture and multi-agent workflow: an interface layer (TUI, CLI, npm, API) sends commands to an orchestration layer (the state machine running write→critique→revise→commit); the orchestrator routes every call to the models layer (OpenRouter/DeepSeek) and drives the agents layer, where Writer → Critic → Judge → Humanizer run the per-unit workflow; results commit to the memory layer (the markdown brain of canon, skills, and versions), which feeds the Learner that returns new skills to the orchestrator." width="900">
+
+<sub><i>↑ also drawn by the system itself (D2 + ELK backend) — see [Architecture ↗](https://docs-writingagent.vercel.app/concepts/architecture/) for the full picture</i></sub>
+
+</div>
 
 ---
 

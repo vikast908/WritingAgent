@@ -9,10 +9,13 @@ to it (passing your terminal straight through, so the interactive TUI works).
 
 ```bash
 npm install -g writingagent       # the CLI  (needs Node >= 16)
-writingagent setup                # one-time: installs the Python engine (needs Python 3.10+ & pip)
+writingagent setup                # one-time: installs the whole stack (needs Python 3.10+ & pip)
 ```
 
-`setup` pip-installs the engine straight from GitHub (no clone needed). Then, from anywhere:
+`setup` installs everything for you: the **Python engine** (pip, straight from GitHub — no clone),
+**cairosvg** (crisp PDF diagrams), and the **d2 binary** (downloaded for your platform, used for
+diagrams). All best-effort — the app degrades gracefully if cairosvg/d2 can't install. You can even
+skip `setup`: the first run of `writingagent` offers to do it. Then, from anywhere:
 
 ```bash
 writingagent                      # launch the interactive TUI
@@ -21,8 +24,12 @@ writingagent new --abstract "..." # create a project
 writingagent run                  # drive it to completion
 writingagent status               # where things stand
 writingagent export --format pdf
+writingagent update               # update the engine to the latest version
 writingagent doctor               # show how the engine was resolved
 ```
+
+On a fresh machine you can even skip `setup` — the first run of `writingagent` offers to install
+the engine for you.
 
 `writingagent --version`, `writingagent --help`, and `writingagent doctor` are handled by the
 launcher itself; **everything else is forwarded to the agent** (so `writingagent run --help` shows

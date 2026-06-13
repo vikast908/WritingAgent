@@ -66,7 +66,7 @@ class Settings:
     humanize: bool = True                    # rewrite each chapter to strip AI tells (em-dashes...)
     article_cohesion: bool = True            # whole-article smoothing pass before References
     use_images: bool = True                  # fetch Wikimedia Commons images (non-fiction/illustrated)
-    diagram_engine: str = "auto"             # SVG layout: auto (d2 if installed, else builtin) | d2 | builtin
+    diagram_engine: str = "auto"             # SVG layout: auto (D2+ELK if d2 is installed, else builtin) | d2 | builtin
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
     use_headroom: bool = True               # context compression via headroom-ai (60-95% fewer tokens)
     request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
