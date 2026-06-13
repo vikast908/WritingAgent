@@ -110,19 +110,59 @@ function parse(argv) {
   if (first === "--version" || first === "-V") return { kind: "version" };
   if (first === "--help" || first === "-h") return { kind: "help" };
   if (first === "doctor") return { kind: "doctor" };
+  if (first === "setup") return { kind: "setup" };
   return { kind: "forward", argv };
+}
+
+// The Python engine isn't on PyPI; `writingagent setup` installs it straight from GitHub
+// (a source tarball, so plain pip works — no git required, just Python 3.10+ and pip).
+const ENGINE_PIP_SPEC =
+  "https://github.com/vikast908/WritingAgent/archive/refs/heads/master.tar.gz";
+
+/** One-time bootstrap: pip-install the Python engine so `writingagent` actually has something
+ *  to launch. Runs only when the user asks (`writingagent setup`) — never on npm install. */
+function runSetup() {
+  const py = findPython();
+  if (!py) {
+    console.error("writingagent: Python 3.10+ with pip is required, but no Python was found on PATH.");
+    console.error("Install Python from https://python.org, then run:  writingagent setup");
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`writingagent: installing the engine via ${[py.cmd, ...py.prefix, "-m pip"].join(" ")} …\n`);
+  const child = spawn(py.cmd, [...py.prefix, "-m", "pip", "install", "--upgrade", ENGINE_PIP_SPEC], {
+    stdio: "inherit",
+  });
+  child.on("error", (e) => {
+    console.error(`writingagent: could not run pip (${e.message}). Is pip installed for this Python?`);
+    process.exit(1);
+  });
+  child.on("exit", (code) => {
+    if (code === 0) {
+      const agent = resolveAgent();
+      if (agent) console.log('\n✓ Engine installed. Try:  writingagent write "an article on …"');
+      else
+        console.log(
+          "\n✓ pip finished, but the `writing-agent` command isn't on PATH yet.\n" +
+            "  Add your Python scripts directory to PATH (see `writingagent doctor`), then reopen your shell.",
+        );
+    }
+    process.exit(code == null ? 1 : code);
+  });
 }
 
 const HELP = `writingagent — launcher for the Writing Agent (books + articles)
 
 Usage:
   writingagent                 Launch the interactive TUI
+  writingagent setup           One-time: install the Python engine (needs Python 3.10+ & pip)
   writingagent <command> ...   Forward to the agent (write, new, run, status, export, …)
   writingagent doctor          Diagnose how the agent will be found
   writingagent --version       Show this launcher's version + the resolved agent
   writingagent --help          Show this help
 
 Examples:
+  writingagent setup
   writingagent write "an article on vector databases"
   writingagent new --abstract "..." && writingagent run
   writingagent status
@@ -132,8 +172,8 @@ It forwards everything (except the flags above) to the Python engine. Resolution
   2. writing-agent / bookwriter / book   a pip-installed console script on PATH
   3. python book.py                via $WRITING_AGENT_HOME or an upward search for book.py
 
-If none is found, install the engine (pip install -e .) or set WRITING_AGENT_HOME to the
-project directory. Run "writingagent doctor" to see what was detected.`;
+If none is found, run "writingagent setup" (installs the engine), or set WRITING_AGENT_HOME to a
+local clone. Run "writingagent doctor" to see what was detected.`;
 
 function printHelp(out = console.log) {
   out(HELP);
@@ -160,10 +200,10 @@ function printDoctor(out = console.log) {
 }
 
 function printNoAgent(err = console.error) {
-  err("writingagent: could not find the Writing Agent engine.");
+  err("writingagent: the Python engine isn't installed yet.");
   err("Fix it one of these ways:");
-  err("  • pip install -e .   (from the project dir, to get the `writing-agent` command)");
-  err("  • set WRITING_AGENT_HOME to the project directory (the one with book.py)");
+  err("  • writingagent setup   ← installs the engine for you (needs Python 3.10+ & pip)");
+  err("  • set WRITING_AGENT_HOME to a local clone of the repo (the dir with book.py)");
   err("  • set WRITINGAGENT_CMD to an explicit executable to run");
   err("Then run `writingagent doctor` to confirm.");
 }
@@ -174,6 +214,7 @@ function run(argv = process.argv.slice(2)) {
   if (action.kind === "version") return printVersion();
   if (action.kind === "help") return printHelp();
   if (action.kind === "doctor") return printDoctor();
+  if (action.kind === "setup") return runSetup();
 
   const agent = resolveAgent();
   if (!agent) {
@@ -200,7 +241,9 @@ module.exports = {
   printHelp,
   printVersion,
   printDoctor,
+  runSetup,
   run,
   HELP,
+  ENGINE_PIP_SPEC,
   CONSOLE_SCRIPTS,
 };

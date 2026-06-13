@@ -8,13 +8,11 @@ to it (passing your terminal straight through, so the interactive TUI works).
 ## Install
 
 ```bash
-# from this directory
-npm install -g .
-# or, once published:
-npm install -g writingagent
+npm install -g writingagent       # the CLI  (needs Node >= 16)
+writingagent setup                # one-time: installs the Python engine (needs Python 3.10+ & pip)
 ```
 
-Then, from anywhere:
+`setup` pip-installs the engine straight from GitHub (no clone needed). Then, from anywhere:
 
 ```bash
 writingagent                      # launch the interactive TUI
@@ -23,6 +21,7 @@ writingagent new --abstract "..." # create a project
 writingagent run                  # drive it to completion
 writingagent status               # where things stand
 writingagent export --format pdf
+writingagent doctor               # show how the engine was resolved
 ```
 
 `writingagent --version`, `writingagent --help`, and `writingagent doctor` are handled by the
@@ -45,11 +44,8 @@ detected (Python interpreter, console scripts, project directory, and the comman
 ## Prerequisites
 
 - **Node.js ≥ 16** (to run this launcher).
-- The **Python engine installed** — from the project root:
-  ```bash
-  pip install -e .          # gives you the `writing-agent` console script
-  ```
-  …or set `WRITING_AGENT_HOME` to the project directory so the launcher can run `python book.py`.
+- **Python 3.10+ with pip** — `writingagent setup` uses it to install the engine. (Already have a
+  clone? `pip install -e .` from the repo, or set `WRITING_AGENT_HOME` to it, works too.)
 
 ## Why a separate name?
 

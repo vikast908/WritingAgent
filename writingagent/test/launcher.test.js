@@ -16,8 +16,14 @@ test("parse classifies launcher flags vs forwarded args", () => {
   assert.equal(L.parse(["--help"]).kind, "help");
   assert.equal(L.parse(["-h"]).kind, "help");
   assert.equal(L.parse(["doctor"]).kind, "doctor");
+  assert.equal(L.parse(["setup"]).kind, "setup");
   assert.equal(L.parse(["write", "a topic"]).kind, "forward");
   assert.equal(L.parse(["run", "--help"]).kind, "forward"); // forwards the agent's own --help
+});
+
+test("the engine install spec points at the project's GitHub source", () => {
+  assert.match(L.ENGINE_PIP_SPEC, /^https:\/\/github\.com\/.+WritingAgent.+\.tar\.gz$/);
+  assert.ok(L.HELP.includes("writingagent setup"));
 });
 
 test("whichSync finds an executable on a synthetic PATH (cross-platform)", () => {

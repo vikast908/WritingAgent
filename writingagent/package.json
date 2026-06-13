@@ -1,7 +1,7 @@
 {
   "name": "writingagent",
   "version": "0.1.0",
-  "description": "Global CLI launcher for the Writing Agent — a self-correcting, autonomous writing system (books + articles). Forwards to the Python engine.",
+  "description": "Global CLI for the Writing Agent — a self-correcting, autonomous writing system (books + articles). `writingagent setup` installs the Python engine; the CLI then drives it.",
   "bin": {
     "writingagent": "bin/writingagent.js"
   },
@@ -25,7 +25,19 @@
     "llm",
     "books",
     "articles",
-    "launcher"
+    "launcher",
+    "deepseek",
+    "openrouter"
   ],
+  "homepage": "https://docs-writingagent.vercel.app/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vikast908/WritingAgent.git",
+    "directory": "writingagent"
+  },
+  "bugs": {
+    "url": "https://github.com/vikast908/WritingAgent/issues"
+  },
+  "author": "vikast908",
   "license": "MIT"
 }

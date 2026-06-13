@@ -38,47 +38,49 @@ prompt**: a durable state machine with a separate critic in the loop, not a sing
 ## Quickstart
 
 ```bash
-git clone https://github.com/vikast908/WritingAgent && cd WritingAgent
-pip install -e .                     # Python 3.10+, any OS
-cp .env.example .env                 # then set OPENROUTER_API_KEY=sk-or-...
+npm install -g writingagent          # the CLI   (needs Node ≥ 16)
+writingagent setup                   # one-time: installs the Python engine (Python 3.10+ & pip)
 ```
 
-Launch the interactive studio and give it a topic:
+Point it at your [OpenRouter](https://openrouter.ai/) key and give it a topic:
 
 ```bash
-writing-agent                        # the TUI   (or: python book.py)
-```
-
-```text
-❧  write --abstract "How stoicism applies to modern burnout"
+export OPENROUTER_API_KEY=sk-or-...   # or drop it in a .env in your working directory
+writingagent write "How stoicism applies to modern burnout"
 ```
 
 `write` asks a few questions upfront (audience, depth, tone, must-includes), then runs fully
-autonomously and hands you an exported file. Prefer to drive each step? `new → run → export`.
-Every command is in the [**command reference ↗**](https://docs-writingagent.vercel.app/reference/commands/).
+autonomously and hands you an exported file. Prefer to drive each step? `writingagent new → run →
+export` — every command is in the [**command reference ↗**](https://docs-writingagent.vercel.app/reference/commands/).
 
 **Try it with no API key.** *Fake mode* returns deterministic placeholder output, so you can
-exercise the whole pipeline, state machine, and exports for free:
+exercise the whole pipeline and exports for free:
 
 ```bash
-BOOK_AGENT_FAKE=1 python book.py new --abstract "test" --pick 1 && python book.py run
+BOOK_AGENT_FAKE=1 writingagent new --abstract "test" --pick 1 && writingagent run
 ```
 
-<sub>Windows PowerShell: <code>$env:BOOK_AGENT_FAKE=1; python book.py new --abstract "test" --pick 1; python book.py run</code></sub>
+<sub>Windows PowerShell: <code>$env:BOOK_AGENT_FAKE=1; writingagent new --abstract "test" --pick 1; writingagent run</code></sub>
 
 ---
 
 ## Install
 
-| | |
-|---|---|
-| **Requirements** | Python 3.10+ · Linux / macOS / Windows · an [OpenRouter API key](https://openrouter.ai/) (free tier works; none needed for fake mode) |
-| **Core** | `pip install -e .` |
-| **Optional extras** | context compression, deep research, DOCX export, D2 diagrams, embeddings — each degrades gracefully when absent |
-| **npm launcher** | `cd writingagent && npm install -g .` → a global `writingagent` command that forwards to the engine |
+**Requirements:** Node ≥ 16 (for the CLI) · Python 3.10+ with pip (the engine) · Linux / macOS /
+Windows · an [OpenRouter API key](https://openrouter.ai/) for real runs (free tier works; none needed for fake mode).
 
-Virtualenv setup, per-OS notes, and every optional extra are in the
-[**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
+```bash
+# npm (recommended)
+npm install -g writingagent          # the CLI
+writingagent setup                   # installs the Python engine from source; `writingagent doctor` verifies
+
+# …or from source with pip
+git clone https://github.com/vikast908/WritingAgent && cd WritingAgent
+pip install -e .                     # gives you the `writing-agent` command (hyphen) directly
+```
+
+Optional extras (context compression, deep research, DOCX export, D2 diagrams, embeddings) each
+degrade gracefully — see the [**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
 
 ---
 
