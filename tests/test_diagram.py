@@ -144,15 +144,51 @@ def test_back_edge_does_not_reverse_the_pipeline():
     assert rank["mic"] < rank["asr"] < rank["llm"] < rank["tts"] < rank["spk"]
 
 
-def test_cycle_archetype_still_renders_overlap_free():
+def test_cycle_renders_a_ring_overlap_free():
+    """The cycle archetype lays nodes on a ring (varied x AND y), not a flow column."""
     spec = S.DiagramSpec(
         title="Feedback loop", archetype="cycle",
-        nodes=[S.DiagramNode(id=f"n{i}", label=f"Stage {i}") for i in range(4)],
-        edges=[S.DiagramEdge(source=f"n{i}", target=f"n{(i + 1) % 4}") for i in range(4)])
+        nodes=[S.DiagramNode(id=f"n{i}", label=f"Stage {i}") for i in range(5)],
+        edges=[S.DiagramEdge(source=f"n{i}", target=f"n{(i + 1) % 5}") for i in range(5)])
     rects = _node_rects(diagram.render_spec(spec))
+    assert len(rects) == 5
     for i in range(len(rects)):
         for j in range(i + 1, len(rects)):
             assert not _overlap(rects[i], rects[j])
+    xs = {r[0] for r in rects}
+    ys = {r[1] for r in rects}
+    assert len(xs) > 1 and len(ys) > 1            # a ring spreads both axes (flow would not)
+
+
+def test_comparison_renders_two_labelled_columns():
+    spec = S.DiagramSpec(
+        title="A vs B", archetype="comparison", edges=[],
+        nodes=[S.DiagramNode(id="a1", label="A one", group="Option A"),
+               S.DiagramNode(id="a2", label="A two", group="Option A"),
+               S.DiagramNode(id="b1", label="B one", group="Option B"),
+               S.DiagramNode(id="b2", label="B two", group="Option B")])
+    svg = diagram.render_spec(spec)
+    assert "Option A" in svg and "Option B" in svg     # column headers present
+    rects = _node_rects(svg)
+    assert len(rects) == 4
+    for i in range(len(rects)):
+        for j in range(i + 1, len(rects)):
+            assert not _overlap(rects[i], rects[j])
+    # two distinct column x-positions
+    assert len({r[0] for r in rects}) == 2
+
+
+def test_cycle_and_comparison_degrade_to_flow_when_underspecified():
+    # cycle with < 3 nodes -> flow (still valid, no crash)
+    tiny = S.DiagramSpec(title="t", archetype="cycle",
+                         nodes=[S.DiagramNode(id="a", label="A"), S.DiagramNode(id="b", label="B")],
+                         edges=[S.DiagramEdge(source="a", target="b")])
+    assert diagram.render_spec(tiny).startswith("<svg")
+    # comparison with < 2 groups -> flow
+    one = S.DiagramSpec(title="t", archetype="comparison",
+                        nodes=[S.DiagramNode(id="a", label="A"), S.DiagramNode(id="b", label="B")],
+                        edges=[])
+    assert diagram.render_spec(one).startswith("<svg")
 
 
 def test_generate_svg_diagram_fake_mode_is_placeholder(monkeypatch):
@@ -214,6 +250,19 @@ def test_inject_d2_legend_noop_without_groups():
     svg = '<svg viewBox="0 0 400 200"><rect/></svg>'
     spec = S.DiagramSpec(title="t", nodes=[S.DiagramNode(id="a", label="A")], edges=[])
     assert diagram._inject_d2_legend(svg, spec) == svg
+
+
+def test_generate_svg_diagram_emits_spec_to_on_spec(tmp_brain, monkeypatch):
+    """The freshly-built spec is handed to `on_spec` so the orchestrator can persist it."""
+    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.setattr(diagram, "find_d2", lambda: None)   # force the built-in path
+    spec = S.DiagramSpec(title="t", archetype="flow",
+                         nodes=[S.DiagramNode(id="a", label="Alpha")],
+                         edges=[])
+    monkeypatch.setattr(nodes, "complete_structured", lambda *a, **k: spec)
+    captured = {}
+    nodes.generate_svg_diagram(load_config(), "h", on_spec=lambda sp: captured.setdefault("spec", sp))
+    assert captured["spec"].nodes[0].label == "Alpha"
 
 
 @pytest.mark.skipif(diagram.find_d2() is None, reason="d2 binary not installed")

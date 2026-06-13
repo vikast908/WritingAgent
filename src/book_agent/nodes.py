@@ -565,14 +565,16 @@ def _diagram_spec(cfg: ModelConfig, model: str, heading: str, context: str) -> S
 
 
 def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "",
-                         engine: str = "auto") -> str:
+                         engine: str = "auto", on_spec=None) -> str:
     """Produce a self-contained SVG figure for a topic.
 
     The model only chooses the figure's CONTENT (a structured `DiagramSpec`); LAYOUT is done
     by a renderer, so labels can't overflow and edges can't collide (the raw-SVG failure mode).
     `engine`: 'd2' (the d2 CLI, ELK layout - best for complex graphs), 'builtin' (the zero-dep
     Python engine - carries title/legend/metrics), or 'auto' (d2 when the binary is present,
-    else builtin). Returns SVG starting with '<svg'; a placeholder on total failure.
+    else builtin). `on_spec`, if given, is called with the freshly-built `DiagramSpec` (the
+    orchestrator persists it for auditability). Returns SVG starting with '<svg'; a placeholder
+    on total failure.
     """
     from . import diagram as _dgm
     model = cfg.model_for("diagram")
@@ -594,6 +596,12 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "",
             spec = _diagram_spec(cfg, fallback, heading, context)
     if spec is None:
         return _dgm.placeholder(heading[:100] or "Diagram")
+
+    if on_spec is not None:
+        try:
+            on_spec(spec)           # audit breadcrumb (e.g. versions/<unit>.diagram.spec.json)
+        except Exception:  # noqa: BLE001 - persistence must never fail figure generation
+            pass
 
     svg = _dgm.render_d2(spec) if use_d2 else None       # ELK layout; None if d2 missing/errors
     if svg is None:                                      # built-in fallback (always available)

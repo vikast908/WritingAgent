@@ -18,6 +18,7 @@ carries fill="none" (a filled path renders as a black blob).
 """
 from __future__ import annotations
 
+import math
 import os
 import re
 import shutil
@@ -109,9 +110,13 @@ def render_spec(spec: S.DiagramSpec) -> str:
              if e.source in ids and e.target in ids and e.source != e.target][:MAX_EDGES]
     if not nodes:
         return placeholder(spec.title or "Diagram")
-    arche = spec.archetype if spec.archetype in ("flow", "layered") else "flow"
+    arche = spec.archetype if spec.archetype in ("flow", "layered", "cycle", "comparison") else "flow"
     if arche == "layered" and any(n.lane for n in nodes):
         return _render_layered(spec, nodes, edges)
+    if arche == "cycle" and len(nodes) >= 3:
+        return _render_cycle(spec, nodes, edges)
+    if arche == "comparison" and len(_group_colors(nodes)) >= 2:
+        return _render_comparison(spec, nodes, edges)
     return _render_flow(spec, nodes, edges)
 
 
@@ -189,6 +194,27 @@ def _arrow(x: float, y: float, direction: str) -> str:
 
 def _path(d: str) -> str:
     return f'<path d="{d}" fill="none" stroke="{_EDGE}" stroke-width="1.6"/>'
+
+
+def _arrow_at(x: float, y: float, angle: float) -> str:
+    """Arrowhead whose tip is (x, y), pointing along `angle` radians (for non-orthogonal
+    edges in the cycle/comparison layouts)."""
+    s = 5.5
+    bx, by = x - 2 * s * math.cos(angle), y - 2 * s * math.sin(angle)
+    px, py = -math.sin(angle) * s, math.cos(angle) * s
+    return (f'<polygon points="{x:.1f},{y:.1f} {bx + px:.1f},{by + py:.1f} '
+            f'{bx - px:.1f},{by - py:.1f}" fill="{_EDGE}"/>')
+
+
+def _box_edge(cx: float, cy: float, hw: float, hh: float, tx: float, ty: float) -> tuple[float, float]:
+    """Where the ray from a box centre (cx,cy) toward (tx,ty) crosses the box border."""
+    dx, dy = tx - cx, ty - cy
+    if dx == 0 and dy == 0:
+        return (cx, cy)
+    sx = hw / abs(dx) if dx else math.inf
+    sy = hh / abs(dy) if dy else math.inf
+    s = min(sx, sy)
+    return (cx + dx * s, cy + dy * s)
 
 
 def _edge_label(x: float, y: float, text: str, placed: list) -> str:
@@ -421,6 +447,114 @@ def _render_layered(spec, nodes, edges) -> str:
         color = colors.get((n.group or "").strip(), _NEUTRAL)
         out.append(_node_svg(n, x, y, box_w, box_h, wrapped[n.id], color, n.id == spec.focus))
     out += _legend(nodes, colors, canvas_w, legend_y)
+    out.append("</svg>")
+    return "".join(out)
+
+
+# ── Cycle layout (nodes on a ring) ────────────────────────────────────────────
+def _render_cycle(spec, nodes, edges) -> str:
+    """Nodes evenly on a circle, edges as straight chords with angle-aware arrowheads -
+    the natural shape for a feedback loop or lifecycle (vs. forcing it into a line)."""
+    wrapped, box_w, box_h, _hd = _box_size(nodes)
+    colors = _group_colors(nodes)
+    n = len(nodes)
+    top = SUB_TOP + 24 if (spec.subtitle or "").strip() else TITLE_TOP + 28
+    # Radius so adjacent boxes (chord = 2R·sin(π/n)) clear each other.
+    R = max(box_h * 1.7, (box_w + 34) / (2 * math.sin(math.pi / n)))
+    cx = MARGIN + R + box_w / 2
+    cyc = top + R + box_h / 2
+    canvas_w = int(2 * R + box_w + 2 * MARGIN)
+    legend_y = int(top + 2 * R + box_h + 26)
+    canvas_h = int(legend_y + (12 if colors else -8) + MARGIN - 14)
+
+    pos = {}
+    for i, nd in enumerate(nodes):
+        theta = 2 * math.pi * i / n - math.pi / 2          # first node at the top, clockwise
+        pos[nd.id] = (cx + R * math.cos(theta) - box_w / 2,
+                      cyc + R * math.sin(theta) - box_h / 2)
+
+    body, placed = [], []
+    for e in edges:
+        sx0, sy0 = pos[e.source]
+        tx0, ty0 = pos[e.target]
+        s_c = (sx0 + box_w / 2, sy0 + box_h / 2)
+        t_c = (tx0 + box_w / 2, ty0 + box_h / 2)
+        sp = _box_edge(*s_c, box_w / 2, box_h / 2, *t_c)
+        tp = _box_edge(*t_c, box_w / 2, box_h / 2, *s_c)
+        body.append(_path(f"M {sp[0]:.0f} {sp[1]:.0f} L {tp[0]:.0f} {tp[1]:.0f}"))
+        body.append(_arrow_at(tp[0], tp[1], math.atan2(tp[1] - sp[1], tp[0] - sp[0])))
+        body.append(_edge_label((sp[0] + tp[0]) / 2, (sp[1] + tp[1]) / 2, e.label, placed))
+
+    for nd in nodes:
+        x, y = pos[nd.id]
+        color = colors.get((nd.group or "").strip(), _NEUTRAL)
+        body.append(_node_svg(nd, x, y, box_w, box_h, wrapped[nd.id], color, nd.id == spec.focus))
+
+    out = _header(canvas_w, canvas_h, spec)
+    out += body                                            # edges, arrowheads + labels, then nodes
+    out += _legend(nodes, colors, canvas_w, legend_y)
+    out.append("</svg>")
+    return "".join(out)
+
+
+# ── Comparison layout (two labelled columns) ──────────────────────────────────
+def _render_comparison(spec, nodes, edges) -> str:
+    """Two side-by-side columns headed by the first two groups - 'A vs B'. The column
+    headers carry the colour, so no separate legend is needed."""
+    wrapped, box_w, box_h, _hd = _box_size(nodes)
+    colors = _group_colors(nodes)
+    g_left, g_right = list(colors)[:2]
+    left = [n for n in nodes if (n.group or "").strip() == g_left]
+    right = [n for n in nodes if (n.group or "").strip() == g_right]
+    for nd in nodes:                                       # nodes outside the two groups
+        if nd not in left and nd not in right:
+            (left if len(left) <= len(right) else right).append(nd)
+
+    gap = 90
+    top = SUB_TOP + 26 if (spec.subtitle or "").strip() else TITLE_TOP + 30
+    head_y = top + 4
+    body_top = top + 30
+    rows = max(len(left), len(right))
+    canvas_w = int(2 * box_w + gap + 2 * MARGIN)
+    content_h = rows * box_h + (rows - 1) * ROW_GAP
+    canvas_h = int(body_top + content_h + MARGIN)
+    x_left = MARGIN
+    x_right = MARGIN + box_w + gap
+
+    pos = {}
+    for col, x in ((left, x_left), (right, x_right)):
+        for i, nd in enumerate(col):
+            pos[nd.id] = (x, body_top + i * (box_h + ROW_GAP))
+
+    out = _header(canvas_w, canvas_h, spec)
+    for x, g in ((x_left, g_left), (x_right, g_right)):     # column headers in group colour
+        c = colors[g]
+        out.append(f'<text x="{x + box_w / 2:.0f}" y="{head_y:.0f}" text-anchor="middle" '
+                   f'font-family="{FONT}" font-size="14" font-weight="700" fill="{c}">'
+                   f'{_esc(g)}</text>')
+        out.append(f'<line x1="{x}" y1="{head_y + 6:.0f}" x2="{x + box_w}" y2="{head_y + 6:.0f}" '
+                   f'stroke="{c}" stroke-width="2"/>')
+
+    placed: list = []
+    for e in edges:                                        # any cross-column relations
+        if e.source not in pos or e.target not in pos:
+            continue
+        sx, sy = pos[e.source]
+        tx, ty = pos[e.target]
+        s_c = (sx + box_w / 2, sy + box_h / 2)
+        t_c = (tx + box_w / 2, ty + box_h / 2)
+        sp = _box_edge(*s_c, box_w / 2, box_h / 2, *t_c)
+        tp = _box_edge(*t_c, box_w / 2, box_h / 2, *s_c)
+        out.append(_path(f"M {sp[0]:.0f} {sp[1]:.0f} L {tp[0]:.0f} {tp[1]:.0f}"))
+        out.append(_arrow_at(tp[0], tp[1], math.atan2(tp[1] - sp[1], tp[0] - sp[0])))
+        out.append(_edge_label((sp[0] + tp[0]) / 2, (sp[1] + tp[1]) / 2, e.label, placed))
+
+    for nd in nodes:
+        if nd.id not in pos:
+            continue
+        x, y = pos[nd.id]
+        color = colors.get((nd.group or "").strip(), _NEUTRAL)
+        out.append(_node_svg(nd, x, y, box_w, box_h, wrapped[nd.id], color, nd.id == spec.focus))
     out.append("</svg>")
     return "".join(out)
 

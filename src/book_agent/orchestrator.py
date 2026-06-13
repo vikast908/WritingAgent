@@ -582,8 +582,11 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
         # genres. A "concept diagram" dropped into a novel chapter is always wrong.
         if not _NONFICTION_RE.search(plan.genre or ""):
             return None
-        svg_text = nodes.generate_svg_diagram(cfg, blueprint.title, blueprint.purpose or "",
-                                              engine=state.get("diagram_engine", "auto"))
+        svg_text = nodes.generate_svg_diagram(
+            cfg, blueprint.title, blueprint.purpose or "",
+            engine=state.get("diagram_engine", "auto"),
+            on_spec=lambda sp: brain.write_text(
+                paths.root / "versions" / f"ch{n:02d}.diagram.spec.json", sp.model_dump_json(indent=2)))
         svg_dir = paths.root / "images"
         svg_dir.mkdir(parents=True, exist_ok=True)
         svg_path = svg_dir / f"ch{n:02d}_diagram.svg"
@@ -1609,8 +1612,10 @@ def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
             return [r.to_markdown(str(i + 1)) for i, r in enumerate(got)]
         # No Wikimedia image - generate an SVG diagram instead
         ctx = getattr(section, "purpose", "") or getattr(section, "heading", "")
-        svg_text = nodes.generate_svg_diagram(cfg, section.heading, ctx,
-                                              engine=state.get("diagram_engine", "auto"))
+        svg_text = nodes.generate_svg_diagram(
+            cfg, section.heading, ctx, engine=state.get("diagram_engine", "auto"),
+            on_spec=lambda sp: brain.write_text(
+                paths.root / "versions" / f"section_{n:02d}.diagram.spec.json", sp.model_dump_json(indent=2)))
         paths.images.mkdir(parents=True, exist_ok=True)
         svg_path = paths.images / f"section_{n:02d}_diagram.svg"
         svg_path.write_text(svg_text, encoding="utf-8")
