@@ -1,0 +1,31 @@
+{
+  "name": "writingagent",
+  "version": "0.1.0",
+  "description": "Global CLI launcher for the Writing Agent — a self-correcting, autonomous writing system (books + articles). Forwards to the Python engine.",
+  "bin": {
+    "writingagent": "bin/writingagent.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "preferGlobal": true,
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "writing",
+    "agent",
+    "cli",
+    "llm",
+    "books",
+    "articles",
+    "launcher"
+  ],
+  "license": "MIT"
+}
