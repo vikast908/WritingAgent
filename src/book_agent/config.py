@@ -62,16 +62,16 @@ class Settings:
     table_read_revise: bool = False          # autonomous: apply the reader's single top fix as one bounded revision
     escalate_below_confidence: float = 0.5   # critic confidence below this -> escalate (plan §7)
     escalate_on_contradiction: bool = True   # consolidation contradictions -> review (plan §9)
-    autonomous: bool = False                 # no human-in-the-loop: never pause, commit best draft
+    autonomous: bool = True                  # no human-in-the-loop: never pause, commit best draft
     humanize: bool = True                    # rewrite each chapter to strip AI tells (em-dashes...)
     article_cohesion: bool = True            # whole-article smoothing pass before References
-    use_images: bool = False                 # fetch Wikimedia Commons images (non-fiction/illustrated)
+    use_images: bool = True                  # fetch Wikimedia Commons images (non-fiction/illustrated)
     diagram_engine: str = "auto"             # SVG layout: auto (d2 if installed, else builtin) | d2 | builtin
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
     use_headroom: bool = True               # context compression via headroom-ai (60-95% fewer tokens)
     request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
     max_run_tokens: int = 0                 # pause a run once its total tokens exceed this (0 = unlimited)
-    mode: str = "book"           # "book" | "article" - default for new projects
+    mode: str = "article"        # "book" | "article" - default for new projects
     num_sections: int = 6        # default section count for articles
     theme: str = "editorial"     # TUI color theme (see ui.THEMES; /theme to switch)
 

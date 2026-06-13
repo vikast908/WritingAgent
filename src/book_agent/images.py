@@ -3,7 +3,7 @@
 Queries the Wikimedia Commons API, filters for CC/PD licenses, and returns structured
 results with URL + full attribution ready for markdown embedding.
 
-Only used when `use_images=True` in settings (default off - fiction rarely needs it).
+Only used when `use_images=True` in settings (default on; fiction rarely needs it).
 No extra deps: uses stdlib urllib only.
 """
 from __future__ import annotations
