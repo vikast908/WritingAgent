@@ -97,3 +97,67 @@ def test_list_skills_rows(tmp_brain):
 
 def test_list_skills_empty_user(tmp_brain):
     assert skmod.list_skills("ghost") == []
+
+
+# ── Ablation-duel efficacy (the causal signal) ────────────────────────────────
+
+def test_record_duel_counts_wins_and_failures(tmp_brain):
+    """A win bumps duels+duel_wins; a loss bumps duels + target_failures."""
+    brain.ensure_user("u")
+    skmod.record_duel("u", "s", True)
+    skmod.record_duel("u", "s", False)
+    s = skmod.load_index("u")["skills"]["s"]
+    assert s["duels"] == 2 and s["duel_wins"] == 1 and s["target_failures"] == 1
+
+
+def test_reconcile_trusts_on_winning_duels(tmp_brain):
+    """>=MIN_DUELS with a high smoothed win-rate -> trusted (duels beat first_pass)."""
+    skmod.write_skill("u", _prop("winner"))
+    for _ in range(skmod.MIN_DUELS):
+        skmod.record_duel("u", "winner", True)
+    assert dict(skmod.reconcile("u"))["winner"] == "trusted"
+
+
+def test_reconcile_retires_on_losing_duels(tmp_brain):
+    """>=MIN_DUELS with a low smoothed win-rate -> retired."""
+    skmod.write_skill("u", _prop("flop"))
+    for _ in range(skmod.MIN_DUELS):
+        skmod.record_duel("u", "flop", False)
+    assert dict(skmod.reconcile("u"))["flop"] == "retired"
+
+
+def test_reconcile_below_min_duels_falls_back(tmp_brain):
+    """Too few duels -> the duel rule doesn't fire; stays candidate (no first_pass data)."""
+    skmod.write_skill("u", _prop("young"))
+    skmod.record_duel("u", "young", True)
+    assert dict(skmod.reconcile("u"))["young"] == "candidate"
+
+
+def test_pick_duel_target_prefers_least_dueled_then_stops(tmp_brain):
+    """Returns the least-dueled candidate under MIN_DUELS; None once all are decided."""
+    brain.ensure_user("u")
+    skmod.record_duel("u", "a", True)            # a has 1 duel, b has 0
+    assert skmod.pick_duel_target("u", ["a", "b"]) == "b"
+    for name in ("a", "b"):
+        for _ in range(skmod.MIN_DUELS):
+            skmod.record_duel("u", name, True)
+    assert skmod.pick_duel_target("u", ["a", "b"]) is None
+    assert skmod.pick_duel_target("u", []) is None
+
+
+def test_distill_retires_near_duplicate(tmp_brain):
+    """Two near-identical skills -> one retired (status only; file kept), the other survives."""
+    skmod.write_skill("u", _prop("alpha"))
+    skmod.write_skill("u", _prop("beta"))   # identical body, different name
+    retired = skmod.distill("u")
+    assert len(retired) == 1
+    statuses = {r["name"]: r["status"] for r in skmod.list_skills("u")}
+    assert sorted(statuses.values()) == ["candidate", "retired"]
+
+
+def test_watch_block_framing():
+    """Guarded enforcement says BLOCKING; advisory says nit-only; empty -> None."""
+    from book_agent import nodes
+    assert "BLOCKING" in nodes._watch_block("p - why", True)
+    assert "advisory" in nodes._watch_block("p - why", False)
+    assert nodes._watch_block(None, True) is None

@@ -123,6 +123,18 @@ def write_chapter(
 
 
 # ── Critic ────────────────────────────────────────────────────────────────────
+def _watch_block(watch_list: str | None, watch_blocking: bool) -> str | None:
+    """Frame the learned watch-list for the critic. Guarded enforcement (watch_blocking=True)
+    blocks only clear, concrete violations so fuzzy/stylistic borderline cases don't cause
+    revision thrash; watch_blocking=False makes the whole list advisory (nits only)."""
+    if not watch_list:
+        return None
+    head = ("LEARNED WATCH-LIST (flag a CLEAR, CONCRETE violation as BLOCKING; treat a "
+            "borderline or purely stylistic case as a nit, not blocking):" if watch_blocking
+            else "LEARNED WATCH-LIST (advisory - raise any violation as a nit, never blocking):")
+    return f"{head}\n{watch_list}"
+
+
 def critique_chapter(
     cfg: ModelConfig,
     plan: S.BookPlan,
@@ -134,6 +146,7 @@ def critique_chapter(
     skills: list[str] | None = None,
     length_note: str | None = None,
     requirements: str | None = None,
+    watch_blocking: bool = True,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
@@ -142,8 +155,9 @@ def critique_chapter(
                      f"audience, length, tone, or a missing must-include - as BLOCKING):\n{requirements}")
     if context:
         parts.append(f"Canonical context:\n{context}")
-    if watch_list:
-        parts.append(f"LEARNED WATCH-LIST (flag these patterns as blocking):\n{watch_list}")
+    wb = _watch_block(watch_list, watch_blocking)
+    if wb:
+        parts.append(wb)
     if skills:
         parts.append("Craft skills the writer was asked to apply:\n\n" + "\n\n---\n\n".join(skills))
     if length_note:
@@ -463,6 +477,7 @@ def critique_article_section(
     requirements: str | None = None,
     thesis: str | None = None,
     research_on: bool = True,
+    watch_blocking: bool = True,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section blueprint:\n{_ctx(section)}"]
@@ -477,8 +492,9 @@ def critique_article_section(
                      "study citation, or named-source attribution is a fabrication risk.")
     if context:
         parts.append(f"Prior context:\n{context}")
-    if watch_list:
-        parts.append(f"LEARNED WATCH-LIST (flag these patterns as blocking):\n{watch_list}")
+    wb = _watch_block(watch_list, watch_blocking)
+    if wb:
+        parts.append(wb)
     if length_note:
         parts.append(length_note)
     from .humanizer import structural_report

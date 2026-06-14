@@ -234,6 +234,7 @@ def test_narrow_banner_drops_figlet():
     import io
 
     from rich.console import Console
+
     from book_agent import shell
     from book_agent.config import Settings, load_config
     console = Console(file=io.StringIO(), force_terminal=True, width=40)

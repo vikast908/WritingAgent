@@ -403,6 +403,8 @@ def _base_run_state(uid, abstract, *, intake, author, max_revisions, autonomous,
         "divergent_drafts": settings.divergent_drafts,
         "tournament_judge": settings.tournament_judge,
         "min_insight": settings.min_insight,
+        "skill_duels": settings.skill_duels,
+        "watch_blocking": settings.watch_blocking,
         # Autonomous runs never pause on low confidence.
         "escalate_below_confidence": 0.0 if autonomous else settings.escalate_below_confidence,
     }
@@ -460,7 +462,7 @@ def _log_run_complete(label: str, name: str, manuscript, log) -> None:
 
 def _divergent_first_draft(cfg, paths, *, unit_tag, unit_desc, n_div, fix_notes,
                            write, critique, thesis_brief, ask, autonomous, use_judge,
-                           skeletons, log):
+                           skeletons, log, duel=None):
     """Attempt-0 divergent drafting, shared by chapters and sections: draft n_div
     variants at varied temperatures in parallel, critique each, and let a side-by-side
     judge pick the winner (selection for strength over convergence). With skeletons=True
@@ -468,24 +470,39 @@ def _divergent_first_draft(cfg, paths, *, unit_tag, unit_desc, n_div, fix_notes,
     length, so discarded drafts cost ~a third the tokens. `write`/`critique` are the
     unit's own node closures. Returns (draft, crit, judge_note)."""
     temps = _DIVERGENT_TEMPS[:n_div]
-    log(f"   drafting {len(temps)} variants (temps {', '.join(map(str, temps))})...")
-    drafts = concurrency.gather(
-        {f"v{i}": (lambda t=t, fn=fix_notes: write(fn, None, t, skeleton=skeletons))
-         for i, t in enumerate(temps)},
-        strict=True)
+    label_kind = "skeleton" if skeletons else "variant"
+    # Ablation duel (opt-in): draft one EXTRA variant with the `duel` skill held out, at v0's
+    # temperature, so the only difference is that one skill. The critic's verdict on v0 vs the
+    # ablated twin (_crit_better) is the skill's causal lift - a real counterfactual. Adding a
+    # variant rather than reusing a slot keeps every real contender, so publication quality is
+    # not sacrificed; the cost is one extra draft, only on units with an undecided skill.
+    # Skipped in skeleton mode (a one-third draft carries too little signal).
+    duel_on = bool(duel) and not skeletons and len(temps) >= 1
+    tasks = {f"v{i}": (lambda t=t, fn=fix_notes: write(fn, None, t, skeleton=skeletons))
+             for i, t in enumerate(temps)}
+    labels = {f"v{i}": f"{label_kind} temp={t}" for i, t in enumerate(temps)}
+    if duel_on:
+        tasks["ablated"] = (lambda fn=fix_notes: write(fn, None, temps[0], skills=duel["ablated"]))
+        labels["ablated"] = f"ablated:{duel['name']} temp={temps[0]}"
+    log(f"   drafting {len(tasks)} variants (temps {', '.join(map(str, temps))}"
+        f"{'; +1 ablation probe' if duel_on else ''})...")
+    drafts = concurrency.gather(tasks, strict=True)
     log("   critiquing variants...")
     crits = concurrency.gather(
         {k: (lambda d=d: critique(d)) for k, d in drafts.items()}, strict=True)
-    label_kind = "skeleton" if skeletons else "variant"
-    for i, d in enumerate(drafts.values()):
-        _save_version(paths, unit_tag, d, label=f"{label_kind} temp={temps[i]}")
+    for k, d in drafts.items():
+        _save_version(paths, unit_tag, d, label=labels.get(k, label_kind))
+    if duel_on:
+        won = _crit_better(crits["v0"], crits["ablated"])
+        skills_mod.record_duel(paths.uid, duel["name"], won)
+        log(f"   [duel] skill '{duel['name']}' -> {'kept lift (won)' if won else 'no lift (lost)'}")
     picker_ask = None if autonomous else ask
     draft, crit, judge_note, pref = _pick_variant(
         cfg, unit_desc, thesis_brief, drafts, crits, picker_ask, log, use_judge=use_judge)
     if pref:
         _record_preference(paths, pref)
     log(f"   picked variant ({sum(1 for c in crits.values() if c.verdict == 'approve')}"
-        f"/{len(temps)} approved)")
+        f"/{len(crits)} approved)")
     if skeletons:   # expand only the winning skeleton to full length (article F3)
         log("   expanding the winning skeleton to full length...")
         draft = write(((judge_note + "\n") if judge_note else "")
@@ -546,8 +563,10 @@ def _run_learner(cfg, paths, plan, instructions: str, findings: str, *, log) -> 
     watch = ["# Avoid list (watch-list)", ""] + [f"- {w.pattern} - {w.why}" for w in out.watch_items]
     brain.write_text(brain.watch_list(uid), "\n".join(watch))
     statuses = skills_mod.reconcile(uid)
+    distilled = skills_mod.distill(uid) if load_settings().skill_distill else []
     log(f"   [learn] +{len(out.skills)} skills, {len(out.watch_items)} watch items; "
-        f"reconciled {len(statuses)} skills")
+        f"reconciled {len(statuses)} skills"
+        + (f", distilled {len(distilled)} duplicate(s)" if distilled else ""))
 
 
 def _escalate(paths, n, crit: S.Critique, draft: str) -> None:

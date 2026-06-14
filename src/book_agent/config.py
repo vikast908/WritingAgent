@@ -70,6 +70,15 @@ class Settings:
     #                                          short skeleton reveals less about the full draft, so off by default.
     tournament_judge: bool = True            # pick the best divergent draft side-by-side, not by scalar self-score
     min_insight: int = 3                     # critic insight (1-5) required to approve (0 = off)
+    skill_duels: bool = False                # A/B-test learned skills: draft one extra variant with a candidate
+    #                                          skill held out and let the critic say if it helped - a true
+    #                                          counterfactual (the causal efficacy signal). Opt-in: costs one
+    #                                          extra draft on units that still have undecided skills.
+    skill_distill: bool = False              # after learning, retire near-duplicate skills (keep the best-scoring
+    #                                          one) so retrieval stays sharp. Safe only once duels give real
+    #                                          scores, so off by default. Non-destructive (sets status only).
+    watch_blocking: bool = True              # watch-list violations: True = block only CLEAR, CONCRETE ones
+    #                                          (borderline/stylistic -> nit); False = fully advisory (nit only).
     verify_claims: bool = True               # check each [N]-cited claim against its source; unsupported = blocking
     table_read: bool = True                  # whole-article cold read by a skeptical reader (report only)
     table_read_revise: bool = False          # autonomous: apply the reader's single top fix as one bounded revision

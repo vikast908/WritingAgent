@@ -294,10 +294,11 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     best: tuple[str, S.Critique] | None = None
     approved_attempt = -1
 
-    def _write(notes, base, temperature=None, skeleton=False):
+    def _write(notes, base, temperature=None, skeleton=False, skills=None):
         # Skeleton mode (divergent_skeletons, opt-in): divergent variants are drafted short
         # so the judge picks a winner cheaply; only the winner is expanded to full length,
-        # cutting discarded-draft completion tokens (~60%).
+        # cutting discarded-draft completion tokens (~60%). skills= overrides the default set
+        # (used by the ablation duel to draft a variant with one skill held out).
         if skeleton:
             notes = ((notes + "\n\n") if notes else "") + (
                 "Write a SHORT SKELETON of this section (~one third of target): the thesis "
@@ -308,7 +309,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             ln = _length_note(0, target)
         return nodes.write_article_section(
             cfg, outline, section, fix_notes=notes, context=full_context,
-            skills=skill_bodies, images=images, base_draft=base,
+            skills=skill_bodies if skills is None else skills, images=images, base_draft=base,
             requirements=requirements, thesis=thesis_md, voice=voice,
             length_note=ln, temperature=temperature)
 
@@ -316,6 +317,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
         return nodes.critique_article_section(
             cfg, outline, section, d, context=full_context, watch_list=watch,
             requirements=requirements, thesis=thesis_brief_md, research_on=research_on,
+            watch_blocking=bool(state.get("watch_blocking", True)),
             length_note=_length_note(len(d.split()), target))
 
     n_div = max(1, int(state.get("divergent_drafts", 1) or 1))
@@ -325,13 +327,19 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     log(f"\n== Section {n}: {section.heading} ==")
     for attempt in range(max_rev + 1):
         if attempt == 0 and n_div > 1 and not base_draft:
+            duel = None
+            if state.get("skill_duels") and skill_pairs and not skeletons:
+                target_skill = skills_mod.pick_duel_target(paths.uid, skill_names)
+                if target_skill:
+                    duel = {"name": target_skill,
+                            "ablated": [b for nm, b in skill_pairs if nm != target_skill]}
             draft, crit, judge_note = _divergent_first_draft(
                 cfg, paths, unit_tag=_unit_tag, unit_desc=_unit_desc, n_div=n_div,
                 fix_notes=fix_notes, write=_write, critique=_critique,
                 thesis_brief=thesis_brief_md, ask=ask,
                 autonomous=bool(state.get("autonomous")),
                 use_judge=bool(state.get("tournament_judge", True)),
-                skeletons=skeletons, log=log)
+                skeletons=skeletons, log=log, duel=duel)
         else:
             log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
             draft = _write(fix_notes, base_draft)

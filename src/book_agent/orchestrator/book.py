@@ -349,10 +349,12 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
 
     # skeleton kwarg: a book chapter has no skeleton mode (that's an article token
     # optimisation); it's accepted so _divergent_first_draft can call _write/_critique
-    # with one signature across chapters and sections.
-    def _write(notes, base, temperature=None, skeleton=False):
+    # with one signature across chapters and sections. skills= overrides the default set
+    # (used by the ablation duel to draft a variant with one skill held out).
+    def _write(notes, base, temperature=None, skeleton=False, skills=None):
         return nodes.write_chapter(cfg, plan, blueprint, fix_notes=notes,
-                                   context=context, skills=skill_bodies, images=images,
+                                   context=context, images=images,
+                                   skills=skill_bodies if skills is None else skills,
                                    base_draft=base, requirements=requirements, voice=voice,
                                    length_note=_length_note(0, blueprint.target_words),
                                    temperature=temperature)
@@ -361,6 +363,7 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         return nodes.critique_chapter(
             cfg, plan, blueprint, d, context=context, watch_list=watch,
             skills=skill_bodies, requirements=requirements,
+            watch_blocking=bool(state.get("watch_blocking", True)),
             length_note=_length_note(len(d.split()), blueprint.target_words))
 
     n_div = max(1, int(state.get("divergent_drafts", 1) or 1))
@@ -370,11 +373,18 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
     log(f"\n== Chapter {n}: {blueprint.title} ==")
     for attempt in range(max_rev + 1):
         if attempt == 0 and n_div > 1 and not base_draft:
+            duel = None
+            if state.get("skill_duels") and skill_pairs:
+                target = skills_mod.pick_duel_target(paths.uid, skill_names)
+                if target:
+                    duel = {"name": target,
+                            "ablated": [b for nm, b in skill_pairs if nm != target]}
             draft, crit, judge_note = _divergent_first_draft(
                 cfg, paths, unit_tag=_unit_tag, unit_desc=_unit_desc, n_div=n_div,
                 fix_notes=fix_notes, write=_write, critique=_critique, thesis_brief=None,
                 ask=ask, autonomous=bool(state.get("autonomous")),
-                use_judge=bool(state.get("tournament_judge", True)), skeletons=False, log=log)
+                use_judge=bool(state.get("tournament_judge", True)), skeletons=False,
+                log=log, duel=duel)
         else:
             log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
             draft = _write(fix_notes, base_draft)
