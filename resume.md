@@ -5,6 +5,20 @@
 
 ## Current status
 
+- **New (2026-06-14 - orchestrator.py split into a package):** the 2274-line `orchestrator.py`
+  god-module is now `orchestrator/` - a documented facade `__init__` (33 lines) re-exporting six seam
+  modules: **common** (592, shared leaf helpers), **book** (632, chapter pipeline + `run()` dispatcher),
+  **article** (651, section pipeline), **export** (203, pdf/epub/.../repolish/evidence), **manage** (128,
+  lifecycle/state), **review** (296, approve/revise/table-read/evaluate). Dependency DAG is acyclic
+  (common <- {article,book,manage}; article <- export; book <- {article,manage}; review <-
+  {book,article,common}). `orchestrator.X` is unchanged for every caller and test (incl. the private
+  names tests reach for) - pure code movement, no logic changes. Done in 6 suite-gated commits (package
+  conversion → common → article+export → manage → book+review → facade); a ruff per-file-ignore marks the
+  facade's intentional star re-exports. **330 passed / 1 skipped, ruff clean** at every step, plus a
+  fake-mode e2e drove both pipelines to `done` through the new seams. (Also a standalone `style(shell)`
+  commit for a pre-existing ruff E262 nit.) **Next:** apply the same package split to `shell.py` (144 KB)
+  - seams: branding / help / commands / dashboard / chat / repl (user-approved order: orchestrator then
+  shell).
 - **New (2026-06-14 - book↔article dedup, Tier 3 evaluated; refactor backlog closed):** pulled two pure,
   byte-identical idioms out of both run loops - **`_mark_escalated`** (durable pending-review + the
   "resolve with..." hint) and **`_log_run_complete`** (the `[OK] ... complete` line + per-run usage

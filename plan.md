@@ -1053,3 +1053,22 @@ Prioritized, by risk:
 
 Each tier is its own PR: extract, run the suite, and a fake-mode end-to-end for BOTH modes before the
 next.
+
+## 20.1 File split - orchestrator (done), shell (next)
+
+Once dedup was paid down, the two god-files were split into packages behind a stable facade so
+`orchestrator.X` / `shell.X` resolve unchanged for every caller and test (incl. the private names tests
+reach for). Pure code movement, suite-gated per step.
+
+- **`orchestrator/` - done.** 2274-line module → facade `__init__` (re-exports via `from .seam import *`)
+  + six seams: `common` (shared leaf helpers), `book` (chapter pipeline + the public `run()` dispatcher),
+  `article` (section pipeline), `export` (renderers/repolish/evidence), `manage` (lifecycle/state),
+  `review` (approve/revise/table-read/evaluate). Acyclic: common ← {article,book,manage}; article ←
+  export; book ← {article,manage}; review ← {book,article,common}. Genuinely-shared leaves that surfaced
+  during the carve (`_escalate`, `_manuscript_section_bodies`, `_replace_manuscript_section`) went to
+  `common`. A ruff per-file-ignore (`__init__.py` = F401/F403/F405) marks the intentional star re-exports.
+- **`shell/` - planned.** Same recipe; seams: branding (banner/wordmark/flame/palette/welcome),
+  help (tables/slash-help/toggle-grid), commands (`_cmd_*` + path/use-project), dashboard (`_RunControls`/
+  `_KeyListener`/`_RunDashboard`/`run_with_dashboard`/cards), chat (respond/history/hints/system), repl
+  (`run_shell`/`_handle_slash`/pt-session/input routing). Tests reach for many `shell._x` names, so the
+  facade must re-export them.
