@@ -22,6 +22,9 @@ reseed.py
 # README/CONTRIBUTING linked to plan.md.
 plan.md
 resume.md
+# docs.md: the documentation agent's working brief - it reviews the whole repo and updates
+# the published docs site from it. Local-only.
+docs.md
 
 # Playwright MCP browser artifacts (CI debugging)
 .playwright-mcp/
