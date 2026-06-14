@@ -1018,7 +1018,8 @@ bug), so behavior-preserving extraction + the full suite (and ideally a live run
 mandatory. Already shared (do not re-extract): `_pick_variant`, `_save_version`, `_record_preference`,
 `_length_note`, `_merge_fix_notes`, `_escalate`. **Done:** `_run_learner` (shared learner tail);
 `_base_run_state` (shared run-state keys for `start_book`/`start_article`); `_divergent_first_draft` +
-`_finalize_unit` (shared attempt-0 divergent drafting and post-loop bookkeeping - Tier 2).
+`_finalize_unit` (shared attempt-0 divergent drafting and post-loop bookkeeping - Tier 2);
+`_mark_escalated` + `_log_run_complete` (shared run-loop escalation + completion footer - Tier 3).
 
 Prioritized, by risk:
 
@@ -1037,8 +1038,15 @@ Prioritized, by risk:
   full per-attempt revision loop - **NOT merged**: it's woven with `break`/`continue` and mutates five
   locals (`best`, `approved_attempt`, `fix_notes`, `judge_note`, `base_draft`); extracting it needs
   signal-return callback-soup that reads worse than the duplication. Leave the loop bodies inline.
-- **Tier 3 (defer):** the `run()`/`_run_article()` phase-machine loop (works, but the `control`/pool/log
-  flow makes unification low-value until a 3rd pipeline variant appears).
+- **Tier 3 (evaluated):** ✅ `_mark_escalated` (durable pending-review + resolver hint) and
+  `_log_run_complete` (done line + usage summary) - two pure, byte-identical idioms pulled out of both
+  run loops - **done**. ❌ the `run()`/`_run_article()` **phase-machine loop unification** - **evaluated
+  and deliberately NOT merged**: the two machines share only a shape - they differ in phase *set* (book
+  chapters/consolidate/production/learn vs article sections/produce/learn), in the `Store` lifecycle (book
+  opens/closes it, article is stateless), and in book's consolidation-interleave + pending-review
+  branching that has no article analog. A shared loop would be a dispatch table of closures over a dozen
+  shared mutable locals (cfg/paths/plan/toc/store/prefetch/pool/...) plus signal-return control flow -
+  strictly worse to read than two linear machines. Revisit only if a 3rd pipeline variant appears.
 - **Keep separate (semantically different, by design):** context assembly (book persistent Store vs
   article stateless summaries), production (front/back-matter vs cohesion+polish), and the per-mode
   learner inputs.

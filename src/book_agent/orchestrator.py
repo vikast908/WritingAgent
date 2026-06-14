@@ -437,6 +437,25 @@ def _apply_run_control(control, state, paths, log) -> bool:
     return False
 
 
+def _mark_escalated(state, paths, kind: str, msg: str, log) -> None:
+    """Record a unit escalation in the durable run_state and tell the author how to
+    resolve it. Shared by the book and article run loops; the caller returns `state`
+    afterwards (the run pauses here until the review is answered)."""
+    state["pending_review"] = True
+    state["review_kind"] = kind
+    brain.write_json(paths.run_state, state)
+    log(msg)
+
+
+def _log_run_complete(label: str, name: str, manuscript, log) -> None:
+    """Shared run-completion footer: the done line + the per-run token/cost usage
+    summary (book and article print these identically)."""
+    log(f"[OK] {label} '{name}' complete. Manuscript: {manuscript}")
+    summary = llm.usage_summary()
+    if summary:
+        log("   " + summary)
+
+
 def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
         autonomous: bool | None = None, log=print, ask=None, control=None) -> dict:
     llm.reset_usage()
@@ -505,10 +524,9 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
                 outcome = _process_chapter(cfg, paths, plan, toc, store, state, n, log,
                                            prefetched=prefetch.pop(n, None), ask=ask)
                 if outcome == "escalate":
-                    state["pending_review"] = True
-                    state["review_kind"] = "chapter"
-                    brain.write_json(paths.run_state, state)
-                    log(f"[!] Chapter {n} escalated. Resolve with `book review` then `book run`.")
+                    _mark_escalated(state, paths, "chapter",
+                                    f"[!] Chapter {n} escalated. Resolve with `book review` then `book run`.",
+                                    log)
                     return state
                 state["committed"] += 1
                 state["current_chapter"] = n + 1
@@ -550,10 +568,7 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
                 _learn(cfg, paths, plan, log=log)
                 state["phase"] = "done"
                 brain.write_json(paths.run_state, state)
-        log(f"[OK] Book '{book_id}' complete. Manuscript: {paths.manuscript}")
-        _summary = llm.usage_summary()
-        if _summary:
-            log("   " + _summary)
+        _log_run_complete("Book", book_id, paths.manuscript, log)
         return state
     except llm.BudgetExceeded as e:
         # Nothing committed mid-flight is lost: the resume guards make a re-run
@@ -1693,10 +1708,8 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log, ask=No
                 outcome = _process_article_section(cfg, paths, outline, state, n, log,
                                                    prefetched=prefetch.pop(n, None), ask=ask)
                 if outcome == "escalate":
-                    state["pending_review"] = True
-                    state["review_kind"] = "section"
-                    brain.write_json(paths.run_state, state)
-                    log(f"[!] Section {n} escalated. Resolve with `review` then `run`.")
+                    _mark_escalated(state, paths, "section",
+                                    f"[!] Section {n} escalated. Resolve with `review` then `run`.", log)
                     return state
                 state["committed"] += 1
                 state["current_section"] = n + 1
@@ -1717,10 +1730,7 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log, ask=No
         return state
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
-    log(f"[OK] Article '{paths.article_id}' complete. Manuscript: {paths.manuscript}")
-    _summary = llm.usage_summary()
-    if _summary:
-        log("   " + _summary)
+    _log_run_complete("Article", paths.article_id, paths.manuscript, log)
     return state
 
 

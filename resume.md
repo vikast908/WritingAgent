@@ -5,6 +5,19 @@
 
 ## Current status
 
+- **New (2026-06-14 - book↔article dedup, Tier 3 evaluated; refactor backlog closed):** pulled two pure,
+  byte-identical idioms out of both run loops - **`_mark_escalated`** (durable pending-review + the
+  "resolve with..." hint) and **`_log_run_complete`** (the `[OK] ... complete` line + per-run usage
+  summary). **Deliberately did NOT unify the `run()`/`_run_article()` phase machines:** they share only a
+  shape - different phase *sets* (chapters/consolidate/production/learn vs sections/produce/learn), the
+  `Store` lifecycle (book opens/closes, article stateless), and book's consolidation-interleave +
+  pending-review branching with no article analog. A shared loop = a dispatch table of closures over a
+  dozen shared mutable locals + signal-return control flow, strictly worse than two linear machines.
+  Suite **330 passed / 1 skipped**, ruff clean, fake-mode e2e drove BOTH pipelines to the shared
+  completion footer. That closes the §20 dedup backlog: everything cleanly shareable is shared; the rest
+  is documented as *evaluated-and-declined* (not "todo"). **Next deferred win:** split the giant files
+  (`shell.py` 144 KB, `orchestrator.py` 115 KB) along their natural seams now that cross-path duplication
+  is paid down.
 - **New (2026-06-14 - book↔article dedup, Tier 2 done):** extracted two shared helpers in
   `orchestrator.py` so the drift-prone chapter/section paths share one source: **`_divergent_first_draft`**
   (attempt-0 divergent drafting - N variants at varied temps → critique → side-by-side judge picks the
