@@ -52,6 +52,9 @@ __all__ = [
     '_finalize_unit',
     '_praised_passages',
     '_run_learner',
+    '_escalate',
+    '_manuscript_section_bodies',
+    '_replace_manuscript_section',
 ]
 
 
@@ -545,3 +548,45 @@ def _run_learner(cfg, paths, plan, instructions: str, findings: str, *, log) -> 
     statuses = skills_mod.reconcile(uid)
     log(f"   [learn] +{len(out.skills)} skills, {len(out.watch_items)} watch items; "
         f"reconciled {len(statuses)} skills")
+
+
+def _escalate(paths, n, crit: S.Critique, draft: str) -> None:
+    brain.write_text(paths.ch_draft(n), draft)
+    lines = [
+        f"# Review needed - chapter {n}", "",
+        f"- verdict: {crit.verdict}", f"- confidence: {crit.confidence:.2f}", "",
+        "## Blocking",
+        *(f"- [{b.type}] {b.where}: {b.detail}\n  fix: {b.fix}" for b in crit.blocking),
+        "", "## Nits", *(f"- {x}" for x in crit.nits), "",
+        "## Your directed instructions",
+        "_Run: book review --chapter N --instruction \"...\" - then book run to resume._",
+    ]
+    brain.write_text(paths.review_of(n), "\n".join(lines))
+    brain.append_text(paths.revision_log, f"## Chapter {n} ESCALATED ({crit.verdict})")
+
+
+def _manuscript_section_bodies(ms: str) -> list[str]:
+    """Section bodies from an assembled manuscript (skips header + References).
+    Tolerates the doubled '---' separators the header block produces."""
+    bodies = []
+    for part in ms.split("\n\n---\n\n"):
+        s = re.sub(r"^(?:-{3,}\s*)+", "", part.strip()).strip()
+        if s.startswith("## ") and not s.startswith("## References"):
+            bodies.append(s)
+    return bodies
+
+
+def _replace_manuscript_section(ms: str, idx: int, new_body: str) -> str | None:
+    """Replace the idx-th (0-based) section body in an assembled manuscript.
+    Returns the new manuscript, or None when idx is out of range."""
+    parts = ms.split("\n\n---\n\n")
+    count = -1
+    for i, part in enumerate(parts):
+        s = re.sub(r"^(?:-{3,}\s*)+", "", part.strip()).strip()
+        if s.startswith("## ") and not s.startswith("## References"):
+            count += 1
+            if count == idx:
+                prefix = part[: part.find(s)] if s and s in part else ""
+                parts[i] = prefix + new_body
+                return "\n\n---\n\n".join(parts)
+    return None
