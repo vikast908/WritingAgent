@@ -19,11 +19,11 @@ import shlex
 import threading
 import time
 
-from . import __version__ as _VERSION  # single source of truth (src/book_agent/__init__.py)
-from . import brain, ui
-from . import skills as skills_mod
-from .config import ModelConfig, Settings, save_config, save_settings
-from .ui import DIM, ERR, GOLD, GOLD_HI, INK, OFF_CLR, ON_CLR, PARCH, RULE  # palette
+from .. import __version__ as _VERSION  # single source of truth (src/book_agent/__init__.py)
+from .. import brain, ui
+from .. import skills as skills_mod
+from ..config import ModelConfig, Settings, save_config, save_settings
+from ..ui import DIM, ERR, GOLD, GOLD_HI, INK, OFF_CLR, ON_CLR, PARCH, RULE  # palette
 
 
 def _sync_palette() -> None:
@@ -392,7 +392,7 @@ def _active_provider(settings: Settings | None):
     if settings is None:
         return None
     try:
-        from . import providers
+        from .. import providers
         return providers.REGISTRY.get(providers.resolve(settings.provider))
     except Exception:  # noqa: BLE001 - cosmetic only
         return None
@@ -421,7 +421,7 @@ def _provider_needs_key(settings: Settings | None) -> bool:
     if p is None:
         return False
     try:
-        from . import providers
+        from .. import providers
         return not getattr(p, "local", False) and not providers.has_credentials(p)
     except Exception:  # noqa: BLE001 - cosmetic only
         return False
@@ -495,7 +495,7 @@ def _feat_row(label: str, enabled: bool, desc: str) -> tuple[str, str]:
 
 
 def _book_status_rows(uid: str, projects: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    from .brain import ArticlePaths, BookPaths
+    from ..brain import ArticlePaths, BookPaths
     rows = []
     for project_id, ptype in projects[:8]:
         try:
@@ -852,7 +852,7 @@ def _slash_help_topic(console, settings: Settings | None, topic: str) -> None:
 
 def _model_catalog(console) -> None:
     """Browse popular models (`/model list`). Any slug works; this is just discovery."""
-    from . import providers
+    from .. import providers
     if console:
         _section(console, "POPULAR MODELS")
         rows = [(fam if i == 0 else "", s)               # family shown once; one slug per line
@@ -901,7 +901,7 @@ def _cmd_model(console, cfg: ModelConfig, rest: list[str]) -> None:
 def _cmd_provider(console, settings: Settings, rest: list[str]) -> None:
     """Show or switch the model host. `/provider` lists every provider with a
     key/local marker; `/provider <id>` switches, persists, and rebuilds the client."""
-    from . import llm, providers
+    from .. import llm, providers
     if not rest:
         active = providers.resolve(settings.provider)
         rows = []
@@ -1139,7 +1139,7 @@ def _use_project(console, uid: str, query: str, state: dict) -> None:
 
 def _cmd_dashboard(console, uid: str, rest: list[str]) -> None:
     """/dashboard [project] - telemetry rollup: calls, tokens, cost, latency, errors."""
-    from . import telemetry
+    from .. import telemetry
     project = " ".join(rest) if rest else None
     if project and project not in {p[0] for p in brain.list_projects(uid)}:
         project, cands = brain.resolve_project(uid, project)
@@ -1284,7 +1284,7 @@ def _cmd_auto(console, settings: Settings, state: dict, name: str, rest: list[st
     run_state - so `/auto on` over a stalled section clears its review and the
     next `run` finishes the piece without pausing.
     """
-    from . import orchestrator
+    from .. import orchestrator
     if name == "manual":
         want = False
     elif name == "autonomous":
@@ -1327,7 +1327,7 @@ def _cmd_praise(console, state: dict, rest: list[str]) -> None:
     calls receive it as a register exemplar, and the learner distills what made it
     work (positive signal, not just failure patterns).
     """
-    from .brain import ArticlePaths, BookPaths
+    from ..brain import ArticlePaths, BookPaths
     book = state.get("book")
     if not book:
         _out(console, f"[{ERR}]No active project.[/] Use `/use <project>` first.")
@@ -1811,7 +1811,7 @@ class _RunDashboard:
         from rich.console import Group
         from rich.text import Text
 
-        from . import llm
+        from .. import llm
         head = Text()
         head.append(f"{_FLEURON} {self.book_id}", style=f"bold {GOLD}")
         toks = f"{llm.current_tokens():,}"
@@ -1898,8 +1898,8 @@ def _summary_card(console, dash, state: dict, uid: str, book_id: str) -> None:
     from rich.panel import Panel
     from rich.text import Text
 
-    from . import llm
-    from .brain import ArticlePaths, BookPaths
+    from .. import llm
+    from ..brain import ArticlePaths, BookPaths
     console.print()   # settle: the Live's last frame has no trailing newline, so the
     #                   summary Panel border would otherwise glue onto the last log line
     is_article = state.get("mode") == "article"
@@ -1956,7 +1956,7 @@ def _paused_card(console, book_id: str) -> None:
     from rich.panel import Panel
     from rich.text import Text
 
-    from . import llm
+    from .. import llm
     console.print()
     tok, cap = llm.current_tokens(), llm.run_budget()
     body = Text()
@@ -1982,9 +1982,9 @@ def _escalation_picker(console, cfg, uid: str, book_id: str, state: dict) -> str
     a two-flag command. Returns 'rerun' (resume the pipeline) or 'stop'."""
     from rich.markdown import Markdown
 
-    from . import orchestrator
-    from .brain import ArticlePaths, BookPaths
-    from .config import load_settings as _load_settings
+    from .. import orchestrator
+    from ..brain import ArticlePaths, BookPaths
+    from ..config import load_settings as _load_settings
     is_article = state.get("mode") == "article"
     unit = "section" if is_article else "chapter"
     n = state.get("current_section" if is_article else "current_chapter")
@@ -2047,9 +2047,9 @@ def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = Fa
 
     from rich.live import Live
 
-    from . import brain as _brain
-    from . import orchestrator
-    from .brain import ArticlePaths, BookPaths
+    from .. import brain as _brain
+    from .. import orchestrator
+    from ..brain import ArticlePaths, BookPaths
 
     interactive = bool(console) and _sys.stdin.isatty()
     while True:
@@ -2204,7 +2204,7 @@ def _build_chat_system(settings: Settings, state: dict) -> str:
     # (emit `review --chapter N --instruction ...` or `run --autonomous`) instead of
     # looping on status/read.
     if active:
-        from .brain import ArticlePaths, BookPaths
+        from ..brain import ArticlePaths, BookPaths
         ap = ArticlePaths(active, uid)
         paths = ap if ap.run_state.exists() else BookPaths(active, uid)
         st = brain.read_json(paths.run_state) or {}
@@ -2247,7 +2247,7 @@ def _build_chat_system(settings: Settings, state: dict) -> str:
 
 def _next_hint(state: dict, settings=None) -> str:
     """One-liner prompt of the most useful next action given current state."""
-    from .brain import ArticlePaths, BookPaths
+    from ..brain import ArticlePaths, BookPaths
     projects = brain.list_projects(state["uid"])
     active = state.get("book")
     if not projects:
@@ -2291,7 +2291,7 @@ def _compact_history(history: list, cfg: ModelConfig) -> list:
     """Summarize chat history to a single system message using the chat model."""
     if not history:
         return []
-    from .llm import complete_text
+    from ..llm import complete_text
     model = cfg.model_for("chat")
     transcript = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in history)
     summary = complete_text(
@@ -2317,7 +2317,7 @@ def _trim_history(history: list, user_msg: dict, asst_msg: dict) -> None:
 
 def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, state: dict) -> None:
     """Route unrecognised input to the chat model with streaming + spinner UX."""
-    from .llm import stream_text
+    from ..llm import stream_text
 
     system = _build_chat_system(settings, state)
     model = cfg.model_for("chat")
@@ -2479,7 +2479,7 @@ def _prompt_state(state: dict) -> str:
     if not book:
         return ""
     try:
-        from .brain import ArticlePaths, BookPaths
+        from ..brain import ArticlePaths, BookPaths
         art = ArticlePaths(book, state["uid"])
         if art.run_state.exists():
             st = brain.read_json(art.run_state) or {}
@@ -2557,7 +2557,7 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
             active = state.get("book")
             ctx_lines = []
             if active:
-                from .brain import ArticlePaths, BookPaths
+                from ..brain import ArticlePaths, BookPaths
                 art = ArticlePaths(active, state["uid"])
                 if art.run_state.exists():
                     st = brain.read_json(art.run_state) or {}
@@ -2716,7 +2716,7 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                         if pid.startswith(cur):
                             yield _comp(pid, -len(cur), ptype)
                 elif sub in ("model", "models"):
-                    from . import providers
+                    from .. import providers
                     if len(words) <= (1 if ends_space else 2):       # agent | all-agents slug | list
                         for a in ["default", "list", *_NODES]:
                             if a.startswith(cur):
@@ -2729,7 +2729,7 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                             if slug.startswith(cur):
                                 yield _comp(slug, -len(cur), "model")
                 elif sub in ("provider", "providers"):
-                    from . import providers
+                    from .. import providers
                     for pid in providers.names():
                         if pid.startswith(cur):
                             tag = "local" if providers.REGISTRY[pid].local else "host"
@@ -2758,7 +2758,7 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                                 if v.startswith(cur):
                                     yield _comp(v, -len(cur), "theme")
                         elif key == "provider":
-                            from . import providers
+                            from .. import providers
                             for pid in providers.names():
                                 if pid.startswith(cur):
                                     yield _comp(pid, -len(cur), "host")
@@ -2791,7 +2791,7 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
                         yield _comp(c, -len(cur), "command")
                 return
             if words[0] == "export":                             # formats (positional) + --format
-                from .cli import _EXPORT_FORMATS
+                from ..cli import _EXPORT_FORMATS
                 opts = [*_EXPORT_FORMATS, "all"]
                 prior = words[-1] if ends_space else (words[-2] if len(words) >= 2 else "")
                 if prior == "--format":
@@ -2874,7 +2874,7 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
             sfx_plain = ""
             if book:
                 try:
-                    from .brain import BookPaths
+                    from ..brain import BookPaths
                     st = brain.read_json(BookPaths(book, state["uid"]).run_state) or {}
                     if st.get("pending_review"):
                         sfx_plain = " !"
