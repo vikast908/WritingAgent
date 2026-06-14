@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from book_agent import llm, nodes
-from book_agent import schemas as S
-from book_agent.config import ModelConfig
+from writingagent import llm, nodes
+from writingagent import schemas as S
+from writingagent.config import ModelConfig
 
 
 def test_strip_schema_noise_drops_titles_keeps_structure():
@@ -71,7 +71,7 @@ def test_max_tokens_for_override_and_default():
 
 
 def test_build_evidence_report():
-    from book_agent import polish
+    from writingagent import polish
     ms = ("# My Title\n\n*angle*\n\nBody.\n\n---\n\n"
           "## References\n\n*Ranked by influence on this article (0–100).*\n\n"
           "1. **100** · 2024 · [A](http://a)\n2. **40** · n.d. · [B](http://b)\n")

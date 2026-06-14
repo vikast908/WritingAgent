@@ -1,4 +1,4 @@
-# Book Agent - Plan
+# Writing Agent - Plan
 
 A self-correcting, multi-book writing system. Not a chatbot and not a single prompt - a
 **writing machine with memory** that drafts chapters, judges its own work, escalates to a
@@ -7,9 +7,9 @@ human when it's unsure, and **learns reusable craft skills per user across many 
 > **The loop:** write → judge → (approve | revise | escalate to human) → commit canon →
 > consolidate → learn skills → write the next chapter better.
 
-> **Implementation status (v1, updated 2026-06-12).** Built in `src/book_agent/` and shipped as an
+> **Implementation status (v1, updated 2026-06-12).** Built in `src/writingagent/` and shipped as an
 > interactive **WRITING AGENT** shell (a themed TUI with slash commands + per-agent model switching)
-> plus a one-shot CLI (`writing-agent` / `bookwriter` / `book` / `python book.py`; see README).
+> plus a one-shot CLI (`writing-agent` / `python writingagent.py`; see README).
 > **Live-validated** on OpenRouter + DeepSeek V4 Pro/Flash: fully autonomous runs completed a book
 > (9-page PDF, captured in `SampleRun/`) and a long-form article (6 sections, DOCX export).
 >
@@ -505,11 +505,11 @@ a **single transport**. `providers.py` is a small frozen-dataclass registry (`id
 **OpenRouter is the default** (and the only host that reports real USD `usage.cost`); also built in:
 DeepSeek, OpenAI, Google Gemini (compat endpoint), xAI, Groq, Mistral, Moonshot/Kimi, Qwen/DashScope,
 Zhipu GLM, NVIDIA NIM, Together/Fireworks/DeepInfra aggregators, **Ollama** and **LM Studio** (local,
-no key), and a `custom` escape hatch (`BOOK_AGENT_BASE_URL`). Aliases resolve shorthand (`grok→xai`,
+no key), and a `custom` escape hatch (`WRITINGAGENT_BASE_URL`). Aliases resolve shorthand (`grok→xai`,
 `ds→deepseek`, `kimi→moonshot`, …). Adding a provider is **one registry entry**, nothing else.
 
 Switch with **`/provider <id>`** (lists every host with a key/local/no-key marker, persists to
-`settings.provider`, rebuilds the client), `/set provider <id>`, or **`BOOK_AGENT_PROVIDER`**.
+`settings.provider`, rebuilds the client), `/set provider <id>`, or **`WRITINGAGENT_PROVIDER`**.
 Credentials are resolved lazily - switching to a key-less host never crashes startup; the clear
 "set `XAI_API_KEY`" error only fires on the first real call. Each host reads its own key env var; a
 `*_BASE_URL` var points any provider at a proxy/self-hosted gateway. *Deliberately out of scope
@@ -525,17 +525,17 @@ across hosts - set them per host with `/model`.*
 Two surfaces over one engine (plus the markdown brain repo, which is half the UI - read chapters
 and canon in any editor):
 
-- **Interactive shell - the WRITING AGENT TUI.** Run `writing-agent` / `book` / `python book.py`
+- **Interactive shell - the WRITING AGENT TUI.** Run `writing-agent` / `python writingagent.py`
   with no command (see `shell.py`). Themed masthead (gradient-filled ANSI Shadow wordmark; theme
   also sets palette/figlet/glyphs - `ui.THEMES`), a **compact welcome** (START + your projects +
   a status footer - sized so the wordmark is still on screen at the first prompt on a 30-row
   terminal; the full command list lives under `/help`, the feature board under `/features`; a
-  red warning fires when `BOOK_AGENT_FAKE` is set so test mode can't silently eat real runs),
+  red warning fires when `WRITINGAGENT_FAKE` is set so test mode can't silently eat real runs),
   live run dashboard (progress, stage, tokens vs budget, USD cost), `/dashboard` telemetry
   rollup, autocomplete + persistent history, and a `❧ <model>` prompt. No bottom toolbar (it
-  read as noise; state lives in the prompt prefix + welcome footer). Type book commands without
-  the `book` prefix; lines starting with `/` are slash commands; anything else is free chat.
-- **One-shot CLI** - `python book.py <command> ...` (same commands), for scripting.
+  read as noise; state lives in the prompt prefix + welcome footer). Type commands directly (no
+  command-name prefix); lines starting with `/` are slash commands; anything else is free chat.
+- **One-shot CLI** - `python writingagent.py <command> ...` (same commands), for scripting.
 
 | Command | Does |
 |---|---|
@@ -597,15 +597,15 @@ surfaces via the prompt suffix and the escalation picker (the bottom toolbar was
   (rolling median per stage) and a **"self-edits"** line (revision / humanizer counts).
 - **Structured recovery**, never a dead stop: a *paused* card (budget-cap vs interrupt, with resume +
   alternatives) and export failures that say why + how to recover (file locked / missing optional dep).
-- **Accessibility**: `BOOK_AGENT_A11Y` line-mode (no in-place Live redraw — append-only full-sentence
-  status for screen readers), `BOOK_AGENT_REDUCED_MOTION` (static stages, no spinner), a one-line
+- **Accessibility**: `WRITINGAGENT_A11Y` line-mode (no in-place Live redraw — append-only full-sentence
+  status for screen readers), `WRITINGAGENT_REDUCED_MOTION` (static stages, no spinner), a one-line
   wordmark on narrow (<60-col) terminals, and `NO_COLOR` / `--plain` honored throughout.
 - **Proactive key check**: the banner warns when the active provider has no API key (before the first
-  call fails); `BOOK_AGENT_PROVIDER` now syncs `settings.provider` so the masthead is accurate.
+  call fails); `WRITINGAGENT_PROVIDER` now syncs `settings.provider` so the masthead is accurate.
 - **Progressive help**: `/help <topic>` shows only the matching commands.
 - **Second UX pass (2026-06-14, P1–P3):**
   - **First-run onboarding** — with no API key, the welcome shows a "NO API KEY YET" block (set the key
-    *or* try the whole flow free with `BOOK_AGENT_FAKE=1`) instead of suggesting a command that fails.
+    *or* try the whole flow free with `WRITINGAGENT_FAKE=1`) instead of suggesting a command that fails.
   - **Friendly recoverable errors** (`ui.explain_error`) — bad/missing key (401), rate-limit (429),
     network blip, and locked files map to a clear next step (every hint notes progress is saved), wired
     into the shell + chat error sinks; unknown errors fall back to the raw message.
@@ -621,7 +621,7 @@ surfaces via the prompt suffix and the escalation picker (the bottom toolbar was
     `/delete` discards.
 - **Reading time** is prose-only — fenced code and the references list are excluded
   (`polish.read_time_min`, `READ_WPM`), so technical pieces no longer over-state "N min read".
-- **Version** is single-sourced from `book_agent.__version__` (pyproject derives it via
+- **Version** is single-sourced from `writingagent.__version__` (pyproject derives it via
   `dynamic`/`attr`); the TUI imports it. Currently **0.2.0**.
 
 ---
@@ -665,7 +665,7 @@ Durable decisions from the hardening pass. All thresholds are tunable config.
 | **Concurrency** | The chapter/section *prose* chain is **sequential by design** (continuity: each unit reads the previous summary). Everything independent of prose overlaps via a small thread pool (`concurrency.gather`): (a) within a unit, research ∥ image/SVG ∥ skill retrieval; (b) **unit n+1's research/images/skills are prefetched while unit n is written/critiqued** (they depend only on the plan/TOC; prefetch results are disk-cached so escalations waste nothing); (c) at commit, **humanize ∥ summarize ∥ canon-extraction** run as one batch (`strict=True` - a failed summary/extraction still aborts the commit) since all three derive from the same approved draft; (d) production's front/back-matter components. The SQLite `Store` is only touched on the main thread. |
 | **Prompt size** | The writer/critic canon block is capped at the **most recent `MAX_CANON_FACTS_PER_CHAR` (12) facts per character** - uncapped it grows linearly with the book and late chapters pay maximum latency/cost. Consolidation and extraction still see the full canon. |
 | **Caching** | Web-search results (7-day TTL) and generated SVG diagrams are cached on disk under `.index/cache/` (best-effort; corrupt entries self-heal as misses). |
-| **State durability** | `run_state.json` (and all brain writes) are written **atomically** (temp file + `os.replace`); `read_json` tolerates a corrupt file (returns `None`). A crash between commit and the state advance is caught by a **resume guard** that skips already-committed units - no double-commit, no duplicate canon facts. `BOOK_AGENT_HOME` relocates the writable brain + index off synced folders (OneDrive/Dropbox locks can break `os.replace` and slow every write). |
+| **State durability** | `run_state.json` (and all brain writes) are written **atomically** (temp file + `os.replace`); `read_json` tolerates a corrupt file (returns `None`). A crash between commit and the state advance is caught by a **resume guard** that skips already-committed units - no double-commit, no duplicate canon facts. `WRITINGAGENT_HOME` relocates the writable brain + index off synced folders (OneDrive/Dropbox locks can break `os.replace` and slow every write). |
 | **Safety** | The conversational assistant may **not** auto-execute `delete` / `/user` / `/set` (data-loss / tenant / config) - the human must type those. Project/user ids are validated (`is_safe_id`) and `delete_book` confines `rmtree` to the brain dir. Exported HTML is sanitized (no `<script>`/`<iframe>`/event handlers). A chat **stream error renders as an error**, not as assistant prose - a half-streamed reply is never saved to chat history or command-parsed (an error chunk that passed for prose would be). Deep-research fetches pass an SSRF/robots/politeness gate (§15.2). |
 | **Telemetry** | Token usage is aggregated per run and surfaced (`[usage]` line + live in the run dashboard, with real USD cost when OpenRouter reports `usage.cost`). Every LLM call also appends a structured JSONL record - ts, run_id, project, unit (chXX/secXX/phase), kind, model, latency, attempts, tokens, cost, error - to `.index/telemetry/calls-YYYYMMDD.jsonl` (best-effort, never breaks a run). `/dashboard [<project>]` renders the rollup (totals, per-model; per-unit when a project is named). |
 | **Run budget (kill-switch)** | `max_run_tokens` (0 = unlimited): checked before every LLM call; crossing it raises `BudgetExceeded`, which `run()` catches to pause cleanly - state stays resumable, nothing committed is lost. Budget is read live from settings at run start; the dashboard shows `tokens / budget`. |
@@ -677,21 +677,21 @@ Durable decisions from the hardening pass. All thresholds are tunable config.
 | **Article cohesion** | `article_cohesion` (default on): a whole-article smoothing pass over the assembled sections (transitions, cross-section repetition, terminology) before References. Guarded - if the edit shrinks the body >40% or loses headings, the original is kept. |
 | **Long-range retrieval** | `assemble_context` augments canon + dependency summaries with FTS5 excerpts from *other* committed chapters matched on the blueprint's key terms (`store.search_excerpts`). Timeline events are recorded under the actual committing chapter (LLM-reported numbers were unreliable). |
 | **Export fidelity** | All exporters resolve relative `images/` references against the project root: PDF renders SVG as **vector art via xhtml2pdf's svglib** (always available - it's a hard dep; arrow markers degrade to plain lines), preferring **cairosvg rasterization** when installed (full marker fidelity); EPUB packages images as items, DOCX passes `--resource-path` to pandoc, HTML inlines images as data URIs. |
-| **Diagram quality (spec → deterministic render, 2026-06-13)** | The model no longer emits SVG - it is bad at geometry, so labels overflowed and edge pills collided no matter the prompt (two prompt rounds failed). The `diagram` node now returns a **structured `DiagramSpec`** (nodes/edges/labels/archetype - what an LLM is good at) via `DIAGRAM_SPEC_SYS`, and **`diagram.py` lays it out deterministically**: text is measured (per-char widths) so boxes are sized to fit and labels wrap before overflowing; nodes are placed by archetype (column-ranked DAG for `flow`, stacked lane bands for `layered`, an evenly-spaced **ring for `cycle`**, two colour-headed **columns for `comparison`** - radius/column maths keep boxes clear; `cycle`<3 nodes or `comparison`<2 groups degrade to `flow`) so **boxes can't overlap by construction**; the ranker detects **back edges via DFS and excludes them** so a feedback/loop arrow doesn't reverse a pipeline; edges route as orthogonal elbows (adjacent) or stacked bottom channels (spanning/back) that never cross boxes; edge labels get measured white pills with collision-nudging; groups map to a consistent colour + a bottom legend; one `focus` node is emphasized. **Arrowheads are explicit polygons** (svglib drops `<marker>`, so marker-only arrows vanish in PDF). `_svg_fill_guard` (forces `fill="none"`) stays as a no-op safety net. A node-less spec → **flash-tier `diagram_fallback`** retry → minimal placeholder. Disk-cached by (model, heading, context, engine).<br>**Optional D2 backend (`diagram_engine`, default `auto`).** The same `DiagramSpec` can instead be laid out by the **[D2](https://d2lang.com) CLI with ELK** (`diagram.to_d2` → `d2 --layout elk`), which routes complex graphs (fan-out/fan-in, lane containers) better than the built-in engine - chosen after a side-by-side render comparison. D2 has no legend of its own, so `_inject_d2_legend` extends its outer viewBox and appends a colour legend matching the node borders. `engine`: `auto` (use d2 when the `d2` binary is on PATH or `$BOOK_AGENT_D2`, else built-in), `d2`, or `builtin`. The built-in engine stays the **zero-dependency default** (d2 is an ~18 MB Go binary, not required - CI and unconfigured users get built-in); any d2 failure falls back to it. |
+| **Diagram quality (spec → deterministic render, 2026-06-13)** | The model no longer emits SVG - it is bad at geometry, so labels overflowed and edge pills collided no matter the prompt (two prompt rounds failed). The `diagram` node now returns a **structured `DiagramSpec`** (nodes/edges/labels/archetype - what an LLM is good at) via `DIAGRAM_SPEC_SYS`, and **`diagram.py` lays it out deterministically**: text is measured (per-char widths) so boxes are sized to fit and labels wrap before overflowing; nodes are placed by archetype (column-ranked DAG for `flow`, stacked lane bands for `layered`, an evenly-spaced **ring for `cycle`**, two colour-headed **columns for `comparison`** - radius/column maths keep boxes clear; `cycle`<3 nodes or `comparison`<2 groups degrade to `flow`) so **boxes can't overlap by construction**; the ranker detects **back edges via DFS and excludes them** so a feedback/loop arrow doesn't reverse a pipeline; edges route as orthogonal elbows (adjacent) or stacked bottom channels (spanning/back) that never cross boxes; edge labels get measured white pills with collision-nudging; groups map to a consistent colour + a bottom legend; one `focus` node is emphasized. **Arrowheads are explicit polygons** (svglib drops `<marker>`, so marker-only arrows vanish in PDF). `_svg_fill_guard` (forces `fill="none"`) stays as a no-op safety net. A node-less spec → **flash-tier `diagram_fallback`** retry → minimal placeholder. Disk-cached by (model, heading, context, engine).<br>**Optional D2 backend (`diagram_engine`, default `auto`).** The same `DiagramSpec` can instead be laid out by the **[D2](https://d2lang.com) CLI with ELK** (`diagram.to_d2` → `d2 --layout elk`), which routes complex graphs (fan-out/fan-in, lane containers) better than the built-in engine - chosen after a side-by-side render comparison. D2 has no legend of its own, so `_inject_d2_legend` extends its outer viewBox and appends a colour legend matching the node borders. `engine`: `auto` (use d2 when the `d2` binary is on PATH or `$WRITINGAGENT_D2`, else built-in), `d2`, or `builtin`. The built-in engine stays the **zero-dependency default** (d2 is an ~18 MB Go binary, not required - CI and unconfigured users get built-in); any d2 failure falls back to it. |
 
 ### 15.2 Deep multi-source researcher (`deep_research`, off by default)
 
-The "Deep Researcher" once deferred below, now built (`src/book_agent/deep_research.py`).
+The "Deep Researcher" once deferred below, now built (`src/writingagent/deep_research.py`).
 Opt-in via `deep_research: true` (it layers on `use_researcher`); both books and articles use it.
 
 | Aspect | Decision |
 |---|---|
 | **Query expansion** | A `researcher`-model node (`nodes.propose_search_queries`) turns the chapter/section focus into a few distinct queries (core facts, recent developments, expert/critical angle, examples). Best-effort: on failure the deterministic seed query still runs. |
 | **Fan-out + diversity** | The expansion LLM call runs **concurrently with a warm-up search for the seed query** (`orchestrator._deep_docs`; search results are disk-cached, so the merged pass re-reads it for free). Queries are then searched concurrently (`concurrency.gather` over `search.web_search`, one DDGS session per thread), hits merged in query order, **deduped by URL**, and capped at `max_per_domain` (2) so a brief spans multiple sites - then the top `max_sources` (6) are kept. |
-| **Full-text fetch** | The kept sources have their actual page text fetched concurrently. **Fetch backend is pluggable:** if **Scrapo** (`github.com/vikast908/Scrapo`) is installed it's preferred - it returns clean page markdown and escalates HTTP -> browser -> stealth, reaching JS-rendered/soft-blocked pages; otherwise a pure-stdlib `urllib` + `html.parser` extractor is used (script/style/nav stripped, http(s) only, byte-capped, non-HTML skipped). All Scrapo coroutines share **one persistent background event loop** (no per-URL loop churn; enables session/browser reuse inside Scrapo). 7-day disk cache wraps both. Every step is non-fatal: Scrapo failure falls back to stdlib, which falls back to the snippet. `BOOK_AGENT_NO_SCRAPO=1` forces the stdlib path. |
+| **Full-text fetch** | The kept sources have their actual page text fetched concurrently. **Fetch backend is pluggable:** if **Scrapo** (`github.com/vikast908/Scrapo`) is installed it's preferred - it returns clean page markdown and escalates HTTP -> browser -> stealth, reaching JS-rendered/soft-blocked pages; otherwise a pure-stdlib `urllib` + `html.parser` extractor is used (script/style/nav stripped, http(s) only, byte-capped, non-HTML skipped). All Scrapo coroutines share **one persistent background event loop** (no per-URL loop churn; enables session/browser reuse inside Scrapo). 7-day disk cache wraps both. Every step is non-fatal: Scrapo failure falls back to stdlib, which falls back to the snippet. `WRITINGAGENT_NO_SCRAPO=1` forces the stdlib path. |
 | **Synthesis** | `nodes.deep_research` / `deep_research_article` read the numbered full-text sources and produce a brief that cites sources by number and flags agreement/disagreement. For articles the **real fetched URLs** become the persisted sources (more reliable than LLM-copied URLs), feeding the References section. |
 | **Portability / cost** | Zero *required* deps - the stdlib fetch path keeps CI green on all three OSes x Python 3.10-3.13. Scrapo is an optional extra (`pip install '.[deep]'`; Python 3.11+, installs from git) for higher-fidelity fetching. Deep mode adds one query-planning LLM call + N page fetches per unit - hence opt-in. In fake/offline mode the whole path no-ops. |
-| **Fetch safety** | Search results (and the LLM's query expansion behind them) decide what gets fetched, so every uncached fetch passes a gate: **SSRF guard** (host must resolve and every address must be globally routable - blocks loopback/private/link-local/cloud-metadata; the stdlib path re-validates **each redirect hop**), **robots.txt** honored per host (cached for the process; unreachable/missing robots = allow; `BOOK_AGENT_IGNORE_ROBOTS=1` skips), and a **per-host politeness interval** (`_HOST_MIN_INTERVAL`, 1s) between requests to the same host. Scrapo does its own fetching - the initial-URL guard still applies to it, and it has `SCRAPO_RESPECT_ROBOTS` for robots. |
+| **Fetch safety** | Search results (and the LLM's query expansion behind them) decide what gets fetched, so every uncached fetch passes a gate: **SSRF guard** (host must resolve and every address must be globally routable - blocks loopback/private/link-local/cloud-metadata; the stdlib path re-validates **each redirect hop**), **robots.txt** honored per host (cached for the process; unreachable/missing robots = allow; `WRITINGAGENT_IGNORE_ROBOTS=1` skips), and a **per-host politeness interval** (`_HOST_MIN_INTERVAL`, 1s) between requests to the same host. Scrapo does its own fetching - the initial-URL guard still applies to it, and it has `SCRAPO_RESPECT_ROBOTS` for robots. |
 
 ### 15.3 Upfront-interview `write` flow (interview once, then deliver)
 
@@ -948,7 +948,7 @@ decision into `plan.md`. Never duplicate content between the two.
 ## 18. Public Python API (stable embedding surface)
 
 **Why:** the internals (`orchestrator`, `nodes`, `brain`, …) are importable but explicitly
-unstable pre-1.0. `book_agent.api` is a thin **facade** that gives integrators a supported,
+unstable pre-1.0. `writingagent.api` is a thin **facade** that gives integrators a supported,
 semver-guaranteed surface to embed the pipeline in their own programs, while leaving the internals
 free to change. The CLI/TUI and the API are siblings over the same orchestrator - neither wraps the
 other.
@@ -983,12 +983,12 @@ one-shot `write()` convenience layered on top.
 - **`requirements`** (str or dict) is the library's door to the same intake the upfront-interview
   (§15.3) feeds the writer/critic; `write()` always runs autonomously (a one-shot can't answer a
   review prompt).
-- **Lazy exports.** `book_agent/__init__.py` resolves the public names via PEP-562 `__getattr__`,
-  so `import book_agent` / `from book_agent import brain` stay cheap and never eagerly pull the
+- **Lazy exports.** `writingagent/__init__.py` resolves the public names via PEP-562 `__getattr__`,
+  so `import writingagent` / `from writingagent import brain` stay cheap and never eagerly pull the
   whole pipeline.
-- **Versioning.** `book_agent.__version__` (kept in step with `pyproject`'s); the API module's
+- **Versioning.** `writingagent.__version__` (kept in step with `pyproject`'s); the API module's
   docstring states the no-break-within-major contract. Surface is covered by `tests/test_api.py`
-  (offline, `BOOK_AGENT_FAKE`).
+  (offline, `WRITINGAGENT_FAKE`).
 
 ---
 

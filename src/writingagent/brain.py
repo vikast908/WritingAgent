@@ -10,11 +10,11 @@ import tempfile
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[2]
-# BOOK_AGENT_HOME relocates the writable state (brain + derived index) away from the
+# WRITINGAGENT_HOME relocates the writable state (brain + derived index) away from the
 # repo - important when the repo lives in a synced folder (OneDrive/Dropbox): sync
 # adds latency to every atomic write and its file locks can make os.replace fail.
-_HOME = (Path(os.environ["BOOK_AGENT_HOME"]).expanduser()
-         if os.environ.get("BOOK_AGENT_HOME") else _ROOT)
+_HOME = (Path(os.environ["WRITINGAGENT_HOME"]).expanduser()
+         if os.environ.get("WRITINGAGENT_HOME") else _ROOT)
 BRAIN = _HOME / "brain"
 INDEX_DIR = _HOME / ".index"   # derived, gitignored
 

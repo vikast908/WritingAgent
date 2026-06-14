@@ -61,17 +61,17 @@ test("whichSync finds an executable on a synthetic PATH (cross-platform)", () =>
   }
 });
 
-test("findProjectDir locates the dir holding book.py and honors WRITING_AGENT_HOME", () => {
+test("findProjectDir locates the dir holding writingagent.py and honors WRITINGAGENT_HOME", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "wa-proj-"));
   const nested = path.join(root, "a", "b");
   try {
     fs.mkdirSync(nested, { recursive: true });
-    fs.writeFileSync(path.join(root, "book.py"), "# stub");
+    fs.writeFileSync(path.join(root, "writingagent.py"), "# stub");
     // upward search from a nested dir finds the root
     assert.equal(L.findProjectDir(nested, undefined), fs.realpathSync(root));
     // explicit home wins
     assert.equal(L.findProjectDir(os.tmpdir(), root), fs.realpathSync(root));
-    // no book.py anywhere -> null
+    // no writingagent.py anywhere -> null
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), "wa-empty-"));
     assert.equal(L.findProjectDir(empty, undefined), null);
     fs.rmSync(empty, { recursive: true, force: true });

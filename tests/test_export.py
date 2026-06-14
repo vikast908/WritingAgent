@@ -1,6 +1,6 @@
 """Regression tests for manuscript export fixes (PDF code wrap, Mermaid images,
 unicode normalization, placeholder byline)."""
-from book_agent import export
+from writingagent import export
 
 
 def test_normalize_text_strips_tofu_glyphs():
@@ -37,20 +37,20 @@ def test_pre_linebreaks_preserves_code_lines():
 def test_render_mermaid_offline_keeps_source(monkeypatch):
     # In fake mode (and on any network failure) the fenced block is preserved so
     # the diagram source still appears instead of breaking the export.
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
     md = "```mermaid\nsequenceDiagram\n  A->>B: hi\n```"
     assert export._render_mermaid(md) == md
 
 
 def test_render_mermaid_falls_back_when_fetch_fails(monkeypatch):
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     monkeypatch.setattr(export, "_mermaid_png", lambda code, timeout=12.0: None)
     md = "```mermaid\ngraph TD\n  A-->B\n```"
     assert export._render_mermaid(md) == md  # unchanged: source survives
 
 
 def test_render_mermaid_embeds_data_uri_without_base_dir(monkeypatch):
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     monkeypatch.setattr(export, "_mermaid_png", lambda code, timeout=12.0: b"\x89PNG\r\n\x1a\nXX")
     md = "```mermaid\ngraph TD\n  A-->B\n```"
     out = export._render_mermaid(md)  # no base_dir → inline data URI
@@ -60,7 +60,7 @@ def test_render_mermaid_embeds_data_uri_without_base_dir(monkeypatch):
 def test_render_mermaid_caches_and_references_local_file(tmp_path, monkeypatch):
     # With base_dir the PNG is written under images/ and referenced by relative path,
     # so EPUB/DOCX can package it. A second call reads the cache (no re-fetch).
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     calls = {"n": 0}
 
     def fake_png(code, timeout=12.0):
@@ -94,7 +94,7 @@ def test_pdf_css_wraps_code():
 
 
 def test_markdown_to_pdf_renders_long_code_without_error(tmp_path, monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")  # skip mermaid network
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")  # skip mermaid network
     long_line = "x = " + " + ".join(f"variable_number_{i}" for i in range(40))
     md = f"# Doc\n\nText.\n\n```python\n{long_line}\n```\n"
     out = export.markdown_to_pdf(md, tmp_path / "doc.pdf", title="Doc")

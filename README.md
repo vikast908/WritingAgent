@@ -2,8 +2,7 @@
 
 <img src="assets/writing-agent-banner.svg" alt="Writing Agent - a self-correcting, autonomous writing system that turns a topic into a publication-ready manuscript" width="860">
 
-[![CI](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-writingagent.vercel.app-6f9ed9?style=flat-square)](https://docs-writingagent.vercel.app/)
+[![Docs](https://img.shields.io/badge/docs-docs--writingagent.vercel.app-6f9ed9?style=flat-square)](https://docs-writingagent.vercel.app/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://www.python.org/)
 [![Platforms](https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-informational?style=flat-square)](#install)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square)](LICENSE)
@@ -78,10 +77,10 @@ export` — every command is in the [**command reference ↗**](https://docs-wri
 exercise the whole pipeline and exports for free:
 
 ```bash
-BOOK_AGENT_FAKE=1 writingagent new --abstract "test" --pick 1 && writingagent run
+WRITINGAGENT_FAKE=1 writingagent new --abstract "test" --pick 1 && writingagent run
 ```
 
-<sub>Windows PowerShell: <code>$env:BOOK_AGENT_FAKE=1; writingagent new --abstract "test" --pick 1; writingagent run</code></sub>
+<sub>Windows PowerShell: <code>$env:WRITINGAGENT_FAKE=1; writingagent new --abstract "test" --pick 1; writingagent run</code></sub>
 
 ---
 
@@ -187,7 +186,7 @@ Everything beyond this tour lives at **[docs-writingagent.vercel.app](https://do
 | | |
 |---|---|
 | [Quickstart ↗](https://docs-writingagent.vercel.app/quickstart/) | from install to a finished article in one command |
-| [The TUI ↗](https://docs-writingagent.vercel.app/guides/tui/) | the interactive shell, live dashboard, 10 themes |
+| [The TUI ↗](https://docs-writingagent.vercel.app/guides/tui/) | the interactive shell, live dashboard, 11 themes |
 | [Commands ↗](https://docs-writingagent.vercel.app/reference/commands/) · [Slash commands ↗](https://docs-writingagent.vercel.app/reference/slash-commands/) | every command and flag |
 | [Quality machinery ↗](https://docs-writingagent.vercel.app/reference/quality/) | thesis, judge, claim checks, the learning loop |
 | [Model routing ↗](https://docs-writingagent.vercel.app/reference/models/) · [Settings ↗](https://docs-writingagent.vercel.app/reference/settings/) | per-node models; every tunable |

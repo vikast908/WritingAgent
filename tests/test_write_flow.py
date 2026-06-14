@@ -8,15 +8,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from book_agent import brain, cli, nodes, orchestrator
-from book_agent import schemas as S
-from book_agent.brain import ArticlePaths
-from book_agent.config import Settings, load_config, load_settings
+from writingagent import brain, cli, nodes, orchestrator
+from writingagent import schemas as S
+from writingagent.brain import ArticlePaths
+from writingagent.config import Settings, load_config, load_settings
 
 
 @pytest.fixture
 def fake_llm(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
 
 
 def _silent(*_a, **_k):

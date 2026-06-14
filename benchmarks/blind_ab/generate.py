@@ -16,7 +16,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 
-# Make book_agent importable whether or not it's pip-installed, and load the project .env.
+# Make writingagent importable whether or not it's pip-installed, and load the project .env.
 sys.path.insert(0, str(ROOT / "src"))
 try:
     from dotenv import load_dotenv
@@ -24,7 +24,7 @@ try:
 except ImportError:
     pass
 
-from book_agent import Agent  # noqa: E402
+from writingagent import Agent  # noqa: E402
 
 UNITS = 4   # sections per article; bump for longer pieces (and higher cost)
 
@@ -38,8 +38,8 @@ def main() -> None:
                if ln.strip() and not ln.startswith("#")]
     if not prompts:
         sys.exit("No prompts in prompts.txt.")
-    if not os.getenv("OPENROUTER_API_KEY") and not os.getenv("BOOK_AGENT_FAKE"):
-        sys.exit("Set OPENROUTER_API_KEY (real run) or BOOK_AGENT_FAKE=1 (dry wiring test).")
+    if not os.getenv("OPENROUTER_API_KEY") and not os.getenv("WRITINGAGENT_FAKE"):
+        sys.exit("Set OPENROUTER_API_KEY (real run) or WRITINGAGENT_FAKE=1 (dry wiring test).")
 
     cases = HERE / "cases"
     cases.mkdir(exist_ok=True)

@@ -1,7 +1,7 @@
 """Tests for the shared UI helpers and the run dashboard's log parsing."""
 from __future__ import annotations
 
-from book_agent import ui
+from writingagent import ui
 
 
 def test_did_you_mean():
@@ -20,7 +20,7 @@ def test_trust_chip_normalizes_verdict():
 
 
 def test_prose_reading_time_excludes_code_and_refs():
-    from book_agent import polish
+    from writingagent import polish
     md = ("Prose one two three four five.\n\n"
           "```python\n" + "x = 1\n" * 50 + "```\n\n"
           "More prose words here.\n\n"
@@ -36,7 +36,7 @@ def test_prose_reading_time_excludes_code_and_refs():
 def test_input_disambiguation_word_sets():
     """Bare slash-words must be catchable; ambiguous English words must NOT auto-route
     when followed by chat text (only as a single bare token)."""
-    from book_agent import shell
+    from writingagent import shell
     assert {"help", "features", "theme", "provider"} <= shell._SLASH_WORDS
     # ambiguous words are present (single-token routing) but excluded from STRONG (args case)
     for w in ("set", "use", "model", "mode", "path", "auto", "clear"):
@@ -76,7 +76,7 @@ def test_plain_mode_env(monkeypatch):
 
 
 def test_run_dashboard_log_parsing():
-    from book_agent.shell import _RunDashboard
+    from writingagent.shell import _RunDashboard
     d = _RunDashboard("mybook", total=2, done=0)
     for msg in [
         "== Chapter 1: The Start ==",
@@ -97,7 +97,7 @@ def test_run_dashboard_stage_animates(monkeypatch):
     dash object, and the label changes frame-to-frame. Terminal stages stay static."""
     import time as _time
 
-    from book_agent.shell import _RunDashboard
+    from writingagent.shell import _RunDashboard
     d = _RunDashboard("b", total=1, done=0)
     d.stage = "critiquing…"
     monkeypatch.setattr(_time, "monotonic", lambda: 0.0)
@@ -122,19 +122,19 @@ def _record_console():
 def test_welcome_is_compact(tmp_brain, monkeypatch):
     """The welcome must leave the banner on screen: banner (~21 rows) + welcome must
     fit a standard 35-row terminal. The 45-line welcome was the regression this guards."""
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
-    from book_agent import shell
-    from book_agent.config import load_config, load_settings
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
+    from writingagent import shell
+    from writingagent.config import load_config, load_settings
     console = _record_console()
     shell._welcome(console, load_config(), load_settings(), "u")
     assert len(console.file.getvalue().splitlines()) <= 14
 
 
 def test_welcome_warns_on_fake_mode(tmp_brain, monkeypatch):
-    """A leftover BOOK_AGENT_FAKE otherwise silently cans every model call."""
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
-    from book_agent import shell
-    from book_agent.config import load_config, load_settings
+    """A leftover WRITINGAGENT_FAKE otherwise silently cans every model call."""
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
+    from writingagent import shell
+    from writingagent.config import load_config, load_settings
     console = _record_console()
     shell._welcome(console, load_config(), load_settings(), "u")
     assert "FAKE MODE" in console.file.getvalue()
@@ -142,8 +142,8 @@ def test_welcome_warns_on_fake_mode(tmp_brain, monkeypatch):
 
 def test_features_and_commands_tables_render(tmp_brain):
     """/features and /help content moved out of the welcome - they must still render."""
-    from book_agent import shell
-    from book_agent.config import load_settings
+    from writingagent import shell
+    from writingagent.config import load_settings
     settings = load_settings()
     console = _record_console()
     shell._features_table(console, settings)
@@ -157,8 +157,8 @@ def test_features_and_commands_tables_render(tmp_brain):
 def test_slash_help_is_grouped_by_category(tmp_brain):
     """/help groups commands under dimmed category headers (the registry is
     category-keyed, not a flat list)."""
-    from book_agent import shell
-    from book_agent.config import load_settings
+    from writingagent import shell
+    from writingagent.config import load_settings
     # Structure: [(category, [(usage, desc), ...]), ...]
     cats = [c for c, _ in shell._SLASH_HELP]
     assert "configuration" in cats and "session" in cats
@@ -172,8 +172,8 @@ def test_slash_help_is_grouped_by_category(tmp_brain):
 
 
 def test_slash_help_topic_filters(tmp_brain):
-    from book_agent import shell
-    from book_agent.config import load_settings
+    from writingagent import shell
+    from writingagent.config import load_settings
     console = _record_console()
     shell._slash_help(console, load_settings(), ["export"])
     out = console.file.getvalue()
@@ -184,8 +184,8 @@ def test_slash_help_topic_filters(tmp_brain):
 
 
 def test_stack_label_reflects_provider_and_model(tmp_brain):
-    from book_agent import shell
-    from book_agent.config import Settings, load_config
+    from writingagent import shell
+    from writingagent.config import Settings, load_config
     cfg = load_config()
     label = shell._stack_label(cfg, Settings(provider="openrouter"))
     assert "OpenRouter" in label and "deepseek-v4-pro" in label and "v" in label
@@ -193,20 +193,20 @@ def test_stack_label_reflects_provider_and_model(tmp_brain):
 
 
 def test_key_warning_surfaces_missing_key(tmp_brain, monkeypatch):
-    from book_agent import shell
-    from book_agent.config import Settings
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    from writingagent import shell
+    from writingagent.config import Settings
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     assert shell._provider_needs_key(Settings(provider="deepseek")) is True
     assert "DEEPSEEK_API_KEY" in shell._key_warning(Settings(provider="deepseek"))
     # local providers never need a key; fake mode suppresses the warning entirely
     assert shell._provider_needs_key(Settings(provider="ollama")) is False
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
     assert shell._provider_needs_key(Settings(provider="deepseek")) is False
 
 
 def test_export_failed_messages(capsys):
-    from book_agent.cli import _export_failed
+    from writingagent.cli import _export_failed
     _export_failed(None, "pdf", PermissionError("file in use"))
     out = capsys.readouterr().out
     assert "pdf" in out and ("locked" in out or "close" in out)
@@ -215,8 +215,8 @@ def test_export_failed_messages(capsys):
 
 
 def test_reduced_motion_label(monkeypatch):
-    from book_agent.shell import _RunDashboard
-    monkeypatch.setenv("BOOK_AGENT_REDUCED_MOTION", "1")
+    from writingagent.shell import _RunDashboard
+    monkeypatch.setenv("WRITINGAGENT_REDUCED_MOTION", "1")
     d = _RunDashboard("b", total=1, done=0)
     d.stage = "critiquing…"
     label = d._stage_label()
@@ -224,7 +224,7 @@ def test_reduced_motion_label(monkeypatch):
 
 
 def test_paused_card_renders(tmp_brain):
-    from book_agent import shell
+    from writingagent import shell
     console = _record_console()
     shell._paused_card(console, "mybook")          # no budget set -> generic paused card
     assert "paused" in console.file.getvalue().lower()
@@ -235,8 +235,8 @@ def test_narrow_banner_drops_figlet():
 
     from rich.console import Console
 
-    from book_agent import shell
-    from book_agent.config import Settings, load_config
+    from writingagent import shell
+    from writingagent.config import Settings, load_config
     console = Console(file=io.StringIO(), force_terminal=True, width=40)
     shell._banner(console, load_config(), Settings())
     out = console.file.getvalue()
@@ -244,7 +244,7 @@ def test_narrow_banner_drops_figlet():
 
 
 def test_run_controls_flags():
-    from book_agent.shell import _RunControls
+    from writingagent.shell import _RunControls
     c = _RunControls()
     assert c.pause is False and c.take_manual() is False
     c.request_pause()
@@ -256,7 +256,7 @@ def test_run_controls_flags():
 def test_key_listener_no_ops_without_tty():
     """Under pytest stdin isn't a TTY, so the listener must stay inactive (no thread) -
     this is what keeps the run behaving identically in tests / pipes / a11y."""
-    from book_agent.shell import _KeyListener
+    from writingagent.shell import _KeyListener
     sink = []
     with _KeyListener(sink.append, enabled=False) as kl:
         assert kl.active is False
@@ -267,7 +267,7 @@ def test_key_listener_no_ops_without_tty():
 def test_apply_run_control_pause_and_manual(tmp_path):
     from types import SimpleNamespace
 
-    from book_agent import orchestrator
+    from writingagent import orchestrator
     paths = SimpleNamespace(run_state=tmp_path / "rs.json")
     logs: list[str] = []
     assert orchestrator._apply_run_control(None, {}, paths, logs.append) is False
@@ -291,8 +291,8 @@ def test_apply_run_control_pause_and_manual(tmp_path):
 def test_feature_keys_match_settings_and_table(tmp_brain):
     """Every grid toggle maps to a real bool setting, and the no-TTY path falls
     back to the static table (returns False, never opens an app under pytest)."""
-    from book_agent import shell
-    from book_agent.config import Settings, load_settings
+    from writingagent import shell
+    from writingagent.config import Settings, load_settings
     s = Settings()
     for key, _label, _desc in shell._FEATURE_KEYS:
         assert isinstance(getattr(s, key), bool), f"{key} is not a bool setting"

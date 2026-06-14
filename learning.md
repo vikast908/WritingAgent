@@ -123,9 +123,9 @@ A **book** follows the same arc but with chapters instead of sections, plus two 
 Here is the whole project laid out. Top level first, then we go into the important rooms.
 
 ```
-Book Agent/
-├── book.py                ← the "start button" for the command-line version
-├── src/book_agent/        ← ALL the actual program lives here (see §4.2)
+WritingAgent/
+├── writingagent.py                ← the "start button" for the command-line version
+├── src/writingagent/        ← ALL the actual program lives here (see §4.2)
 ├── config/                ← settings you can tweak (which AI model, defaults)
 ├── brain/                 ← the program's MEMORY — everything it produces (see §5)
 ├── seeds/                 ← starter "craft skills" shipped with the project
@@ -143,7 +143,7 @@ Book Agent/
 └── pyproject.toml         ← the project's "ingredients list" (dependencies, how to install)
 ```
 
-**Why is the code under `src/book_agent/` and not just loose in the folder?** This "src layout" is a
+**Why is the code under `src/writingagent/` and not just loose in the folder?** This "src layout" is a
 standard professional convention: it keeps the *program* cleanly separated from the *project's other
 stuff* (tests, docs, data), and prevents a whole class of "it worked on my machine" import bugs.
 
@@ -158,7 +158,7 @@ that does the work**. This separation is the single most important structural id
 *Why:* you can completely redesign the console without touching the writing brain, and vice versa. This
 is why the project could be safely reorganised many times without breaking anything.
 
-### 4.2 Inside `src/book_agent/` — the program itself
+### 4.2 Inside `src/writingagent/` — the program itself
 
 Files are grouped here by their job. (Line counts are rough, to show relative size.)
 
@@ -229,7 +229,7 @@ that choice matters so much.
 |---|---|
 | `concurrency.py` | Runs several independent jobs **at the same time** (e.g. fetch research + images + skills together) to save time. |
 | `ui.py` | Shared **visual helpers**: colour themes, the console, reading-time formatting. Used by both faces. |
-| `__init__.py` | Marks `book_agent` as a package and holds the **version number** (single source of truth). |
+| `__init__.py` | Marks `writingagent` as a package and holds the **version number** (single source of truth). |
 
 ### 4.3 Inside `shell/` (the interactive console, broken into small rooms)
 
@@ -384,7 +384,7 @@ There are three ways in, all backed by the same engine:
 
 1. **Interactive console (most fun):**
    ```
-   writing-agent           # or: python book.py
+   writing-agent           # or: python writingagent.py
    ```
    You get a themed prompt; type a topic or chat with it; watch the live dashboard as it writes.
 
@@ -397,7 +397,7 @@ There are three ways in, all backed by the same engine:
 
 3. **Fake mode (free, no AI key, to see the whole flow):**
    ```
-   BOOK_AGENT_FAKE=1 writing-agent
+   WRITINGAGENT_FAKE=1 writing-agent
    ```
    This runs the *entire* process with placeholder text instead of real AI calls — perfect for
    understanding the machinery without spending anything. (It's also how the ~330 automated tests run.)
@@ -409,8 +409,8 @@ failing on the first command.
 
 **Comfort + accessibility, briefly.** Type `/theme` to switch the look (11 themes, including a
 **colourblind-safe** high-contrast one); `/features` toggles capabilities live. For screen readers set
-`BOOK_AGENT_A11Y=1` (plain line-by-line output, no animated redraw); for less motion set
-`BOOK_AGENT_REDUCED_MOTION=1`; set `NO_COLOR=1` (or run with `--plain`) for monochrome. If something
+`WRITINGAGENT_A11Y=1` (plain line-by-line output, no animated redraw); for less motion set
+`WRITINGAGENT_REDUCED_MOTION=1`; set `NO_COLOR=1` (or run with `--plain`) for monochrome. If something
 goes wrong (bad key, rate-limit, network blip, a file open in another program), it shows a plain-English
 fix — and your progress is always saved, so you just run again.
 

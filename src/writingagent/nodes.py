@@ -622,7 +622,7 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "",
     """
     from . import diagram as _dgm
     model = cfg.model_for("diagram")
-    _fake = bool(os.getenv("BOOK_AGENT_FAKE"))
+    _fake = bool(os.getenv("WRITINGAGENT_FAKE"))
     if _fake:                       # offline: no model, just a valid placeholder figure
         return _dgm.placeholder(heading[:100] or "Diagram")
     eng = (engine or "auto").lower()

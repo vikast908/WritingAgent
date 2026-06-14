@@ -2,7 +2,7 @@
 
 This module is the **supported import-and-call surface** for embedding the
 pipeline in your own program. Everything exported here (and re-exported from the
-``book_agent`` package root) follows the project's versioning policy: names and
+``writingagent`` package root) follows the project's versioning policy: names and
 call signatures will not break within a major version. The internal modules
 (``orchestrator``, ``nodes``, ``brain``, ``llm``, ...) carry no such guarantee
 and may change between releases - reach for them only when the facade can't.
@@ -11,14 +11,14 @@ Quick start
 -----------
 One-shot (topic in, finished file out)::
 
-    from book_agent import write
+    from writingagent import write
 
     result = write("How vector databases work", mode="article", export="docx")
     print(result.export_path, result.word_count)
 
 Full lifecycle (create -> run -> inspect -> revise -> export)::
 
-    from book_agent import Agent
+    from writingagent import Agent
 
     agent = Agent(autonomous=True)
     project = agent.create(
@@ -52,7 +52,7 @@ from .config import ModelConfig, Settings, load_config, load_settings
 
 __all__ = [
     "Agent", "Project", "Approach", "Status", "Evaluation", "WriteResult",
-    "write", "BookAgentError", "ProjectNotFound", "EXPORT_FORMATS", "MODES",
+    "write", "WritingAgentError", "ProjectNotFound", "EXPORT_FORMATS", "MODES",
 ]
 
 #: Output formats accepted by :meth:`Project.export` / ``export=`` arguments.
@@ -68,11 +68,11 @@ def _noop(*_a: Any, **_k: Any) -> None:
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
-class BookAgentError(Exception):
+class WritingAgentError(Exception):
     """Base class for all errors raised by the public API."""
 
 
-class ProjectNotFound(BookAgentError):
+class ProjectNotFound(WritingAgentError):
     """Raised when a project id can't be found for the given user."""
 
 
@@ -178,7 +178,7 @@ _EXPORT_FNS: dict[str, Callable[..., Any]] = {
 class Agent:
     """Entry point to the writing pipeline.
 
-    Bundles the per-call plumbing (``user``, :class:`~book_agent.config.Settings`,
+    Bundles the per-call plumbing (``user``, :class:`~writingagent.config.Settings`,
     model routing) the internal functions otherwise require, so your code calls
     :meth:`create` / :meth:`write` directly.
 
@@ -246,7 +246,7 @@ class Agent:
         """Return the raw schema object for the chosen direction/angle."""
         if isinstance(approach, Approach):
             if approach.raw is None:
-                raise BookAgentError("Approach carries no plan; get it from Agent.plan().")
+                raise WritingAgentError("Approach carries no plan; get it from Agent.plan().")
             return approach.raw
         options = self.plan(topic, mode=mode)
         if approach is None:
@@ -255,13 +255,13 @@ class Agent:
             raise TypeError("approach must be None, int, Approach, or callable")
         elif isinstance(approach, int):
             if not 1 <= approach <= len(options):
-                raise BookAgentError(f"approach index {approach} out of range 1..{len(options)}")
+                raise WritingAgentError(f"approach index {approach} out of range 1..{len(options)}")
             chosen = options[approach - 1]
         elif callable(approach):
             picked = approach(options)
             chosen = options[picked - 1] if isinstance(picked, int) else picked
             if not isinstance(chosen, Approach):
-                raise BookAgentError("approach callable must return an Approach or 1-based int")
+                raise WritingAgentError("approach callable must return an Approach or 1-based int")
         else:
             raise TypeError("approach must be None, int, Approach, or callable")
         return chosen.raw
@@ -534,7 +534,7 @@ class Project:
         Returns the path to the written file."""
         fmt = (fmt or "").lower()
         if fmt not in EXPORT_FORMATS:
-            raise BookAgentError(f"unknown export format {fmt!r}; choose from {EXPORT_FORMATS}")
+            raise WritingAgentError(f"unknown export format {fmt!r}; choose from {EXPORT_FORMATS}")
         return _EXPORT_FNS[fmt](self._agent.user, self.id, log=progress or _noop)
 
     def delete(self) -> None:

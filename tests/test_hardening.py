@@ -7,7 +7,7 @@ import time
 import pytest
 from pydantic import BaseModel
 
-from book_agent import cache, concurrency, llm
+from writingagent import cache, concurrency, llm
 
 
 # ── concurrency.gather ─────────────────────────────────────────────────────────
@@ -34,8 +34,8 @@ def test_gather_actually_overlaps():
 def test_merge_fix_notes_keeps_instruction():
     """The human instruction must survive every revision round (it used to be
     overwritten by the first critique's notes)."""
-    from book_agent import schemas as S
-    from book_agent.orchestrator import _merge_fix_notes
+    from writingagent import schemas as S
+    from writingagent.orchestrator import _merge_fix_notes
     crit = S.Critique(verdict="revise", confidence=0.7, blocking=[], nits=["tighten"])
     out = _merge_fix_notes("keep the ending exactly as is", crit)
     assert "keep the ending exactly as is" in out
@@ -44,8 +44,8 @@ def test_merge_fix_notes_keeps_instruction():
 
 
 def test_crit_better_ordering():
-    from book_agent import schemas as S
-    from book_agent.orchestrator import _crit_better
+    from writingagent import schemas as S
+    from writingagent.orchestrator import _crit_better
     def c(verdict, conf, nblock):
         blocking = [S.BlockingIssue(type="style", where="w", detail="d", fix="f")] * nblock
         return S.Critique(verdict=verdict, confidence=conf, blocking=blocking, nits=[])
@@ -55,7 +55,7 @@ def test_crit_better_ordering():
 
 
 def test_export_md_no_duplicate_title(tmp_path):
-    from book_agent.export import markdown_to_md
+    from writingagent.export import markdown_to_md
     out = markdown_to_md("# Already Titled\n\nbody", tmp_path / "a.md", title="Other")
     text = out.read_text(encoding="utf-8")
     assert text.count("# Already Titled") == 1 and "# Other" not in text
@@ -64,7 +64,7 @@ def test_export_md_no_duplicate_title(tmp_path):
 
 
 def test_export_inline_images_data_uri(tmp_path):
-    from book_agent.export import _inline_images
+    from writingagent.export import _inline_images
     (tmp_path / "images").mkdir()
     (tmp_path / "images" / "x.png").write_bytes(b"\x89PNG fake")
     html = '<p><img src="images/x.png"/> and <img src="https://remote/x.png"/></p>'
@@ -210,7 +210,7 @@ def test_structured_repair_retry(no_sleep, monkeypatch):
 
 # ── export escaping (#1) ────────────────────────────────────────────────────────
 def test_html_export_escapes_title(tmp_path):
-    from book_agent import export
+    from writingagent import export
     out = export.markdown_to_html("# Body\n\ntext", tmp_path / "a.html",
                                   title='Crime & Punishment <x>')
     html = out.read_text(encoding="utf-8")
@@ -220,7 +220,7 @@ def test_html_export_escapes_title(tmp_path):
 def test_epub_export_wellformed_with_special_chars(tmp_path):
     import pytest
     epub = pytest.importorskip("ebooklib.epub")
-    from book_agent import export
+    from writingagent import export
     md = "# A & B\n\nPara with <angle> & ampersand.\n\n---\n\n## Sec & Two\n\nMore."
     out = export.markdown_to_epub(md, tmp_path / "b.epub", title="A & B <x>", author="Me & Co")
     # Round-trip: a corrupt/ill-formed EPUB would raise here.
@@ -230,7 +230,7 @@ def test_epub_export_wellformed_with_special_chars(tmp_path):
 
 # ── image markdown escaping (#2) ────────────────────────────────────────────────
 def test_image_to_markdown_escapes_caption_and_url():
-    from book_agent.images import ImageResult
+    from writingagent.images import ImageResult
     r = ImageResult(
         url="https://x.org/wiki/File:Foo (bar) baz.jpg",
         title="File:Foo (bar).jpg",
@@ -250,7 +250,7 @@ def test_image_to_markdown_escapes_caption_and_url():
 
 # ── confidence clamp (#low) ─────────────────────────────────────────────────────
 def test_confidence_clamp():
-    from book_agent.schemas import Critique
+    from writingagent.schemas import Critique
     assert Critique(verdict="approve", confidence=95, blocking=[], nits=[]).confidence == 0.95
     assert Critique(verdict="approve", confidence=0.8, blocking=[], nits=[]).confidence == 0.8
     assert Critique(verdict="approve", confidence=-0.2, blocking=[], nits=[]).confidence == 0.0
@@ -258,14 +258,14 @@ def test_confidence_clamp():
 
 # ── humanizer (#4) ──────────────────────────────────────────────────────────────
 def test_humanizer_dash_does_not_merge_lines():
-    from book_agent.humanizer import mechanical_clean
+    from writingagent.humanizer import mechanical_clean
     out = mechanical_clean("first line ends—\nsecond line")
     assert "\n" in out                     # newline preserved (lines not merged)
     assert out.count("\n") == 1
 
 
 def test_humanizer_leaves_code_fences_untouched():
-    from book_agent.humanizer import mechanical_clean
+    from writingagent.humanizer import mechanical_clean
     src = 'prose with “smart quotes”\n```\ncode = a—b  # keep this\n```\nmore “prose”'
     out = mechanical_clean(src)
     assert '"smart quotes"' in out          # prose normalized
@@ -274,7 +274,7 @@ def test_humanizer_leaves_code_fences_untouched():
 
 
 def test_humanizer_handles_unbalanced_fence():
-    from book_agent.humanizer import mechanical_clean
+    from writingagent.humanizer import mechanical_clean
     # Odd number of fences must not raise or mangle - just don't crash.
     out = mechanical_clean("intro “q”\n```\nunterminated code—block")
     assert "intro \"q\"" in out
@@ -282,14 +282,14 @@ def test_humanizer_handles_unbalanced_fence():
 
 # ── brain: atomic writes, corrupt-read resilience, safe ids (#2, #7) ────────────
 def test_read_json_corrupt_returns_none(tmp_brain):
-    from book_agent import brain
+    from writingagent import brain
     p = tmp_brain / "x.json"
     p.write_text("{ truncated", encoding="utf-8")
     assert brain.read_json(p) is None          # no crash, treated as absent
 
 
 def test_write_json_atomic_roundtrip_no_temp_left(tmp_brain):
-    from book_agent import brain
+    from writingagent import brain
     p = tmp_brain / "sub" / "s.json"
     brain.write_json(p, {"a": 1})
     assert brain.read_json(p) == {"a": 1}
@@ -297,7 +297,7 @@ def test_write_json_atomic_roundtrip_no_temp_left(tmp_brain):
 
 
 def test_is_safe_id():
-    from book_agent import brain
+    from writingagent import brain
     assert brain.is_safe_id("my-book_1.2")
     assert not brain.is_safe_id("../etc")
     assert not brain.is_safe_id("C:\\x")
@@ -308,7 +308,7 @@ def test_is_safe_id():
 def test_delete_book_refuses_unsafe_id(tmp_brain):
     import pytest
 
-    from book_agent import orchestrator
+    from writingagent import orchestrator
     with pytest.raises(ValueError):
         orchestrator.delete_book("default", "../evil")
     with pytest.raises(ValueError):
@@ -317,15 +317,15 @@ def test_delete_book_refuses_unsafe_id(tmp_brain):
 
 # ── retrieval frontmatter (#4) ──────────────────────────────────────────────────
 def test_parse_frontmatter_coerces_non_dict():
-    from book_agent.retrieval import _parse_frontmatter
+    from writingagent.retrieval import _parse_frontmatter
     assert _parse_frontmatter("---\njust a bare string\n---\nbody") == {}
     assert _parse_frontmatter("---\nname: ok\n---\n").get("name") == "ok"
 
 
 # ── skills frontmatter escaping + no clobber (#5, low) ──────────────────────────
 def test_write_skill_yaml_safe_roundtrip(tmp_brain):
-    from book_agent import brain, retrieval, skills
-    from book_agent.schemas import SkillProposal
+    from writingagent import brain, retrieval, skills
+    from writingagent.schemas import SkillProposal
     prop = SkillProposal(name="show: don't tell, really",
                          genre_tags=["a: b", "c, d", "e]f"],
                          when_to_apply="x", technique=["t1"], anti_pattern="ap")
@@ -337,8 +337,8 @@ def test_write_skill_yaml_safe_roundtrip(tmp_brain):
 
 
 def test_write_skill_does_not_clobber_distinct_name(tmp_brain):
-    from book_agent import brain, skills
-    from book_agent.schemas import SkillProposal
+    from writingagent import brain, skills
+    from writingagent.schemas import SkillProposal
     mk = lambda nm: SkillProposal(name=nm, genre_tags=["x"], when_to_apply="a",
                                   technique=["t"], anti_pattern="p")
     skills.write_skill("u2", mk("Show Tell"))
@@ -348,7 +348,7 @@ def test_write_skill_does_not_clobber_distinct_name(tmp_brain):
 
 # ── chat command auto-exec allow/deny (#1, #8) ──────────────────────────────────
 def test_chat_command_filter_blocks_destructive():
-    from book_agent import shell
+    from writingagent import shell
     known = {"run", "delete", "new", "status"}
     blk = lambda c: f"```\n{c}\n```"
     text = "\n".join(blk(c) for c in
@@ -364,7 +364,7 @@ def test_chat_command_filter_blocks_destructive():
 def test_chat_command_extractor_single_line_blocks():
     """Single-line fenced blocks (```run```) - the format the chat system prompt
     teaches - must be extracted, not swallowed as an info string."""
-    from book_agent import shell
+    from writingagent import shell
     known = {"run", "new", "status"}
     text = ('Starting now:\n'
             '```new --abstract "How to build the fastest voice agent"```\n'
@@ -375,7 +375,7 @@ def test_chat_command_extractor_single_line_blocks():
 
 
 def test_chat_command_extractor_language_tagged_blocks():
-    from book_agent import shell
+    from writingagent import shell
     known = {"run"}
     assert shell._commands_in_response("```bash\nrun\n```", known) == ["run"]
     assert shell._commands_in_response("```run```", known) == ["run"]
@@ -384,7 +384,7 @@ def test_chat_command_extractor_language_tagged_blocks():
 
 # ── export HTML sanitization (#6) ───────────────────────────────────────────────
 def test_sanitize_html_strips_active_content():
-    from book_agent.export import _sanitize_html
+    from writingagent.export import _sanitize_html
     dirty = ('<p>safe</p><script>alert(1)</script>'
              '<a href="javascript:steal()">x</a><img src=q onerror="evil()">'
              '<iframe src="//x"></iframe>')

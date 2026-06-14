@@ -40,10 +40,10 @@ the agent's own help for `run`).
 The launcher tries, in order:
 
 1. **`$WRITINGAGENT_CMD`** — an explicit executable you point it at (advanced).
-2. **A console script on PATH** — `writing-agent`, `bookwriter`, or `book`, created when you
+2. **A console script on PATH** — `writing-agent`, created when you
    `pip install` the Python package. This is the normal path.
-3. **`python book.py`** — when the project directory is found via **`$WRITING_AGENT_HOME`** or by
-   searching upward from your current directory for `book.py`.
+3. **`python writingagent.py`** — when the project directory is found via **`$WRITINGAGENT_HOME`** or by
+   searching upward from your current directory for `writingagent.py`.
 
 If none is found it prints how to fix it. Run **`writingagent doctor`** to see exactly what was
 detected (Python interpreter, console scripts, project directory, and the command it will use).
@@ -52,7 +52,7 @@ detected (Python interpreter, console scripts, project directory, and the comman
 
 - **Node.js ≥ 16** (to run this launcher).
 - **Python 3.10+ with pip** — `writingagent setup` uses it to install the engine. (Already have a
-  clone? `pip install -e .` from the repo, or set `WRITING_AGENT_HOME` to it, works too.)
+  clone? `pip install -e .` from the repo, or set `WRITINGAGENT_HOME` to it, works too.)
 
 ## Why a separate name?
 

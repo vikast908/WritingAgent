@@ -35,4 +35,4 @@ jobs:
       - name: Test
         run: pytest -q
         env:
-          BOOK_AGENT_FAKE: "1"   # tests run fully offline; no API key needed
+          WRITINGAGENT_FAKE: "1"   # tests run fully offline; no API key needed

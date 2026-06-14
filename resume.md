@@ -8,7 +8,7 @@
 - **New (2026-06-14 - UX audit P1-P3 + all md docs refreshed):** ran a UX audit (framework: audit-then-
   approve) and implemented everything. **P1:** `/skills` now shows the duel win-rate (vs 50/50) + count
   next to first-pass lift, and notes duels decide trusted/retired once a skill has data (closes the debt
-  from learning-v2); first-run no-key onboarding block in the welcome (set key OR try `BOOK_AGENT_FAKE=1`
+  from learning-v2); first-run no-key onboarding block in the welcome (set key OR try `WRITINGAGENT_FAKE=1`
   free). **P2:** new toggles (`skill_duels`/`skill_distill`/`watch_blocking`) in `/features` grid + static
   table; whole-run ETA on the dashboard (`_run_eta`); friendly recoverable errors (`ui.explain_error`:
   401/429/network/locked-file) wired into the shell + chat error sinks. **P3:** colourblind-safe
@@ -136,7 +136,7 @@
   local, `custom`) and an alias table. `llm.py` rewired: `_get_client` resolves the active provider
   (lazy creds - key-less switch never crashes; clear "set XAI_API_KEY" only on first real call),
   `configure_provider`/`active_provider` added, cost-ask gated per provider. `settings.provider`
-  (default `openrouter`) + `BOOK_AGENT_PROVIDER` env; wired at startup (`cli._apply_provider`,
+  (default `openrouter`) + `WRITINGAGENT_PROVIDER` env; wired at startup (`cli._apply_provider`,
   `api._apply_runtime`). Shell: `/provider [id]` (list with key/local markers · switch · did-you-mean),
   `/set provider` side-effect, completer + `/help` config group. **Deliberately dropped from the spec:**
   the 3 non-OpenAI transports, `NormalizedResponse`, `api_mode` heuristics, OAuth/Bedrock/Codex auth,
@@ -191,9 +191,9 @@
   depth-gated (blocks on deep full-text, advisory nit on shallow snippets). Wired into the user
   surfaces too (`shell._NODES` for `/model`, `/features` board, chat context, `settings.yaml`).
   +11 tests (`test_quality.py`); ruff clean.
-- **New (2026-06-13, session 13 - public Python API):** added `book_agent.api` - a stable
+- **New (2026-06-13, session 13 - public Python API):** added `writingagent.api` - a stable
   `Agent` + `Project` facade (plus a one-shot `write()`) over the orchestrator, re-exported from
-  the package root with `__version__` and PEP-562 lazy imports, so `from book_agent import Agent,
+  the package root with `__version__` and PEP-562 lazy imports, so `from writingagent import Agent,
   write` just works after `pip install -e .`. +14 offline tests (`tests/test_api.py`); README
   "Python API" section + plan.md §18. The internals stay unstable; this is the supported
   embedding surface.
@@ -335,7 +335,7 @@
   - **`read --manuscript` works for articles** (`cli._paths_for` picks ArticlePaths vs BookPaths) - fixes the long-standing pre-existing bug.
   - **+4 technical-writing seed skills:** `technical-explanation`, `runnable-code-examples`, `claims-and-evidence`, `information-architecture` (13 seed skills total).
   - **First article-pipeline tests** (`test_article.py`) + deep-researcher tests (`test_deep_research.py`). **62 tests pass** (was 44); ruff clean.
-- **Agent name:** **WRITING AGENT** (was BOOKWRITER). CLI: `writing-agent` / `bookwriter` / `book` / `python book.py`.
+- **Agent name:** **WRITING AGENT** (was BOOKWRITER). CLI: `writing-agent` / `bookwriter` / `book` / `python writingagent.py`.
 - **Article pipeline:** fully built and live-run - "How to think with AI without offloading your brain to AI" (6 sections, DOCX exported).
 - **Book pipeline:** fully built and live-run - *The Misprint File* (3 chapters, 9-page PDF).
 - **New this session (2026-06-10 session 5 - reliability/UX/security hardening, branch `hardening-reliability-ux`):**
@@ -346,7 +346,7 @@
   - **Richer TUI/CLI:** live `run` dashboard (elapsed + live tokens + stage + event log), arg/value autocomplete, persistent history, `new` spinners, Rich `status` (phase stepper + word count/reading time), Markdown `read`/`memory`, skills efficacy bars, clickable export paths, "did you mean?", `--plain`/`NO_COLOR`.
   - Removed dead `run.py`/`slice.py`; new shared `ui.py` (palette + helpers). 44 tests (added `tests/test_hardening.py`, `tests/test_ui.py`).
 - **Source of truth:** `plan.md` (spec + implementation status); `README.md` = how to run.
-- **How to run:** `writing-agent` (after `pip install -e .`) or `python book.py` → interactive shell; `python book.py <cmd> ...` for one-shot. Needs `OPENROUTER_API_KEY` in `.env`.
+- **How to run:** `writing-agent` (after `pip install -e .`) or `python writingagent.py` → interactive shell; `python writingagent.py <cmd> ...` for one-shot. Needs `OPENROUTER_API_KEY` in `.env`.
 - **Next up (all optional):** (a) live end-to-end deep-research run through the full article/book pipeline (fetch path validated live; full pipeline only run offline); (b) LangGraph wrapper; (c) multi-user / server mode; (d) book↔article dedup refactor in orchestrator/shell (~800 duplicated lines - the revise-critic drift was a symptom). robots.txt/SSRF/rate-limit: **done** (session 10).
 - **Stack:** Python; durable on-disk state machine; markdown brain + SQLite/FTS5; OpenRouter + DeepSeek V4 Pro/Flash per-node; Rich TUI + prompt_toolkit.
 - **Platforms:** **Linux · macOS · Windows** - all code is portable (pathlib, atomic `os.replace`, `Path.as_uri()` links, OS-aware optional headroom) and CI runs the suite on all three × Python 3.10–3.13.
@@ -488,8 +488,8 @@ no command/flag removed** (the user's explicit worry); changes are additive + te
   noted - synchronous run loop.)
 - **P1.6**: "self-edits" summary line (revision/humanizer counts on the dash); persistent prompt
   "done" marker is the status stripe.
-- **P2.7 a11y/motion**: `BOOK_AGENT_A11Y` line-mode (no Live; append-only sentences) +
-  `BOOK_AGENT_REDUCED_MOTION` (no spinner) + narrow (<60col) one-line wordmark fallback in `_banner`.
+- **P2.7 a11y/motion**: `WRITINGAGENT_A11Y` line-mode (no Live; append-only sentences) +
+  `WRITINGAGENT_REDUCED_MOTION` (no spinner) + narrow (<60col) one-line wordmark fallback in `_banner`.
 - **P2.8 key check**: `_provider_needs_key`/`_key_warning` warn in the banner when the active provider
   has no key. **Latent bug found+fixed**: `_stack_label` called `providers.resolve().name` but
   `resolve()` returns an id string, not a `Provider` (always hit the fallback) - now via `REGISTRY`.
@@ -504,7 +504,7 @@ no command/flag removed** (the user's explicit worry); changes are additive + te
     for autonomous + real-TTY runs (no-ops in pytest/pipes/a11y, so the suite is unaffected). Dashboard
     shows the controls hint + a live `note`. +4 tests (incl. an end-to-end pause/resume in
     `test_article.py`). **All tests pass.**
-  - **Latent bug fixed**: `BOOK_AGENT_PROVIDER` configured the llm client but never synced
+  - **Latent bug fixed**: `WRITINGAGENT_PROVIDER` configured the llm client but never synced
     `settings.provider`, so the banner/key-warning read the stale provider. `cli._apply_provider` now
     sets `settings.provider = providers.resolve(choice)`. Verified: banner shows `DeepSeek · … ` +
     `⚠ no API key for DeepSeek` when pointed at a keyless provider.
@@ -537,9 +537,9 @@ Three threads after the article re-polish. **All tests pass (full suite, fake mo
   header**; `cli` status reads the manuscript for a prose-based estimate. Re-polished the voicebot
   article: header **22 → 16 min** (prose 3,568 words). +exports refreshed (epub skipped - `ebooklib`
   not in .venv).
-- **Version single-sourced + bumped 0.1.0 → 0.2.0.** `src/book_agent/__init__.py __version__` is now
+- **Version single-sourced + bumped 0.1.0 → 0.2.0.** `src/writingagent/__init__.py __version__` is now
   the ONE source; `pyproject.toml` uses `dynamic = ["version"]` + `[tool.setuptools.dynamic] version
-  = {attr="book_agent.__version__"}`; `shell.py` imports it (was a hardcoded `_VERSION = "0.1.0"`).
+  = {attr="writingagent.__version__"}`; `shell.py` imports it (was a hardcoded `_VERSION = "0.1.0"`).
 - **Banner provider/model now dynamic** (was hardcoded `"OpenRouter · DeepSeek"`). New
   `shell._stack_label(cfg, settings)` shows `providers.resolve(settings.provider).name · <writer
   model> · vX`; `_banner` takes cfg/settings (defaulted, so the theme test's `_banner(c)` still works).
@@ -556,7 +556,7 @@ article** (`brain/users/default/articles/from-idea-to-sub-100ms-voicebot-…`). 
 
 - **Stale PDF fixed.** The article's `manuscript.pdf` was Jun-13 22:50 (pre-polish - last session it
   was file-locked open, so it never got the §16.6 polish + re-export); every other format was the
-  Jun-14 00:16 polished version. Ran **`book.py polish --book-id <id>`** (idempotent, ~0 tokens): it
+  Jun-14 00:16 polished version. Ran **`writingagent.py polish --book-id <id>`** (idempotent, ~0 tokens): it
   rebuilt the References (46 ranked), re-cleaned citations/stray refs, and re-exported pdf/html/docx/
   txt/md. **`epub` skipped** - `ebooklib` is missing from `.venv` (the existing polished `.epub` from
   last session is current, so all 6 formats are now polished). Verified the new PDF with pypdf: 16
@@ -626,14 +626,14 @@ over a standalone/LLM CLI). Built under **`writingagent/`** (zero npm deps, Node
 - **`lib/launcher.js`** resolves how to invoke the agent and forwards args with `stdio: 'inherit'`
   (so the TUI works) + propagates the exit code. Resolution order: `$WRITINGAGENT_CMD` →
   a console script on PATH (`writing-agent`/`bookwriter`/`book`, from `pip install`) →
-  `python book.py` (via `$WRITING_AGENT_HOME` or an upward search). Zero-dep cross-platform
+  `python writingagent.py` (via `$WRITINGAGENT_HOME` or an upward search). Zero-dep cross-platform
   helpers: `whichSync` (honors PATHEXT), `findPython` (`py -3`/python3/python), `findProjectDir`.
   Local commands: `--version`, `--help`, `doctor` (diagnostics); everything else forwards
   (so `writingagent run --help` shows the agent's help). `bin/writingagent.js` is a 1-line shim.
 - **Verified end-to-end:** `npm test` (5 Node `--test` cases - parse/which/project-discovery/
   env-override/version) green; `npm install -g .` then `writingagent --version|doctor|list` run
   from a neutral dir ($TEMP) and correctly resolve via the `writing-agent` console script even
-  when book.py isn't reachable from cwd; forwarded `list` printed the real projects; exit codes
+  when writingagent.py isn't reachable from cwd; forwarded `list` printed the real projects; exit codes
   propagate (0). The earlier `-1` was just `Select-Object -First` closing the pipe (EPIPE), not a bug.
 - **Naming:** npm `writingagent` (no hyphen) deliberately ≠ the pip console script `writing-agent`
   (hyphen) so they don't collide on PATH; the launcher calls the hyphenated one under the hood.
@@ -650,7 +650,7 @@ sessions, didn't fix it). Fixed by removing layout from the model entirely. **26
 **Verified visually** (Playwright screenshots of the rendered specs - flow w/ back-edge, branching
 flow, layered stack, fan-out).
 
-- **New `src/book_agent/diagram.py`** - a pure-Python SVG layout engine. The model returns a
+- **New `src/writingagent/diagram.py`** - a pure-Python SVG layout engine. The model returns a
   structured **`DiagramSpec`** (`schemas.py`: nodes/edges/labels/group/lane/focus + archetype) via
   the new **`DIAGRAM_SPEC_SYS`** prompt; the engine does the geometry: per-char text measurement →
   boxes sized to fit + labels wrap (never overflow); **uniform-box grid placement** so boxes can't
@@ -676,7 +676,7 @@ side by side in a browser. Verdict: **D2+ELK routes complex graphs (fan-out/fan-
 containers) noticeably better**; the built-in engine wins on zero-dep portability + in-figure
 title/legend/metrics. So both ship: **optional D2 backend** (`diagram_engine: auto|d2|builtin`,
 default `auto`), `diagram.to_d2` + `render_d2` (temp-file subprocess, ELK, never raises → built-in
-fallback), discovered via `$BOOK_AGENT_D2` or `d2` on PATH. **User flagged D2 has no legend** -
+fallback), discovered via `$WRITINGAGENT_D2` or `d2` on PATH. **User flagged D2 has no legend** -
 fixed: `_inject_d2_legend` extends d2's outer viewBox and appends a colour legend matching the node
 borders (verified visually). The built-in engine stays the zero-dep default so CI/unconfigured
 users are unaffected. +7 diagram tests (the real-binary one skips without d2). `diagram_engine`
@@ -767,7 +767,7 @@ revise, evaluate, export). One-shot `write()` layered on top. Sync + `progress` 
 the synchronous, network-bound engine; async is a `to_thread` away and deliberately out of scope).
 
 **What landed:**
-- **`src/book_agent/api.py`** (new) - the facade. `Agent(*, user, settings, models, autonomous,
+- **`src/writingagent/api.py`** (new) - the facade. `Agent(*, user, settings, models, autonomous,
   **overrides)` bundles the `cfg`/`settings`/`uid` plumbing the orchestrator functions otherwise
   demand; `**overrides` validated against `Settings`; `models=` accepts a `ModelConfig` or a slug
   string (→ `set_all`). `Agent.plan/create/write/open/projects`. `Project` is a cheap on-disk
@@ -776,12 +776,12 @@ the synchronous, network-bound engine; async is a `to_thread` away and deliberat
   `WriteResult`) so the wire shape is stable and doesn't leak pydantic. `Status` normalizes the
   book/article run-state split. `requirements` (str|dict) feeds the §15.3 intake; `write()` forces
   autonomous (a one-shot can't answer a review).
-- **`src/book_agent/__init__.py`** - `__version__ = "0.1.0"` + PEP-562 `__getattr__` lazy exports,
-  so `import book_agent` and `from book_agent import brain` stay cheap (don't eagerly pull
+- **`src/writingagent/__init__.py`** - `__version__ = "0.1.0"` + PEP-562 `__getattr__` lazy exports,
+  so `import writingagent` and `from writingagent import brain` stay cheap (don't eagerly pull
   orchestrator/llm/nodes). Public names: `Agent, Project, Approach, Status, Evaluation,
-  WriteResult, write, BookAgentError, ProjectNotFound, EXPORT_FORMATS, MODES, Settings,
+  WriteResult, write, WritingAgentError, ProjectNotFound, EXPORT_FORMATS, MODES, Settings,
   ModelConfig`.
-- **`tests/test_api.py`** (new, +14) - all offline via `BOOK_AGENT_FAKE` + the autouse temp-brain
+- **`tests/test_api.py`** (new, +14) - all offline via `WRITINGAGENT_FAKE` + the autouse temp-brain
   fixture. Covers lazy exports/version, planning, create→run→status→read, requirements
   persistence, explicit/Approach/int selection + range error, one-shot `write` (with and without
   export), open/projects/not-found, export-format + settings-override validation, delete.
@@ -846,7 +846,7 @@ User feedback from a real launch: the startup screen was so long the wordmark sc
 off (66 rendered lines vs a ~30-row terminal), and the bottom toolbar strip was "annoying".
 Also debugged a live failure: chat kept replying with canned boilerplate - the user had
 launched `writing-agent` from the same PowerShell window where a test command had set
-`BOOK_AGENT_FAKE=1`, and nothing in the TUI indicated fake mode. **214 tests pass** (+3).
+`WRITINGAGENT_FAKE=1`, and nothing in the TUI indicated fake mode. **214 tests pass** (+3).
 
 - **Welcome screen 66 → 33 lines** (banner 21 + welcome 12): START (write/new + a try-it
   example when no projects), YOUR PROJECTS (compact), status footer + one-line feature
@@ -856,8 +856,8 @@ launched `writing-agent` from the same PowerShell window where a test command ha
   styles): state lives in the prompt prefix and welcome footer; a pending review still
   surfaces via the prompt suffix + escalation picker (the toolbar-turns-red behavior went
   with it - plan §13 updated).
-- **FAKE-mode guard:** `_welcome` prints a red warning when `BOOK_AGENT_FAKE` is set
-  (rich + plain paths) with the exact `Remove-Item Env:BOOK_AGENT_FAKE` fix - a leftover
+- **FAKE-mode guard:** `_welcome` prints a red warning when `WRITINGAGENT_FAKE` is set
+  (rich + plain paths) with the exact `Remove-Item Env:WRITINGAGENT_FAKE` fix - a leftover
   test env var can no longer silently can every model call.
 - Guard tests: welcome height budget (≤14 lines, the regression that started this),
   fake-warning presence, /features + /help tables render (`test_ui.py`, +3).
@@ -868,7 +868,7 @@ launched `writing-agent` from the same PowerShell window where a test command ha
   continuously: clock ticks, and active stages (`…`) get a braille spinner + cycling
   dots (`⠹ critiquing..`). Settled stages (reviewed/committed) stay static. +1 test
   (animation frames differ; dash is print-able). **215 tests pass.**
-- **Next step:** user re-runs `writing-agent` in a clean terminal (no BOOK_AGENT_FAKE) and
+- **Next step:** user re-runs `writing-agent` in a clean terminal (no WRITINGAGENT_FAKE) and
   retries the live article: chat-propose → "go ahead" → run.
 
 ### 2026-06-12 (10) - Review fixes (revise parity, stream errors, fetch gate) + Linux CI unblocked
@@ -898,7 +898,7 @@ all 12 matrix jobs** after the fix below. All testing this session is recorded i
 - **Deep-fetcher safety gate** (backlog item, now built): every uncached fetch passes an SSRF
   guard (host must resolve only to globally-routable addresses; stdlib path re-validates each
   redirect hop), per-host robots.txt (process-cached; missing/unreachable = allow;
-  `BOOK_AGENT_IGNORE_ROBOTS=1` skips), and a 1s per-host politeness interval. Spec row in plan
+  `WRITINGAGENT_IGNORE_ROBOTS=1` skips), and a 1s per-host politeness interval. Spec row in plan
   §15.2; README hardening section updated.
 - **Wikimedia image search was silently dead live:** `_call` requests `formatversion=2` (pages
   = LIST) but `_fetch_info` parsed the v1 dict shape → AttributeError → swallowed by the
@@ -1199,7 +1199,7 @@ per-thread DDGS session reuse in `search.py` (reset on error); embeddings import
 `_json_instruction` cached per schema; embed-cache path now respects `brain.INDEX_DIR` (was
 hardcoded `_ROOT/.index`, bypassing redirects).
 
-**New: `BOOK_AGENT_HOME`** env var relocates brain + .index off synced folders (OneDrive sync adds
+**New: `WRITINGAGENT_HOME`** env var relocates brain + .index off synced folders (OneDrive sync adds
 latency to every atomic write and its locks can break `os.replace`). Documented in README
 troubleshooting + plan §15. **Recommended on this machine** (repo lives in OneDrive).
 
@@ -1219,13 +1219,13 @@ Worked four items off the backlog after fast-forwarding `master` to `origin/mast
 
 **3. Technical-writing seed skills (`seeds/skills/`, +4 -> 13):** `technical-explanation` (concrete-before-abstract, progressive disclosure, worked examples), `runnable-code-examples` (minimal/runnable/tagged + show output), `claims-and-evidence` (every claim sourced; no fabricated stats), `information-architecture` (one idea per section, dependency order, scannable). Same frontmatter+section format as the existing seeds; all `status: trusted`.
 
-**4. Deep multi-source researcher (`src/book_agent/deep_research.py`, new):** the §15 deferred "Deep Researcher", now built. Pipeline: `nodes.propose_search_queries` (query expansion, best-effort) -> `deep_research.gather_documents` (concurrent multi-query search via `concurrency.gather`, dedupe by URL, cap 2/domain, keep top 6) -> concurrent `fetch_text` (stdlib `urllib` + an `html.parser`-based `_TextExtractor` that strips script/style/nav; http(s)-only, byte-capped, non-HTML skipped, 7-day disk cache, all non-fatal) -> `nodes.deep_research` / `deep_research_article` synthesize across the numbered full-text sources and cite by number. Opt-in `deep_research` setting (layers on `use_researcher`), threaded through `start_book`/`start_article` run_state and both `_do_research` branches in the orchestrator. Articles persist the **real fetched URLs** as sources (more reliable than LLM-copied ones) -> References section. New schema `SearchQueries`; new prompts `QUERY_PLANNER_SYS` / `DEEP_RESEARCHER_SYS` / `DEEP_ARTICLE_RESEARCHER_SYS`; reuses the `researcher` model node (no models.yaml change). Surfaced in the shell FEATURES table + `settings.yaml`.
+**4. Deep multi-source researcher (`src/writingagent/deep_research.py`, new):** the §15 deferred "Deep Researcher", now built. Pipeline: `nodes.propose_search_queries` (query expansion, best-effort) -> `deep_research.gather_documents` (concurrent multi-query search via `concurrency.gather`, dedupe by URL, cap 2/domain, keep top 6) -> concurrent `fetch_text` (stdlib `urllib` + an `html.parser`-based `_TextExtractor` that strips script/style/nav; http(s)-only, byte-capped, non-HTML skipped, 7-day disk cache, all non-fatal) -> `nodes.deep_research` / `deep_research_article` synthesize across the numbered full-text sources and cite by number. Opt-in `deep_research` setting (layers on `use_researcher`), threaded through `start_book`/`start_article` run_state and both `_do_research` branches in the orchestrator. Articles persist the **real fetched URLs** as sources (more reliable than LLM-copied ones) -> References section. New schema `SearchQueries`; new prompts `QUERY_PLANNER_SYS` / `DEEP_RESEARCHER_SYS` / `DEEP_ARTICLE_RESEARCHER_SYS`; reuses the `researcher` model node (no models.yaml change). Surfaced in the shell FEATURES table + `settings.yaml`.
 
-**Fetch backend (added after first pass, at user's suggestion):** the page-fetch step is pluggable. It prefers **Scrapo** (`github.com/vikast908/Scrapo`, v0.7.0, installed from git - not on PyPI) when available: `await scrapo.scrape(url)` returns clean page **markdown** and escalates HTTP -> http+session -> browser -> stealth on real failure signals (403s etc.), reaching pages the naive fetch can't. Bridged from the sync `fetch_text` via a per-call `asyncio.run` (safe: runs on `concurrency.gather` worker threads / the sync orchestrator thread, neither has a live loop). Scrapo leaves logging to the caller and structlog's unconfigured default prints everything, so the loader calls `scrapo.logging.configure_logging("WARNING")` (overridable via `SCRAPO_LOG_LEVEL`) to keep the TUI clean. If Scrapo is absent or returns nothing, it falls back to the stdlib `urllib`+`html.parser` path - so there are still **zero required deps** and CI (py3.10-3.13 x 3 OSes) stays green. `BOOK_AGENT_NO_SCRAPO=1` forces the stdlib path. Optional `[deep]` extra in `pyproject.toml` (git ref + `python_version >= '3.11'` marker). Browser-tier escalation additionally needs `playwright install chromium` (not required; without it Scrapo just stops at the HTTP tiers).
+**Fetch backend (added after first pass, at user's suggestion):** the page-fetch step is pluggable. It prefers **Scrapo** (`github.com/vikast908/Scrapo`, v0.7.0, installed from git - not on PyPI) when available: `await scrapo.scrape(url)` returns clean page **markdown** and escalates HTTP -> http+session -> browser -> stealth on real failure signals (403s etc.), reaching pages the naive fetch can't. Bridged from the sync `fetch_text` via a per-call `asyncio.run` (safe: runs on `concurrency.gather` worker threads / the sync orchestrator thread, neither has a live loop). Scrapo leaves logging to the caller and structlog's unconfigured default prints everything, so the loader calls `scrapo.logging.configure_logging("WARNING")` (overridable via `SCRAPO_LOG_LEVEL`) to keep the TUI clean. If Scrapo is absent or returns nothing, it falls back to the stdlib `urllib`+`html.parser` path - so there are still **zero required deps** and CI (py3.10-3.13 x 3 OSes) stays green. `WRITINGAGENT_NO_SCRAPO=1` forces the stdlib path. Optional `[deep]` extra in `pyproject.toml` (git ref + `python_version >= '3.11'` marker). Browser-tier escalation additionally needs `playwright install chromium` (not required; without it Scrapo just stops at the HTTP tiers).
 
 **Validated live:** real `gather_documents` over real DuckDuckGo + real Scrapo fetch returned 4 sources across 4 domains (realpython/docs.python.org/medium/datacamp/dataquest/geeksforgeeks across runs) with full markdown (~6000 chars each) in ~5s concurrently; medium.com's 403 escalated through the tiers; JS-only YouTube returned little text (needs the browser tier).
 
-Tests in `tests/test_deep_research.py` (HTML extraction, cache-hit-without-network, dedup/domain-cap/max-sources, query dedup, format/truncation, **Scrapo-preferred / stdlib-fallback / env-kill-switch backend selection**, offline e2e for both pipelines, query-helper fallback, and an **opt-in live test** gated by `BOOK_AGENT_LIVE=1`). **67 tests** (66 pass + 1 live skipped by default); ruff clean. Spec: `plan.md` §15.2.
+Tests in `tests/test_deep_research.py` (HTML extraction, cache-hit-without-network, dedup/domain-cap/max-sources, query dedup, format/truncation, **Scrapo-preferred / stdlib-fallback / env-kill-switch backend selection**, offline e2e for both pipelines, query-helper fallback, and an **opt-in live test** gated by `WRITINGAGENT_LIVE=1`). **67 tests** (66 pass + 1 live skipped by default); ruff clean. Spec: `plan.md` §15.2.
 
 **Playwright installed (for Scrapo's browser tier):** `playwright==1.60.0` + `python -m playwright install chromium` (chromium-1223). Verified the browser tier now activates with no `playwright-missing` error (confirmed chromium launches + renders). Note: Scrapo escalates HTTP -> browser on *failure signals* (403/blocks), not merely thin content, so a 200-with-sparse-body page won't auto-escalate; hostile targets (YouTube) still return little even via browser.
 
@@ -1254,7 +1254,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 - Live `run` dashboard; arg/value autocomplete (`/use`,`/model`,`/set`,`/skill`,`/mode`,`export --format`); persistent `FileHistory`; spinners during `new`; Rich `status` (phase stepper + word count + reading time); Markdown-rendered `read` (paged) / `memory`; skills efficacy bars; clickable export paths + size; "did you mean?"; `--plain` + `NO_COLOR`; richer bottom toolbar.
 - `ui.py` centralizes the editorial palette + pure helpers; deleted dead `run.py`/`slice.py` (referenced removed `brain.ensure_book`).
 
-**Removed dead code:** vertical-slice prototype `run.py` + `src/book_agent/slice.py`.
+**Removed dead code:** vertical-slice prototype `run.py` + `src/writingagent/slice.py`.
 
 **Next:** push the branch + open PR when ready; the `--manuscript` path in `cmd_read` still uses `BookPaths` (won't find article manuscripts - pre-existing, low priority); consider article-node unit tests.
 
@@ -1444,7 +1444,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 ### 2026-06-08 - Interactive shell (TUI) + pip-installable `book` command
 
 - Added `shell.py`: a Hermes-style REPL (pyfiglet banner + rich command panel showing
-  models/skills/books/user + `<model> ›` prompt). Launches when `book`/`python book.py` is run
+  models/skills/books/user + `<model> ›` prompt). Launches when `book`/`python writingagent.py` is run
   with no subcommand. Type commands without the `book` prefix; `help`/`clear`/`exit` built in.
 - Refactored `cli.py`: extracted `build_parser()`; `main()` branches to the shell on bare invoke,
   reuses the same parser+`_COMMANDS` for one-shot and REPL.
@@ -1494,7 +1494,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
   0.5) now escalates as a chapter review (settings + run_state + `_process_chapter`).
 - **#2 Consolidation escalation:** when `escalate_on_contradiction` (default true), contradictions
   pause the run with `reviews/consolidation-*.md`; resume via the new `book run --force`.
-- Faker gained `BOOK_AGENT_FAKE_CONFIDENCE` + `BOOK_AGENT_FAKE_CONTRADICTION` (default = clean book,
+- Faker gained `WRITINGAGENT_FAKE_CONFIDENCE` + `WRITINGAGENT_FAKE_CONTRADICTION` (default = clean book,
   so autonomous fake runs still complete).
 - Added 2 tests (low-confidence escalate; consolidation escalate → force). **8 pytest pass.**
 - Remaining spec gaps are now only the two intentional v1 simplifications (canon DB-of-record
@@ -1518,8 +1518,8 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 
 - Added the **Researcher** node (optional, off by default via `use_researcher`) wired into the
   chapter context slice - the last planned node.
-- Added an offline **fake-LLM mode** in `llm.py` (`BOOK_AGENT_FAKE`, optional
-  `BOOK_AGENT_FAKE_VERDICT`): builds valid Pydantic instances + canned prose so the full pipeline
+- Added an offline **fake-LLM mode** in `llm.py` (`WRITINGAGENT_FAKE`, optional
+  `WRITINGAGENT_FAKE_VERDICT`): builds valid Pydantic instances + canned prose so the full pipeline
   runs with no API.
 - Added a **pytest suite** (`tests/`, `pytest.ini`, `requirements-dev.txt`): data layer
   (store/FTS5/canon, context slice, skill promote + retire) and end-to-end orchestrator (full
@@ -1529,12 +1529,12 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 
 ### 2026-06-08 - Full system built (all 10 components)
 
-- Implemented the whole pipeline in `src/book_agent/`: `brain` (multi-tenant markdown layout +
+- Implemented the whole pipeline in `src/writingagent/`: `brain` (multi-tenant markdown layout +
   `BookPaths`), `store` (per-book SQLite FTS5 index + entity graph + canon, renders canon md),
   `retrieval` (context slice + lexical genre-relevance), `nodes` (planner/toc/writer/critic/
   summarizer/extraction/consolidation/production/learner), `skills` (efficacy counters +
   lift-over-baseline reconcile), `orchestrator` (durable on-disk state machine: chapters →
-  consolidate → production → learn, with escalate/review/resume), `cli` + `book.py`
+  consolidate → production → learn, with escalate/review/resume), `cli` + `writingagent.py`
   (new/run/status/review/read/memory/produce/consolidate/skills/config).
 - **Two flagged deviations from spec** (both noted in plan.md top status block): orchestrator is a
   durable on-disk state machine, **not** LangGraph (brain on disk = checkpoint; LangGraph stays
@@ -1548,7 +1548,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 
 ### 2026-06-08 - Vertical slice built (Planner→TOC→Writer→Critic)
 
-- Built the files-only slice under `src/book_agent/` + `run.py` (no orchestrator yet). Nodes:
+- Built the files-only slice under `src/writingagent/` + `run.py` (no orchestrator yet). Nodes:
   planner (directions + expand), TOC, writer (streamed, adaptive thinking), critic
   (approve/revise/escalate + confidence + blocking/nits), summarizer. Revision loop with a
   `--max-revisions` cap → escalate + write a review-queue entry on failure.

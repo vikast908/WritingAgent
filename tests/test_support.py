@@ -8,7 +8,7 @@ import types
 
 import pytest
 
-from book_agent import cache, embeddings, images, search
+from writingagent import cache, embeddings, images, search
 
 
 # ── cache ──────────────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ def test_cache_path_hashing(tmp_brain):
 @pytest.fixture
 def online(tmp_brain, monkeypatch):
     """Pretend to be online (no FAKE flag) with a clean per-thread DDGS slot."""
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     monkeypatch.setattr(search._tl, "ddgs", None, raising=False)
     return tmp_brain
 
@@ -67,7 +67,7 @@ class _FakeDDGS:
 
 
 def test_web_search_fake_mode_returns_empty(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
     assert search.web_search("anything") == []
 
 

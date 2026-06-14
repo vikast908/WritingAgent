@@ -39,7 +39,7 @@ Zero-install try: open [`colab_quickstart.ipynb`](colab_quickstart.ipynb) in Goo
 placeholder output) to see the whole flow for free:
 
 ```bash
-BOOK_AGENT_FAKE=1 writingagent new --abstract "test" --pick 1 && writingagent run
+WRITINGAGENT_FAKE=1 writingagent new --abstract "test" --pick 1 && writingagent run
 ```
 
 ## Contribute a sample

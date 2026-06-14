@@ -2,8 +2,8 @@
 that lets the agent point at any OpenAI-compatible host (OpenRouter by default)."""
 import pytest
 
-from book_agent import llm
-from book_agent import providers as P
+from writingagent import llm
+from writingagent import providers as P
 
 
 @pytest.fixture(autouse=True)
@@ -53,7 +53,7 @@ def test_local_provider_needs_no_key(monkeypatch):
 
 
 def test_configure_provider_switches_and_gates_cost(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
     llm.configure_provider("deepseek")
     assert llm.active_provider().id == "deepseek"
     assert llm._include_cost is False                 # non-aggregator: don't ask for cost
@@ -85,6 +85,6 @@ def test_missing_key_raises_clear_error(monkeypatch):
 
 def test_fake_mode_unaffected_by_provider(monkeypatch):
     """Switching providers must never break the offline pipeline (fake bypasses the client)."""
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
     llm.configure_provider("groq")
     assert "Placeholder" in llm.complete_text("any-model", "sys", "user")

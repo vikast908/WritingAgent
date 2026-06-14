@@ -1,6 +1,6 @@
 """Deterministic manuscript polishing: citation stripping, reference-dump removal,
 figure de-duplication, and the influence-scored / dated / ranked References list."""
-from book_agent import polish
+from writingagent import polish
 
 
 def test_strip_inline_citations_handles_chains_and_keeps_links():

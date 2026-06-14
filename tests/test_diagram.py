@@ -8,9 +8,9 @@ import re
 
 import pytest
 
-from book_agent import diagram, nodes
-from book_agent import schemas as S
-from book_agent.config import load_config
+from writingagent import diagram, nodes
+from writingagent import schemas as S
+from writingagent.config import load_config
 
 
 def _node_rects(svg: str):
@@ -209,7 +209,7 @@ def test_cycle_and_comparison_degrade_to_flow_when_underspecified():
 
 
 def test_generate_svg_diagram_fake_mode_is_placeholder(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
     out = nodes.generate_svg_diagram(load_config(), "some heading", context="ctx")
     assert out.startswith("<svg") and "some heading" in out
 
@@ -241,7 +241,7 @@ def test_render_d2_returns_none_without_binary(monkeypatch):
 
 
 def test_generate_svg_diagram_falls_back_to_builtin_without_d2(monkeypatch):
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     monkeypatch.setattr(diagram, "find_d2", lambda: None)
 
     def fake_spec(model, system, user, schema, **_kw):
@@ -271,7 +271,7 @@ def test_inject_d2_legend_noop_without_groups():
 
 def test_generate_svg_diagram_emits_spec_to_on_spec(tmp_brain, monkeypatch):
     """The freshly-built spec is handed to `on_spec` so the orchestrator can persist it."""
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     monkeypatch.setattr(diagram, "find_d2", lambda: None)   # force the built-in path
     spec = S.DiagramSpec(title="t", archetype="flow",
                          nodes=[S.DiagramNode(id="a", label="Alpha")],

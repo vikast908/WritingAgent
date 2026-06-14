@@ -6,15 +6,15 @@ references assembly, source de-duplication, and project-type-aware path resoluti
 """
 import pytest
 
-from book_agent import brain, orchestrator
-from book_agent import schemas as S
-from book_agent.brain import ArticlePaths, BookPaths
-from book_agent.config import load_config, load_settings
+from writingagent import brain, orchestrator
+from writingagent import schemas as S
+from writingagent.brain import ArticlePaths, BookPaths
+from writingagent.config import load_config, load_settings
 
 
 @pytest.fixture
 def fake_llm(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
 
 
 def _angle():
@@ -46,7 +46,7 @@ def test_article_end_to_end_completes(tmp_brain, fake_llm):
 
 def test_article_escalation_then_resume(tmp_brain, fake_llm, monkeypatch):
     cfg, settings = load_config(), load_settings()
-    monkeypatch.setenv("BOOK_AGENT_FAKE_VERDICT", "revise")  # never approves -> cap -> escalate
+    monkeypatch.setenv("WRITINGAGENT_FAKE_VERDICT", "revise")  # never approves -> cap -> escalate
     aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
                                      "esc", 1, 1)  # not autonomous
     state = orchestrator.run(cfg, "u", aid, log=_silent)
@@ -55,7 +55,7 @@ def test_article_escalation_then_resume(tmp_brain, fake_llm, monkeypatch):
     assert paths.review_of(1).exists()
     assert not paths.section(1).exists()            # not committed
 
-    monkeypatch.setenv("BOOK_AGENT_FAKE_VERDICT", "approve")
+    monkeypatch.setenv("WRITINGAGENT_FAKE_VERDICT", "approve")
     orchestrator.record_instruction("u", aid, 1, "tighten the intro")
     state2 = orchestrator.run(cfg, "u", aid, log=_silent)
     assert state2["phase"] == "done"
@@ -143,7 +143,7 @@ def test_article_references_dedup_by_url(tmp_brain, fake_llm):
 def test_article_learner_receives_critic_findings(tmp_brain, fake_llm, monkeypatch):
     """eval_*.json files must survive until the learn phase reads them (they used to
     be deleted by production's cleanup, silently starving the article learner)."""
-    from book_agent import nodes
+    from writingagent import nodes
     seen = {}
     real_learn = nodes.learn
 
@@ -211,7 +211,7 @@ def test_commit_section_writes_real_summary_and_registry(tmp_brain, fake_llm):
 
 # ── cmd_read article fix (Item 1) ───────────────────────────────────────────────
 def test_paths_for_resolves_article_vs_book(tmp_brain, fake_llm):
-    from book_agent import cli
+    from writingagent import cli
     cfg, settings = load_config(), load_settings()
     aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
                                      "art1", 1, 1, autonomous=True)
@@ -225,7 +225,7 @@ def test_paths_for_resolves_article_vs_book(tmp_brain, fake_llm):
 
 
 def test_paths_for_defaults_to_book(tmp_brain):
-    from book_agent import cli
+    from writingagent import cli
     # No project on disk -> BookPaths (the historical default).
     p = cli._paths_for("u", "nonexistent")
     assert isinstance(p, BookPaths)

@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from book_agent import brain, llm, nodes, orchestrator, prompts, shell, telemetry
-from book_agent import schemas as S
-from book_agent.config import load_config, load_settings
+from writingagent import brain, llm, nodes, orchestrator, prompts, shell, telemetry
+from writingagent import schemas as S
+from writingagent.config import load_config, load_settings
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +22,7 @@ def reset_llm_state():
 
 @pytest.fixture
 def fake_llm(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
 
 
 def _silent(*_a, **_k):
@@ -87,7 +87,7 @@ def _stub_response(content="hi", total=15, cost=0.001):
 
 
 def test_real_call_writes_jsonl_record(tmp_brain, monkeypatch):
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     stub = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
         create=lambda **kw: _stub_response())))
     monkeypatch.setattr(llm, "_get_client", lambda: stub)

@@ -1,6 +1,6 @@
 """Structured per-LLM-call telemetry: one JSONL record per call.
 
-Files land under `.index/telemetry/calls-YYYYMMDD.jsonl` (or `$BOOK_AGENT_HOME`),
+Files land under `.index/telemetry/calls-YYYYMMDD.jsonl` (or `$WRITINGAGENT_HOME`),
 one JSON object per line - greppable/jq-able for "why was chapter 3 slow or
 expensive". Records carry: timestamp, run_id, unit (ch03/sec02/production/...),
 kind (text/structured), model, latency_ms, attempts, token counts, cost (when

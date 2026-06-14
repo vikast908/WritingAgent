@@ -61,7 +61,7 @@ def _pdf_prepare_images(html_body: str, base_dir: Path | None) -> str:
 def _slug_id(title: str) -> str:
     """A stable, ASCII-safe identifier for the EPUB (no spaces/punctuation)."""
     s = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
-    return f"bookwriter-{s or 'book'}"
+    return f"writingagent-{s or 'book'}"
 
 
 # Manuscript markdown can carry raw HTML straight from an LLM (python-markdown
@@ -188,7 +188,7 @@ def _render_mermaid(md_text: str, base_dir: Path | None = None) -> str:
     fenced block is kept, so the diagram source still appears (and wraps, not clipped).
     """
     import os
-    if os.getenv("BOOK_AGENT_FAKE", "").lower() in ("1", "true", "yes"):
+    if os.getenv("WRITINGAGENT_FAKE", "").lower() in ("1", "true", "yes"):
         return md_text
 
     def repl(m):

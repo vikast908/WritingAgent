@@ -1,7 +1,7 @@
 """Focused offline tests for the skill library + efficacy tracking (skills.py)."""
-from book_agent import brain, retrieval
-from book_agent import schemas as S
-from book_agent import skills as skmod
+from writingagent import brain, retrieval
+from writingagent import schemas as S
+from writingagent import skills as skmod
 
 
 def _prop(name, tags=("thriller",)):
@@ -157,7 +157,7 @@ def test_distill_retires_near_duplicate(tmp_brain):
 
 def test_watch_block_framing():
     """Guarded enforcement says BLOCKING; advisory says nit-only; empty -> None."""
-    from book_agent import nodes
+    from writingagent import nodes
     assert "BLOCKING" in nodes._watch_block("p - why", True)
     assert "advisory" in nodes._watch_block("p - why", False)
     assert nodes._watch_block(None, True) is None

@@ -1,4 +1,4 @@
-"""Interactive REPL/TUI for WRITING AGENT (run `writing-agent` / `book` / `python book.py`).
+"""Interactive REPL/TUI for WRITING AGENT (run `writing-agent` / `python writingagent.py`).
 
 Aesthetic: themed (see ui.THEMES; /theme to switch). The default "editorial" theme is
 ink & brass - one warm accent, semantic status colors, a gradient-filled wordmark,

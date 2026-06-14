@@ -5,9 +5,9 @@
  * It resolves how to invoke the agent and forwards your arguments to it, passing stdin/
  * stdout/stderr straight through so the interactive TUI works. Resolution order:
  *   1. $WRITINGAGENT_CMD            — an explicit executable to run (advanced).
- *   2. a console script on PATH     — `writing-agent`, `bookwriter`, or `book`
+ *   2. a console script on PATH     — `writing-agent`
  *                                     (created by `pip install` of the Python package).
- *   3. `python book.py`             — when the project is found via $WRITING_AGENT_HOME
+ *   3. `python writingagent.py`             — when the project is found via $WRITINGAGENT_HOME
  *                                     or by searching up from the current directory.
  * Anything but `--version` / `--help` / `doctor` (as the first argument) is forwarded.
  */
@@ -18,7 +18,7 @@ const { spawn } = require("child_process");
 
 const pkg = require("../package.json");
 
-const CONSOLE_SCRIPTS = ["writing-agent", "bookwriter", "book"];
+const CONSOLE_SCRIPTS = ["writing-agent"];
 
 // Where the launcher keeps the d2 binary it installs (so we never touch the system PATH).
 const D2_VERSION = "v0.7.1";
@@ -60,12 +60,12 @@ function findPython(platform = process.platform) {
   return null;
 }
 
-/** The Writing Agent project directory (the one holding book.py), or null. */
-function findProjectDir(start = process.cwd(), home = process.env.WRITING_AGENT_HOME) {
-  if (home && fs.existsSync(path.join(home, "book.py"))) return path.resolve(home);
+/** The Writing Agent project directory (the one holding writingagent.py), or null. */
+function findProjectDir(start = process.cwd(), home = process.env.WRITINGAGENT_HOME) {
+  if (home && fs.existsSync(path.join(home, "writingagent.py"))) return path.resolve(home);
   let dir = path.resolve(start);
   for (let i = 0; i < 8; i++) {
-    if (fs.existsSync(path.join(dir, "book.py"))) return dir;
+    if (fs.existsSync(path.join(dir, "writingagent.py"))) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -92,9 +92,9 @@ function resolveAgent() {
     if (py) {
       return {
         cmd: py.cmd,
-        baseArgs: [...py.prefix, path.join(home, "book.py")],
+        baseArgs: [...py.prefix, path.join(home, "writingagent.py")],
         cwd: home,
-        how: "python book.py",
+        how: "python writingagent.py",
       };
     }
   }
@@ -102,11 +102,11 @@ function resolveAgent() {
 }
 
 /** Spawn the resolved target with stdio inherited; handles Windows .cmd/.bat shims.
- *  Points the engine at the launcher-installed d2 (BOOK_AGENT_D2) so `diagram_engine: auto`
+ *  Points the engine at the launcher-installed d2 (WRITINGAGENT_D2) so `diagram_engine: auto`
  *  uses D2+ELK without any PATH changes. */
 function spawnAgent(target, args, cwd) {
   const env = { ...process.env };
-  if (!env.BOOK_AGENT_D2 && fs.existsSync(d2BinPath())) env.BOOK_AGENT_D2 = d2BinPath();
+  if (!env.WRITINGAGENT_D2 && fs.existsSync(d2BinPath())) env.WRITINGAGENT_D2 = d2BinPath();
   const opts = { stdio: "inherit", cwd: cwd || process.cwd(), env };
   if (process.platform === "win32" && /\.(cmd|bat)$/i.test(target)) {
     // .cmd/.bat must go through the shell; quote everything for spaces.
@@ -320,12 +320,12 @@ Examples:
 
 It forwards everything (except the flags above) to the Python engine. Resolution:
   1. $WRITINGAGENT_CMD              an explicit executable to run
-  2. writing-agent / bookwriter / book   a pip-installed console script on PATH
-  3. python book.py                via $WRITING_AGENT_HOME or an upward search for book.py
+  2. writing-agent                       a pip-installed console script on PATH
+  3. python writingagent.py                via $WRITINGAGENT_HOME or an upward search for writingagent.py
 
 On first run with nothing installed, writingagent offers to install the whole stack for you —
 the Python engine, cairosvg (crisp PDF), and the d2 diagram binary. You can also run
-"writingagent setup" explicitly, or set WRITING_AGENT_HOME to a local clone. Run
+"writingagent setup" explicitly, or set WRITINGAGENT_HOME to a local clone. Run
 "writingagent doctor" to see what was detected.`;
 
 function printHelp(out = console.log) {
@@ -347,8 +347,8 @@ function printDoctor(out = console.log) {
     const p = whichSync(name);
     out(`  ${name}:${" ".repeat(Math.max(1, 14 - name.length))}${p || "not on PATH"}`);
   }
-  out(`  project:  ${findProjectDir() || "book.py not found (set WRITING_AGENT_HOME)"}`);
-  const d2 = process.env.BOOK_AGENT_D2 || (fs.existsSync(d2BinPath()) ? d2BinPath() : whichSync("d2"));
+  out(`  project:  ${findProjectDir() || "writingagent.py not found (set WRITINGAGENT_HOME)"}`);
+  const d2 = process.env.WRITINGAGENT_D2 || (fs.existsSync(d2BinPath()) ? d2BinPath() : whichSync("d2"));
   out(`  d2:       ${d2 || "not installed (diagrams use the built-in engine)"}`);
   const agent = resolveAgent();
   out(agent ? `  -> will run via ${agent.how}: ${agent.cmd}` : "  -> NO agent found (see writingagent --help)");
@@ -358,7 +358,7 @@ function printNoAgent(err = console.error) {
   err("writingagent: the Python engine isn't installed yet.");
   err("Fix it one of these ways:");
   err("  • writingagent setup   ← installs the engine for you (needs Python 3.10+ & pip)");
-  err("  • set WRITING_AGENT_HOME to a local clone of the repo (the dir with book.py)");
+  err("  • set WRITINGAGENT_HOME to a local clone of the repo (the dir with writingagent.py)");
   err("  • set WRITINGAGENT_CMD to an explicit executable to run");
   err("Then run `writingagent doctor` to confirm.");
 }

@@ -3,10 +3,10 @@
 - Text: chat.completions -> message content.
 - Structured: JSON mode + Pydantic validation, with one repair retry (portable across
   models; DeepSeek has no Anthropic-style messages.parse).
-- Fake mode (BOOK_AGENT_FAKE): returns valid placeholder output, no network. Used by tests.
+- Fake mode (WRITINGAGENT_FAKE): returns valid placeholder output, no network. Used by tests.
 
 The active provider (OpenRouter by default) comes from `providers.py`; switch it
-with `/provider`, the `provider` setting, or BOOK_AGENT_PROVIDER. Each provider
+with `/provider`, the `provider` setting, or WRITINGAGENT_PROVIDER. Each provider
 reads its own key env var (OPENROUTER_API_KEY, DEEPSEEK_API_KEY, ...). Models are
 configured per node in config/models.yaml.
 """
@@ -376,12 +376,12 @@ def _cost_kwargs() -> dict:
 
 # ── Fake mode (offline testing/demo; no API calls) ───────────────────────────
 def _fake_mode() -> bool:
-    return os.getenv("BOOK_AGENT_FAKE", "").lower() in ("1", "true", "yes")
+    return os.getenv("WRITINGAGENT_FAKE", "").lower() in ("1", "true", "yes")
 
 
 _FAKE_TEXT = (
     "## Chapter - Placeholder\n\n"
-    "Placeholder prose generated in fake mode (BOOK_AGENT_FAKE) for offline testing.\n\n"
+    "Placeholder prose generated in fake mode (WRITINGAGENT_FAKE) for offline testing.\n\n"
     "Maya stood at the window and watched the fog roll in.\n"
 )
 _FAKE_STRINGS = {"title": "Untitled Chapter", "name": "Maya", "premise": "A placeholder premise."}
@@ -396,8 +396,8 @@ def _fake_value(annotation, field_name: str = ""):
     if annotation is int:
         if field_name == "insight":
             # Default fake = a passing insight score so autonomous runs complete;
-            # tests force the low-insight path with BOOK_AGENT_FAKE_INSIGHT.
-            override = os.getenv("BOOK_AGENT_FAKE_INSIGHT")
+            # tests force the low-insight path with WRITINGAGENT_FAKE_INSIGHT.
+            override = os.getenv("WRITINGAGENT_FAKE_INSIGHT")
             if override:
                 try:
                     return int(override)
@@ -409,7 +409,7 @@ def _fake_value(annotation, field_name: str = ""):
         return 1
     if annotation is float:
         if field_name == "confidence":
-            override = os.getenv("BOOK_AGENT_FAKE_CONFIDENCE")
+            override = os.getenv("WRITINGAGENT_FAKE_CONFIDENCE")
             if override:
                 try:
                     return float(override)
@@ -419,13 +419,13 @@ def _fake_value(annotation, field_name: str = ""):
     if origin is list:
         (inner,) = get_args(annotation)
         # Default fake = a clean book (no contradictions) so autonomous runs complete.
-        if field_name == "contradictions" and not os.getenv("BOOK_AGENT_FAKE_CONTRADICTION"):
+        if field_name == "contradictions" and not os.getenv("WRITINGAGENT_FAKE_CONTRADICTION"):
             return []
         return [_fake_value(inner, field_name)]
     if origin is Literal:
         opts = get_args(annotation)
         if field_name == "verdict":
-            override = os.getenv("BOOK_AGENT_FAKE_VERDICT")
+            override = os.getenv("WRITINGAGENT_FAKE_VERDICT")
             if override in opts:
                 return override
         return opts[0]

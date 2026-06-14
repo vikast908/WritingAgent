@@ -2,15 +2,15 @@
 divergent drafting, insight gate, and /praise."""
 import pytest
 
-from book_agent import brain, humanizer, nodes, orchestrator
-from book_agent import schemas as S
-from book_agent.brain import ArticlePaths
-from book_agent.config import load_config, load_settings
+from writingagent import brain, humanizer, nodes, orchestrator
+from writingagent import schemas as S
+from writingagent.brain import ArticlePaths
+from writingagent.config import load_config, load_settings
 
 
 @pytest.fixture
 def fake_llm(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
 
 
 def _angle():
@@ -119,7 +119,7 @@ def test_rewrite_ok_guards():
 
 
 def test_humanize_splices_only_guarded_rewrites(monkeypatch):
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     text = ("Keep this sentence. We delve into caching here.\n\n"
             "It is a robust design with 99 nodes.")
 
@@ -170,7 +170,7 @@ def test_divergent_drafts_writes_n_variants(tmp_brain, fake_llm, monkeypatch):
 
 
 def test_low_insight_triggers_sharpening_revision(tmp_brain, fake_llm, monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE_INSIGHT", "2")   # below the min_insight=3 bar
+    monkeypatch.setenv("WRITINGAGENT_FAKE_INSIGHT", "2")   # below the min_insight=3 bar
     writes = []
 
     real_write = nodes.write_article_section
@@ -385,8 +385,8 @@ def test_models_yaml_nodes_are_selectable_in_shell():
     `verifier` cross-family - is silently rejected as an 'unknown agent'."""
     import yaml
 
-    from book_agent import shell
-    from book_agent.config import _MODELS
+    from writingagent import shell
+    from writingagent.config import _MODELS
     routed = set((yaml.safe_load(_MODELS.read_text(encoding="utf-8")) or {}).get("nodes", {}))
     assert {"judge", "verifier"} <= set(shell._NODES)        # the new quality nodes
     missing = routed - set(shell._NODES)
@@ -395,7 +395,7 @@ def test_models_yaml_nodes_are_selectable_in_shell():
 
 # ── /praise ───────────────────────────────────────────────────────────────────
 def test_praise_saves_section_to_voice_dir(tmp_brain, fake_llm):
-    from book_agent.shell import _cmd_praise
+    from writingagent.shell import _cmd_praise
     cfg, settings = load_config(), load_settings()
     aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
                                      "praiseart", 1, 1, autonomous=True)
@@ -422,7 +422,7 @@ def test_svg_fill_guard_kills_black_blobs():
 def test_diagram_falls_back_to_flash_when_pro_returns_no_spec(tmp_brain, monkeypatch):
     """The pro tier can return an empty (node-less) spec - the node must retry on the flash
     tier and render that, instead of shipping a placeholder."""
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     cfg = load_config()
     calls = []
 

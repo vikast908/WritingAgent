@@ -1,7 +1,7 @@
 # Test record - WRITING AGENT
 
 Verification log for recent sessions (newest first). The living suite is `tests/`
-(run `pytest -q` with `BOOK_AGENT_FAKE=1`); this file records what was executed,
+(run `pytest -q` with `WRITINGAGENT_FAKE=1`); this file records what was executed,
 where, and what it proved.
 
 ## 2026-06-13 (session 12): diagrams + export images
@@ -67,7 +67,7 @@ packages**, then the full suite + ruff pass on Linux (211 passed, 1 skipped; ruf
 | `revise_unit` critic parity - revise-path critics now receive watch-list, intake requirements, prior-unit context (Store canon for books, section summaries for articles), and length note, matching the pipeline critic | `test_ux.py::test_revise_unit_article_critic_gets_pipeline_context`, `::test_revise_unit_book_critic_gets_pipeline_context` |
 | Chat stream errors render as errors, not assistant prose - partial text kept on screen, half-streamed reply NOT saved to history, NOT command-parsed | `test_shell_chat.py::test_chat_stream_error_is_not_prose` |
 | Deep-fetcher SSRF guard - public-only resolved addresses (loopback/private/link-local/cloud-metadata blocked), unsafe URLs never reach a fetch backend | `test_deep_research.py::test_url_is_safe_blocks_private_and_loopback`, `::test_fetch_text_blocks_unsafe_url` |
-| robots.txt honored per host (+ `BOOK_AGENT_IGNORE_ROBOTS=1` escape hatch) | `test_deep_research.py::test_robots_disallow_blocks_fetch`, `::test_robots_ignored_via_env` |
+| robots.txt honored per host (+ `WRITINGAGENT_IGNORE_ROBOTS=1` escape hatch) | `test_deep_research.py::test_robots_disallow_blocks_fetch`, `::test_robots_ignored_via_env` |
 | Per-host politeness throttle (1s between same-host requests; different hosts unthrottled) | `test_deep_research.py::test_throttle_spaces_same_host` |
 | Wikimedia `formatversion=2` parse (live API returns `pages` as a list; the dict-only parse made every live image search silently return `[]`) | `test_support.py::test_search_wikimedia_parses_formatversion2_list` |
 

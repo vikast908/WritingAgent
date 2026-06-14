@@ -2,8 +2,8 @@
 sampling, the shell's live palette sync, and the settings field."""
 import pytest
 
-from book_agent import shell, ui
-from book_agent.config import Settings
+from writingagent import shell, ui
+from writingagent.config import Settings
 
 
 @pytest.fixture(autouse=True)

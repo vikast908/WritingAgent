@@ -1,6 +1,6 @@
 # WRITING AGENT
 
-A self-correcting, autonomous writing system (books, articles, and more). Interactive TUI (`writing-agent` / `python book.py`)
+A self-correcting, autonomous writing system (books, articles, and more). Interactive TUI (`writing-agent` / `python writingagent.py`)
 + one-shot CLI, on OpenRouter + DeepSeek. **Cross-platform: Linux · macOS · Windows** (CI runs the suite on all three × Python 3.10–3.13). Full spec in `plan.md`; how-to-run in `README.md`.
 
 ## Start every session here

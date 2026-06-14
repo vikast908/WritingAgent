@@ -1,8 +1,8 @@
 """Focused offline tests for the per-book SQLite store (store.py)."""
-from book_agent import brain
-from book_agent import schemas as S
-from book_agent.brain import BookPaths
-from book_agent.store import Store
+from writingagent import brain
+from writingagent import schemas as S
+from writingagent.brain import BookPaths
+from writingagent.store import Store
 
 
 def _ex(name="Maya", status="", facts=(), voice=(), rules=(), timeline=(), threads=()):

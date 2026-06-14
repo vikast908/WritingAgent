@@ -1,6 +1,6 @@
 import pytest
 
-from book_agent import brain
+from writingagent import brain
 
 
 @pytest.fixture(autouse=True)

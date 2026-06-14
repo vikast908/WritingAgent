@@ -20,7 +20,7 @@ What you expected instead.
 - Python: `python --version`
 - WRITING AGENT version / commit:
 - Mode: book / article
-- Did it happen in fake mode (`BOOK_AGENT_FAKE=1`)? yes / no
+- Did it happen in fake mode (`WRITINGAGENT_FAKE=1`)? yes / no
 
 **Logs / output**
 Paste the error or relevant terminal output (redact your API key).

@@ -5,12 +5,12 @@ import os
 
 import pytest
 
-from book_agent import deep_research as dr
-from book_agent import orchestrator
-from book_agent import schemas as S
-from book_agent.brain import ArticlePaths, BookPaths
-from book_agent.config import load_config, load_settings
-from book_agent.search import SearchResult
+from writingagent import deep_research as dr
+from writingagent import orchestrator
+from writingagent import schemas as S
+from writingagent.brain import ArticlePaths, BookPaths
+from writingagent.config import load_config, load_settings
+from writingagent.search import SearchResult
 
 
 # ── HTML -> text ───────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ def test_fetch_text_rejects_non_http():
 
 
 def test_fetch_text_uses_cache_without_network(tmp_brain, monkeypatch):
-    from book_agent import cache
+    from writingagent import cache
     url = "https://example.com/page"
     cache.put("fetch", (url, dr._MAX_DOC_CHARS), "cached body")
 
@@ -118,7 +118,7 @@ def test_format_documents_numbered_and_truncated():
 
 # ── fetch backends: Scrapo preferred, stdlib fallback ───────────────────────────
 def test_scrapo_disabled_via_env(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_NO_SCRAPO", "1")
+    monkeypatch.setenv("WRITINGAGENT_NO_SCRAPO", "1")
     assert dr._scrapo() is None                          # env kill-switch wins
 
 
@@ -197,7 +197,7 @@ def test_robots_disallow_blocks_fetch(tmp_brain, monkeypatch):
 
 
 def test_robots_ignored_via_env(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_IGNORE_ROBOTS", "1")
+    monkeypatch.setenv("WRITINGAGENT_IGNORE_ROBOTS", "1")
     assert dr._robots_allows("https://anything.example/x")
 
 
@@ -220,7 +220,7 @@ def test_fetch_via_scrapo_returns_empty_when_unavailable(monkeypatch):
 # ── pipeline wiring (offline / fake mode) ───────────────────────────────────────
 @pytest.fixture
 def fake_llm(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
 
 
 def _silent(*_a, **_k):
@@ -259,7 +259,7 @@ def test_deep_research_book_pipeline_offline(tmp_brain, fake_llm):
 def test_research_queries_helper_falls_back_on_llm_error(tmp_brain, monkeypatch):
     """If query expansion raises, the seed queries are still returned."""
     cfg = load_config()
-    from book_agent import nodes
+    from writingagent import nodes
     monkeypatch.setattr(nodes, "propose_search_queries",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     qs = orchestrator._research_queries(cfg, "topic", "focus", "seed query", log=_silent)
@@ -267,10 +267,10 @@ def test_research_queries_helper_falls_back_on_llm_error(tmp_brain, monkeypatch)
 
 
 # ── live network (opt-in) ───────────────────────────────────────────────────────
-_LIVE = os.getenv("BOOK_AGENT_LIVE", "").lower() in ("1", "true", "yes")
+_LIVE = os.getenv("WRITINGAGENT_LIVE", "").lower() in ("1", "true", "yes")
 
 
-@pytest.mark.skipif(not _LIVE, reason="live network test; set BOOK_AGENT_LIVE=1 to run")
+@pytest.mark.skipif(not _LIVE, reason="live network test; set WRITINGAGENT_LIVE=1 to run")
 def test_gather_documents_live(tmp_brain):
     """Real DuckDuckGo discovery + real page fetch (Scrapo if installed, else stdlib).
     Opt-in - hits the network. Asserts we get diverse sources with real page text."""

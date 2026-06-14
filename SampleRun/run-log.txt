@@ -30,6 +30,6 @@
    autonomous: committing best (unapproved) draft
    [OK] committed chapter 3 (+ summary, canon, index)
    [consolidate:final] contradictions=5 unresolved=12
-   [production] front=5 back=2 -> C:\Users\vikas\OneDrive\Documents\MY PROJECTS GITHUB\Book Agent\brain\users\default\books\deathdates\manuscript.md
+   [production] front=5 back=2 -> C:\Users\vikas\OneDrive\Documents\MY PROJECTS GITHUB\WritingAgent\brain\users\default\books\deathdates\manuscript.md
    [learn] +5 skills, 5 watch items; reconciled 5 skills
-[OK] Book 'deathdates' complete. Manuscript: C:\Users\vikas\OneDrive\Documents\MY PROJECTS GITHUB\Book Agent\brain\users\default\books\deathdates\manuscript.md
+[OK] Book 'deathdates' complete. Manuscript: C:\Users\vikas\OneDrive\Documents\MY PROJECTS GITHUB\WritingAgent\brain\users\default\books\deathdates\manuscript.md

@@ -132,7 +132,7 @@ def domain_of(url: str) -> str:
 # it reaches content the plain urllib + html.parser path can't (JS-rendered pages,
 # soft blocks). It's optional - Python 3.11+, heavier deps - so we prefer it when it's
 # installed and silently fall back to the stdlib path otherwise. Set
-# BOOK_AGENT_NO_SCRAPO=1 to force the stdlib path (deterministic / offline runs).
+# WRITINGAGENT_NO_SCRAPO=1 to force the stdlib path (deterministic / offline runs).
 _SCRAPO_UNSET = object()
 _scrapo_mod = _SCRAPO_UNSET
 
@@ -140,7 +140,7 @@ _scrapo_mod = _SCRAPO_UNSET
 def _scrapo():
     """The scrapo module if importable and not disabled, else None (resolved once)."""
     global _scrapo_mod
-    if os.getenv("BOOK_AGENT_NO_SCRAPO", "").lower() in ("1", "true", "yes"):
+    if os.getenv("WRITINGAGENT_NO_SCRAPO", "").lower() in ("1", "true", "yes"):
         return None
     if _scrapo_mod is _SCRAPO_UNSET:
         try:
@@ -210,7 +210,7 @@ def _fetch_via_scrapo(url: str, *, max_chars: int, timeout: float = _SCRAPO_TIME
 # fetched, so the fetcher must not be steerable at internal services. The guard
 # resolves the host and requires every address to be globally routable; the stdlib
 # path re-checks each redirect hop. robots.txt is honored per host (unreachable or
-# missing robots = allow, the wide-web convention; BOOK_AGENT_IGNORE_ROBOTS=1 skips
+# missing robots = allow, the wide-web convention; WRITINGAGENT_IGNORE_ROBOTS=1 skips
 # the check), and requests to one host are spaced at least _HOST_MIN_INTERVAL apart.
 # The Scrapo backend does its own fetching - it has SCRAPO_RESPECT_ROBOTS for robots,
 # and the initial-URL guard here still applies to it.
@@ -263,8 +263,8 @@ _robots_cache: dict[str, robotparser.RobotFileParser | None] = {}
 
 def _robots_allows(url: str, *, timeout: float = _ROBOTS_TIMEOUT) -> bool:
     """robots.txt verdict for `url`, cached per scheme://host for the process.
-    No reachable/parsable robots.txt means allow. BOOK_AGENT_IGNORE_ROBOTS=1 skips."""
-    if os.getenv("BOOK_AGENT_IGNORE_ROBOTS", "").lower() in ("1", "true", "yes"):
+    No reachable/parsable robots.txt means allow. WRITINGAGENT_IGNORE_ROBOTS=1 skips."""
+    if os.getenv("WRITINGAGENT_IGNORE_ROBOTS", "").lower() in ("1", "true", "yes"):
         return True
     try:
         p = urlparse(url)

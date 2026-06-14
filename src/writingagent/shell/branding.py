@@ -198,7 +198,7 @@ def _stack_label(cfg: ModelConfig | None, settings: Settings | None) -> str:
 def _provider_needs_key(settings: Settings | None) -> bool:
     """True when the active (non-local) provider has no API key set - so we can warn at
     launch instead of letting the first real call fail with a cryptic auth error."""
-    if os.getenv("BOOK_AGENT_FAKE"):
+    if os.getenv("WRITINGAGENT_FAKE"):
         return False
     p = _active_provider(settings)
     if p is None:
@@ -314,9 +314,9 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     # Loud guard: a leftover test env var otherwise makes every model call return
     # canned text with zero indication why (chat replies with the same boilerplate,
     # runs "succeed" with placeholder prose).
-    fake = os.getenv("BOOK_AGENT_FAKE", "").lower() in ("1", "true", "yes")
-    fake_msg = ("⚠ FAKE MODE is on (BOOK_AGENT_FAKE env var) - no real AI calls; chat and runs "
-                "return canned text. Fix: Remove-Item Env:BOOK_AGENT_FAKE  then restart.")
+    fake = os.getenv("WRITINGAGENT_FAKE", "").lower() in ("1", "true", "yes")
+    fake_msg = ("⚠ FAKE MODE is on (WRITINGAGENT_FAKE env var) - no real AI calls; chat and runs "
+                "return canned text. Fix: Remove-Item Env:WRITINGAGENT_FAKE  then restart.")
 
     if not console:
         if fake:
@@ -346,7 +346,7 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
         _section(console, "FIRST RUN  ·  NO API KEY YET")
         _cmd_table(console, [
             ("real runs", f"set [bold]{env}[/] in a .env file  (or [bold]/provider[/] to switch host)"),
-            ("try it free now", "restart with [bold]BOOK_AGENT_FAKE=1[/] — the whole flow, "
+            ("try it free now", "restart with [bold]WRITINGAGENT_FAKE=1[/] — the whole flow, "
                                 "placeholder output, $0"),
         ])
 

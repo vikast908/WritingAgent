@@ -1,9 +1,9 @@
 """Offline tests for the non-LLM data layer: store, retrieval, skills."""
-from book_agent import brain, retrieval
-from book_agent import schemas as S
-from book_agent import skills as skmod
-from book_agent.brain import BookPaths
-from book_agent.store import Store
+from writingagent import brain, retrieval
+from writingagent import schemas as S
+from writingagent import skills as skmod
+from writingagent.brain import BookPaths
+from writingagent.store import Store
 
 
 def _plan():
@@ -114,7 +114,7 @@ def test_skills_promotion_and_retrieval(tmp_brain):
 
 
 def test_humanizer_strips_tells_preserves_code():
-    from book_agent.humanizer import mechanical_clean
+    from writingagent.humanizer import mechanical_clean
     txt = 'She paused—then ran. “Hi,” he said…\n```py\nx = a—b\n```\n'
     out = mechanical_clean(txt)
     prose = out.split("```")[0]

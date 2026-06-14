@@ -581,8 +581,8 @@ _D2_PAL = [("#e9f1fe", "#4f8ef7"), ("#e7faf1", "#34c98a"), ("#fff0e6", "#ff6719"
 
 
 def find_d2() -> str | None:
-    """The d2 binary path: $BOOK_AGENT_D2 (explicit) or `d2` on PATH; None if absent."""
-    return os.environ.get("BOOK_AGENT_D2") or shutil.which("d2")
+    """The d2 binary path: $WRITINGAGENT_D2 (explicit) or `d2` on PATH; None if absent."""
+    return os.environ.get("WRITINGAGENT_D2") or shutil.which("d2")
 
 
 _VIEWBOX_RE = re.compile(r'viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"')

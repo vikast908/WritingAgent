@@ -8,8 +8,8 @@ import io
 
 from rich.console import Console
 
-from book_agent import shell
-from book_agent.config import load_config, load_settings
+from writingagent import shell
+from writingagent.config import load_config, load_settings
 
 
 def _console():
@@ -22,13 +22,13 @@ def _state():
 
 
 def test_chat_stream_renders_and_saves_once(tmp_brain, monkeypatch):
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
 
     def fake_stream(model, system, message, *, history=None, max_tokens=400, temperature=0.7):
         yield "Intro paragraph.\n\n"
         yield "SENTINELWORD sits in the body.\n\n"
         yield "Closing line.\n"
-    monkeypatch.setattr("book_agent.llm.stream_text", fake_stream)
+    monkeypatch.setattr("writingagent.llm.stream_text", fake_stream)
 
     cfg, settings = load_config(), load_settings()
     console = _console()
@@ -44,12 +44,12 @@ def test_chat_stream_renders_and_saves_once(tmp_brain, monkeypatch):
 
 
 def test_chat_stream_keeps_partial_on_cancel(tmp_brain, monkeypatch):
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
 
     def fake_stream(model, system, message, *, history=None, max_tokens=400, temperature=0.7):
         yield "First chunk kept. "
         raise KeyboardInterrupt
-    monkeypatch.setattr("book_agent.llm.stream_text", fake_stream)
+    monkeypatch.setattr("writingagent.llm.stream_text", fake_stream)
 
     cfg, settings = load_config(), load_settings()
     console = _console()
@@ -63,15 +63,15 @@ def test_chat_stream_keeps_partial_on_cancel(tmp_brain, monkeypatch):
 def test_chat_stream_error_is_not_prose(tmp_brain, monkeypatch):
     """A mid-stream error renders as an error (not assistant prose): the partial
     text is shown, history is NOT polluted, and no commands are parsed from it."""
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
 
     def fake_stream(model, system, message, *, history=None, max_tokens=400, temperature=0.7):
         yield "Partial reply with a half command: ```ru"
         raise RuntimeError("connection reset")
-    monkeypatch.setattr("book_agent.llm.stream_text", fake_stream)
+    monkeypatch.setattr("writingagent.llm.stream_text", fake_stream)
     executed = []
     # _execute_cmd lives in shell.dispatch; _chat_respond lazy-imports it from there.
-    monkeypatch.setattr("book_agent.shell.dispatch._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
+    monkeypatch.setattr("writingagent.shell.dispatch._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
 
     cfg, settings = load_config(), load_settings()
     console = _console()
@@ -93,11 +93,11 @@ def _stream_new_and_run(model, system, message, *, history=None, max_tokens=400,
 
 def test_chat_new_without_goahead_is_held(tmp_brain, monkeypatch):
     """The model jumps straight to new+run on a topic message → nothing executes."""
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
-    monkeypatch.setattr("book_agent.llm.stream_text", _stream_new_and_run)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
+    monkeypatch.setattr("writingagent.llm.stream_text", _stream_new_and_run)
     executed = []
     # _execute_cmd lives in shell.dispatch; _chat_respond lazy-imports it from there.
-    monkeypatch.setattr("book_agent.shell.dispatch._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
+    monkeypatch.setattr("writingagent.shell.dispatch._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
 
     cfg, settings = load_config(), load_settings()
     console = _console()
@@ -113,11 +113,11 @@ def test_chat_new_without_goahead_is_held(tmp_brain, monkeypatch):
 
 def test_chat_new_with_goahead_executes(tmp_brain, monkeypatch):
     """Same response on an explicit go-ahead turn → both commands run in order."""
-    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
-    monkeypatch.setattr("book_agent.llm.stream_text", _stream_new_and_run)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
+    monkeypatch.setattr("writingagent.llm.stream_text", _stream_new_and_run)
     executed = []
     # _execute_cmd lives in shell.dispatch; _chat_respond lazy-imports it from there.
-    monkeypatch.setattr("book_agent.shell.dispatch._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
+    monkeypatch.setattr("writingagent.shell.dispatch._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
 
     cfg, settings = load_config(), load_settings()
     console = _console()

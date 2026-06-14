@@ -1,19 +1,19 @@
-"""Offline tests for the stable public API (book_agent.api).
+"""Offline tests for the stable public API (writingagent.api).
 
-All runs use BOOK_AGENT_FAKE so no network/API key is needed; the autouse
+All runs use WRITINGAGENT_FAKE so no network/API key is needed; the autouse
 `_isolated_brain` fixture (conftest) redirects storage to a temp dir. Articles
 with a single section are used for the full create -> run -> export path because
 they finish fast and deterministically offline (mirrors test_write_flow.py).
 """
 import pytest
 
-import book_agent
-from book_agent import Agent, Approach, ProjectNotFound, Status, write
+import writingagent
+from writingagent import Agent, Approach, ProjectNotFound, Status, write
 
 
 @pytest.fixture
 def fake_llm(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
 
 
 @pytest.fixture
@@ -24,14 +24,14 @@ def agent(fake_llm):
 
 # ── package surface ───────────────────────────────────────────────────────────
 def test_lazy_exports_and_version():
-    assert isinstance(book_agent.__version__, str)
+    assert isinstance(writingagent.__version__, str)
     # Lazy PEP 562 resolution works for the public names...
-    assert book_agent.Agent is Agent
-    assert callable(book_agent.write)
-    assert "pdf" in book_agent.EXPORT_FORMATS
+    assert writingagent.Agent is Agent
+    assert callable(writingagent.write)
+    assert "pdf" in writingagent.EXPORT_FORMATS
     # ...and unknown attributes still raise.
     with pytest.raises(AttributeError):
-        _ = book_agent.NoSuchThing
+        _ = writingagent.NoSuchThing
 
 
 # ── planning ──────────────────────────────────────────────────────────────────
@@ -75,8 +75,8 @@ def test_create_with_explicit_approach_object(agent):
 
 
 def test_create_with_int_approach_out_of_range(agent):
-    from book_agent.api import BookAgentError
-    with pytest.raises(BookAgentError):
+    from writingagent.api import WritingAgentError
+    with pytest.raises(WritingAgentError):
         agent.create("x", approach=99)
 
 
@@ -117,8 +117,8 @@ def test_open_missing_raises(agent):
 def test_export_unknown_format_rejected(agent):
     project = agent.create("topic for bad export")
     project.run(progress=lambda _m: None)
-    from book_agent.api import BookAgentError
-    with pytest.raises(BookAgentError):
+    from writingagent.api import WritingAgentError
+    with pytest.raises(WritingAgentError):
         project.export("rtf")
 
 

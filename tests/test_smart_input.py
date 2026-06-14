@@ -1,7 +1,7 @@
 """Smart, forgiving input across the TUI: fuzzy project lookup (excerpts/typos),
 slang-tolerant yes/no, and the generic option matcher used by /theme /mode /model
 /set /provider. The system should understand intent, not demand exact strings."""
-from book_agent import brain, ui
+from writingagent import brain, ui
 
 _SLUGS = [
     "from-idea-to-sub-100ms-voicebot-a-step-by-step-technical-blueprint",
@@ -52,7 +52,7 @@ def test_resolve_project_exact_id_wins(tmp_brain):
 def test_chat_use_guardrail_ignores_junk_keeps_active(tmp_brain):
     """A chat-emitted /use to a hallucinated id (or with an [article] tag) must
     never clobber the correct active project - it only switches on a strong match."""
-    from book_agent import shell
+    from writingagent import shell
     _seed()
     active, other = _SLUGS[0], _SLUGS[1]
     hallucinated = "totally-made-up-voice-thing-from-zero-to-100ms-guide"

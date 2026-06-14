@@ -29,15 +29,15 @@ __all__ = [
 
 def _reduced_motion() -> bool:
     """Honor a reduced-motion preference: no spinner/cycling dots, just static stages
-    + the elapsed clock. Set by BOOK_AGENT_REDUCED_MOTION or the a11y line-mode."""
-    return bool(os.getenv("BOOK_AGENT_REDUCED_MOTION") or os.getenv("BOOK_AGENT_A11Y"))
+    + the elapsed clock. Set by WRITINGAGENT_REDUCED_MOTION or the a11y line-mode."""
+    return bool(os.getenv("WRITINGAGENT_REDUCED_MOTION") or os.getenv("WRITINGAGENT_A11Y"))
 
 
 def _a11y() -> bool:
-    """Accessible line-mode (BOOK_AGENT_A11Y): no in-place Live redraw - screen readers
+    """Accessible line-mode (WRITINGAGENT_A11Y): no in-place Live redraw - screen readers
     can't follow a region that rewrites itself - just append one full status line per
     event. The same pipeline runs; only the rendering changes."""
-    return bool(os.getenv("BOOK_AGENT_A11Y"))
+    return bool(os.getenv("WRITINGAGENT_A11Y"))
 
 
 class _RunControls:

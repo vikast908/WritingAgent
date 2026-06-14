@@ -1,6 +1,6 @@
 [project]
 name = "writing-agent"
-dynamic = ["version"]   # single source: src/book_agent/__init__.py __version__
+dynamic = ["version"]   # single source: src/writingagent/__init__.py __version__
 description = "A self-correcting, autonomous writing system for books and articles (CLI/TUI)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -73,12 +73,10 @@ Repository = "https://github.com/vikast908/WritingAgent"
 Issues = "https://github.com/vikast908/WritingAgent/issues"
 
 [project.scripts]
-writing-agent = "book_agent.cli:main"
-bookwriter = "book_agent.cli:main"
-book = "book_agent.cli:main"
+writing-agent = "writingagent.cli:main"
 
 [tool.setuptools.dynamic]
-version = { attr = "book_agent.__version__" }
+version = { attr = "writingagent.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -100,11 +98,11 @@ ignore = [
 # The orchestrator package __init__ is a pure facade: it re-exports the seam
 # submodules (from .common import * etc.) so `orchestrator.X` keeps resolving for
 # every caller and test. Star re-exports are intentional here.
-"src/book_agent/orchestrator/__init__.py" = ["F401", "F403", "F405"]
-"src/book_agent/shell/__init__.py" = ["F401", "F403", "F405"]
+"src/writingagent/orchestrator/__init__.py" = ["F401", "F403", "F405"]
+"src/writingagent/shell/__init__.py" = ["F401", "F403", "F405"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]   # tests import book_agent from src without an install
+pythonpath = ["src"]   # tests import writingagent from src without an install
 testpaths = ["tests"]
 addopts = "-q"
 

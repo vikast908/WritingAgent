@@ -6,7 +6,7 @@ via a compat endpoint, so there is exactly one transport and adding a provider i
 a single entry in `_PROVIDERS` - no code changes anywhere else.
 
 Switch providers via `/provider <id>` in the shell, the `provider` setting, or
-the BOOK_AGENT_PROVIDER env var. Each provider reads its key from its own env var
+the WRITINGAGENT_PROVIDER env var. Each provider reads its key from its own env var
 (OPENROUTER_API_KEY, DEEPSEEK_API_KEY, ...) and its base URL can be overridden by
 the matching *_BASE_URL var (for proxies / self-hosted gateways).
 """
@@ -76,8 +76,8 @@ _PROVIDERS = [
              notes="local models - start the LM Studio server"),
     # ── escape hatch ─────────────────────────────────────────────────────────
     Provider("custom", "Custom endpoint", "",
-             ("BOOK_AGENT_API_KEY", "OPENAI_API_KEY"), "BOOK_AGENT_BASE_URL",
-             notes="point BOOK_AGENT_BASE_URL at any OpenAI-compatible server"),
+             ("WRITINGAGENT_API_KEY", "OPENAI_API_KEY"), "WRITINGAGENT_BASE_URL",
+             notes="point WRITINGAGENT_BASE_URL at any OpenAI-compatible server"),
 ]
 
 REGISTRY: dict[str, Provider] = {p.id: p for p in _PROVIDERS}

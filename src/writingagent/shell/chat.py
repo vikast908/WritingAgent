@@ -182,7 +182,7 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
     system = _build_chat_system(settings, state)
     model = cfg.model_for("chat")
     model_slug = model.split("/")[-1]
-    fake = os.getenv("BOOK_AGENT_FAKE", "").lower() in ("1", "true", "yes")
+    fake = os.getenv("WRITINGAGENT_FAKE", "").lower() in ("1", "true", "yes")
     history: list[dict] = state.setdefault("chat_history", [])
 
     # ── Plain-text (no Rich) - stream chunks directly ─────────────────────────

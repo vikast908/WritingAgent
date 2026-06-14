@@ -2,15 +2,15 @@
 picking, insight tracking, and the table read."""
 import pytest
 
-from book_agent import brain, nodes, orchestrator
-from book_agent import schemas as S
-from book_agent.brain import ArticlePaths
-from book_agent.config import load_config, load_settings
+from writingagent import brain, nodes, orchestrator
+from writingagent import schemas as S
+from writingagent.brain import ArticlePaths
+from writingagent.config import load_config, load_settings
 
 
 @pytest.fixture
 def fake_llm(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
 
 
 def _angle():
@@ -30,7 +30,7 @@ def _crit(verdict="approve", insight=4, blocking=0):
 
 # ── approve_escalation ────────────────────────────────────────────────────────
 def test_approve_escalation_commits_stalled_section(tmp_brain, fake_llm, monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE_VERDICT", "escalate")
+    monkeypatch.setenv("WRITINGAGENT_FAKE_VERDICT", "escalate")
     cfg, settings = load_config(), load_settings()
     aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
                                      "appr", 2, 1, autonomous=False)
@@ -43,7 +43,7 @@ def test_approve_escalation_commits_stalled_section(tmp_brain, fake_llm, monkeyp
     assert out["committed"] == 1 and out["current_section"] == 2
     assert brain.read_text(ArticlePaths(aid, "u").section(1))   # committed file exists
 
-    monkeypatch.delenv("BOOK_AGENT_FAKE_VERDICT", raising=False)
+    monkeypatch.delenv("WRITINGAGENT_FAKE_VERDICT", raising=False)
     final = orchestrator.run(cfg, "u", aid, log=_silent)        # resumes and finishes
     assert final["phase"] == "done"
     assert final["committed"] == 1   # fake outline always has 1 section

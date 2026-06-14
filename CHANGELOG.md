@@ -21,7 +21,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   red/green pair). 11 themes total.
 - **Whole-run ETA** on the live dashboard (~Nm left, from this session's average time-per-unit).
 - **First-run onboarding**: with no API key set, the welcome shows how to set the key *or* try the whole
-  flow free with `BOOK_AGENT_FAKE=1`, instead of suggesting a command that would fail.
+  flow free with `WRITINGAGENT_FAKE=1`, instead of suggesting a command that would fail.
 
 ### Changed
 - **Internals reorganised into packages (behavior-preserving).** The two largest modules were split
@@ -66,7 +66,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   no longer stack/overlap. **D2 + ELK is now explicit opt-in** (`diagram_engine: d2`): the same
   `DiagramSpec` is laid out by the [D2](https://d2lang.com) CLI with ELK (a colour legend is injected
   to match the built-in engine), but it tends to render very wide and hard to read, so it is no longer
-  auto-selected just because the `d2` binary is present ($BOOK_AGENT_D2 / PATH still locates it when
+  auto-selected just because the `d2` binary is present ($WRITINGAGENT_D2 / PATH still locates it when
   opted in). The zero-dependency built-in engine stays the default and the fallback.
 
 ### Added
@@ -94,8 +94,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "Ctrl-C pauses · resumable" controls line, and a "self-edits" summary line (revisions/humanizer
   passes). (4) **Structured recovery** - a clear *paused* card (budget-cap vs interrupt, with resume
   + alternatives) and export failures that say *why and how to recover* (file locked / missing
-  optional dep) instead of a quiet skip. (5) **Accessibility** - `BOOK_AGENT_A11Y` line-mode (no Live
-  redraw; append-only full-sentence status for screen readers), `BOOK_AGENT_REDUCED_MOTION` (static
+  optional dep) instead of a quiet skip. (5) **Accessibility** - `WRITINGAGENT_A11Y` line-mode (no Live
+  redraw; append-only full-sentence status for screen readers), `WRITINGAGENT_REDUCED_MOTION` (static
   stages, no spinner), and a one-line wordmark fallback on narrow (<60col) terminals. (6) **Proactive
   key check** - the banner warns when the active provider has no API key (before the first call fails).
   (7) **Progressive help** - `/help <topic>` shows just the matching commands. (8) **Live run
@@ -163,7 +163,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   wordmark stays visible at the first prompt; the full command list moved to `/help` and
   the feature board to a new **`/features`** command (one-line feature status in the
   footer). The bottom status toolbar was removed (state lives in the prompt + footer),
-  and a red warning fires at launch when `BOOK_AGENT_FAKE` is set so test mode can't
+  and a red warning fires at launch when `WRITINGAGENT_FAKE` is set so test mode can't
   silently swallow real runs.
 - **Run-mode toggle** - `/auto [on|off]` (aliases `/autonomous`, `/manual`) and
   `run --autonomous`/`--manual`, which also clear a stalled per-unit review when going autonomous.
@@ -193,7 +193,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (spoof-neutralized markers + standing instruction) at every research → prompt path.
 - **Fetch safety gate** - the deep-research fetcher now enforces an SSRF guard (hosts
   must resolve to globally-routable addresses only; redirects re-validated per hop),
-  honors robots.txt per host (`BOOK_AGENT_IGNORE_ROBOTS=1` to skip), and rate-limits
+  honors robots.txt per host (`WRITINGAGENT_IGNORE_ROBOTS=1` to skip), and rate-limits
   requests per host (1s politeness interval).
 - Open-source scaffolding: `LICENSE` (MIT), `CONTRIBUTING.md`, `SECURITY.md`,
   `CODE_OF_CONDUCT.md`, issue/PR templates, GitHub Actions CI (Linux/macOS/Windows
@@ -216,8 +216,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The banner hardcoded "OpenRouter · DeepSeek"** regardless of the active provider/model, and (a
   latent bug) `providers.resolve()` returns an id string, not a `Provider`, so the provider name was
   always the fallback - both fixed; the masthead now reflects the real provider, writer model, and
-  version (single-sourced from `book_agent.__version__`, bumped 0.1.0 → 0.2.0).
-- **`BOOK_AGENT_PROVIDER` configured the model client but never synced `settings.provider`**, so the
+  version (single-sourced from `writingagent.__version__`, bumped 0.1.0 → 0.2.0).
+- **`WRITINGAGENT_PROVIDER` configured the model client but never synced `settings.provider`**, so the
   banner and key-warning showed the stale (saved) provider while a different host was actually active;
   `_apply_provider` now updates `settings.provider` to the resolved id.
 - `autonomous: true` in `settings.yaml` was silently ignored by `new` (a `store_true`
@@ -271,7 +271,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   re-validation), robots.txt-respecting, and per-host rate-limited.
 
 ### Removed
-- Dead vertical-slice prototype (`run.py`, `src/book_agent/slice.py`).
+- Dead vertical-slice prototype (`run.py`, `src/writingagent/slice.py`).
 
 ## [0.1.0]
 - Initial book + article pipelines: plan → write → critique → revise → humanise →

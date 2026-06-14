@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from book_agent import brain, cli
-from book_agent.config import load_config, load_settings
+from writingagent import brain, cli
+from writingagent.config import load_config, load_settings
 
 
 def test_resolve_formats_all_lists_and_unknowns():

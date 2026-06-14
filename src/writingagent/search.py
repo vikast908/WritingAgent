@@ -48,7 +48,7 @@ def web_search(query: str, max_results: int = 5) -> list[SearchResult]:
     Non-empty results are cached on disk (keyed by query + count) so resumes and
     near-identical sections don't re-hit the network or burn rate-limit budget.
     """
-    if os.getenv("BOOK_AGENT_FAKE", "").lower() in ("1", "true", "yes"):
+    if os.getenv("WRITINGAGENT_FAKE", "").lower() in ("1", "true", "yes"):
         return []
 
     from . import cache

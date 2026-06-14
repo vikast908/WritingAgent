@@ -61,7 +61,7 @@ def _call(params: dict) -> dict:
     qs = urllib.parse.urlencode({"format": "json", "formatversion": "2", **params})
     req = urllib.request.Request(
         f"{_API}?{qs}",
-        headers={"User-Agent": "BookAgent/1.0 (open-source book writing tool)"},
+        headers={"User-Agent": "WritingAgent/1.0 (open-source book writing tool)"},
     )
     with urllib.request.urlopen(req, timeout=10) as r:
         return json.loads(r.read().decode())

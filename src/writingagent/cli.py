@@ -1,4 +1,4 @@
-"""CLI for the Book Agent (plan.md §13). Subcommands:
+"""CLI for Writing Agent (plan.md §13). Subcommands:
 new, run, status, review, read, memory, produce, consolidate, skills, config.
 """
 from __future__ import annotations
@@ -150,7 +150,7 @@ def _cmd_new_book(args, cfg, settings, uid, abstract):
     book_id = _outline_gate(uid, _create(abstract), abstract, _create,
                             is_article=False, gate_on=not autonomous)
     print(f"\n[OK] Created book '{book_id}'.")
-    print(f"     Next: python book.py run --book-id {book_id}")
+    print(f"     Next: python writingagent.py run --book-id {book_id}")
 
 
 def _cmd_new_article(args, cfg, settings, uid, abstract):
@@ -172,7 +172,7 @@ def _cmd_new_article(args, cfg, settings, uid, abstract):
     article_id = _outline_gate(uid, _create(abstract), abstract, _create,
                                is_article=True, gate_on=not autonomous)
     print(f"\n[OK] Created article '{article_id}'.")
-    print(f"     Next: python book.py run --book-id {article_id}")
+    print(f"     Next: python writingagent.py run --book-id {article_id}")
 
 
 # ── Autonomous "write" flow: interview once, then run to a finished file ───────
@@ -404,7 +404,7 @@ def cmd_review(args, cfg, settings, uid):
         sys.exit("review needs --chapter and --instruction")
     book_id = _resolve_book(uid, args.book_id)
     orchestrator.record_instruction(uid, book_id, args.chapter, args.instruction)
-    print(f"[OK] Recorded instruction for chapter {args.chapter}. Now: python book.py run "
+    print(f"[OK] Recorded instruction for chapter {args.chapter}. Now: python writingagent.py run "
           f"--book-id {book_id}")
 
 
@@ -849,7 +849,7 @@ _COMMANDS = {
 
 
 def build_parser(settings):
-    ap = argparse.ArgumentParser(prog="book", description="Book Agent CLI (see plan.md §13).")
+    ap = argparse.ArgumentParser(prog="writing-agent", description="Writing Agent CLI (see plan.md §13).")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--user", default=settings.default_user)
     common.add_argument("--book-id")
@@ -946,12 +946,12 @@ def build_parser(settings):
 
 
 def _apply_provider(llm_mod, settings) -> None:
-    """Select the model host from BOOK_AGENT_PROVIDER (if set) or settings.provider.
+    """Select the model host from WRITINGAGENT_PROVIDER (if set) or settings.provider.
 
     An unknown id is a warning, not a crash - configure_provider leaves the default
     (OpenRouter) in place, so a typo never bricks startup."""
     import os
-    choice = os.getenv("BOOK_AGENT_PROVIDER") or settings.provider
+    choice = os.getenv("WRITINGAGENT_PROVIDER") or settings.provider
     try:
         llm_mod.configure_provider(choice)
         from . import providers
@@ -986,7 +986,7 @@ def main() -> None:
     _llm.configure_timeout(settings.request_timeout)
     _llm.configure_openrouter_providers(settings.openrouter_providers)
     _apply_provider(_llm, settings)
-    if len(sys.argv) == 1:  # bare `book` / `python book.py` -> interactive shell (TUI)
+    if len(sys.argv) == 1:  # bare `writing-agent` / `python writingagent.py` -> interactive shell (TUI)
         from .shell import run_shell
         run_shell(build_parser(settings), _COMMANDS, cfg, settings)
         return

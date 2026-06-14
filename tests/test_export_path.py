@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from book_agent import brain, orchestrator
-from book_agent.config import Settings
+from writingagent import brain, orchestrator
+from writingagent.config import Settings
 
 
 def _make_article(uid: str, pid: str) -> Path:
@@ -28,7 +28,7 @@ def test_project_root_detects_article_vs_book(tmp_brain):
 
 def _no_global_default(monkeypatch):
     """Pin load_settings so the root-fallback tests don't see an ambient export_dir."""
-    monkeypatch.setattr("book_agent.config.load_settings", Settings)
+    monkeypatch.setattr("writingagent.config.load_settings", Settings)
 
 
 def test_default_export_dir_is_project_root(tmp_brain, monkeypatch):
@@ -53,7 +53,7 @@ def test_per_project_override_wins(tmp_brain, tmp_path, monkeypatch):
 def test_global_default_namespaces_by_project(tmp_brain, tmp_path, monkeypatch):
     _make_article("u", "demo")
     base = tmp_path / "AllWriting"
-    monkeypatch.setattr("book_agent.config.load_settings",
+    monkeypatch.setattr("writingagent.config.load_settings",
                         lambda: Settings(export_dir=str(base)))
     assert brain.resolve_export_dir("u", "demo") == base / "demo"
 

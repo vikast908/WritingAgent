@@ -1,9 +1,9 @@
 """Focused offline tests for context-slice assembly and skill retrieval (retrieval.py)."""
-from book_agent import brain, embeddings, retrieval
-from book_agent import schemas as S
-from book_agent import skills as skmod
-from book_agent.brain import BookPaths
-from book_agent.store import Store
+from writingagent import brain, embeddings, retrieval
+from writingagent import schemas as S
+from writingagent import skills as skmod
+from writingagent.brain import BookPaths
+from writingagent.store import Store
 
 
 def _plan(genre="thriller", themes=("memory", "fog")):

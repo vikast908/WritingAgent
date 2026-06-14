@@ -10,7 +10,7 @@ asn1crypto==1.5.1
 ast-grep-cli==0.42.3
 attrs==26.1.0
 beautifulsoup4==4.15.0
--e git+https://github.com/vikast908/WritingAgent.git@0d35d3dbe425540c9b7e58718f4aef80da6cd4e2#egg=book_agent
+-e git+https://github.com/vikast908/WritingAgent.git@0d35d3dbe425540c9b7e58718f4aef80da6cd4e2#egg=writingagent
 brotli==1.2.0
 certifi==2026.5.20
 cffi==2.0.0

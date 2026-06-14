@@ -36,7 +36,7 @@ claim rests on.
 
 ## Notes & honesty caveats
 
-- **Cost:** `generate.py` makes real LLM calls. Use a small prompt set first. (Set `BOOK_AGENT_FAKE=1`
+- **Cost:** `generate.py` makes real LLM calls. Use a small prompt set first. (Set `WRITINGAGENT_FAKE=1`
   to dry-run the *wiring* with placeholder text — useful to test the flow, useless for judging quality.)
 - **Fairness:** keep the competitor prompt identical to `prompt.txt`, and give ChatGPT/Claude a fair
   shot (a normal "write a long-form article on X with sources" prompt). Document exactly what you

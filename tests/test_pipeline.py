@@ -1,15 +1,15 @@
 """End-to-end orchestrator tests using fake-LLM mode (no API calls)."""
 import pytest
 
-from book_agent import brain, orchestrator
-from book_agent import schemas as S
-from book_agent.brain import BookPaths
-from book_agent.config import load_config, load_settings
+from writingagent import brain, orchestrator
+from writingagent import schemas as S
+from writingagent.brain import BookPaths
+from writingagent.config import load_config, load_settings
 
 
 @pytest.fixture
 def fake_llm(monkeypatch):
-    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
 
 
 def _chosen():
@@ -39,7 +39,7 @@ def test_end_to_end_completes(tmp_brain, fake_llm):
 
 def test_escalation_review_resume(tmp_brain, fake_llm, monkeypatch):
     cfg, settings = load_config(), load_settings()
-    monkeypatch.setenv("BOOK_AGENT_FAKE_VERDICT", "revise")  # force the cap -> escalate path
+    monkeypatch.setenv("WRITINGAGENT_FAKE_VERDICT", "revise")  # force the cap -> escalate path
     bid = orchestrator.start_book(cfg, settings, "u", "abstract", _chosen(), "esc", 1, 1)
 
     state = orchestrator.run(cfg, "u", bid, log=_silent)
@@ -50,7 +50,7 @@ def test_escalation_review_resume(tmp_brain, fake_llm, monkeypatch):
     assert not paths.ch(1).exists()  # not committed
 
     # Human answers, then it can approve -> resume to completion.
-    monkeypatch.setenv("BOOK_AGENT_FAKE_VERDICT", "approve")
+    monkeypatch.setenv("WRITINGAGENT_FAKE_VERDICT", "approve")
     orchestrator.record_instruction("u", bid, 1, "make the confrontation colder")
     state2 = orchestrator.run(cfg, "u", bid, log=_silent)
     assert state2["phase"] == "done"
@@ -60,7 +60,7 @@ def test_escalation_review_resume(tmp_brain, fake_llm, monkeypatch):
 
 def test_low_confidence_escalates(tmp_brain, fake_llm, monkeypatch):
     cfg, settings = load_config(), load_settings()
-    monkeypatch.setenv("BOOK_AGENT_FAKE_CONFIDENCE", "0.1")  # below default 0.5 threshold
+    monkeypatch.setenv("WRITINGAGENT_FAKE_CONFIDENCE", "0.1")  # below default 0.5 threshold
     bid = orchestrator.start_book(cfg, settings, "u", "abstract", _chosen(), "lowconf", 1, 1)
 
     state = orchestrator.run(cfg, "u", bid, log=_silent)
@@ -68,7 +68,7 @@ def test_low_confidence_escalates(tmp_brain, fake_llm, monkeypatch):
     assert state.get("review_kind") == "chapter"
     assert BookPaths(bid, "u").review_of(1).exists()
 
-    monkeypatch.setenv("BOOK_AGENT_FAKE_CONFIDENCE", "0.9")
+    monkeypatch.setenv("WRITINGAGENT_FAKE_CONFIDENCE", "0.9")
     orchestrator.record_instruction("u", bid, 1, "tighten it")
     state2 = orchestrator.run(cfg, "u", bid, log=_silent)
     assert state2["phase"] == "done"
@@ -76,7 +76,7 @@ def test_low_confidence_escalates(tmp_brain, fake_llm, monkeypatch):
 
 def test_consolidation_escalation_and_force(tmp_brain, fake_llm, monkeypatch):
     cfg, settings = load_config(), load_settings()
-    monkeypatch.setenv("BOOK_AGENT_FAKE_CONTRADICTION", "1")  # force a contradiction
+    monkeypatch.setenv("WRITINGAGENT_FAKE_CONTRADICTION", "1")  # force a contradiction
     bid = orchestrator.start_book(cfg, settings, "u", "abstract", _chosen(), "consesc", 1, 1)
 
     state = orchestrator.run(cfg, "u", bid, log=_silent)
@@ -93,8 +93,8 @@ def test_consolidation_escalation_and_force(tmp_brain, fake_llm, monkeypatch):
 
 def test_autonomous_never_pauses(tmp_brain, fake_llm, monkeypatch):
     cfg, settings = load_config(), load_settings()
-    monkeypatch.setenv("BOOK_AGENT_FAKE_VERDICT", "revise")    # critic never approves
-    monkeypatch.setenv("BOOK_AGENT_FAKE_CONTRADICTION", "1")   # consolidation would escalate
+    monkeypatch.setenv("WRITINGAGENT_FAKE_VERDICT", "revise")    # critic never approves
+    monkeypatch.setenv("WRITINGAGENT_FAKE_CONTRADICTION", "1")   # consolidation would escalate
     bid = orchestrator.start_book(cfg, settings, "u", "abstract", _chosen(), "auto", 1, 1,
                                   autonomous=True)
     state = orchestrator.run(cfg, "u", bid, log=_silent)
