@@ -5,6 +5,20 @@
 
 ## Current status
 
+- **New (2026-06-14 - learning loop v2: causal skill efficacy):** fixed the loop's *showstopper* (the
+  efficacy signal was confounded - `record_chapter` credited every applied skill with the same
+  chapter-level `first_pass`, no counterfactual, `target_failures` never written) with the *gamechanger*:
+  **ablation duels** (`skill_duels`, opt-in). On a unit with an undecided skill, `_divergent_first_draft`
+  drafts one EXTRA variant with that skill held out (same temp as v0); `_crit_better(v0, ablated)` is the
+  skill's causal lift. New `skills.record_duel` / `pick_duel_target`; `reconcile` prefers a Laplace-smoothed
+  duel win-rate (`MIN_DUELS`/`TRUST_WR`/`RETIRE_WR`) over the first-pass fallback, and a lost duel finally
+  drives `target_failures`. De-risks: variant is *added* not substituted (no real contender lost; cost =
+  one extra draft, only while undecided), smoothed+sample-gated stats, skipped in skeleton mode. Plus
+  **`skill_distill`** (opt-in, deterministic, non-destructive near-duplicate retirement - keeps retrieval
+  sharp; only meaningful after duels score skills) and **`watch_blocking`** (default on: watch-list now
+  blocks only CLEAR/CONCRETE violations instead of unconditionally - cuts false-positive revision thrash;
+  False = advisory). +7 offline tests (`test_skills.py`), fake-mode e2e fires a real duel on both
+  pipelines. **337 passed / 1 skipped, ruff clean.** See plan §8.
 - **New (2026-06-14 - repl.py split into 4 seams):** the largest remaining shell file, `repl.py` (816
   lines), is now four concerns behind the same facade: **dispatch** (247, input interpretation +
   `_execute_cmd` - the chat assistant's guarded command runner: confirmation detection, project auto-pick,

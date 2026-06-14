@@ -370,6 +370,29 @@ baseline**, where `p_base` = the user's overall first-pass approval rate and
 All thresholds are tunable config. Neither Hermes nor GBrain clearly solves trust - this is
 the gate we add.
 
+**Ablation duels (the causal efficacy signal · `skill_duels`, opt-in).** The first-pass-lift
+rule above is *confounded*: `record_chapter` credits every applied skill with the same
+chapter-level outcome (no per-skill attribution, no counterfactual), and `target_failures` was
+never written. The fix reuses the best-of-N machinery: on a unit that still has an *undecided*
+skill, `_divergent_first_draft` drafts **one extra variant with that skill held out**, at v0's
+temperature, so the only difference is the skill. `_crit_better(crit[v0], crit[ablated])` is the
+skill's **causal lift** - a true counterfactual. `skills.record_duel` logs win/loss (a loss is
+an attributed `target_failure`), `pick_duel_target` chooses the least-dueled candidate and tapers
+off at `MIN_DUELS`, and `reconcile` prefers a **Laplace-smoothed duel win-rate** (`TRUST_WR` /
+`RETIRE_WR`, gated by `MIN_DUELS`) over the first-pass fallback. De-risks: a variant is *added*,
+not substituted (no real contender lost; cost = one extra draft only while a skill is undecided);
+the win-rate is smoothed + sample-gated so noise can't flip a skill; skipped in skeleton mode.
+
+**Distillation (`skill_distill`, opt-in).** As the library grows, near-duplicate skills dilute
+top-N retrieval. `skills.distill` retires the weaker of each near-duplicate cluster (Jaccard over
+body tokens ≥ `DEDUP_SIM`, keeping the best duel win-rate / applied count). Deterministic and
+**non-destructive** (status only; the md is kept), and only meaningful once duels score skills -
+hence off by default.
+
+**Watch-list enforcement (`watch_blocking`, default on).** The watch-list was unconditionally
+blocking (false-positive / revision-thrash risk). It now blocks only **clear, concrete**
+violations (borderline/stylistic → nit); `False` makes it fully advisory.
+
 ---
 
 ## 9. Consolidation pass (GBrain "Dream Cycle" analog)

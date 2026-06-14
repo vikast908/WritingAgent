@@ -356,7 +356,14 @@ enough context to appreciate each.
 
 - **The learning loop.** After each finished piece, lessons are distilled into reusable "skills" that
   inform future runs, and skills that don't help are retired. *Why:* the studio should get better with
-  experience, not start from zero every time.
+  experience, not start from zero every time. **Two important honesty notes:** (1) this is *memory*,
+  not retraining — the underlying AI model never changes; the system accumulates a personal, self-pruning
+  library of lessons that it feeds back as context. (2) To know which lessons *actually* help, it can run
+  an **ablation duel** (turn on `skill_duels`): when writing, it occasionally drafts one extra version
+  with a candidate skill removed and lets the critic compare — if the version *with* the skill keeps
+  winning, the skill earns trust; if not, it's retired. This is a genuine cause-and-effect test (the only
+  thing that differs is that one skill), not a guess. It's off by default because it costs one extra draft
+  on the units where it's still learning a skill's worth.
 
 - **The evidence report.** The piece ships with its thesis and **every source ranked by influence**.
   *Why:* it makes the work *auditable* — you can see exactly what carried the argument. Most AI writing
