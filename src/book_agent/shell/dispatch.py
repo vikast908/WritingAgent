@@ -10,7 +10,7 @@ import shlex
 
 from .. import brain
 from ..config import Settings
-from ..ui import DIM, ERR, GOLD, INK
+from ..ui import DIM, ERR, GOLD, INK, explain_error
 from ._const import _CODE_BLOCK_RE
 from .branding import _out
 from .dashboard import _cmd_run_rich
@@ -244,4 +244,4 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
     except SystemExit:
         pass
     except Exception as e:  # noqa: BLE001
-        _out(console, f"[{ERR}]error:[/] {type(e).__name__}: {e}")
+        _out(console, f"[{ERR}]error:[/] {explain_error(e) or f'{type(e).__name__}: {e}'}")

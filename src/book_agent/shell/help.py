@@ -86,6 +86,12 @@ def _features_table(console, settings: Settings) -> None:
                   "skeptical whole-piece reader pass (articles)"),
         _feat_row("reader-loop", settings.table_read_revise,
                   "autonomous: apply the reader's top fix as one revision"),
+        _feat_row("skill duels", settings.skill_duels,
+                  "A/B-test learned skills (one extra draft) - causal efficacy signal"),
+        _feat_row("distill    ", settings.skill_distill,
+                  "retire near-duplicate skills so retrieval stays sharp"),
+        _feat_row("watch-block", settings.watch_blocking,
+                  "watch-list blocks clear violations (off = advisory, nit only)"),
         ("", ""),
         ("quality knobs",
          f"divergent_drafts={settings.divergent_drafts}, min_insight={settings.min_insight}/5"),
@@ -112,6 +118,9 @@ _FEATURE_KEYS = [
     ("verify_claims",     "verify",      "check each cited claim against its source"),
     ("table_read",        "table read",  "skeptical whole-piece reader pass (articles)"),
     ("table_read_revise", "reader-loop", "autonomous: apply the reader's top fix as one revision"),
+    ("skill_duels",       "skill duels", "A/B-test learned skills (one extra draft) - causal efficacy"),
+    ("skill_distill",     "distill",     "retire near-duplicate skills so retrieval stays sharp"),
+    ("watch_blocking",    "watch-block", "watch-list blocks clear violations (off = advisory only)"),
 ]
 
 

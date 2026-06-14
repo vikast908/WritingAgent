@@ -593,18 +593,25 @@ def cmd_skills(args, cfg, settings, uid):
     console = _console()
     if not console:
         for r in rows:
+            duel = f" duel_wr={r['duel_wr']} ({r['duels']})" if r["duels"] else ""
             print(f"- {r['name']:<28} {r['status']:<10} applied={r['applied']} "
-                  f"p_skill={r['p_skill']} p_base={r['p_base']}")
+                  f"p_skill={r['p_skill']} p_base={r['p_base']}{duel}")
         return
     from rich.table import Table
     t = Table(box=None, show_header=True, header_style=ui.DIM, padding=(0, 3, 0, 0))
     t.add_column("skill", style=f"bold {ui.GOLD}", no_wrap=True)
     t.add_column("status", style=ui.PARCH)
     t.add_column("used", justify="right", style=ui.DIM)
-    t.add_column("efficacy  (vs baseline)", style=ui.PARCH)
+    t.add_column("first-pass  (vs baseline)", style=ui.PARCH)
+    t.add_column("duels  (vs 50/50)", style=ui.PARCH)
     for r in rows:
+        if r["duels"]:
+            duel_cell = ui.efficacy_bar(r["duel_wr"], 0.5)
+            duel_cell.append(f"  ({r['duels']})", style=ui.DIM)
+        else:
+            duel_cell = "[dim]—[/]"
         t.add_row(r["name"], r["status"], str(r["applied"]),
-                  ui.efficacy_bar(r["p_skill"], r["p_base"]))
+                  ui.efficacy_bar(r["p_skill"], r["p_base"]), duel_cell)
     console.print(t)
 
 

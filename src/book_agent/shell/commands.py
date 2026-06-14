@@ -547,14 +547,25 @@ def _print_skills(console, uid: str) -> None:
         t.add_column("skill", style=f"bold {GOLD}", no_wrap=True)
         t.add_column("status", style=PARCH)
         t.add_column("used", justify="right", style=DIM)
-        t.add_column("efficacy  (vs baseline)", style=PARCH)
+        t.add_column("first-pass  (vs baseline)", style=PARCH)
+        t.add_column("duels  (vs 50/50)", style=PARCH)
         for r in rows:
+            if r["duels"]:
+                # win-rate vs a 0.5 coin-flip baseline; this drives status once it has data.
+                duel_cell = ui.efficacy_bar(r["duel_wr"], 0.5)
+                duel_cell.append(f"  ({r['duels']})", style=DIM)
+            else:
+                duel_cell = "[dim]—[/]"
             t.add_row(r["name"], r["status"], str(r["applied"]),
-                      ui.efficacy_bar(r["p_skill"], r["p_base"]))
+                      ui.efficacy_bar(r["p_skill"], r["p_base"]), duel_cell)
         console.print(t)
+        console.print(f"  [{DIM}]trusted/retired is decided by duels once a skill has data "
+                      f"(/set skill_duels true), else by first-pass lift.[/]")
     else:
         for r in rows:
-            print(f"  {r['name']:<34} {r['status']:<10} applied={r['applied']} p={r['p_skill']}")
+            duel = f" duel_wr={r['duel_wr']} ({r['duels']})" if r["duels"] else ""
+            print(f"  {r['name']:<34} {r['status']:<10} applied={r['applied']} "
+                  f"p={r['p_skill']}{duel}")
 
 
 def _print_skill(console, uid: str, rest: list[str]) -> None:

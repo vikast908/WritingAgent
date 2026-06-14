@@ -203,7 +203,7 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
             except SystemExit:
                 pass
             except Exception as e:  # noqa: BLE001
-                _out(console, f"[{ERR}]error:[/] {type(e).__name__}: {e}")
+                _out(console, f"[{ERR}]error:[/] {ui.explain_error(e) or f'{type(e).__name__}: {e}'}")
             continue
 
         # ── Reserved command word typed without its slash → run it, don't chat it ─

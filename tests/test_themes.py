@@ -92,3 +92,18 @@ def test_banner_renders_in_every_theme():
                     width=100, file=io.StringIO())
         shell._banner(c)
         assert c.file.getvalue()
+
+
+def test_highcontrast_theme_present_and_cb_safe():
+    """The colourblind-safe theme exists and pairs ok=blue / error=vermillion (not red/green)."""
+    t = ui.THEMES["highcontrast"]
+    assert t["ON_CLR"].lower() == "#0072b2"     # ok = blue
+    assert t["ERR"].lower() == "#d55e00"        # error = vermillion (CB-safe vs blue)
+
+
+def test_explain_error_maps_known_failures():
+    """Recognised failures get a friendly hint; unknown ones fall back to None (raw error)."""
+    assert "key" in ui.explain_error(RuntimeError("401 Unauthorized")).lower()
+    assert "rate" in ui.explain_error(RuntimeError("429 Too Many Requests")).lower()
+    assert ui.explain_error(RuntimeError("Connection timed out")) is not None
+    assert ui.explain_error(ValueError("totally unknown thing")) is None

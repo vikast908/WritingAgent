@@ -46,6 +46,17 @@ THEMES: dict[str, dict] = {
         FONT=FONT, WORDS=WORDS, SHEAR=SHEAR,
         DESC="ink & brass - blue-ink default, semantic status colors",
     ),
+    "highcontrast": dict(
+        # Okabe-Ito palette - distinguishable for all common types of colour-blindness.
+        # Status is NOT red/green: "on/ok" is blue, "error" is vermillion, so they never
+        # collide for red-green CVD. Paired with white text for maximum contrast.
+        GOLD="#0072B2", GOLD_HI="#56B4E9", INK="#E69F00", PARCH="#FFFFFF",
+        DIM="#9a9a9a", RULE="#5a5a5a", ERR="#D55E00", ON_CLR="#0072B2",
+        OFF_CLR="#9a9a9a", FLEURON="✒",
+        STOPS=("#0072B2", "#56B4E9", "#F0E442"),
+        FONT="ansi_regular", WORDS=("WRITING", "AGENT"), SHEAR=False,
+        DESC="high-contrast, colourblind-safe (Okabe-Ito; blue = ok, vermillion = error)",
+    ),
     "kazama": dict(
         GOLD="#ff7a18", GOLD_HI="#ffd23f", INK="#d4452f", PARCH="#e8ddd0",
         DIM="grey42", RULE="#7a1208", ERR="#ff4d3d", ON_CLR="#ffd23f",
@@ -250,6 +261,24 @@ def smart_match(query, options, *, aliases=None, cutoff: float = 0.6):
 
 def word_count(text: str | None) -> int:
     return len(text.split()) if text else 0
+
+
+def explain_error(exc) -> str | None:
+    """A friendly, recoverable one-liner for a recognised failure, or None to fall back to
+    the raw error. Maps the handful of failures users actually hit (bad/missing key,
+    rate-limit, network blip, locked file) to a clear next step instead of a stack-trace-y
+    `RuntimeError: ...`. Progress is always saved, so every hint says 'run again'."""
+    s = f"{type(exc).__name__}: {exc}".lower()
+    if any(k in s for k in ("401", "unauthorized", "invalid api key", "authentication", "no auth")):
+        return "API key looks invalid or missing — check it in .env (or /provider to switch host)."
+    if any(k in s for k in ("429", "rate limit", "rate-limit", "too many requests", "quota")):
+        return "Rate-limited by the provider — wait a moment, then run again (progress is saved)."
+    if any(k in s for k in ("timeout", "timed out", "connection", "network", "getaddrinfo",
+                            "ssl", "temporarily unavailable", "502", "503", "connect")):
+        return "Network/provider hiccup — check your connection, then run again (saved & resumable)."
+    if any(k in s for k in ("permission", "another process", "being used", "in use", "locked")):
+        return "A file is locked (open in another program?) — close it, then try again."
+    return None
 
 
 def trust_chip(raw: str) -> str:

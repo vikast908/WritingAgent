@@ -152,6 +152,7 @@ class _RunDashboard:
         self.book_id = book_id
         self.total = max(total, 1)
         self.done = done
+        self._done0 = done          # units already committed before this session (for the run ETA)
         self.brief = brief      # the thesis claim / premise - the goal, always visible
         self.unit = ""
         self.stage = "starting…"
@@ -189,6 +190,16 @@ class _RunDashboard:
     def _eta(self) -> str:
         ds = sorted(self._durs.get(self._norm(self.stage), []))
         return f" · ~{int(ds[len(ds) // 2])}s" if ds else ""
+
+    def _run_eta(self) -> str:
+        """Coarse whole-run ETA from this session's average time-per-unit. Only once at
+        least one unit has committed this session; silent on resume until then."""
+        completed = self.done - self._done0
+        remaining = max(0, self.total - self.done)
+        if completed < 1 or remaining == 0:
+            return ""
+        secs = int((time.time() - self.start) / completed * remaining)
+        return f" · ~{secs // 60}m left" if secs >= 60 else f" · ~{secs}s left"
 
     def _stage_label(self) -> str:
         """Active stages (ending in …) get a spinner + cycling dots so a long model
@@ -233,14 +244,15 @@ class _RunDashboard:
         bar.append("█" * filled, style=ON_CLR)
         bar.append("░" * (w - filled), style=DIM)
         bar.append(f"  {self.done}/{self.total}", style=PARCH)
+        bar.append(self._run_eta(), style=DIM)
         stage = Text("  ")
         if self.unit:
             stage.append(self.unit + "  ", style=PARCH)
         stage.append("· " + self._stage_label(), style=f"italic {INK}")
         if self.verdict:
             stage.append("   " + self.verdict, style=DIM)
-        hint = ("  esc pause · m manual · Ctrl-C stop now" if self.live_controls
-                else "  Ctrl-C pauses · progress is saved & resumable")
+        hint = ("  esc pause · m manual · Ctrl-C stop — all resumable" if self.live_controls
+                else "  Ctrl-C pauses — saved & resumable (discard a project with /delete)")
         rows = [head, *rows_brief, bar, stage, Text(hint, style=DIM)]
         if self.note:
             rows.append(Text(f"  {self.note}", style=f"bold {GOLD}"))

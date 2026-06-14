@@ -339,6 +339,17 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     if fake:
         console.print(Text(f"  {fake_msg}", style=f"bold {ERR}"))
 
+    # ── First run with no API key: don't suggest a command that will just fail. ─
+    if _provider_needs_key(settings):
+        p = _active_provider(settings)
+        env = (p.key_env[0] if p and getattr(p, "key_env", None) else "the API key")
+        _section(console, "FIRST RUN  ·  NO API KEY YET")
+        _cmd_table(console, [
+            ("real runs", f"set [bold]{env}[/] in a .env file  (or [bold]/provider[/] to switch host)"),
+            ("try it free now", "restart with [bold]BOOK_AGENT_FAKE=1[/] — the whole flow, "
+                                "placeholder output, $0"),
+        ])
+
     # ── Start here ────────────────────────────────────────────────────────────
     _section(console, "START")
     unit = "section" if is_article else "chapter"
