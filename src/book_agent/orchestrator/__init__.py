@@ -13,12 +13,12 @@ from __future__ import annotations
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from . import brain, concurrency, humanizer, llm, nodes, render, retrieval
-from . import schemas as S
-from . import skills as skills_mod
-from .brain import ArticlePaths, BookPaths
-from .config import ModelConfig, Settings, load_settings
-from .store import Store
+from .. import brain, concurrency, humanizer, llm, nodes, render, retrieval
+from .. import schemas as S
+from .. import skills as skills_mod
+from ..brain import ArticlePaths, BookPaths
+from ..config import ModelConfig, Settings, load_settings
+from ..store import Store
 
 _BUDGET_PAUSE_MSG = ("[!] {err} - run paused. Raise the cap (/set max_run_tokens N, "
                      "0 = unlimited) or just run again to continue with a fresh budget.")
@@ -43,8 +43,8 @@ def _deep_docs(cfg, topic: str, focus: str, seed_query: str, log=print):
     warm-up search for the deterministic seed query. Search results are disk-cached,
     so the warmed seed search is a cache hit inside gather_documents - the seed's
     network time hides behind the expansion LLM call instead of adding to it."""
-    from . import deep_research as dr
-    from . import search as search_mod
+    from .. import deep_research as dr
+    from .. import search as search_mod
     out = concurrency.gather({
         "proposed": lambda: _research_queries(cfg, topic, focus, log=log),
         "warm": lambda: search_mod.web_search(seed_query, max_results=5),
@@ -595,10 +595,10 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
         registry so production can emit a real bibliography."""
         if not state.get("use_researcher"):
             return (None, [])
-        from . import search as search_mod
+        from .. import search as search_mod
         base_query = search_mod.build_query(plan, blueprint)
         if state.get("deep_research"):
-            from . import deep_research as dr
+            from .. import deep_research as dr
             docs = _deep_docs(
                 cfg, f"{plan.genre}: {plan.title} - {plan.premise}",
                 f"{blueprint.title}. {blueprint.purpose}", base_query, log=log)
@@ -624,7 +624,7 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
     def _do_images():
         if not state.get("use_images"):
             return None
-        from . import images as img_mod
+        from .. import images as img_mod
         query = f"{blueprint.title} {blueprint.purpose} {plan.genre}"
         fetched = img_mod.search_wikimedia(query, max_results=2)
         if fetched:
@@ -1508,7 +1508,7 @@ def repolish_manuscript(uid: str, project_id: str, settings, *, log=print):
     mid-article reference dumps, optionally strips inline [N] markers, and de-dupes
     figures (drops the model's 'Figure N.N' caption-headings and a redundant embedded
     SVG when a rendered diagram is already present). Returns the manuscript path."""
-    from . import polish
+    from .. import polish
     paths = ArticlePaths(project_id, uid)
     if not paths.run_state.exists():
         raise FileNotFoundError(f"'{project_id}' is not an article (re-polish is article-only).")
@@ -1556,7 +1556,7 @@ def build_evidence_report(uid: str, project_id: str, *, log=print):
     by influence, built deterministically from the finished manuscript (no LLM, ~0 tokens).
     The shareable proof behind the 'argues a thesis, cites real sources' claim. Returns the
     path, or None when there's nothing to report. Article-only."""
-    from . import polish
+    from .. import polish
     paths = ArticlePaths(project_id, uid)
     if not paths.run_state.exists():
         raise FileNotFoundError(f"'{project_id}' is not an article (evidence report is article-only).")
@@ -1592,7 +1592,7 @@ def _export_paths_and_title(uid: str, project_id: str):
 
 
 def export_pdf(uid: str, book_id: str, *, log=print):
-    from . import export
+    from .. import export
     root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
     md = brain.read_text(manuscript)
     if not md:
@@ -1604,7 +1604,7 @@ def export_pdf(uid: str, book_id: str, *, log=print):
 
 
 def export_epub(uid: str, book_id: str, *, log=print):
-    from . import export
+    from .. import export
     root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
     md = brain.read_text(manuscript)
     if not md:
@@ -1747,10 +1747,10 @@ def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
         # claim-verification gate checks cited claims against. Empty when research is off.
         if not state.get("use_researcher"):
             return ("", [], "")
-        from . import search as search_mod
+        from .. import search as search_mod
         base_query = section.search_query or f"{outline.title} {section.heading}"
         if state.get("deep_research"):
-            from . import deep_research as dr
+            from .. import deep_research as dr
             docs = _deep_docs(
                 cfg, f"{outline.title} ({outline.angle})",
                 f"{section.heading}. {section.purpose}", base_query, log=log)
@@ -1779,7 +1779,7 @@ def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
     def _do_images():
         if not (state.get("use_images") and section.include_image):
             return None
-        from . import images as img_mod
+        from .. import images as img_mod
         got = img_mod.search_wikimedia(f"{section.heading} {outline.title}", max_results=2)
         if got:
             log(f"   fetched {len(got)} image(s) from Wikimedia Commons")
@@ -2060,7 +2060,7 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
             log("   cohesion edit rejected by guard - keeping original sections")
 
     # ── References + citations (deterministic, see polish.py) ────────────────
-    from . import polish
+    from .. import polish
     body = polish.strip_model_figures(body)         # safety net: producer owns figures
     body = polish.strip_reference_dumps(body)       # references live ONLY at the end
     keywords = (brain.read_text(paths.root / "thesis.md") or "") + "\n" + \
@@ -2227,7 +2227,7 @@ def _learn_article(cfg, paths: ArticlePaths, outline, *, log) -> None:
 
 
 def export_html(uid: str, book_id: str, *, log=print):
-    from . import export
+    from .. import export
     root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
     md = brain.read_text(manuscript)
     if not md:
@@ -2239,7 +2239,7 @@ def export_html(uid: str, book_id: str, *, log=print):
 
 
 def export_docx(uid: str, book_id: str, *, log=print):
-    from . import export
+    from .. import export
     root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
     md = brain.read_text(manuscript)
     if not md:
@@ -2251,7 +2251,7 @@ def export_docx(uid: str, book_id: str, *, log=print):
 
 
 def export_txt(uid: str, book_id: str, *, log=print):
-    from . import export
+    from .. import export
     root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
     md = brain.read_text(manuscript)
     if not md:
@@ -2263,7 +2263,7 @@ def export_txt(uid: str, book_id: str, *, log=print):
 
 
 def export_md(uid: str, book_id: str, *, log=print):
-    from . import export
+    from .. import export
     root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
     md = brain.read_text(manuscript)
     if not md:
