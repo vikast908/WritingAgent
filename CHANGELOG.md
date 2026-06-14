@@ -18,6 +18,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`nodes.thesis_brief`); the full thesis still goes to the writer (it must engage the
   counterargument); (5) **per-node `max_tokens`** in `models.yaml` + `ModelConfig.max_tokens_for`
   (defaults unchanged - a tuning lever); (6) chat history 10→8.
+- **Actually claim the DeepSeek prompt-cache (OpenRouter).** Telemetry showed `cached_tokens: 0` -
+  OpenRouter load-balances DeepSeek across upstreams and only some cache. New **`openrouter_providers`**
+  setting pins the upstream order (e.g. `DeepSeek`, fallbacks on) via OpenRouter's `provider` routing;
+  measured live, this cached ~80% of the prompt prefix at ~3.5x lower cost vs default routing (which
+  never cached). Cache-hit detection also now reads DeepSeek-direct's `prompt_cache_hit_tokens`, so
+  hits are visible whichever host is active. For guaranteed caching, `provider=deepseek` is best.
 - **`divergent_skeletons` setting (opt-in, default off):** draft the N divergent variants SHORT, judge,
   then expand only the winner to full length - cuts discarded-draft completion tokens ~60%. Off by
   default (a skeleton reveals less than a full draft); enable and A/B against telemetry.

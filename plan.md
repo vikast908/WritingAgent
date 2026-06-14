@@ -985,8 +985,15 @@ prompt-cache discount, not prompt rewriting. Durable decisions:
 
 - **Prefix stability is an invariant.** Keep static instruction in the system block and per-unit
   content in the user message, so the system prefix is byte-identical across calls and the provider
-  caches it. Cache hits are measured via `usage.prompt_tokens_details.cached_tokens` (surfaced in
-  `usage_summary` and the per-call JSONL).
+  caches it. Cache hits are measured via both `prompt_tokens_details.cached_tokens` (OpenAI /
+  OpenRouter) and `prompt_cache_hit_tokens` (DeepSeek-direct), surfaced in `usage_summary` + the JSONL.
+- **Claim the cache discount (OpenRouter caveat, measured).** OpenRouter load-balances DeepSeek across
+  upstreams and only some support caching, so by default `cached_tokens` stays 0 (verified live:
+  default routing never cached). Setting **`openrouter_providers: DeepSeek`** (→ request
+  `provider.order`, fallbacks kept on) pins the caching-capable backend - a live 2-call check then
+  cached ~80% of the prompt prefix at ~3.5x lower cost. It's not 100% reliable over OpenRouter
+  (instance load-balancing), so for guaranteed caching prefer **DeepSeek-direct** (`provider=deepseek`),
+  whose context cache is automatic.
 - **`use_headroom` defaults OFF.** Compression saved ~nothing on single-turn payloads and risked
   perturbing the cacheable prefix.
 - **Schema dump is lossless-minimized** (`llm._strip_schema_noise` drops pydantic's auto `title`s).

@@ -271,6 +271,24 @@
 
 ## Session log
 
+### 2026-06-14 (23) - Prompt-cache follow-up: claim the DeepSeek discount + A/B pilot
+
+Followed up on the A/B run's finding that `cached_tokens: 0` on every OpenRouter call.
+
+- **Root cause (measured live):** OpenRouter load-balances DeepSeek across upstreams; only some
+  cache, so default routing never hits. Fix: new **`openrouter_providers`** setting →
+  `llm.configure_openrouter_providers` → OpenRouter `provider.order` (fallbacks on). Live 2-call check:
+  default routing cached 0 both calls; **pinned DeepSeek cached 768/965 (~80%) at ~3.5x lower cost**
+  (call 2 still missed - OpenRouter instance load-balancing isn't 100%, so DeepSeek-direct
+  `provider=deepseek` is the reliable path). Enabled `openrouter_providers: DeepSeek` in the local
+  (gitignored) settings.yaml.
+- **Measurement broadened:** `llm._cached_tokens` now also reads DeepSeek-direct's
+  `prompt_cache_hit_tokens` (+ pydantic model_extra), so hits show on any host. +2 tests.
+- Wired into both startup paths (`cli.main`, `api._apply_runtime`). Docs: plan §19, CHANGELOG.
+- **A/B pilot (separate, in progress):** case 1 (vector DBs) done - Writing Agent beat the Claude side
+  (deeper, defended thesis, 20 sources) but self-judged + n=1, so indicative only. Cases 2-3 were
+  generating in the background; `benchmarks/blind_ab/cases/` is gitignored (RESULTS.md is the artifact).
+
 ### 2026-06-14 (22) - Product (PM) review → implemented P0/P1 + PRD + evidence report
 
 User asked for a product-value review (OSS lens, benchmarked vs rivals), then "implement everything +

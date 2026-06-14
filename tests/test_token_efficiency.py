@@ -32,6 +32,24 @@ def test_cached_tokens_reads_details_object_or_dict():
         prompt_tokens_details={"cached_tokens": 64})) == 64
     assert llm._cached_tokens(SimpleNamespace(prompt_tokens_details=None)) == 0
     assert llm._cached_tokens(SimpleNamespace()) == 0
+    # DeepSeek-direct reports the hit under prompt_cache_hit_tokens (not in details)
+    assert llm._cached_tokens(SimpleNamespace(
+        prompt_tokens_details=None, prompt_cache_hit_tokens=200)) == 200
+    # provider-specific fields can arrive in pydantic's model_extra
+    assert llm._cached_tokens(SimpleNamespace(
+        prompt_tokens_details=None, model_extra={"prompt_cache_hit_tokens": 99})) == 99
+
+
+def test_openrouter_provider_routing(monkeypatch):
+    monkeypatch.setattr(llm, "_include_cost", True)
+    llm.configure_openrouter_providers("DeepSeek, Fireworks")
+    body = llm._cost_kwargs()["extra_body"]
+    assert body["usage"]["include"] is True
+    assert body["provider"] == {"order": ["DeepSeek", "Fireworks"], "allow_fallbacks": True}
+    llm.configure_openrouter_providers("")                      # off -> no provider pin
+    assert "provider" not in llm._cost_kwargs().get("extra_body", {})
+    monkeypatch.setattr(llm, "_include_cost", False)            # non-OpenRouter -> nothing sent
+    assert llm._cost_kwargs() == {}
 
 
 def test_usage_summary_reports_cache_hits():

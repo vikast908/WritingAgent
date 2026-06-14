@@ -90,6 +90,8 @@ class Settings:
     num_sections: int = 6        # default section count for articles
     theme: str = "editorial"     # TUI color theme (see ui.THEMES; /theme to switch)
     provider: str = "openrouter" # model host (see providers.py; /provider to switch)
+    openrouter_providers: str = ""  # comma-separated OpenRouter upstreams to pin (e.g. "DeepSeek")
+    #                                 so DeepSeek's prompt cache engages; "" = OpenRouter default routing
     export_dir: str = ""         # default save folder for exports ("" = each project's own folder; /path)
     strip_inline_citations: bool = True   # remove [N] markers from prose; sourcing lives only in end References
     rank_references: bool = True          # final References scored by influence (0-100), dated, sorted high->low

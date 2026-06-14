@@ -138,16 +138,33 @@ def reset_usage() -> None:
     _run_id = uuid.uuid4().hex[:12]
 
 
+def _u(o, name: str) -> int:
+    """Read a usage field whether `o` is a dict, a pydantic object with the field defined,
+    or a pydantic object carrying it as an extra (model_extra) - the OpenAI client drops
+    provider-specific fields like DeepSeek's cache counters into model_extra."""
+    if o is None:
+        return 0
+    if isinstance(o, dict):
+        return int(o.get(name) or 0)
+    v = getattr(o, name, None)
+    if v is None:
+        me = getattr(o, "model_extra", None)
+        if isinstance(me, dict):
+            v = me.get(name)
+    return int(v or 0)
+
+
 def _cached_tokens(u) -> int:
-    """Prompt tokens served from the provider's context cache (cache hit) - reported as
-    usage.prompt_tokens_details.cached_tokens by OpenAI-compatible hosts incl. OpenRouter/
-    DeepSeek. A high ratio vs prompt_tokens means the stable system prefix is being cached."""
+    """Prompt tokens served from the provider's context cache (a cache hit). Conventions
+    differ: OpenAI / OpenRouter report `prompt_tokens_details.cached_tokens`; DeepSeek's
+    own API reports `prompt_cache_hit_tokens` at the top of usage. We read both, so cache
+    hits are visible whichever host (and field) is in play."""
     d = getattr(u, "prompt_tokens_details", None)
     if d is None:
-        return 0
-    if isinstance(d, dict):
-        return int(d.get("cached_tokens", 0) or 0)
-    return int(getattr(d, "cached_tokens", 0) or 0)
+        me = getattr(u, "model_extra", None)
+        if isinstance(me, dict):
+            d = me.get("prompt_tokens_details")
+    return _u(d, "cached_tokens") or _u(u, "prompt_cache_hit_tokens")
 
 
 def _record_usage(resp) -> None:
@@ -331,9 +348,30 @@ def _get_client() -> OpenAI:
     return _client
 
 
+# OpenRouter upstream-provider preference. OpenRouter load-balances a model across several
+# upstreams (DeepSeek, Together, Fireworks, ...) and only some support prompt caching - so
+# DeepSeek's automatic context cache often never engages. Pinning the order (fallbacks kept
+# on) routes to a caching-capable backend. Empty = OpenRouter's default routing.
+_openrouter_providers: list[str] = []
+
+
+def configure_openrouter_providers(spec: str | None) -> None:
+    """Set preferred OpenRouter upstreams (comma-separated, e.g. 'DeepSeek') so DeepSeek's
+    prompt cache engages. Called at startup from settings.openrouter_providers. '' = off."""
+    global _openrouter_providers
+    _openrouter_providers = [s.strip() for s in (spec or "").split(",") if s.strip()]
+
+
 def _cost_kwargs() -> dict:
-    """Per-request extra body asking OpenRouter to include usage.cost."""
-    return {"extra_body": {"usage": {"include": True}}} if _include_cost else {}
+    """Per-request extra body for OpenRouter: ask it to report usage.cost, and (when set)
+    pin the upstream provider order so a caching-capable backend is used. Only OpenRouter
+    accepts these fields, so they're gated on _include_cost (true only for OpenRouter)."""
+    if not _include_cost:
+        return {}
+    body: dict = {"usage": {"include": True}}
+    if _openrouter_providers:
+        body["provider"] = {"order": _openrouter_providers, "allow_fallbacks": True}
+    return {"extra_body": body}
 
 
 # ── Fake mode (offline testing/demo; no API calls) ───────────────────────────

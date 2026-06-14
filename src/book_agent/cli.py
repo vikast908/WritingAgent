@@ -977,6 +977,7 @@ def main() -> None:
     from . import llm as _llm
     _llm.configure_headroom(settings.use_headroom)
     _llm.configure_timeout(settings.request_timeout)
+    _llm.configure_openrouter_providers(settings.openrouter_providers)
     _apply_provider(_llm, settings)
     if len(sys.argv) == 1:  # bare `book` / `python book.py` -> interactive shell (TUI)
         from .shell import run_shell
