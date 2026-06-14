@@ -1076,3 +1076,7 @@ reach for). Pure code movement, suite-gated per step.
   remembering: **`_sync_palette` must refresh every seam + the facade** (each from-imports the ui palette
   at import time, so a live `/theme` switch has to rebind all copies), and the **facade re-exports the ui
   palette** (`shell.GOLD` etc.). Per-file-ignore F401/F403/F405 on the facade `__init__`.
+  - `shell/repl.py` was itself split further (it was 816 lines): `dispatch` (input interpretation +
+    `_execute_cmd`), `slash` (`_handle_slash`), `session` (`_make_pt_session`), and `repl` (now just
+    `_prompt_state` + `run_shell`). The chat→dispatcher lazy back-edge points at `dispatch`. No shell
+    file now exceeds ~580 lines.

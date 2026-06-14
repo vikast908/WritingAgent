@@ -5,6 +5,15 @@
 
 ## Current status
 
+- **New (2026-06-14 - repl.py split into 4 seams):** the largest remaining shell file, `repl.py` (816
+  lines), is now four concerns behind the same facade: **dispatch** (247, input interpretation +
+  `_execute_cmd` - the chat assistant's guarded command runner: confirmation detection, project auto-pick,
+  argv fix, command extraction), **slash** (175, the `/command` dispatcher `_handle_slash`), **session**
+  (177, the prompt_toolkit `_make_pt_session` + autocomplete), and **repl** (221, now just `_prompt_state`
+  + `run_shell`). `_SLASH_COMPLETIONS` moved to `_const` (shared by session + slash). Acyclic except the
+  existing `chat → dispatch` back-edge (chat's lazy import, repointed from `.repl`). Largest shell file is
+  now dashboard (564) / commands (578); nothing over ~580 lines anywhere. **330 passed / 1 skipped, ruff
+  clean**; smoke-rendered `/help` + `/theme` and built the pt-session through the new seams.
 - **New (2026-06-14 - shell.py split into a package - DONE):** `shell.py` (~2900 lines) is now `shell/`
   - a facade `__init__` (30 lines) + seven seams: **_const** (257, glyphs/vocab/regexes/chat-prompt),
   **branding** (389, banner/wordmark/flame/palette/welcome/_section/_cmd_table), **help** (278, tables/
