@@ -648,6 +648,62 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
         {"research": _do_research, "images": _do_images, "skills": _do_skills})
 
 
+def _divergent_first_draft(cfg, paths, *, unit_tag, unit_desc, n_div, fix_notes,
+                           write, critique, thesis_brief, ask, autonomous, use_judge,
+                           skeletons, log):
+    """Attempt-0 divergent drafting, shared by chapters and sections: draft n_div
+    variants at varied temperatures in parallel, critique each, and let a side-by-side
+    judge pick the winner (selection for strength over convergence). With skeletons=True
+    (article opt-in) the variants are short and only the winner is expanded to full
+    length, so discarded drafts cost ~a third the tokens. `write`/`critique` are the
+    unit's own node closures. Returns (draft, crit, judge_note)."""
+    temps = _DIVERGENT_TEMPS[:n_div]
+    log(f"   drafting {len(temps)} variants (temps {', '.join(map(str, temps))})...")
+    drafts = concurrency.gather(
+        {f"v{i}": (lambda t=t, fn=fix_notes: write(fn, None, t, skeleton=skeletons))
+         for i, t in enumerate(temps)},
+        strict=True)
+    log("   critiquing variants...")
+    crits = concurrency.gather(
+        {k: (lambda d=d: critique(d)) for k, d in drafts.items()}, strict=True)
+    label_kind = "skeleton" if skeletons else "variant"
+    for i, d in enumerate(drafts.values()):
+        _save_version(paths, unit_tag, d, label=f"{label_kind} temp={temps[i]}")
+    picker_ask = None if autonomous else ask
+    draft, crit, judge_note, pref = _pick_variant(
+        cfg, unit_desc, thesis_brief, drafts, crits, picker_ask, log, use_judge=use_judge)
+    if pref:
+        _record_preference(paths, pref)
+    log(f"   picked variant ({sum(1 for c in crits.values() if c.verdict == 'approve')}"
+        f"/{len(temps)} approved)")
+    if skeletons:   # expand only the winning skeleton to full length (article F3)
+        log("   expanding the winning skeleton to full length...")
+        draft = write(((judge_note + "\n") if judge_note else "")
+                      + "Expand this skeleton into the full section at the target "
+                      "length - keep its structure, argument, and specifics; add the "
+                      "prose, examples, and citations.", draft)
+        _save_version(paths, unit_tag, draft, label="skeleton-expanded")
+        crit = critique(draft)
+        judge_note = ""   # consumed by the expansion
+    return draft, crit, judge_note
+
+
+def _finalize_unit(state, *, approved_attempt, best, draft, crit, instruction, log):
+    """Post-attempt-loop bookkeeping shared by chapters and sections: in autonomous mode
+    fall back to the best-judged attempt (not the last), compute first_pass, and append
+    the insight/score history the summary card reads. Returns (draft, crit, first_pass)."""
+    if approved_attempt < 0:
+        draft, crit = best   # commit the best-judged attempt, not the last one
+        log(f"   autonomous: committing best draft "
+            f"(blocking={len(crit.blocking)}, confidence={crit.confidence:.2f})")
+    first_pass = approved_attempt == 0 and instruction is None
+    state.setdefault("insights", []).append(crit.insight)   # quality history for the summary card
+    state.setdefault("scores", []).append(
+        {"insight": crit.insight, "clarity": crit.clarity,
+         "structure": crit.structure, "evidence": crit.evidence})
+    return draft, crit, first_pass
+
+
 def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=None,
                      ask=None) -> str:
     llm.set_unit(f"ch{n:02d}")
@@ -693,7 +749,10 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
     best: tuple[str, S.Critique] | None = None
     approved_attempt = -1
 
-    def _write(notes, base, temperature=None):
+    # skeleton kwarg: a book chapter has no skeleton mode (that's an article token
+    # optimisation); it's accepted so _divergent_first_draft can call _write/_critique
+    # with one signature across chapters and sections.
+    def _write(notes, base, temperature=None, skeleton=False):
         return nodes.write_chapter(cfg, plan, blueprint, fix_notes=notes,
                                    context=context, skills=skill_bodies, images=images,
                                    base_draft=base, requirements=requirements, voice=voice,
@@ -713,27 +772,11 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
     log(f"\n== Chapter {n}: {blueprint.title} ==")
     for attempt in range(max_rev + 1):
         if attempt == 0 and n_div > 1 and not base_draft:
-            # Divergent first drafts: varied temperatures in parallel, a side-by-side judge
-            # picks the winner, revisions refine it (selection for strength over convergence).
-            temps = _DIVERGENT_TEMPS[:n_div]
-            log(f"   drafting {len(temps)} variants (temps {', '.join(map(str, temps))})...")
-            drafts = concurrency.gather(
-                {f"v{i}": (lambda t=t, fn=fix_notes: _write(fn, None, t))
-                 for i, t in enumerate(temps)},
-                strict=True)
-            log("   critiquing variants...")
-            crits = concurrency.gather(
-                {k: (lambda d=d: _critique(d)) for k, d in drafts.items()}, strict=True)
-            for i, d in enumerate(drafts.values()):
-                _save_version(paths, _unit_tag, d, label=f"variant temp={temps[i]}")
-            picker_ask = None if state.get("autonomous") else ask
-            draft, crit, judge_note, pref = _pick_variant(
-                cfg, _unit_desc, None, drafts, crits, picker_ask, log,
-                use_judge=bool(state.get("tournament_judge", True)))
-            if pref:
-                _record_preference(paths, pref)
-            log(f"   picked variant ({sum(1 for c in crits.values() if c.verdict == 'approve')}"
-                f"/{len(temps)} approved)")
+            draft, crit, judge_note = _divergent_first_draft(
+                cfg, paths, unit_tag=_unit_tag, unit_desc=_unit_desc, n_div=n_div,
+                fix_notes=fix_notes, write=_write, critique=_critique, thesis_brief=None,
+                ask=ask, autonomous=bool(state.get("autonomous")),
+                use_judge=bool(state.get("tournament_judge", True)), skeletons=False, log=log)
         else:
             log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
             draft = _write(fix_notes, base_draft)
@@ -777,15 +820,9 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
 
     assert crit is not None and best is not None
     if approved_attempt >= 0 or state.get("autonomous"):
-        if approved_attempt < 0:
-            draft, crit = best   # commit the best-judged attempt, not the last one
-            log(f"   autonomous: committing best draft "
-                f"(blocking={len(crit.blocking)}, confidence={crit.confidence:.2f})")
-        first_pass = approved_attempt == 0 and instruction is None
-        state.setdefault("insights", []).append(crit.insight)   # quality history for the summary card
-        state.setdefault("scores", []).append(
-            {"insight": crit.insight, "clarity": crit.clarity,
-             "structure": crit.structure, "evidence": crit.evidence})
+        draft, crit, first_pass = _finalize_unit(
+            state, approved_attempt=approved_attempt, best=best, draft=draft,
+            crit=crit, instruction=instruction, log=log)
         _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass,
                 log, humanize=bool(state.get("humanize")), sources=ch_sources)
         paths.ch_draft(n).unlink(missing_ok=True)   # escalation draft resolved
@@ -1853,37 +1890,13 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     log(f"\n== Section {n}: {section.heading} ==")
     for attempt in range(max_rev + 1):
         if attempt == 0 and n_div > 1 and not base_draft:
-            # Divergent first drafts: sample at varied temperatures in parallel, critique
-            # each, a side-by-side judge picks the winner. Strength over convergence.
-            temps = _DIVERGENT_TEMPS[:n_div]
-            log(f"   drafting {len(temps)} variants (temps {', '.join(map(str, temps))})...")
-            drafts = concurrency.gather(
-                {f"v{i}": (lambda t=t, fn=fix_notes: _write(fn, None, t, skeleton=skeletons))
-                 for i, t in enumerate(temps)},
-                strict=True)
-            log("   critiquing variants...")
-            crits = concurrency.gather(
-                {k: (lambda d=d: _critique(d)) for k, d in drafts.items()}, strict=True)
-            for i, d in enumerate(drafts.values()):
-                _save_version(paths, _unit_tag, d,
-                              label=f"{'skeleton' if skeletons else 'variant'} temp={temps[i]}")
-            picker_ask = None if state.get("autonomous") else ask
-            draft, crit, judge_note, pref = _pick_variant(
-                cfg, _unit_desc, thesis_brief_md, drafts, crits, picker_ask, log,
-                use_judge=bool(state.get("tournament_judge", True)))
-            if pref:
-                _record_preference(paths, pref)
-            log(f"   picked variant ({sum(1 for c in crits.values() if c.verdict == 'approve')}"
-                f"/{len(temps)} approved)")
-            if skeletons:   # expand only the winning skeleton to full length (F3)
-                log("   expanding the winning skeleton to full length...")
-                draft = _write(((judge_note + "\n") if judge_note else "")
-                               + "Expand this skeleton into the full section at the target "
-                               "length - keep its structure, argument, and specifics; add the "
-                               "prose, examples, and citations.", draft)
-                _save_version(paths, _unit_tag, draft, label="skeleton-expanded")
-                crit = _critique(draft)
-                judge_note = ""   # consumed by the expansion
+            draft, crit, judge_note = _divergent_first_draft(
+                cfg, paths, unit_tag=_unit_tag, unit_desc=_unit_desc, n_div=n_div,
+                fix_notes=fix_notes, write=_write, critique=_critique,
+                thesis_brief=thesis_brief_md, ask=ask,
+                autonomous=bool(state.get("autonomous")),
+                use_judge=bool(state.get("tournament_judge", True)),
+                skeletons=skeletons, log=log)
         else:
             log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
             draft = _write(fix_notes, base_draft)
@@ -1930,15 +1943,9 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
 
     assert crit is not None and best is not None
     if approved_attempt >= 0 or state.get("autonomous"):
-        if approved_attempt < 0:
-            draft, crit = best
-            log(f"   autonomous: committing best draft "
-                f"(blocking={len(crit.blocking)}, confidence={crit.confidence:.2f})")
-        first_pass = approved_attempt == 0 and instruction is None
-        state.setdefault("insights", []).append(crit.insight)   # quality history for the summary card
-        state.setdefault("scores", []).append(
-            {"insight": crit.insight, "clarity": crit.clarity,
-             "structure": crit.structure, "evidence": crit.evidence})
+        draft, crit, first_pass = _finalize_unit(
+            state, approved_attempt=approved_attempt, best=best, draft=draft,
+            crit=crit, instruction=instruction, log=log)
         _commit_section(cfg, paths, section, n, draft, skill_names, sources, first_pass,
                         log, humanize=bool(state.get("humanize")))
         paths.section_draft(n).unlink(missing_ok=True)

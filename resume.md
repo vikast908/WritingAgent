@@ -5,6 +5,22 @@
 
 ## Current status
 
+- **New (2026-06-14 - book↔article dedup, Tier 2 done):** extracted two shared helpers in
+  `orchestrator.py` so the drift-prone chapter/section paths share one source: **`_divergent_first_draft`**
+  (attempt-0 divergent drafting - N variants at varied temps → critique → side-by-side judge picks the
+  winner; article-only skeleton-expand behind the `skeletons` flag; takes the unit's own `_write`/`_critique`
+  closures so the only mode-specific leaves stay leaves and control flow is linear in one place) and
+  **`_finalize_unit`** (post-loop bookkeeping: best-judged fallback in autonomous mode, `first_pass`,
+  insight/score history). Book `_write` gained a no-op `skeleton=False` for a uniform signature.
+  **Deliberately NOT merged** (callback-soup / pure indirection, same discipline as Tier-1 `_commit`):
+  the `_chapter_fetch`/`_section_fetch` fetch pair (only the one-line `concurrency.gather` is shared; the
+  research/images/skills strategy fns differ in schema, node calls, return arity, paths, gating) and the
+  full per-attempt revision loop (woven with `break`/`continue`, mutates 5 locals). Suite **330 passed /
+  1 skipped**, ruff clean, and a fake-mode end-to-end ran BOTH a 2-variant article and book to commit
+  (divergent branch + finalize both fired, no drift). See `plan.md` §20.
+  **Next:** Tier 3 (the `run()`/`_run_article()` phase-machine loop) is deferred low-value until a 3rd
+  pipeline variant appears; after dedup, the deferred win is splitting the giant files (`shell.py` 144 KB,
+  `orchestrator.py` 115 KB).
 - **New (2026-06-13, session 16 - export quality: references/citations/figures overhaul):** root
   cause of the bad PDFs = the **writer model authors its own figures (mermaid), figure numbers,
   captions, listings, inline `[N]` citations, and bare per-section reference dumps**, which collide

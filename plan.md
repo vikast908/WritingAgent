@@ -1017,7 +1017,8 @@ down **incrementally and test-gated**: these paths have a history of *silent dri
 bug), so behavior-preserving extraction + the full suite (and ideally a live run) between steps is
 mandatory. Already shared (do not re-extract): `_pick_variant`, `_save_version`, `_record_preference`,
 `_length_note`, `_merge_fix_notes`, `_escalate`. **Done:** `_run_learner` (shared learner tail);
-`_base_run_state` (shared run-state keys for `start_book`/`start_article`).
+`_base_run_state` (shared run-state keys for `start_book`/`start_article`); `_divergent_first_draft` +
+`_finalize_unit` (shared attempt-0 divergent drafting and post-loop bookkeeping - Tier 2).
 
 Prioritized, by risk:
 
@@ -1025,11 +1026,17 @@ Prioritized, by risk:
   caller) - **done**. ❌ `_commit`/`_commit_section` - **evaluated and deliberately NOT merged**: the
   paths differ structurally (canon-extraction + Store updates vs citation-renumber-before-gather), so a
   shared helper would be callback-soup that reads worse than the ~8 duplicated lines. Leave separate.
-- **Tier 2 (MEDIUM - schema/strategy callbacks):** `_chapter_fetch`/`_section_fetch` - shared
-  `concurrency.gather` shell, research/images/skills passed as strategy fns (article also returns
-  `source_text` for claim-verify). The divergent-draft + revision attempt loop inside
-  `_process_chapter`/`_process_article_section` - shared scaffold with `_write`/`_critique` callbacks and
-  the skeleton-expansion step optional.
+- **Tier 2 (MEDIUM):** ✅ `_divergent_first_draft` (attempt-0 divergent drafting: N variants at varied
+  temps → critique → side-by-side judge picks the winner; article-only skeleton-expand behind a flag) and
+  ✅ `_finalize_unit` (post-loop bookkeeping: best-judged fallback in autonomous mode, `first_pass`,
+  insight/score history) - **done**. Both take the unit's own `_write`/`_critique` closures (the only
+  mode-specific leaves) so the control flow stays linear in one place - the chunk most prone to silent
+  drift now has a single source. ❌ `_chapter_fetch`/`_section_fetch` - **evaluated and NOT merged**: the
+  only shared line is the `concurrency.gather({...})` call itself; the three strategy fns differ in
+  schema, node calls, return arity, path naming, and gating, so a wrapper is pure indirection. ❌ the
+  full per-attempt revision loop - **NOT merged**: it's woven with `break`/`continue` and mutates five
+  locals (`best`, `approved_attempt`, `fix_notes`, `judge_note`, `base_draft`); extracting it needs
+  signal-return callback-soup that reads worse than the duplication. Leave the loop bodies inline.
 - **Tier 3 (defer):** the `run()`/`_run_article()` phase-machine loop (works, but the `control`/pool/log
   flow makes unification low-value until a 3rd pipeline variant appears).
 - **Keep separate (semantically different, by design):** context assembly (book persistent Store vs
