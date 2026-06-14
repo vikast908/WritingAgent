@@ -14,6 +14,12 @@ diagrams. Generated end-to-end, then the references/citations cleaned determinis
 > This is the headline differentiator made visible: the article takes a contestable position, and the
 > evidence report shows exactly which sources carried it. Most AI writing can't show you either.
 
+## 🅰️🅱️ A/B pilot — three more articles, benchmarked
+
+Three Writing Agent articles from the blind A/B pilot (vs Claude), in
+[**`ab-pilot/`**](ab-pilot/) — vector databases, underpowered A/B tests, and microservices for small
+teams. The scoring + honest caveats are in [`../benchmarks/blind_ab/RESULTS.md`](../benchmarks/blind_ab/RESULTS.md).
+
 ## 📚 Book — *The Misprint File*
 
 A full short novel (3 chapters) with canon/continuity tracking and front/back matter, in
