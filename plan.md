@@ -1006,3 +1006,35 @@ prompt-cache discount, not prompt rewriting. Durable decisions:
   it is a deliberate quality/cost trade left to the operator.
 - **Do NOT shrink** `NO_SLOP`, the scoring rubric, or the thesis machinery for tokens - cache them
   instead; trimming raises slop/insight-miss rates and triggers *more* revision loops (net increase).
+
+---
+
+## 20. Refactor backlog - book↔article de-duplication
+
+The book (chapter) and article (section) pipelines run near-parallel code in `orchestrator.py`
+(115 KB) and `shell.py` (144 KB) - the repo's #1 redundancy (~hundreds of lines). It must be paid
+down **incrementally and test-gated**: these paths have a history of *silent drift* (the revise-parity
+bug), so behavior-preserving extraction + the full suite (and ideally a live run) between steps is
+mandatory. Already shared (do not re-extract): `_pick_variant`, `_save_version`, `_record_preference`,
+`_length_note`, `_merge_fix_notes`, `_escalate`. **Done:** `_run_learner` (shared learner tail).
+
+Prioritized, by risk:
+
+- **Tier 1 (LOW - do next):** `_init_project_state` - a shared run-state dict builder for
+  `start_book`/`start_article` (mode-specific keys as kwargs; mind the `current_chapter`/`current_section`
+  + `num_*` name differences). `_commit`/`_commit_section` - extract the shared humanize+summarize+
+  version+skill-record scaffold; keep canon-extraction (book) vs citation-renumbering (article) as a
+  `finalize` callback.
+- **Tier 2 (MEDIUM - schema/strategy callbacks):** `_chapter_fetch`/`_section_fetch` - shared
+  `concurrency.gather` shell, research/images/skills passed as strategy fns (article also returns
+  `source_text` for claim-verify). The divergent-draft + revision attempt loop inside
+  `_process_chapter`/`_process_article_section` - shared scaffold with `_write`/`_critique` callbacks and
+  the skeleton-expansion step optional.
+- **Tier 3 (defer):** the `run()`/`_run_article()` phase-machine loop (works, but the `control`/pool/log
+  flow makes unification low-value until a 3rd pipeline variant appears).
+- **Keep separate (semantically different, by design):** context assembly (book persistent Store vs
+  article stateless summaries), production (front/back-matter vs cohesion+polish), and the per-mode
+  learner inputs.
+
+Each tier is its own PR: extract, run the suite, and a fake-mode end-to-end for BOTH modes before the
+next.

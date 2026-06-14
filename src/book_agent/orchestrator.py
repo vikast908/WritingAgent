@@ -984,19 +984,13 @@ def _praised_passages(uid: str, max_chars: int = 4000) -> str:
     return "\n\n".join(chunks)
 
 
-def _learn(cfg, paths, plan, *, log) -> None:
+def _run_learner(cfg, paths, plan, instructions: str, findings: str, *, log) -> None:
+    """Shared learner tail (book + article): distill craft skills + a watch-list from a
+    finished piece, write them, reconcile, log. Callers gather their own instructions /
+    critic findings and build the plan object (a real BookPlan, or an article proxy)."""
     uid = paths.uid
-    instructions = "\n\n".join(
-        f"### chapter {p.stem[2:4]}\n{p.read_text(encoding='utf-8')}"
-        for p in sorted(paths.instructions.glob("ch*.md"))
-    )
-    findings = []
-    for p in sorted(paths.eval.glob("ch*.json")):
-        data = brain.read_json(p) or {}
-        findings += [f"- [{b['type']}] {b['detail']}" for b in data.get("blocking", [])]
     existing = "\n".join(p.stem for p in brain.skills_dir(uid).glob("*.md"))
-
-    out = nodes.learn(cfg, plan, instructions, "\n".join(findings), existing,
+    out = nodes.learn(cfg, plan, instructions, findings, existing,
                       praised=_praised_passages(uid), preferences=_read_preferences(paths))
     for prop in out.skills:
         skills_mod.write_skill(uid, prop)
@@ -1005,6 +999,18 @@ def _learn(cfg, paths, plan, *, log) -> None:
     statuses = skills_mod.reconcile(uid)
     log(f"   [learn] +{len(out.skills)} skills, {len(out.watch_items)} watch items; "
         f"reconciled {len(statuses)} skills")
+
+
+def _learn(cfg, paths, plan, *, log) -> None:
+    instructions = "\n\n".join(
+        f"### chapter {p.stem[2:4]}\n{p.read_text(encoding='utf-8')}"
+        for p in sorted(paths.instructions.glob("ch*.md"))
+    )
+    findings = []
+    for p in sorted(paths.eval.glob("ch*.json")):
+        data = brain.read_json(p) or {}
+        findings += [f"- [{b['type']}] {b['detail']}" for b in data.get("blocking", [])]
+    _run_learner(cfg, paths, plan, instructions, "\n".join(findings), log=log)
 
 
 # ── CLI-facing helpers ───────────────────────────────────────────────────────
@@ -2184,7 +2190,6 @@ def _targeted_section_revise(cfg, paths: ArticlePaths, outline, state, n: int,
 
 
 def _learn_article(cfg, paths: ArticlePaths, outline, *, log) -> None:
-    uid = paths.uid
     instructions = "\n\n".join(
         f"### section {p.stem}\n{p.read_text(encoding='utf-8')}"
         for p in sorted(paths.root.glob("instruction_*.md"))
@@ -2193,21 +2198,12 @@ def _learn_article(cfg, paths: ArticlePaths, outline, *, log) -> None:
     for p in sorted(paths.root.glob("eval_*.json")):
         data = brain.read_json(p) or {}
         findings += [f"- [{b['type']}] {b['detail']}" for b in data.get("blocking", [])]
-    existing = "\n".join(p.stem for p in brain.skills_dir(uid).glob("*.md"))
     article_as_plan = S.BookPlan(
         title=outline.title, premise=outline.angle,
         genre="long-form article", tone="informative", audience=outline.angle[:100],
         themes=[], constraints=[], world_rules=[], main_characters=[],
     )
-    out = nodes.learn(cfg, article_as_plan, instructions, "\n".join(findings), existing,
-                      praised=_praised_passages(uid), preferences=_read_preferences(paths))
-    for prop in out.skills:
-        skills_mod.write_skill(uid, prop)
-    watch = ["# Avoid list (watch-list)", ""] + [f"- {w.pattern} - {w.why}"
-                                                   for w in out.watch_items]
-    brain.write_text(brain.watch_list(uid), "\n".join(watch))
-    skills_mod.reconcile(uid)
-    log(f"   [learn] +{len(out.skills)} skills, {len(out.watch_items)} watch items")
+    _run_learner(cfg, paths, article_as_plan, instructions, "\n".join(findings), log=log)
 
 
 def export_html(uid: str, book_id: str, *, log=print):

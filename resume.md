@@ -284,10 +284,14 @@ redundancy items are large refactors, left as recommendations.
   source docstrings (`cli`, `orchestrator`, `brain`, `prompts`, …) + the CLAUDE workflow - moving them
   would be high-churn for no gain. `requirements.txt` stays (a documented convenience mirror; pyproject
   is canonical).
-- **Flagged, NOT done (need dedicated careful passes):** (1) **book↔article duplication** (~800 lines
-  across `orchestrator.py`/`shell.py`) - the #1 redundancy. (2) **Giant files**: `shell.py` 144KB,
-  `orchestrator.py` 115KB - split candidates (but the book/article dup is intertwined, so do (1) first).
-  (3) Optional: consolidate `SampleRun/` under `examples/`; collapse `requirements.txt` into pyproject+lock.
+- **Book↔article de-dup STARTED (safe, test-gated):** mapped the duplication (Explore agent), then
+  extracted the leaf-level **`_run_learner`** shared by `_learn`/`_learn_article` (suite green). Committed
+  a prioritized, risk-rated **refactor plan in plan.md §20** for the rest (Tier 1: `_init_project_state`,
+  `_commit` scaffold; Tier 2: fetch + attempt-loop with callbacks; Tier 3 defer the run-loop). Each tier
+  = its own PR, suite + both-mode fake run between steps - deliberately NOT bulldozed (drift-bug history).
+- **Still flagged:** giant `shell.py` (144KB) / `orchestrator.py` (115KB) - split AFTER the dedup (do
+  §20 first, since the dup is intertwined). Optional: consolidate `SampleRun/`→`examples/`;
+  collapse `requirements.txt`→pyproject+lock.
 
 Followed up on the A/B run's finding that `cached_tokens: 0` on every OpenRouter call.
 
