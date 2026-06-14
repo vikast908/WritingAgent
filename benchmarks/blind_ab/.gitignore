@@ -1,0 +1,4 @@
+# Run-local A/B artifacts — only RESULTS.md (the final numbers) is committed.
+cases/
+score_sheet.md
+.blind_key.json

@@ -110,7 +110,8 @@ Resolution: **lead with articles**; present everything else as secondary.
 
 ## 9. Validation plan (assumptions to test BEFORE building more)
 
-1. **Quality claim:** does output beat ChatGPT/Claude long-form on blind reads? → 5-prompt blind A/B.
+1. **Quality claim:** does output beat ChatGPT/Claude long-form on blind reads? → 5-prompt blind A/B
+   (**harness shipped:** `benchmarks/blind_ab/` — generate → paste competitor → blind score → tally).
 2. **Segment pull:** do 5 DevRel/technical writers call it must-have after one real run? → interviews.
 3. **Funnel:** what's install → first-finished-piece conversion, and where do people drop? → telemetry.
 4. **Book coherence** at 10+ chapters (the riskiest, least-proven claim). → one long live run, read end-to-end.

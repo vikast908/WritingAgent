@@ -48,6 +48,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   section with a real sample, and an **`examples/`** gallery shipping a complete generated article +
   its evidence report (and a Colab zero-install quickstart). Plus a **`PRD.md`** product-requirements
   doc (problem, users/non-users, JTBD, differentiation, OSS metrics, roadmap, validation, competitors).
+- **Blind A/B benchmark kit** (`benchmarks/blind_ab/`) - validates the core "beats just prompting
+  ChatGPT/Claude" claim: generate Writing Agent's side for a prompt set, paste the competitor side,
+  score anonymized A/B (format tells stripped, key hidden), then tally the win-rate. Run-local
+  artifacts are gitignored; only `RESULTS.md` is committed.
 - **TUI UX overhaul (production-grade interaction layer).** A staff-level pass over the terminal
   experience: (1) **no command dead-ends** - a reserved word typed without its slash (`help`,
   `features`, `theme`, `provider`, …) now runs the command with a one-line hint instead of silently

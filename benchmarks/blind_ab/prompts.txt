@@ -1,0 +1,8 @@
+# Blind A/B prompts — one topic per line (blank lines and #-comments ignored).
+# Pick topics in the product's wheelhouse: technical/opinion long-form where a
+# *thesis* and *real sources* should matter. Edit freely; 5-8 is a good set.
+How vector databases actually work
+Why most A/B tests are underpowered, and what to do about it
+The real reason microservices slow small teams down
+How to reason about LLM inference cost in production
+Why "data-driven" decisions often aren't

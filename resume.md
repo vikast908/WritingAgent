@@ -292,9 +292,14 @@ add PRD.md". Review verdict: the engineering is ahead of the go-to-market; the d
   zero-install quickstart** notebook.
 - **`PRD.md`**: full product-requirements doc - problem, target/non-users, JTBD, value/differentiation,
   scope, OSS success metrics, roadmap (Now/Next/Later), validation plan, risks, competitive landscape.
-- **Next (not yet done; flagged in PRD §8-9):** a hosted/zero-install web demo; a blind A/B harness
-  (this vs ChatGPT long-form) to validate the core quality claim; activation instrumentation
-  (install → first finished piece). These need a human/deploy, not just code.
+- **Blind A/B harness SHIPPED** (`benchmarks/blind_ab/`): `generate.py` (Writing Agent side, real
+  run) → paste competitor into `chatgpt.md` → `blind.py` (anonymize A/B, strip format tells, hide key)
+  → score `score_sheet.md` → `tally.py` (win-rate + dim scores). Validated offline (synthetic cases:
+  blind/tally pipeline + tell-stripping asserted). Run-local artifacts gitignored; `RESULTS.md`
+  template committed.
+- **Next (need a human/deploy, not code):** actually RUN the A/B (human blind reads) → publish
+  RESULTS.md; a hosted/zero-install web demo (HF Space); activation instrumentation
+  (install → first finished piece).
 
 ### 2026-06-14 (21) - Token/cost-efficiency pass (telemetry-grounded; quality unchanged)
 
