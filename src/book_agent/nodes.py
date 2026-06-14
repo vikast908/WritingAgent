@@ -570,9 +570,10 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "",
 
     The model only chooses the figure's CONTENT (a structured `DiagramSpec`); LAYOUT is done
     by a renderer, so labels can't overflow and edges can't collide (the raw-SVG failure mode).
-    `engine`: 'd2' (the d2 CLI, ELK layout - best for complex graphs), 'builtin' (the zero-dep
-    Python engine - carries title/legend/metrics), or 'auto' (d2 when the binary is present,
-    else builtin). `on_spec`, if given, is called with the freshly-built `DiagramSpec` (the
+    `engine`: 'builtin' (the zero-dep Python engine - measures text, lays out compactly, and
+    carries title/legend/metrics), 'd2' (the d2 CLI with ELK layout - explicit opt-in), or
+    'auto' (the default, = builtin; D2's wide output is no longer auto-selected just because the
+    binary is present). `on_spec`, if given, is called with the freshly-built `DiagramSpec` (the
     orchestrator persists it for auditability). Returns SVG starting with '<svg'; a placeholder
     on total failure.
     """

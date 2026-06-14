@@ -14,13 +14,51 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   overlap), routes orthogonal edges, and draws explicit arrowheads (PDF-safe). Back edges are
   detected via DFS so a feedback arrow no longer reverses a pipeline. `flow` and `layered`
   archetypes; `cycle`/`comparison` degrade to `flow`.
-- **Optional D2 + ELK diagram backend** (`diagram_engine: auto|d2|builtin`, default `auto`).
-  The same `DiagramSpec` can be laid out by the [D2](https://d2lang.com) CLI with ELK (better
-  routing for complex graphs / lane containers); a colour legend is injected to match the
-  built-in engine. Used automatically when the `d2` binary is found ($BOOK_AGENT_D2 or PATH);
-  the zero-dependency built-in engine remains the default and the fallback.
+- **`diagram_engine: auto` now defaults to the built-in engine** (`auto|d2|builtin`). It measures
+  text and lays figures out compactly (~590px with title, lane headers, readable boxes), and the
+  `comparison` archetype de-duplicates repeated relationship labels (`provides`×3 → ×1) so edge pills
+  no longer stack/overlap. **D2 + ELK is now explicit opt-in** (`diagram_engine: d2`): the same
+  `DiagramSpec` is laid out by the [D2](https://d2lang.com) CLI with ELK (a colour legend is injected
+  to match the built-in engine), but it tends to render very wide and hard to read, so it is no longer
+  auto-selected just because the `d2` binary is present ($BOOK_AGENT_D2 / PATH still locates it when
+  opted in). The zero-dependency built-in engine stays the default and the fallback.
 
 ### Added
+- **TUI UX overhaul (production-grade interaction layer).** A staff-level pass over the terminal
+  experience: (1) **no command dead-ends** - a reserved word typed without its slash (`help`,
+  `features`, `theme`, `provider`, …) now runs the command with a one-line hint instead of silently
+  falling through to the chat assistant (a `\` prefix forces chat). (2) **Trust chip** - the critic's
+  raw `verdict=approve confidence=0.50 blocking=1` line is normalized to `✓ approved · insight 5/5 ·
+  confidence ●●●○○`, with the invariant that a blocking issue never reads as a bare "approve"
+  (`ui.trust_chip`). (3) **Run dashboard** - a soft ETA (rolling-median per stage), an always-visible
+  "Ctrl-C pauses · resumable" controls line, and a "self-edits" summary line (revisions/humanizer
+  passes). (4) **Structured recovery** - a clear *paused* card (budget-cap vs interrupt, with resume
+  + alternatives) and export failures that say *why and how to recover* (file locked / missing
+  optional dep) instead of a quiet skip. (5) **Accessibility** - `BOOK_AGENT_A11Y` line-mode (no Live
+  redraw; append-only full-sentence status for screen readers), `BOOK_AGENT_REDUCED_MOTION` (static
+  stages, no spinner), and a one-line wordmark fallback on narrow (<60col) terminals. (6) **Proactive
+  key check** - the banner warns when the active provider has no API key (before the first call fails).
+  (7) **Progressive help** - `/help <topic>` shows just the matching commands. (8) **Live run
+  controls** - a background, cross-platform key-listener lets you steer an autonomous run from the
+  dashboard: **esc/p** pauses cleanly at the next unit boundary (resumable) and **m** drops to manual
+  review. Wired through a new opt-in `orchestrator.run(control=...)` hook that's checked only at unit
+  boundaries (a model call can't be interrupted mid-token); `control=None` keeps every existing caller
+  unchanged. Active only for autonomous runs on a real TTY.
+- **Clean references, citations & figures (deterministic polish)** - a new pure-Python `polish.py`
+  pass (no LLM, ~0 tokens) runs at article assembly and fixes the output-quality problems that came
+  from the *writer* authoring its own sourcing and figures. It builds **one end `## References` list
+  ranked by influence** - how often each source is actually cited in the body (weighted) plus title
+  overlap with the thesis/headings, scored 0-100, dated, sorted most-influential first
+  (`rank_references`, on) - **strips the inline `[N]` markers** from the prose *after* scoring so the
+  body reads clean and all sourcing lives in the end list (`strip_inline_citations`, on), pulls
+  **stray mid-article reference dumps** out of the body (headed blocks *and* bare `[N] …` runs), and
+  **de-duplicates figures** (drops any diagram the model still drew, its self-numbered "Figure N.N"
+  caption-heading, and a redundant embedded SVG, so a figure never appears twice). `ARTICLE_WRITER_SYS`
+  now **forbids the model from drawing figures, self-numbering `Figure N`/`Listing N`, writing
+  captions, or emitting `[N] Author…` reference lines** - the producer owns references and figures.
+  New **`polish` command** / `repolish_manuscript()` re-applies the whole pass to an *already
+  generated* manuscript and refreshes its exports with no model call - the cheap way to fix an
+  existing article.
 - **Quality machinery II (independence · verification · compounding)** - breaks the "one model
   judges its own output" ceiling (plan §15.6). A **side-by-side tournament judge**
   (`tournament_judge`, on) reads the divergent drafts together and picks the winner instead of
@@ -109,6 +147,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Per-request `request_timeout` setting.
 
 ### Fixed
+- **Typing a command word without its slash** (e.g. `help`, `features`) silently went to the chat
+  assistant - a dead end (and a wasted LLM call in real mode). It now runs the command.
+- **The run summary card's border glued onto the last log line** (`manuscript.md┌─ ✓ complete`) - the
+  Live region had no trailing newline before the Panel; a settle newline is now printed first.
+- **The critic verdict could read as a contradiction** (`verdict=approve … blocking=1`); the
+  normalized trust chip never shows a blocking issue as a bare "approve".
+- **The banner hardcoded "OpenRouter · DeepSeek"** regardless of the active provider/model, and (a
+  latent bug) `providers.resolve()` returns an id string, not a `Provider`, so the provider name was
+  always the fallback - both fixed; the masthead now reflects the real provider, writer model, and
+  version (single-sourced from `book_agent.__version__`, bumped 0.1.0 → 0.2.0).
+- **`BOOK_AGENT_PROVIDER` configured the model client but never synced `settings.provider`**, so the
+  banner and key-warning showed the stale (saved) provider while a different host was actually active;
+  `_apply_provider` now updates `settings.provider` to the resolved id.
 - `autonomous: true` in `settings.yaml` was silently ignored by `new` (a `store_true`
   flag default shadowed it), so runs paused for review on every low-confidence unit.
   `--autonomous` is now tri-state with a `--no-autonomous` override.

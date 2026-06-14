@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import difflib
 import os
+import re
 
 # ── themes ────────────────────────────────────────────────────────────────────
 # Every theme defines the same palette keys; apply_theme() rebinds the module-level
@@ -251,8 +252,50 @@ def word_count(text: str | None) -> int:
     return len(text.split()) if text else 0
 
 
-def reading_time_min(words: int) -> int:
-    return max(1, round(words / 200))
+def trust_chip(raw: str) -> str:
+    """Normalize a critic verdict line ('verdict=approve confidence=0.50 blocking=1
+    insight=5') into a glanceable chip: '✓ approved · insight 5/5 · confidence ●●●○○'.
+
+    Invariant: a blocking issue NEVER reads as a bare 'approve' - the captured
+    'verdict=approve … blocking=1' looked broken, so any blocking count wins and the
+    chip shows it as 'revising'. Unparseable input falls back to the raw string."""
+    g = dict(re.findall(r"(\w+)=([\w.]+)", raw or ""))
+    if not g:
+        return (raw or "").strip()
+    verdict = (g.get("verdict") or "").lower()
+    try:
+        blocking = int(float(g.get("blocking", 0) or 0))
+    except ValueError:
+        blocking = 0
+    if blocking > 0 or verdict in ("revise", "reject"):
+        sym, label = "↻", "revising"
+    elif verdict == "approve":
+        sym, label = "✓", "approved"
+    else:
+        sym, label = "·", (verdict or "reviewed")
+    parts = [f"{sym} {label}"]
+    try:
+        parts.append(f"insight {int(float(g['insight']))}/5")
+    except (KeyError, ValueError):
+        pass
+    try:
+        n = max(0, min(5, round(float(g["confidence"]) * 5)))
+        parts.append("confidence " + "●" * n + "○" * (5 - n))
+    except (KeyError, ValueError):
+        pass
+    if blocking > 0:
+        parts.append(f"{blocking} blocking")
+    return " · ".join(parts)
+
+
+def reading_time_min(words_or_text) -> int:
+    """Minutes to read. Pass the manuscript TEXT (str) for an accurate prose-only
+    estimate - fenced code and the references list are excluded; pass an int for a
+    raw word count (legacy live estimate, may overcount code-heavy drafts)."""
+    from . import polish
+    if isinstance(words_or_text, str):
+        return polish.read_time_min(words_or_text)
+    return max(1, round((words_or_text or 0) / polish.READ_WPM))
 
 
 # Phase pipelines for the status stepper.

@@ -558,6 +558,33 @@ bell and shows a **summary card** (units · words · elapsed · tokens · cost �
 clarity/structure/evidence scorecard + pointers to `eval` / `tableread`). A pending review
 surfaces via the prompt suffix and the escalation picker (the bottom toolbar was removed).
 
+### 13.1 Interaction & accessibility layer (production-grade UX pass, 2026-06-14)
+
+- **No command dead-ends.** A reserved command word typed without its slash (`help`, `features`,
+  `theme`, `provider`, …) runs the command with a one-line hint instead of silently falling through to
+  the chat assistant; a leading `\` forces chat. (`shell._SLASH_WORDS` / `_STRONG_SLASH`; ambiguous
+  English words like `set`/`use`/`model` only auto-route as a single bare token.)
+- **Trust chip.** The critic's raw `verdict=… confidence=… blocking=…` is normalized to
+  `✓ approved · insight N/5 · confidence ●●●○○` (`ui.trust_chip`), with the **invariant** that a
+  blocking issue never renders as a bare "approve" (it reads "revising").
+- **Live run controls** (autonomous + real-TTY only): a background, cross-platform key-listener
+  (`shell._KeyListener` → `_RunControls`) lets **esc/p** pause and **m** drop to manual; honored by the
+  opt-in `orchestrator.run(control=…)` hook **at unit boundaries only** (a model call can't be
+  interrupted mid-token; `control=None` = unchanged behavior). The dashboard also shows a **soft ETA**
+  (rolling median per stage) and a **"self-edits"** line (revision / humanizer counts).
+- **Structured recovery**, never a dead stop: a *paused* card (budget-cap vs interrupt, with resume +
+  alternatives) and export failures that say why + how to recover (file locked / missing optional dep).
+- **Accessibility**: `BOOK_AGENT_A11Y` line-mode (no in-place Live redraw — append-only full-sentence
+  status for screen readers), `BOOK_AGENT_REDUCED_MOTION` (static stages, no spinner), a one-line
+  wordmark on narrow (<60-col) terminals, and `NO_COLOR` / `--plain` honored throughout.
+- **Proactive key check**: the banner warns when the active provider has no API key (before the first
+  call fails); `BOOK_AGENT_PROVIDER` now syncs `settings.provider` so the masthead is accurate.
+- **Progressive help**: `/help <topic>` shows only the matching commands.
+- **Reading time** is prose-only — fenced code and the references list are excluded
+  (`polish.read_time_min`, `READ_WPM`), so technical pieces no longer over-state "N min read".
+- **Version** is single-sourced from `book_agent.__version__` (pyproject derives it via
+  `dynamic`/`attr`); the TUI imports it. Currently **0.2.0**.
+
 ---
 
 ## 14. Build order (re-weighted: hard part first, learner last)
@@ -849,6 +876,12 @@ comparison archetype **de-duplicates repeated relationship labels** (`provides`�
 never stack/overlap. **D2+ELK is explicit opt-in** (`diagram_engine: d2`) - it tends to render very
 wide (~1700px), hard-to-read figures, so it is no longer auto-selected just because the `d2` binary is
 present.
+
+**Glanceability rule (figure content).** Every figure must obey the **3-second-glance test**: if a
+reader can't explain it after a 3-second glance, it carries too much for a visual - cut detail, drop
+non-essential nodes/edges, or split it into two figures. Encoded in `DIAGRAM_SPEC_SYS` (the spec the
+model authors) alongside the "ONE idea / 5-9 nodes, 12 max" budget; it governs both the pro and the
+`diagram_fallback` paths.
 
 ---
 

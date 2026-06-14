@@ -62,6 +62,37 @@ def test_article_escalation_then_resume(tmp_brain, fake_llm, monkeypatch):
     assert paths.instruction_of(1).exists()
 
 
+def test_article_live_control_pause_then_resume(tmp_brain, fake_llm):
+    """A live-control pause (the threaded esc/p key) must stop the run cleanly at a unit
+    boundary - the committed section is durable - and a plain resume finishes the rest."""
+    cfg, settings = load_config(), load_settings()
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "pausable", 2, 1, autonomous=True)   # 2 sections
+
+    class _PauseAfterFirst:
+        """pause flips True at the 2nd unit-boundary check (after section 1 commits)."""
+        def __init__(self):
+            self._checks = 0
+
+        def take_manual(self):
+            self._checks += 1
+            return False
+
+        @property
+        def pause(self):
+            return self._checks >= 2
+
+    state = orchestrator.run(cfg, "u", aid, log=_silent, control=_PauseAfterFirst())
+    assert state["phase"] != "done"          # paused mid-run, not finished
+    assert state["committed"] == 1           # first section committed and durable
+    paths = ArticlePaths(aid, "u")
+    assert not paths.manuscript.exists()      # production hasn't run yet
+
+    state2 = orchestrator.run(cfg, "u", aid, log=_silent)   # resume, no control
+    assert state2["phase"] == "done"
+    assert paths.manuscript.exists()
+
+
 def test_article_references_dedup_by_url(tmp_brain, fake_llm):
     """_produce_article must de-duplicate sources by URL when building References."""
     cfg, settings = load_config(), load_settings()

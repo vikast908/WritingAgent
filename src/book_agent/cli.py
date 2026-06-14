@@ -334,8 +334,7 @@ def cmd_write(args, cfg, settings, uid):
         try:
             out = _EXPORT_FNS[fmt](uid, pid)
         except Exception as e:  # noqa: BLE001 - one format failing must not lose the rest
-            print(f"[!] Couldn't export {fmt}: {e}\n"
-                  f"    The manuscript is finished - run `export {fmt}` to retry.")
+            _export_failed(console, fmt, e)
             continue
         exported.append(out)
         _report_export(console, fmt, out)
@@ -359,6 +358,10 @@ def cmd_status(args, cfg, settings, uid):
     cur_key, tot_key = (("current_section", "num_sections") if is_article
                         else ("current_chapter", "num_chapters"))
     words = _project_word_count(uid, book_id, mode)
+    # Reading time: prose-only from the assembled manuscript when it exists (code blocks +
+    # references aren't read at prose speed); fall back to the live word count mid-run.
+    _mtext = brain.read_text(_paths_for(uid, book_id).manuscript) or ""
+    read_src = _mtext if _mtext else words
     console = _console()
 
     if not console:
@@ -366,7 +369,7 @@ def cmd_status(args, cfg, settings, uid):
         unit = "section" if is_article else "chapter"
         print(f"{unit}: {st.get(cur_key)}/{st.get(tot_key)} (committed {st.get('committed')})")
         if words:
-            print(f"words: {words} (~{ui.reading_time_min(words)} min read)")
+            print(f"words: {words} (~{ui.reading_time_min(read_src)} min read)")
         print(f"pending_review: {st.get('pending_review')}")
         if st.get("open_reviews"):
             print("open reviews: " + ", ".join(st["open_reviews"]))
@@ -384,7 +387,7 @@ def cmd_status(args, cfg, settings, uid):
     body.append(f"{unit} {cur}/{tot}", style=ui.PARCH)
     body.append(f"   ·   committed {st.get('committed', 0)}", style=ui.DIM)
     if words:
-        body.append(f"\n{words:,} words   ·   ~{ui.reading_time_min(words)} min read", style=ui.DIM)
+        body.append(f"\n{words:,} words   ·   ~{ui.reading_time_min(read_src)} min read", style=ui.DIM)
     if st.get("pending_review"):
         body.append(f"\n⚠ review pending - resume:  review --chapter {st.get(cur_key)} "
                     f'--instruction "..."', style=f"bold {ui.ERR}")
@@ -694,6 +697,27 @@ def _report_export(console, fmt: str, out) -> None:
         print(f"[OK] {fmt} -> {out}")
 
 
+def _export_failed(console, fmt: str, e: Exception) -> None:
+    """One format failing must never abort the rest - but the message should preserve
+    momentum: say WHY and HOW to recover, not just dump the exception. Special-cases
+    the two common, fully-recoverable causes (file open elsewhere; optional dep missing)."""
+    s = str(e)
+    locked = (isinstance(e, PermissionError) or getattr(e, "winerror", None) == 32
+              or "being used by another process" in s.lower() or "permission denied" in s.lower())
+    if locked:
+        hint = f"the open file is locked — close it in your viewer, then  export {fmt}"
+    elif isinstance(e, ModuleNotFoundError) or "No module named" in s:
+        mod = s.split("'")[1] if "'" in s else "the optional dependency"
+        hint = f"needs an optional package —  pip install {mod}  then  export {fmt}"
+    else:
+        hint = f"{type(e).__name__}: {e}  —  retry with  export {fmt}"
+    if console:
+        console.print(f"  [bold {ui.ERR}]✗ {fmt}[/]  [{ui.DIM}]{hint}[/]")
+        console.print(f"  [{ui.DIM}](other formats were still written)[/]")
+    else:
+        print(f"[FAIL] {fmt}: {hint}  (other formats were still written)")
+
+
 def cmd_export(args, cfg, settings, uid):
     book_id = _resolve_book(uid, args.book_id)
     console = _console()
@@ -727,10 +751,7 @@ def cmd_export(args, cfg, settings, uid):
         try:
             out = _EXPORT_FNS[fmt](uid, book_id)
         except Exception as e:  # noqa: BLE001 - one bad format must not abort the others
-            if console:
-                console.print(f"  [bold {ui.ERR}]✗ {fmt}[/]  [dim]{type(e).__name__}: {e}[/]")
-            else:
-                print(f"[FAIL] {fmt}: {e}")
+            _export_failed(console, fmt, e)
             continue
         ok += 1
         _report_export(console, fmt, out)
@@ -763,7 +784,7 @@ def cmd_polish(args, cfg, settings, uid):
         try:
             out = _EXPORT_FNS[fmt](uid, book_id)
         except Exception as e:  # noqa: BLE001 - one format must not abort the rest
-            (console.print(f"  [dim]skip {fmt}: {e}[/]") if console else print(f"skip {fmt}: {e}"))
+            _export_failed(console, fmt, e)
             continue
         _report_export(console, fmt, out)
 
@@ -914,6 +935,9 @@ def _apply_provider(llm_mod, settings) -> None:
     choice = os.getenv("BOOK_AGENT_PROVIDER") or settings.provider
     try:
         llm_mod.configure_provider(choice)
+        from . import providers
+        settings.provider = providers.resolve(choice)   # keep settings in sync so the
+        #   banner / _stack_label / key-warning reflect the ACTUAL active provider
     except ValueError as e:
         print(f"warning: {e}", file=sys.stderr)
         if choice != settings.provider:

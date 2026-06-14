@@ -18,7 +18,10 @@ Everything re-exported here lives in :mod:`book_agent.api`; the internal modules
 """
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# Single source of truth for the version: pyproject derives from this (dynamic = version,
+# attr = book_agent.__version__) and the TUI/CLI import it - so there is exactly one place
+# to bump. Keep it a plain string literal (setuptools reads it statically).
+__version__ = "0.2.0"
 
 __all__ = [
     "Agent", "Project", "Approach", "Status", "Evaluation", "WriteResult",

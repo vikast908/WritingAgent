@@ -403,8 +403,28 @@ def _load(uid: str, book_id: str):
 
 
 # ── Main driver ──────────────────────────────────────────────────────────────
+def _apply_run_control(control, state, paths, log) -> bool:
+    """Honor live run controls at a unit boundary (the only safe point - a model call
+    can't be interrupted mid-token). Returns True if the run should pause now (the caller
+    returns the already-durable state). No-op when control is None, so every existing
+    caller and test is unaffected. `control` is duck-typed (shell._RunControls)."""
+    if control is None:
+        return False
+    if control.take_manual():
+        s = load_settings()
+        state["autonomous"] = False
+        state["escalate_below_confidence"] = s.escalate_below_confidence
+        state["escalate_on_contradiction"] = s.escalate_on_contradiction
+        brain.write_json(paths.run_state, state)
+        log("[i] manual review enabled for the remaining units.")
+    if control.pause:
+        log("[i] paused on request - resumable. Run again to continue.")
+        return True
+    return False
+
+
 def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
-        autonomous: bool | None = None, log=print, ask=None) -> dict:
+        autonomous: bool | None = None, log=print, ask=None, control=None) -> dict:
     llm.reset_usage()
     llm.set_project(book_id)                                   # telemetry attribution
     llm.set_run_budget(load_settings().max_run_tokens)         # cost kill-switch
@@ -420,7 +440,8 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
         if state is None:
             raise FileNotFoundError(f"No run_state for article '{book_id}'.")
         outline = S.ArticleOutline(**brain.read_json(art_paths.outline_json))
-        return _run_article(cfg, art_paths, state, outline, force=force, log=log, ask=ask)
+        return _run_article(cfg, art_paths, state, outline, force=force, log=log, ask=ask,
+                            control=control)
     paths = BookPaths(book_id, uid)
     state = brain.read_json(paths.run_state)
     if state is None:
@@ -448,6 +469,8 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
     pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="unit-prefetch")
     try:
         while state["phase"] != "done":
+            if _apply_run_control(control, state, paths, log):
+                return state
             phase = state["phase"]
             llm.set_unit(phase)
             if phase == "chapters":
@@ -1444,9 +1467,11 @@ def repolish_manuscript(uid: str, project_id: str, settings, *, log=print):
         body = polish.strip_inline_citations(body)        # after scoring, which needs them
 
     out = body.rstrip() + (("\n\n---\n\n" + refs_md + "\n") if refs_md else "\n")
+    out = polish.refresh_read_time(out)   # prose-based estimate (code + refs not counted)
     brain.write_text(paths.manuscript, out)
     n_refs = refs_md.count("\n") and sum(1 for ln in refs_md.splitlines() if re.match(r"\d+\. ", ln))
-    log(f"   [re-polish] references rebuilt ({n_refs} ranked), citations + stray refs cleaned")
+    log(f"   [re-polish] references rebuilt ({n_refs} ranked), citations + stray refs cleaned, "
+        f"read time -> {polish.read_time_min(out)} min")
     return paths.manuscript
 
 
@@ -1566,7 +1591,7 @@ def start_article(
     return article_id
 
 
-def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log, ask=None):
+def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log, ask=None, control=None):
     if state.get("pending_review"):
         log(f"[!] Section {state['current_section']} awaits review. "
             f"Run: review --chapter {state['current_section']} --instruction \"...\"")
@@ -1576,6 +1601,8 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log, ask=No
     pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="unit-prefetch")
     try:
         while state["phase"] != "done":
+            if _apply_run_control(control, state, paths, log):
+                return state
             phase = state["phase"]
             llm.set_unit(phase)
             if phase == "sections":
@@ -1987,9 +2014,9 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
     if state.get("strip_inline_citations", True):
         body = polish.strip_inline_citations(body)
 
-    # Header block
-    total_words = len(body.split())
-    read_time = max(1, round(total_words / 200))
+    # Header block. Reading time is prose-only (code blocks + the references list are
+    # not read at prose speed) - a raw split() overstates it for technical pieces.
+    read_time = polish.read_time_min(body)
     author = (state.get("author") or "").strip()
     header_lines = [
         f"# {outline.title}", "",

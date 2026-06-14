@@ -569,11 +569,13 @@ def _render_comparison(spec, nodes, edges) -> str:
     return "".join(out)
 
 
-# ── Optional D2 backend (terrastruct.github.io/d2) - superior auto-layout ──────
-# The built-in engine above is zero-dependency and carries the title/legend/metrics.
-# The `d2` CLI (a Go binary) lays complex graphs out better, especially fan-out /
-# fan-in and lane containers. When the binary is present we prefer it; otherwise the
-# built-in engine renders. The model output (DiagramSpec) is identical either way.
+# ── Optional D2 backend (terrastruct.github.io/d2) - alternative auto-layout ───
+# The built-in engine above is zero-dependency, measures text, lays out compactly, and
+# carries the title/legend/metrics - so it is the DEFAULT (`diagram_engine: auto`).
+# The `d2` CLI (a Go binary, ELK layout) routes complex graphs (fan-out/fan-in, lane
+# containers) better but renders much wider/harder to read, so it is EXPLICIT opt-in
+# (`diagram_engine: d2`), not auto-selected just because the binary is present. The
+# model output (DiagramSpec) is identical either way.
 _D2_PAL = [("#e9f1fe", "#4f8ef7"), ("#e7faf1", "#34c98a"), ("#fff0e6", "#ff6719"),
            ("#f1ecfe", "#a78bfa"), ("#fdecea", "#e5534b"), ("#e6f6fd", "#0ea5e9")]
 

@@ -27,6 +27,7 @@ prompt**: a durable state machine with a separate critic in the loop, not a sing
 - **Originality, not just slop-absence** — a per-piece thesis the critic enforces, a side-by-side judge that picks the strongest of N drafts, and claim↔source verification that blocks unsupported citations
 - **Figures that lay themselves out** — the model authors a diagram *spec*; a layout engine (built-in, or D2 + ELK) places it so labels never overflow or collide
 - **Use it your way** — interactive TUI, one-shot CLI, an embeddable Python API, or a global `writingagent` npm launcher
+- **A TUI that respects you** — pause/resume an autonomous run from the keyboard (`esc`/`m`), glanceable trust signals, structured recovery on every failure, plus reduced-motion (`BOOK_AGENT_REDUCED_MOTION`) and screen-reader (`BOOK_AGENT_A11Y`) modes
 - **Local-first** — everything is plain markdown + JSON on disk; kill a run and it resumes exactly where it stopped
 
 > 📚 **The full manual lives at [docs-writingagent.vercel.app](https://docs-writingagent.vercel.app/).** This README is just the quick tour.
@@ -91,6 +92,7 @@ for a *take*, not just the absence of tells:
 
 - a contestable **thesis** the critic enforces, and a **side-by-side judge** that picks the strongest of N divergent drafts
 - **claim↔source verification** — a cited claim the source doesn't support is blocking
+- **clean prose, sourced at the end** — inline `[N]` markers are stripped from the body and every source rolls up into one **References list ranked by how much it actually shaped the piece** (cite count + title relevance, scored 0–100, dated)
 - a **surgical humanizer** that rewrites only the sentences with AI tells (citations and numbers preserved)
 - figures that **lay themselves out** — the model authors a spec; a deterministic engine places it (no overflow, no overlap):
 
@@ -101,6 +103,9 @@ for a *take*, not just the absence of tells:
 <sub><i>↑ this figure was drawn by the system itself — the same engine that figures your books and articles</i></sub>
 
 </div>
+
+Already generated a piece? **`writingagent polish <id>`** re-runs the references, citation, and figure
+cleanup and re-exports — with **no model call** (≈0 tokens).
 
 Deep dives: [Quality machinery ↗](https://docs-writingagent.vercel.app/reference/quality/) ·
 [How it works ↗](https://docs-writingagent.vercel.app/concepts/how-it-works/) ·

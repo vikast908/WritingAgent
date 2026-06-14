@@ -16,14 +16,14 @@ import io
 import os
 import re
 import shlex
+import threading
 import time
 
+from . import __version__ as _VERSION   # single source of truth (src/book_agent/__init__.py)
 from . import brain, ui
 from . import skills as skills_mod
 from .config import ModelConfig, Settings, save_config, save_settings
 from .ui import DIM, ERR, GOLD, GOLD_HI, INK, OFF_CLR, ON_CLR, PARCH, RULE  # palette
-
-_VERSION = "0.1.0"
 
 
 def _sync_palette() -> None:
@@ -52,6 +52,24 @@ _MODE_ALIASES = {
 _NIB = "✒"             # the brand glyph: a pen nib (matches the logo)
 _FLEURON = _NIB            # used for the prompt + section/status markers
 _MAX_HISTORY = 10  # max messages kept for multi-turn context (5 user + 5 assistant)
+
+# A bare slash-command word typed WITHOUT the slash (e.g. `help`, `features`) used to
+# fall through to the chat assistant - a silent dead end (and a wasted LLM call in real
+# mode). These are every name `_handle_slash` understands; when one is typed plain we run
+# the slash form and show a one-line hint. (`\` before any line forces chat - see run_shell.)
+_SLASH_WORDS = {
+    "help", "h", "?", "features", "toggle", "clear", "cls", "model", "models",
+    "provider", "providers", "path", "paths", "set", "skill", "seed-skills", "seed",
+    "books", "use", "user", "config", "update", "retry", "reset", "compact",
+    "auto", "autonomous", "manual", "praise", "mode", "dashboard", "theme", "themes",
+}
+# Safe to route even WITH trailing args - a genuine writing-chat sentence rarely opens
+# with these. The ambiguous English words (set/use/mode/path/auto/clear/model/update/user)
+# only route when typed as a single bare token, so "use a warmer tone" still reaches chat.
+_STRONG_SLASH = {
+    "help", "features", "toggle", "provider", "providers", "theme", "themes",
+    "dashboard", "books", "praise", "retry", "reset", "compact", "seed-skills", "seed",
+}
 
 # Slash-command manual, grouped by category (single source for /help; the
 # completion dropdown derives from _SLASH_COMPLETIONS below). Each group is
@@ -368,7 +386,58 @@ def _flame_rule(console):
     return t
 
 
-def _banner(console) -> None:
+def _active_provider(settings: Settings | None):
+    """The active Provider object, or None. NB: providers.resolve() returns a canonical
+    id (a str), not a Provider - REGISTRY maps that id to the object."""
+    if settings is None:
+        return None
+    try:
+        from . import providers
+        return providers.REGISTRY.get(providers.resolve(settings.provider))
+    except Exception:  # noqa: BLE001 - cosmetic only
+        return None
+
+
+def _stack_label(cfg: ModelConfig | None, settings: Settings | None) -> str:
+    """The masthead's `provider · model · vX` line, reflecting what's ACTUALLY in use
+    (not a hardcoded 'OpenRouter · DeepSeek'). Defensive: never breaks the banner."""
+    p = _active_provider(settings)
+    prov = p.name if p is not None else "OpenRouter"
+    model = "DeepSeek"
+    if cfg is not None:
+        try:
+            model = cfg.model_for("writer").split("/")[-1]   # drop the host prefix
+        except Exception:  # noqa: BLE001
+            pass
+    return f"{prov} · {model} · v{_VERSION}"
+
+
+def _provider_needs_key(settings: Settings | None) -> bool:
+    """True when the active (non-local) provider has no API key set - so we can warn at
+    launch instead of letting the first real call fail with a cryptic auth error."""
+    if os.getenv("BOOK_AGENT_FAKE"):
+        return False
+    p = _active_provider(settings)
+    if p is None:
+        return False
+    try:
+        from . import providers
+        return not getattr(p, "local", False) and not providers.has_credentials(p)
+    except Exception:  # noqa: BLE001 - cosmetic only
+        return False
+
+
+def _key_warning(settings: Settings | None) -> str:
+    """The provider-specific 'set your key' line, or '' when credentials are present."""
+    p = _active_provider(settings)
+    if p is None or not _provider_needs_key(settings):
+        return ""
+    env = (p.key_env[0] if getattr(p, "key_env", None) else "the API key")
+    return (f"⚠ no API key for {p.name} — set {env} in .env or your shell, "
+            f"or /provider to switch host")
+
+
+def _banner(console, cfg: ModelConfig | None = None, settings: Settings | None = None) -> None:
     lines = _wordmark()
     if not console:
         print("\n".join(lines))
@@ -377,13 +446,26 @@ def _banner(console) -> None:
     from rich.padding import Padding
     from rich.text import Text
     pad = (0, 0, 0, 2)   # left-aligned with a 2-col indent
+    # Narrow terminal: the figlet masthead would wrap into noise - drop to a one-line
+    # wordmark so the banner still reads (and the wordmark stays on screen).
+    warn = _key_warning(settings)
+    if (console.size.width or 80) < 60:
+        console.print()
+        console.print(Padding(Text(f"{_NIB} WRITING AGENT", style=f"bold {GOLD}"), pad))
+        console.print(Padding(Text(_stack_label(cfg, settings), style=DIM), pad))
+        if warn:
+            console.print(Padding(Text(warn, style=f"bold {ERR}"), pad))
+        console.print()
+        return
     console.print()
     console.print(_flame_rule(console))
     console.print()
     console.print(Padding(_flame_text(lines), pad))
     console.print(Padding(Text("an autonomous writing studio - books, articles & more",
                                style=f"italic {INK}"), pad))
-    console.print(Padding(Text(f"OpenRouter · DeepSeek · v{_VERSION}", style=DIM), pad))
+    console.print(Padding(Text(_stack_label(cfg, settings), style=DIM), pad))
+    if warn:
+        console.print(Padding(Text(warn, style=f"bold {ERR}"), pad))
     console.print()
     console.print(_flame_rule(console))
 
@@ -524,8 +606,9 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     ))
 
 
-def _commands_table(console, settings: Settings) -> None:
-    """The full project-command list (lives under /help; was the welcome screen)."""
+def _command_help_rows(settings: Settings) -> list[tuple[str, str]]:
+    """The project-command (name, description) rows - single source for the /help
+    COMMANDS table and the /help <topic> search."""
     is_article = settings.mode == "article"
     if is_article:
         new_desc = "start an article - topic → angles → outline + sections"
@@ -550,6 +633,12 @@ def _commands_table(console, settings: Settings) -> None:
         ("/mode book", "switch to book mode (chapters, novel/nonfiction)") if is_article
         else ("/mode article", "switch to article mode (single long-form piece)"),
     ]
+    return rows
+
+
+def _commands_table(console, settings: Settings) -> None:
+    """The full project-command list (lives under /help; was the welcome screen)."""
+    rows = _command_help_rows(settings)
     if not console:
         for a, b in rows:
             print(f"  {_MARKUP.sub('', a):<28} {_MARKUP.sub('', b)}")
@@ -718,7 +807,11 @@ def _toggle_grid(console, settings: Settings) -> bool:
     return True
 
 
-def _slash_help(console, settings: Settings | None = None) -> None:
+def _slash_help(console, settings: Settings | None = None, topic_args=None) -> None:
+    topic = " ".join(topic_args or []).strip().lower().lstrip("/")
+    if topic:
+        _slash_help_topic(console, settings, topic)
+        return
     if not console:
         for cat, group in _SLASH_HELP:
             print(f"\n  {cat}")
@@ -733,6 +826,25 @@ def _slash_help(console, settings: Settings | None = None) -> None:
         console.print(Text(f"  {cat}", style=DIM))
         _cmd_table(console, group)
     console.print(Text(f"  agents: {', '.join(_NODES)}", style=DIM))
+    console.print(Text("  focused help:  /help <topic>   (e.g. /help export, /help model)", style=DIM))
+
+
+def _slash_help_topic(console, settings: Settings | None, topic: str) -> None:
+    """Progressive disclosure: `/help <topic>` shows only the command + slash entries
+    whose name or description matches, instead of the whole manual."""
+    cmd_rows = _command_help_rows(settings) if settings is not None else []
+    slash_rows = [row for _cat, grp in _SLASH_HELP for row in grp]
+    matches = [(n, d) for (n, d) in (cmd_rows + slash_rows)
+               if topic in _MARKUP.sub("", n).lower() or topic in _MARKUP.sub("", d).lower()]
+    if not matches:
+        _out(console, f"[dim]no help entry matches “{topic}”.  /help lists everything.[/]")
+        return
+    if console:
+        _section(console, f"HELP · {topic}")
+        _cmd_table(console, matches)
+    else:
+        for n, d in matches:
+            print(f"  {_MARKUP.sub('', n):<28} {_MARKUP.sub('', d)}")
 
 
 # ── Slash handlers ────────────────────────────────────────────────────────────
@@ -1514,6 +1626,116 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
 
 # ── Rich progress wrapper for `run` ──────────────────────────────────────────
 
+def _reduced_motion() -> bool:
+    """Honor a reduced-motion preference: no spinner/cycling dots, just static stages
+    + the elapsed clock. Set by BOOK_AGENT_REDUCED_MOTION or the a11y line-mode."""
+    return bool(os.getenv("BOOK_AGENT_REDUCED_MOTION") or os.getenv("BOOK_AGENT_A11Y"))
+
+
+def _a11y() -> bool:
+    """Accessible line-mode (BOOK_AGENT_A11Y): no in-place Live redraw - screen readers
+    can't follow a region that rewrites itself - just append one full status line per
+    event. The same pipeline runs; only the rendering changes."""
+    return bool(os.getenv("BOOK_AGENT_A11Y"))
+
+
+class _RunControls:
+    """Thread-safe flags the key-listener sets and the orchestrator reads at unit
+    boundaries (duck-typed by orchestrator._apply_run_control). Bool reads/writes are
+    atomic under the GIL, so no lock is needed."""
+
+    def __init__(self):
+        self.pause = False
+        self._manual = False
+
+    def request_pause(self) -> None:
+        self.pause = True
+
+    def request_manual(self) -> None:
+        self._manual = True
+
+    def take_manual(self) -> bool:
+        """One-shot: True once after request_manual(), then resets."""
+        if self._manual:
+            self._manual = False
+            return True
+        return False
+
+
+class _KeyListener:
+    """Background single-key reader for live run controls (esc/p pause · m manual).
+
+    A daemon thread reads one keypress at a time and forwards it to `on_key`. Activates
+    ONLY when `enabled` and stdin is a real TTY, so pytest, pipes, and a11y mode are
+    untouched (the run then behaves exactly as before). Cross-platform: msvcrt on
+    Windows, termios cbreak + select on POSIX. Any failure disables itself silently -
+    Ctrl-C still pauses. Deliberately used only for AUTONOMOUS runs, where the pipeline
+    never prompts for input (so it can't fight console.input over the terminal)."""
+
+    def __init__(self, on_key, *, enabled: bool):
+        self._on_key = on_key
+        self._stop = threading.Event()
+        self._thread = None
+        import sys as _sys
+        self.active = bool(enabled)
+        try:
+            if enabled and _sys.stdin and _sys.stdin.isatty():
+                self._thread = threading.Thread(target=self._run, daemon=True)
+        except Exception:  # noqa: BLE001 - no stdin / not a tty
+            self._thread = None
+        self.active = self._thread is not None
+
+    def __enter__(self):
+        if self._thread is not None:
+            self._thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=0.6)   # let POSIX restore termios before we return
+        return False
+
+    def _run(self):
+        try:
+            if os.name == "nt":
+                self._run_windows()
+            else:
+                self._run_posix()
+        except Exception:  # noqa: BLE001 - never let a read error crash the run
+            pass
+
+    def _run_windows(self):
+        import msvcrt
+        while not self._stop.is_set():
+            if msvcrt.kbhit():
+                try:
+                    self._on_key(msvcrt.getwch())
+                except Exception:  # noqa: BLE001
+                    pass
+            else:
+                self._stop.wait(0.05)
+
+    def _run_posix(self):
+        import select
+        import sys as _sys
+        import termios
+        import tty
+        fd = _sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setcbreak(fd)
+            while not self._stop.is_set():
+                r, _, _ = select.select([_sys.stdin], [], [], 0.1)
+                if r:
+                    try:
+                        self._on_key(_sys.stdin.read(1))
+                    except Exception:  # noqa: BLE001
+                        pass
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
 class _RunDashboard:
     """Live, multi-line view for `run`: header (elapsed + live tokens), a chapter
     progress bar, the current unit + stage, and a short scroll of recent events.
@@ -1535,20 +1757,51 @@ class _RunDashboard:
         self.verdict = ""
         self.events: collections.deque = collections.deque(maxlen=7)
         self.start = time.time()
+        # Soft-ETA: bank each stage's duration so a repeat of the same stage can show a
+        # rolling-median "~Ns". Change counters feed the summary's "self-edits" line.
+        self._stage_t0 = time.monotonic()
+        self._durs: dict[str, list[float]] = {}
+        self.n_revised = 0
+        self.n_humanized = 0
+        self.n_research = 0
+        self.note = ""              # transient status set by the key-listener thread
+        self.live_controls = False  # True when esc/m keys are wired (autonomous + TTY)
 
     def _elapsed(self) -> str:
         s = int(time.time() - self.start)
         return f"{s // 60:02d}:{s % 60:02d}"
 
+    @staticmethod
+    def _norm(stage: str) -> str:
+        return stage.rstrip("…. ").strip().lower()
+
+    def _enter_stage(self, name: str) -> None:
+        """Switch the active stage, banking the previous stage's elapsed time so the
+        soft ETA (rolling median) can show how long this kind of step usually takes."""
+        if self._norm(name) != self._norm(self.stage):
+            prev, dt = self._norm(self.stage), time.monotonic() - self._stage_t0
+            if prev and 0.2 < dt < 3600:
+                self._durs.setdefault(prev, []).append(dt)
+            self._stage_t0 = time.monotonic()
+        self.stage = name
+
+    def _eta(self) -> str:
+        ds = sorted(self._durs.get(self._norm(self.stage), []))
+        return f" · ~{int(ds[len(ds) // 2])}s" if ds else ""
+
     def _stage_label(self) -> str:
-        """Active stages (ending in …) get a spinner + cycling dots so a long
-        model call visibly works instead of looking hung."""
+        """Active stages (ending in …) get a spinner + cycling dots so a long model
+        call visibly works instead of looking hung, plus a soft ETA once we've timed
+        that stage before. Reduced-motion drops the animation, keeps the meaning."""
         if not self.stage.endswith("…"):
             return self.stage
+        base = self.stage[:-1]
+        if _reduced_motion():
+            return f"{base}…{self._eta()}"
         now = time.monotonic()
         spin = self._SPIN[int(now * 8) % len(self._SPIN)]
         dots = "." * (1 + int(now * 2.5) % 3)
-        return f"{spin} {self.stage[:-1]}{dots}"
+        return f"{spin} {base}{dots}{self._eta()}"
 
     def __rich_console__(self, console, options):
         yield self.render()
@@ -1585,7 +1838,11 @@ class _RunDashboard:
         stage.append("· " + self._stage_label(), style=f"italic {INK}")
         if self.verdict:
             stage.append("   " + self.verdict, style=DIM)
-        rows = [head, *rows_brief, bar, stage]
+        hint = ("  esc pause · m manual · Ctrl-C stop now" if self.live_controls
+                else "  Ctrl-C pauses · progress is saved & resumable")
+        rows = [head, *rows_brief, bar, stage, Text(hint, style=DIM)]
+        if self.note:
+            rows.append(Text(f"  {self.note}", style=f"bold {GOLD}"))
         if self.events:
             rows.append(Text("─" * 48, style=RULE))
             rows.extend(self.events)
@@ -1598,22 +1855,29 @@ class _RunDashboard:
             return
         if c.startswith("== Chapter") or c.startswith("== Section"):
             self.unit = c.strip("= ")
-            self.stage, self.verdict = "drafting…", ""
+            self._enter_stage("drafting…")
+            self.verdict = ""
         elif c.startswith("writing"):
-            self.stage = "revising…" if "revision" in c else "drafting…"
+            if "revision" in c:
+                self._enter_stage("revising…")
+                self.n_revised += 1
+            else:
+                self._enter_stage("drafting…")
         elif c.startswith("critiquing"):
-            self.stage = "critiquing…"
+            self._enter_stage("critiquing…")
         elif c.startswith("verdict="):
-            self.stage = "reviewed"
-            self.verdict = c
+            self._enter_stage("reviewed")
+            self.verdict = ui.trust_chip(c)   # normalized chip, never a contradiction
         elif c.startswith("humanizing"):
-            self.stage = "humanising…"
+            self._enter_stage("humanising…")
+            self.n_humanized += 1
         elif c.startswith("fetched") or c.startswith("generated SVG"):
-            self.stage = "researching…"
+            self._enter_stage("researching…")
+            self.n_research += 1
             self.events.append(Text(f"  · {c}", style=DIM))
         elif "[OK] committed" in c:
             self.done += 1
-            self.stage = "committed"
+            self._enter_stage("committed")
             self.events.append(Text(f"  ✓ {c[5:]}", style=ON_CLR))
         elif c.startswith("[!]"):
             self.events.append(Text(f"  {c}", style=f"bold {ERR}"))
@@ -1635,6 +1899,8 @@ def _summary_card(console, dash, state: dict, uid: str, book_id: str) -> None:
 
     from . import llm
     from .brain import ArticlePaths, BookPaths
+    console.print()   # settle: the Live's last frame has no trailing newline, so the
+    #                   summary Panel border would otherwise glue onto the last log line
     is_article = state.get("mode") == "article"
     paths = ArticlePaths(book_id, uid) if is_article else BookPaths(book_id, uid)
     words = len((brain.read_text(paths.manuscript) or "").split())
@@ -1666,12 +1932,48 @@ def _summary_card(console, dash, state: dict, uid: str, book_id: str) -> None:
                 body.append("   ", style=DIM)
         body.append("\nfull report:  eval   ·   reader pass:  tableread [--as \"persona\"]",
                     style=DIM)
+    # What the AI changed on its own - so self-edits are observable, not invisible.
+    chg = []
+    if getattr(dash, "n_revised", 0):
+        chg.append(f"{dash.n_revised} revision pass{'es' if dash.n_revised != 1 else ''}")
+    if getattr(dash, "n_humanized", 0):
+        chg.append(f"humanized {dash.n_humanized} unit{'s' if dash.n_humanized != 1 else ''}")
+    if chg:
+        body.append("\nself-edits:  " + " · ".join(chg), style=DIM)
     if is_article and (paths.root / "table_read.md").exists():
         body.append("\n📋 table read ready - a skeptical reader's report: ", style=PARCH)
         body.append("read it, then  revise --chapter N --instruction \"...\"", style=f"bold {GOLD}")
     body.append("\nnext:  export   (pdf · epub · html · docx · txt · md)", style=DIM)
     console.print(Panel(body, title=f"[{ON_CLR}]✓ complete[/]  [{GOLD}]{book_id}[/]",
                         title_align="left", border_style=ON_CLR, padding=(1, 2)))
+
+
+def _paused_card(console, book_id: str) -> None:
+    """A run ended without finishing and without a unit escalation - i.e. the budget
+    cap or an interrupt paused it. Make that a clear, recoverable moment instead of a
+    silent stop: say why, confirm nothing is lost, and give the resume + alternatives."""
+    from rich.panel import Panel
+    from rich.text import Text
+
+    from . import llm
+    console.print()
+    tok, cap = llm.current_tokens(), llm.run_budget()
+    body = Text()
+    if cap and tok >= cap:
+        body.append(f"token budget reached — {tok:,} / {cap:,}.\n", style=f"bold {ERR}")
+        body.append("Everything committed so far is saved.\n\n", style=DIM)
+        body.append("lift the cap:  /set max_run_tokens 0", style=f"bold {GOLD}")
+        body.append("   then  run        ", style=DIM)
+        body.append("(0 = unlimited)\n", style=DIM)
+        body.append("fresh budget:  run", style=f"bold {GOLD}")
+        body.append("                       ship now:  export", style=DIM)
+        title, border = f"[{ERR}]⏸ paused — budget cap[/]", ERR
+    else:
+        body.append("run paused — progress is saved and fully resumable.\n\n", style=DIM)
+        body.append("resume:  run", style=f"bold {GOLD}")
+        body.append("        check state:  status        ship what exists:  export", style=DIM)
+        title, border = f"[{GOLD}]⏸ paused[/]", GOLD
+    console.print(Panel(body, title=title, title_align="left", border_style=border, padding=(1, 2)))
 
 
 def _escalation_picker(console, cfg, uid: str, book_id: str, state: dict) -> str:
@@ -1770,25 +2072,64 @@ def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = Fa
             total, done_so_far = 1, 0
 
         dash = _RunDashboard(book_id, total, done_so_far, brief=brief)
-        # The dash object (not a snapshot) is the renderable: Live's auto-refresh
-        # re-renders it 8x/s, so the clock + stage spinner animate between events.
-        with Live(dash, console=console, refresh_per_second=8,
-                  transient=False, vertical_overflow="visible") as live:
+        controls = _RunControls()
+        # Live keys only for an AUTONOMOUS run on a real TTY: that's the long hands-off
+        # case worth interrupting, and it never prompts mid-run (so the key-listener
+        # can't fight console.input over the terminal). Manual runs already pause per unit.
+        auto_mode = autonomous if autonomous is not None else bool(st.get("autonomous"))
+        use_keys = bool(console) and not _a11y() and interactive and auto_mode
+        dash.live_controls = use_keys
+
+        def _on_key(ch, controls=controls, dash=dash) -> None:   # bind: defined in a loop
+            c = (ch or "").lower()
+            if ch == "\x1b" or c == "p":
+                controls.request_pause()
+                dash.note = "⏸ pausing after this unit finishes — Ctrl-C to stop now"
+            elif c == "m":
+                controls.request_manual()
+                dash.note = "✎ manual review from the next unit"
+
+        if _a11y():
+            # Accessible line-mode: append one plain status line per event (no Live
+            # redraw). dash still tracks counters/elapsed for the summary card.
+            if brief:
+                console.print(f"  goal: {brief[:96]}")
+
             def _log(msg: str, dash=dash) -> None:   # bind: defined in a loop
-                dash.log(msg)   # auto-refresh picks the mutation up within ~125ms
+                dash.log(msg)
+                m = msg.strip()
+                if m:
+                    console.print(f"  {m}")
 
             def _ask(prompt: str) -> str:
-                # Pause the live render, take input, resume - prompting inside a Live
-                # frame corrupts the display otherwise.
-                live.stop()
-                try:
-                    return console.input(f"\n{prompt}")
-                finally:
-                    console.print()
-                    live.start(refresh=True)
+                return console.input(f"\n{prompt}")
 
             state = orchestrator.run(cfg, uid, book_id, force=force, autonomous=autonomous,
-                                     log=_log, ask=_ask if interactive else None)
+                                     log=_log, ask=_ask if interactive else None, control=controls)
+        else:
+            # The dash object (not a snapshot) is the renderable: Live's auto-refresh
+            # re-renders it 8x/s, so the clock + stage spinner animate between events.
+            # The key-listener (autonomous + TTY only) feeds esc/m into `controls`, which
+            # the orchestrator honors at the next unit boundary.
+            with _KeyListener(_on_key, enabled=use_keys), \
+                 Live(dash, console=console, refresh_per_second=8,
+                      transient=False, vertical_overflow="visible") as live:
+                def _log(msg: str, dash=dash) -> None:   # bind: defined in a loop
+                    dash.log(msg)   # auto-refresh picks the mutation up within ~125ms
+
+                def _ask(prompt: str) -> str:
+                    # Pause the live render, take input, resume - prompting inside a Live
+                    # frame corrupts the display otherwise.
+                    live.stop()
+                    try:
+                        return console.input(f"\n{prompt}")
+                    finally:
+                        console.print()
+                        live.start(refresh=True)
+
+                state = orchestrator.run(cfg, uid, book_id, force=force, autonomous=autonomous,
+                                         log=_log, ask=_ask if interactive else None,
+                                         control=controls)
         force, autonomous = False, None   # one-shot flags; later passes resume plainly
 
         if state.get("phase") == "done":
@@ -1801,6 +2142,10 @@ def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = Fa
             _ring()
             if _escalation_picker(console, cfg, uid, book_id, state) == "rerun":
                 continue
+        elif console and not state.get("pending_review"):
+            # Not done, not a unit escalation → paused (budget cap / interrupt). Make it
+            # a clear recovery moment rather than a silent return to the prompt.
+            _paused_card(console, book_id)
         return
 
 
@@ -2161,7 +2506,7 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
     if name in _EXIT:
         return False
     if name in ("help", "h", "?"):
-        _slash_help(console, settings)
+        _slash_help(console, settings, rest)
     elif name in ("features", "toggle"):
         _toggle_grid(console, settings)
     elif name in ("clear", "cls"):
@@ -2512,7 +2857,7 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
     console = _make_console()
     pt_session, patch_stdout = _make_pt_session(known_commands, state, cfg, settings)
 
-    _banner(console)
+    _banner(console, cfg, settings)
     _welcome(console, cfg, settings, state["uid"])
 
     while True:
@@ -2563,6 +2908,12 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
             continue
         if line in _EXIT:
             break
+
+        # ── Escape hatch: `\` forces the rest to the chat assistant ─────────────
+        # (so a sentence opening with a command word can still be chatted).
+        if line.startswith("\\"):
+            _chat_respond(line[1:].lstrip(), console, cfg, settings, state)
+            continue
 
         # ── Slash command ──────────────────────────────────────────────────────
         if line.startswith("/"):
@@ -2643,6 +2994,15 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
                 pass
             except Exception as e:  # noqa: BLE001
                 _out(console, f"[{ERR}]error:[/] {type(e).__name__}: {e}")
+            continue
+
+        # ── Reserved command word typed without its slash → run it, don't chat it ─
+        fl = first.lower()
+        if fl in _SLASH_WORDS and (len(argv) == 1 or fl in _STRONG_SLASH):
+            _out(console, f"[dim]‹{first}› is a slash command — running /{fl}.  "
+                          f"(meant to chat? prefix the line with \\)[/]")
+            if not _handle_slash("/" + line, console, cfg, settings, state):
+                break
             continue
 
         # ── Everything else → conversational assistant ────────────────────────

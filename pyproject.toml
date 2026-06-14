@@ -1,6 +1,6 @@
 [project]
 name = "writing-agent"
-version = "0.1.0"
+dynamic = ["version"]   # single source: src/book_agent/__init__.py __version__
 description = "A self-correcting, autonomous writing system for books and articles (CLI/TUI)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -76,6 +76,9 @@ Issues = "https://github.com/vikast908/WritingAgent/issues"
 writing-agent = "book_agent.cli:main"
 bookwriter = "book_agent.cli:main"
 book = "book_agent.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "book_agent.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -9,6 +9,41 @@ def test_did_you_mean():
     assert ui.did_you_mean("xyzzy", ["status", "run"]) is None
 
 
+def test_trust_chip_normalizes_verdict():
+    # Invariant: a blocking issue NEVER reads as a bare 'approve' (the captured bug).
+    blocked = ui.trust_chip("verdict=approve confidence=0.50 blocking=1 insight=5")
+    assert "approved" not in blocked and "revising" in blocked and "1 blocking" in blocked
+    assert "insight 5/5" in blocked and "●" in blocked   # 0.50 -> ●●●○○ (3 dots)
+    clean = ui.trust_chip("verdict=approve confidence=0.9 blocking=0 insight=4")
+    assert clean.startswith("✓ approved") and "blocking" not in clean
+    assert ui.trust_chip("garbage") == "garbage"          # unparseable -> raw passthrough
+
+
+def test_prose_reading_time_excludes_code_and_refs():
+    from book_agent import polish
+    md = ("Prose one two three four five.\n\n"
+          "```python\n" + "x = 1\n" * 50 + "```\n\n"
+          "More prose words here.\n\n"
+          "## References\n\n1. **20** · 2024 · [a](u)\n2. **10** · 2023 · [b](v)\n")
+    assert polish.prose_word_count(md) < len(md.split())   # code + refs dropped
+    assert polish.prose_word_count(md) == len("Prose one two three four five. More prose words here.".split())
+    assert polish.read_time_min(md) >= 1
+    # ui.reading_time_min accepts text (prose) or an int (legacy)
+    assert ui.reading_time_min(md) == polish.read_time_min(md)
+    assert ui.reading_time_min(450) >= 1
+
+
+def test_input_disambiguation_word_sets():
+    """Bare slash-words must be catchable; ambiguous English words must NOT auto-route
+    when followed by chat text (only as a single bare token)."""
+    from book_agent import shell
+    assert {"help", "features", "theme", "provider"} <= shell._SLASH_WORDS
+    # ambiguous words are present (single-token routing) but excluded from STRONG (args case)
+    for w in ("set", "use", "model", "mode", "path", "auto", "clear"):
+        assert w in shell._SLASH_WORDS and w not in shell._STRONG_SLASH
+    assert {"help", "features", "provider", "theme"} <= shell._STRONG_SLASH
+
+
 def test_word_count_and_reading_time():
     assert ui.word_count("one two three") == 3
     assert ui.word_count("") == 0
@@ -134,6 +169,122 @@ def test_slash_help_is_grouped_by_category(tmp_brain):
     shell._slash_help(console, load_settings())
     out = console.file.getvalue()
     assert "configuration" in out and "/features" in out and "/theme" in out
+
+
+def test_slash_help_topic_filters(tmp_brain):
+    from book_agent import shell
+    from book_agent.config import load_settings
+    console = _record_console()
+    shell._slash_help(console, load_settings(), ["export"])
+    out = console.file.getvalue()
+    assert "HELP" in out and "export" in out and "epub" in out
+    console = _record_console()
+    shell._slash_help(console, load_settings(), ["zzznope"])
+    assert "no help entry" in console.file.getvalue()
+
+
+def test_stack_label_reflects_provider_and_model(tmp_brain):
+    from book_agent import shell
+    from book_agent.config import Settings, load_config
+    cfg = load_config()
+    label = shell._stack_label(cfg, Settings(provider="openrouter"))
+    assert "OpenRouter" in label and "deepseek-v4-pro" in label and "v" in label
+    assert "DeepSeek" in shell._stack_label(cfg, Settings(provider="deepseek"))
+
+
+def test_key_warning_surfaces_missing_key(tmp_brain, monkeypatch):
+    from book_agent import shell
+    from book_agent.config import Settings
+    monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    assert shell._provider_needs_key(Settings(provider="deepseek")) is True
+    assert "DEEPSEEK_API_KEY" in shell._key_warning(Settings(provider="deepseek"))
+    # local providers never need a key; fake mode suppresses the warning entirely
+    assert shell._provider_needs_key(Settings(provider="ollama")) is False
+    monkeypatch.setenv("BOOK_AGENT_FAKE", "1")
+    assert shell._provider_needs_key(Settings(provider="deepseek")) is False
+
+
+def test_export_failed_messages(capsys):
+    from book_agent.cli import _export_failed
+    _export_failed(None, "pdf", PermissionError("file in use"))
+    out = capsys.readouterr().out
+    assert "pdf" in out and ("locked" in out or "close" in out)
+    _export_failed(None, "epub", ModuleNotFoundError("No module named 'ebooklib'"))
+    assert "pip install ebooklib" in capsys.readouterr().out
+
+
+def test_reduced_motion_label(monkeypatch):
+    from book_agent.shell import _RunDashboard
+    monkeypatch.setenv("BOOK_AGENT_REDUCED_MOTION", "1")
+    d = _RunDashboard("b", total=1, done=0)
+    d.stage = "critiquing…"
+    label = d._stage_label()
+    assert "critiquing" in label and "⠋" not in label and "⠹" not in label   # no spinner
+
+
+def test_paused_card_renders(tmp_brain):
+    from book_agent import shell
+    console = _record_console()
+    shell._paused_card(console, "mybook")          # no budget set -> generic paused card
+    assert "paused" in console.file.getvalue().lower()
+
+
+def test_narrow_banner_drops_figlet():
+    import io
+
+    from rich.console import Console
+    from book_agent import shell
+    from book_agent.config import Settings, load_config
+    console = Console(file=io.StringIO(), force_terminal=True, width=40)
+    shell._banner(console, load_config(), Settings())
+    out = console.file.getvalue()
+    assert "WRITING AGENT" in out                   # one-line wordmark, not the figlet block
+
+
+def test_run_controls_flags():
+    from book_agent.shell import _RunControls
+    c = _RunControls()
+    assert c.pause is False and c.take_manual() is False
+    c.request_pause()
+    assert c.pause is True
+    c.request_manual()
+    assert c.take_manual() is True and c.take_manual() is False   # one-shot
+
+
+def test_key_listener_no_ops_without_tty():
+    """Under pytest stdin isn't a TTY, so the listener must stay inactive (no thread) -
+    this is what keeps the run behaving identically in tests / pipes / a11y."""
+    from book_agent.shell import _KeyListener
+    sink = []
+    with _KeyListener(sink.append, enabled=False) as kl:
+        assert kl.active is False
+    with _KeyListener(sink.append, enabled=True) as kl:
+        assert kl.active is False          # enabled, but no TTY -> still inactive
+
+
+def test_apply_run_control_pause_and_manual(tmp_path):
+    from types import SimpleNamespace
+
+    from book_agent import orchestrator
+    paths = SimpleNamespace(run_state=tmp_path / "rs.json")
+    logs: list[str] = []
+    assert orchestrator._apply_run_control(None, {}, paths, logs.append) is False
+
+    class _Pause:
+        pause = True
+        def take_manual(self):
+            return False
+    assert orchestrator._apply_run_control(_Pause(), {"autonomous": True}, paths, logs.append) is True
+
+    class _Manual:
+        pause = False
+        def take_manual(self):
+            return True
+    st = {"autonomous": True}
+    assert orchestrator._apply_run_control(_Manual(), st, paths, logs.append) is False
+    assert st["autonomous"] is False                      # flipped to manual
+    assert "escalate_below_confidence" in st              # thresholds restored
 
 
 def test_feature_keys_match_settings_and_table(tmp_brain):

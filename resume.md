@@ -271,6 +271,132 @@
 
 ## Session log
 
+### 2026-06-14 (20) - TUI UX overhaul (full spec, all P0-P2 implemented)
+
+User asked for a staff-level UX redesign of the TUI (audit-plan → approval gate → build), then
+"fix all of it." Captured the real surfaces headlessly first (banner/welcome/help/features/run),
+delivered the 10-part spec, then implemented every item. **All tests pass (full suite, fake mode);
++~10 tests in `test_ui.py`.** Standing framework saved to memory [[ux-redesign-framework-default]]
+(audit-plan + approval gate before any design work; production-grade bar). **Functionality preserved -
+no command/flag removed** (the user's explicit worry); changes are additive + test-backed.
+
+- **P0.1 no command dead-ends** (`shell.run_shell`): reserved words without a slash (`_SLASH_WORDS`)
+  run the command + a hint; ambiguous English words (`set/use/model/…`) only route as a single bare
+  token (`_STRONG_SLASH`); leading `\` forces chat. Was: bare `help` → canned chat (verified fixed).
+- **P0.2 summary settle**: `console.print()` before the Panel kills the `manuscript.md┌─` glue.
+- **P0.3 trust chip** (`ui.trust_chip`): `verdict=… blocking=…` → `✓ approved · insight N/5 ·
+  confidence ●●●○○`; **blocking>0 never renders as a bare approve** (the captured contradiction).
+- **P0.4 recovery**: `_paused_card` (budget-cap vs interrupt + resume/alternatives) in the run loop;
+  `cli._export_failed` (locked-file / missing-dep aware) replaces quiet `skip {fmt}` in all 3 export
+  loops.
+- **P1.5 dashboard**: soft ETA (rolling median per stage via `_enter_stage`/`_durs`), a "Ctrl-C
+  pauses · resumable" controls line, stage banking. (True interactive mid-run keys = out of scope,
+  noted - synchronous run loop.)
+- **P1.6**: "self-edits" summary line (revision/humanizer counts on the dash); persistent prompt
+  "done" marker is the status stripe.
+- **P2.7 a11y/motion**: `BOOK_AGENT_A11Y` line-mode (no Live; append-only sentences) +
+  `BOOK_AGENT_REDUCED_MOTION` (no spinner) + narrow (<60col) one-line wordmark fallback in `_banner`.
+- **P2.8 key check**: `_provider_needs_key`/`_key_warning` warn in the banner when the active provider
+  has no key. **Latent bug found+fixed**: `_stack_label` called `providers.resolve().name` but
+  `resolve()` returns an id string, not a `Provider` (always hit the fallback) - now via `REGISTRY`.
+- **P2.9 progressive help**: `/help <topic>` filters commands+slash (`_command_help_rows` extracted as
+  the shared source); empty "no projects" state already had the try-it row.
+- Docs: CHANGELOG Added/Fixed; this entry.
+- **Follow-up (same session) - threaded mid-run controls + LIVE validation (user: "both"):**
+  - **Live run controls** built: `orchestrator.run(control=None)` checks a duck-typed control at each
+    **unit boundary** (only safe interruption point); `_apply_run_control` handles pause (return
+    durable state) + manual (flip autonomous off + restore escalate thresholds). `shell._KeyListener`
+    (cross-platform: msvcrt / termios+select) + `_RunControls`: **esc/p pause · m manual**, active only
+    for autonomous + real-TTY runs (no-ops in pytest/pipes/a11y, so the suite is unaffected). Dashboard
+    shows the controls hint + a live `note`. +4 tests (incl. an end-to-end pause/resume in
+    `test_article.py`). **All tests pass.**
+  - **Latent bug fixed**: `BOOK_AGENT_PROVIDER` configured the llm client but never synced
+    `settings.provider`, so the banner/key-warning read the stale provider. `cli._apply_provider` now
+    sets `settings.provider = providers.resolve(choice)`. Verified: banner shows `DeepSeek · … ` +
+    `⚠ no API key for DeepSeek` when pointed at a keyless provider.
+  - **LIVE (non-fake) run** (real DeepSeek, api path, 2 sections, researcher/images off): trust chip
+    rendered correctly on REAL verdicts (`verdict=revise blocking=5` → `↻ revising · … · 5 blocking`;
+    `verdict=approve blocking=0` → `✓ approved`); invariant held (no bare-approve-with-blocking). Judge
+    picked variants for real. **24 calls / 173k tok / $0.25 / 2,603 words**; learner +4 skills. Demo
+    project + `_live.py` deleted afterward. (Note: the api path doesn't auto-load `.env` like the CLI -
+    a script must call `load_dotenv` itself.)
+- **Next:** soft-ETA + the esc/m keys are interactive-terminal-only (can't capture in a pipe) - the
+  user can see them with `writingagent run` on a 2+ section autonomous project; install `ebooklib` in
+  `.venv` for epub re-exports.
+
+### 2026-06-14 (19) - Diagram glance-rule + micro-improvements (read time, version, provider banner)
+
+Three threads after the article re-polish. **All tests pass (full suite, fake mode); ruff not in
+.venv but new lines match existing style.**
+
+- **Diagrams - confirmed the architecture is already "LLM→spec→layout→SVG"** (the user proposed it;
+  it's been the design since session 15). Mapped their proposal to the code (DiagramSpec / `_ranks`
+  layering / deterministic render); ELK is already wired as the opt-in D2 backend. Added the user's
+  **3-second-glance rule** to `DIAGRAM_SPEC_SYS` (governs pro + `diagram_fallback`), recorded in
+  plan.md §16.6 + memory [[diagram-3-second-glance-rule]]. Fixed two stale "auto = D2" comments
+  (`nodes.py` docstring, `diagram.py` D2 section) - `auto` = built-in since session 16.
+- **Reading time was inflated** (user: voicebot said "22 min" but isn't). Root cause:
+  `len(body.split())/200` counted **489 code words + 703-word references list** as prose (4,782
+  total → 24 min). Fix: `polish.prose_word_count` / `read_time_min` / `refresh_read_time`
+  (`READ_WPM=225`, strips fenced code + the References section + image lines); `ui.reading_time_min`
+  now accepts text (prose) or int (legacy); `_assemble_article` uses it; **`repolish` rewrites the
+  header**; `cli` status reads the manuscript for a prose-based estimate. Re-polished the voicebot
+  article: header **22 → 16 min** (prose 3,568 words). +exports refreshed (epub skipped - `ebooklib`
+  not in .venv).
+- **Version single-sourced + bumped 0.1.0 → 0.2.0.** `src/book_agent/__init__.py __version__` is now
+  the ONE source; `pyproject.toml` uses `dynamic = ["version"]` + `[tool.setuptools.dynamic] version
+  = {attr="book_agent.__version__"}`; `shell.py` imports it (was a hardcoded `_VERSION = "0.1.0"`).
+- **Banner provider/model now dynamic** (was hardcoded `"OpenRouter · DeepSeek"`). New
+  `shell._stack_label(cfg, settings)` shows `providers.resolve(settings.provider).name · <writer
+  model> · vX`; `_banner` takes cfg/settings (defaulted, so the theme test's `_banner(c)` still works).
+- **New standing instruction:** the user set a staff-level **UX redesign framework** as the default
+  for all future design work - **audit-plan + explicit-approval gate before any redesign**, production-
+  grade bar (all component states, purposeful motion, AI trust/observability, WCAG 2.2). Saved as
+  memory [[ux-redesign-framework-default]] (deliberately overrides the autonomous-flow pref for design
+  work). **Next: presented a UX Audit Plan for the TUI; awaiting the user's go/no-go.**
+
+### 2026-06-14 (18) - Re-polished the voicebot article (stale PDF) + CHANGELOG/README sync
+
+User: "go to what we did last and give me improved docs" → clarified they meant the **voicebot
+article** (`brain/users/default/articles/from-idea-to-sub-100ms-voicebot-…`). **No code change.**
+
+- **Stale PDF fixed.** The article's `manuscript.pdf` was Jun-13 22:50 (pre-polish - last session it
+  was file-locked open, so it never got the §16.6 polish + re-export); every other format was the
+  Jun-14 00:16 polished version. Ran **`book.py polish --book-id <id>`** (idempotent, ~0 tokens): it
+  rebuilt the References (46 ranked), re-cleaned citations/stray refs, and re-exported pdf/html/docx/
+  txt/md. **`epub` skipped** - `ebooklib` is missing from `.venv` (the existing polished `.epub` from
+  last session is current, so all 6 formats are now polished). Verified the new PDF with pypdf: 16
+  pages, **0 inline `[N]`**, References present, **46 ranked-ref lines**, figure captions 1.1/2.1/5.1
+  intact, **0 raster images** (figures are the vector built-in SVGs). Spot-checked the HTML render in
+  a browser - figures + ranked References list render clean.
+- **Figures note:** the manuscript references the clean **built-in `section_0X_diagram.svg`** figures
+  (3: §1/§2/§5), not model mermaid - so the prior open item ("figures are model mermaid, clipped pie")
+  is effectively resolved in the current source. Leftover `images/mermaid_*.png` are unused cache.
+- **Also (from the first read of the ask):** synced the user-facing project docs to §16.6 -
+  **CHANGELOG.md** `[Unreleased]` got a top `### Added` entry for the deterministic polish pass (ranked
+  References, `strip_inline_citations`, stray-dump removal, figure de-dup, `ARTICLE_WRITER_SYS` ban,
+  `polish` command), and a **now-stale D2 bullet was fixed** (`diagram_engine: auto` is built-in since
+  session 16, D2 is opt-in). **README.md** "How it makes good writing" gained a "clean prose, sourced
+  at the end" bullet + a `writingagent polish <id>` note.
+- **Next:** install `ebooklib` in `.venv` if epub re-exports are wanted here; consider a `rediagram`
+  command to regenerate figures from the persisted `versions/*.diagram.spec.json`.
+
+- **CHANGELOG.md** `[Unreleased]`: added a top `### Added` entry for the deterministic polish pass
+  (one influence-ranked end References list 0-100 + dated, `strip_inline_citations`, stray-dump
+  removal, figure de-dup, `ARTICLE_WRITER_SYS` forbidding model figures/captions/ref-lines, the new
+  `polish` command / `repolish_manuscript()`). Also **fixed a now-stale D2 bullet** - it still claimed
+  D2 is used automatically when the binary is present, but session 16 flipped `diagram_engine: auto`
+  to the built-in engine; rewrote it as built-in-default / D2-opt-in.
+- **README.md** "How it makes good writing": new bullet *"clean prose, sourced at the end"* (inline
+  `[N]` stripped; one influence-ranked References list), plus a short note that
+  `writingagent polish <id>` re-fixes an existing piece with no model call (~0 tokens).
+- **Not done:** the export-quality session itself was never given its own dated entry in this Session
+  log (it lives only in "Current status" as "session 16"); left as-is to avoid inventing details - the
+  §16.6 spec already covers it. No `docs/` source in this repo (docs-writingagent.vercel.app is a
+  separate repo).
+- **Next:** if the docs site is in scope, port the References/polish material there too
+  (`reference/quality/` + a `polish` command page).
+
 ### 2026-06-13 (17) - Diagrams: dedicated cycle (ring) + comparison (two-column) layouts + spec audit
 
 User: "finish the diagrams." The built-in renderer degraded `cycle`/`comparison` to `flow`; now

@@ -151,3 +151,37 @@ def build_references(scored: list[dict], *, drop_noise: bool = True) -> str:
         return ""
     return ("## References\n\n*Ranked by influence on this article (0–100; higher = more "
             "influence). Dated where known.*\n\n" + "\n".join(rows))
+
+
+# ── reading time ────────────────────────────────────────────────────────────────
+READ_WPM = 225          # words/minute for the prose-only read-time estimate (tunable)
+
+_CODE_FENCE = re.compile(r"(?ms)^```.*?^```")
+_IMG_LINE = re.compile(r"(?m)^!\[[^\]]*\]\([^)]*\).*$")
+
+
+def prose_word_count(md: str) -> int:
+    """Words a human actually *reads* - prose only. Fenced code blocks, the end
+    References list, and image/figure embeds are excluded: counting them (a naive
+    `len(md.split())`) overstates the read time of code-heavy or reference-heavy pieces
+    (e.g. a technical article reads as ~16 min, not the ~24 min a raw split() implies)."""
+    if not md:
+        return 0
+    text = _CODE_FENCE.sub(" ", md)
+    text = re.split(r"(?im)^#{1,4}[ \t]*References\b", text, maxsplit=1)[0]
+    text = _IMG_LINE.sub(" ", text)
+    return len(text.split())
+
+
+def read_time_min(md: str, wpm: int = READ_WPM) -> int:
+    """Estimated reading time in minutes from prose words (see `prose_word_count`)."""
+    return max(1, round(prose_word_count(md) / max(1, wpm)))
+
+
+_READ_TIME_LINE = re.compile(r"(?im)^(\*\*Estimated read time:\*\*\s*)\d+(\s*min\b.*)$")
+
+
+def refresh_read_time(md: str) -> str:
+    """Rewrite the manuscript's '**Estimated read time:** N min' header in place to the
+    current prose-based estimate (used when re-polishing an already-assembled article)."""
+    return _READ_TIME_LINE.sub(rf"\g<1>{read_time_min(md)}\g<2>", md, count=1)
