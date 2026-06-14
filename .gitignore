@@ -16,15 +16,8 @@ config/settings.yaml
 test_diagram.svg
 reseed.py
 
-# Local working docs: the design spec + the session journal stay private (durable decisions
-# also live in code + CHANGELOG.md). NOTE: both were tracked until now, so they remain in the
-# existing git history - a scrub is needed to remove them from the published repo, and
-# README/CONTRIBUTING linked to plan.md.
-plan.md
-resume.md
-# docs.md: the documentation agent's working brief - it reviews the whole repo and updates
-# the published docs site from it. Local-only.
-docs.md
+# NOTE: plan.md, resume.md, docs.md are intentionally TRACKED for now - the author works
+# across multiple laptops and syncs them via git. Move them here only at open-source time.
 
 # Playwright MCP browser artifacts (CI debugging)
 .playwright-mcp/
