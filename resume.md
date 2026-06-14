@@ -5,21 +5,20 @@
 
 ## Current status
 
-- **New (2026-06-14 - shell.py: package conversion done, internal carve mapped):** `shell.py` (144 KB,
-  ~2900 lines) is now `shell/` - step 1 (git mv → `shell/__init__.py`, relative imports rebased . → ..)
-  is **done, committed, suite green**. The internal seam carve is mapped + verified (no big surprises):
-  the dependency DAG is acyclic except **one** edge - `chat._chat_respond` calls `repl._execute_cmd`
-  (and repl calls `_chat_respond`), broken with a lazy import (the codebase's existing idiom). Planned
-  seams (dependency order): **_const** (shared constants/glyphs/vocab/regexes - leaf) → **branding**
-  (banner/wordmark/flame/palette/welcome/_section/_cmd_table/provider-label helpers) → **help**
-  (commands/features tables, slash-help, toggle-grid, model-catalog, _FEATURE_KEYS) → **commands**
-  (`_cmd_*` + path/provider/model/set/auto/praise/skills/use-project) → **dashboard** (_RunControls/
-  _KeyListener/_RunDashboard/cards/_escalation_picker/run_with_dashboard/_cmd_run_rich) → **chat**
-  (respond/history/hints/system) → **repl** (run_shell/_handle_slash/_make_pt_session/_execute_cmd/input
-  routing) → facade `__init__`. Tests reach ~25 `shell._x` names (incl. GOLD, _banner, _NODES,
-  _SLASH_HELP, _wordmark, _toggle_grid, _chat_respond, _paused_card) - the facade must re-export them.
-  cli.py imports `run_shell` + `run_with_dashboard`. **Next:** carve the seams one at a time, suite-gated,
-  same recipe as orchestrator (per-file-ignore F401/F403/F405 on the facade `__init__`).
+- **New (2026-06-14 - shell.py split into a package - DONE):** `shell.py` (~2900 lines) is now `shell/`
+  - a facade `__init__` (30 lines) + seven seams: **_const** (257, glyphs/vocab/regexes/chat-prompt),
+  **branding** (389, banner/wordmark/flame/palette/welcome/_section/_cmd_table), **help** (278, tables/
+  slash-help/toggle-grid/model-catalog), **commands** (578, `_cmd_*` + path/provider/model/set/auto/
+  praise/skills), **dashboard** (564, _RunControls/_KeyListener/_RunDashboard/cards/run_with_dashboard),
+  **chat** (333, respond/history/hints/system), **repl** (816, run_shell/_handle_slash/pt-session/input
+  routing). Acyclic except `chat._chat_respond → repl` (command dispatch), broken with a lazy import.
+  Facade re-exports every public + test-used name so `shell.X` is unchanged for cli.py + tests. **Two
+  real cross-facade fixes the split surfaced** (not test-only): (1) `_sync_palette` now refreshes the
+  palette in every seam + the facade after a live `/theme` switch (each seam from-imports the colors) and
+  the facade re-exports the ui palette so `shell.GOLD` resolves/re-colours; (2) `test_shell_chat` patches
+  `_execute_cmd` at its new home `shell.repl`. **330 passed / 1 skipped, ruff clean**; a smoke render of
+  banner/welcome/tables/slash-help through the seams produced 10k chars cleanly. **Both god-files are now
+  split** (orchestrator + shell) - that closes the file-split work in plan §20.1.
 - **New (2026-06-14 - orchestrator.py split into a package):** the 2274-line `orchestrator.py`
   god-module is now `orchestrator/` - a documented facade `__init__` (33 lines) re-exporting six seam
   modules: **common** (592, shared leaf helpers), **book** (632, chapter pipeline + `run()` dispatcher),

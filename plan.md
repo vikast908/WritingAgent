@@ -1067,8 +1067,12 @@ reach for). Pure code movement, suite-gated per step.
   export; book ← {article,manage}; review ← {book,article,common}. Genuinely-shared leaves that surfaced
   during the carve (`_escalate`, `_manuscript_section_bodies`, `_replace_manuscript_section`) went to
   `common`. A ruff per-file-ignore (`__init__.py` = F401/F403/F405) marks the intentional star re-exports.
-- **`shell/` - planned.** Same recipe; seams: branding (banner/wordmark/flame/palette/welcome),
-  help (tables/slash-help/toggle-grid), commands (`_cmd_*` + path/use-project), dashboard (`_RunControls`/
-  `_KeyListener`/`_RunDashboard`/`run_with_dashboard`/cards), chat (respond/history/hints/system), repl
-  (`run_shell`/`_handle_slash`/pt-session/input routing). Tests reach for many `shell._x` names, so the
-  facade must re-export them.
+- **`shell/` - done.** Facade `__init__` + seven seams: `_const` (glyphs/vocab/regexes/chat-prompt),
+  `branding` (banner/wordmark/flame/palette/welcome/`_section`/`_cmd_table`), `help` (tables/slash-help/
+  toggle-grid/model-catalog), `commands` (`_cmd_*` + path/provider/model/set/auto/praise/skills/use-
+  project), `dashboard` (`_RunControls`/`_KeyListener`/`_RunDashboard`/cards/`run_with_dashboard`), `chat`
+  (respond/history/hints/system), `repl` (`run_shell`/`_handle_slash`/pt-session/input routing). Acyclic
+  except `chat._chat_respond → repl` (broken by a lazy import). The split surfaced two real fixes worth
+  remembering: **`_sync_palette` must refresh every seam + the facade** (each from-imports the ui palette
+  at import time, so a live `/theme` switch has to rebind all copies), and the **facade re-exports the ui
+  palette** (`shell.GOLD` etc.). Per-file-ignore F401/F403/F405 on the facade `__init__`.
