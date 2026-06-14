@@ -624,6 +624,7 @@ def _command_help_rows(settings: Settings) -> list[tuple[str, str]]:
         ("status · review", "where the project stands · answer escalations"),
         ("revise --chapter N ...", "rewrite one committed section/chapter to your instruction"),
         ("brief · versions · eval", "the goal · draft history · quality scorecard"),
+        ("evidence", "thesis + sources ranked by influence → evidence_report.md (shareable proof)"),
         ("tableread [--as \"...\"]", "skeptical-reader report on the finished piece"),
         ("read", "section (--chapter N) · --summary · --manuscript" if is_article
                  else "chapter (--chapter N) · --summary · --manuscript"),

@@ -505,6 +505,13 @@ class Project:
                                           persona=persona, log=progress or _noop)
         return brain.read_text(out) or ""
 
+    def evidence_report(self, *, progress: Progress | None = None) -> str:
+        """Build (and return) evidence_report.md - the thesis + every source ranked by
+        influence. Deterministic, no model call; articles only. Returns the markdown ("" if
+        there was nothing to report)."""
+        out = orchestrator.build_evidence_report(self._agent.user, self.id, log=progress or _noop)
+        return brain.read_text(out) if out else ""
+
     def memory(self) -> str:
         """Human-readable canon + entity-graph summary (books only)."""
         return orchestrator.memory_summary(self._agent.user, self.id)

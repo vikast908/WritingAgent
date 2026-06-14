@@ -789,6 +789,16 @@ def cmd_polish(args, cfg, settings, uid):
         _report_export(console, fmt, out)
 
 
+def cmd_evidence(args, cfg, settings, uid):
+    """Write evidence_report.md - the thesis + every source ranked by influence. No LLM."""
+    book_id = _resolve_book(uid, args.book_id)
+    console = _console()
+    log = (lambda m: console.print(m)) if console else print
+    out = orchestrator.build_evidence_report(uid, book_id, log=log)
+    if out:
+        _report_export(console, "evidence", out)
+
+
 def cmd_seed_skills(args, cfg, settings, uid):
     n = skills_mod.seed_builtin(uid)
     print(f"Seeded {n} new built-in skill(s) for user '{uid}'.")
@@ -827,7 +837,7 @@ _COMMANDS = {
     "read": cmd_read, "memory": cmd_memory, "produce": cmd_produce,
     "consolidate": cmd_consolidate, "skills": cmd_skills, "config": cmd_config,
     "list": cmd_list, "export": cmd_export, "seed-skills": cmd_seed_skills,
-    "delete": cmd_delete, "polish": cmd_polish,
+    "delete": cmd_delete, "polish": cmd_polish, "evidence": cmd_evidence,
 }
 
 
@@ -919,6 +929,8 @@ def build_parser(settings):
                               help="Re-fix an existing manuscript (references, citations, figures) - no LLM, then re-export")
     p_polish.add_argument("--format", default=None,
                           help="Formats to re-export (default: those already present, or 'all')")
+    sub.add_parser("evidence", parents=[common],
+                   help="Write evidence_report.md - thesis + influence-ranked sources (no LLM)")
     sub.add_parser("seed-skills", parents=[common], help="Install built-in craft skills")
     p_del = sub.add_parser("delete", parents=[common], help="Permanently delete a book")
     p_del.add_argument("name", nargs="?", help="Book ID to delete (positional shorthand)")

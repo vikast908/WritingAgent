@@ -1472,7 +1472,32 @@ def repolish_manuscript(uid: str, project_id: str, settings, *, log=print):
     n_refs = refs_md.count("\n") and sum(1 for ln in refs_md.splitlines() if re.match(r"\d+\. ", ln))
     log(f"   [re-polish] references rebuilt ({n_refs} ranked), citations + stray refs cleaned, "
         f"read time -> {polish.read_time_min(out)} min")
+    try:   # refresh the shareable evidence report too (best-effort)
+        build_evidence_report(uid, project_id, log=lambda *_a, **_k: None)
+    except Exception:  # noqa: BLE001
+        pass
     return paths.manuscript
+
+
+def build_evidence_report(uid: str, project_id: str, *, log=print):
+    """Write `evidence_report.md` for an article: the thesis it argues + every source ranked
+    by influence, built deterministically from the finished manuscript (no LLM, ~0 tokens).
+    The shareable proof behind the 'argues a thesis, cites real sources' claim. Returns the
+    path, or None when there's nothing to report. Article-only."""
+    from . import polish
+    paths = ArticlePaths(project_id, uid)
+    if not paths.run_state.exists():
+        raise FileNotFoundError(f"'{project_id}' is not an article (evidence report is article-only).")
+    md = brain.read_text(paths.manuscript) or ""
+    thesis = brain.read_text(paths.root / "thesis.md") or ""
+    report = polish.build_evidence_report(md, thesis)
+    if not report:
+        log("   [evidence] nothing to report (no ranked sources or thesis)")
+        return None
+    out = paths.root / "evidence_report.md"
+    brain.write_text(out, report)
+    log(f"   [evidence] -> {out}")
+    return out
 
 
 def _export_paths_and_title(uid: str, project_id: str):
@@ -2059,6 +2084,13 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
     # NOTE: intermediate section/eval files are cleaned up after the LEARN phase -
     # the learner needs the eval_*.json critic findings (cleaning here starved it).
     log(f"   [production] {len(sections_md)} sections, {len(unique)} sources -> {paths.manuscript}")
+
+    # Shareable evidence report (thesis + influence-ranked sources) - deterministic, the
+    # proof behind "argues a thesis, cites real sources". Best-effort; never fails production.
+    try:
+        build_evidence_report(paths.uid, paths.article_id, log=log)
+    except Exception:  # noqa: BLE001
+        pass
 
     # Table read: a cold read of the WHOLE piece as a skeptical target-audience reader.
     # Catches boredom curves and trust breaks no per-section critic can see. Report-only,

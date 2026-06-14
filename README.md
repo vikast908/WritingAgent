@@ -8,9 +8,11 @@
 [![Platforms](https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-informational?style=flat-square)](#install)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square)](LICENSE)
 
-**self-correcting pipeline · books + articles · 6 export formats · cost guardrails · resumable · local-first**
+### The autonomous long-form writer that argues a thesis and cites real sources — not slop.
 
-[Quickstart](#quickstart) · [Install](#install) · [**Documentation ↗**](https://docs-writingagent.vercel.app/) · [Contributing](#contributing)
+**One command → a researched, self-critiqued, fact-checked, exported article (or book).** Local-first, on your own model key, for cents.
+
+[Quickstart](#quickstart) · [Install](#install) · [Why not just prompt ChatGPT?](#why-not-just-prompt-chatgpt) · [Examples](examples/) · [**Docs ↗**](https://docs-writingagent.vercel.app/)
 
 </div>
 
@@ -18,19 +20,39 @@
 
 ## What it does
 
-Writing Agent takes a topic and produces a **publication-ready manuscript** — drafting, critiquing,
-humanising, and revising in a loop until the work meets quality standards. It's a **pipeline, not a
-prompt**: a durable state machine with a separate critic in the loop, not a single API call.
+Most AI writing is **fluent slop** — confident, generic, samey, often unsourced. Writing Agent's bet
+is the opposite: from one topic it produces a **long-form piece that takes a defensible position and
+backs it with real, ranked sources** — then proves it with an **evidence report**. It's a
+**pipeline, not a prompt**: a durable state machine with a *separate critic*, a *thesis* it enforces,
+and *claim↔source verification* — not a single API call.
 
-- **Books & articles** — multi-chapter narratives with continuity audits, or long-form pieces with research, citations, and editorial angles
-- **One command** — `write` interviews you once upfront, then researches, writes, self-edits, and exports the finished file with zero interruptions
-- **Originality, not just slop-absence** — a per-piece thesis the critic enforces, a side-by-side judge that picks the strongest of N drafts, and claim↔source verification that blocks unsupported citations
-- **Figures that lay themselves out** — the model authors a diagram *spec*; a layout engine (built-in, or D2 + ELK) places it so labels never overflow or collide
+**Best at articles** (a finished, sourced piece for ~$0.25 in a couple of minutes); it does **books**
+too (multi-chapter, with continuity audits + a production layer).
+
+- **One command** — `write` asks a few questions upfront, then researches, writes, self-critiques, fact-checks, humanises, and exports the finished file with zero babysitting
+- **Argues, doesn't just cover** — a per-piece *thesis* the critic enforces, a side-by-side *judge* that picks the strongest of N drafts, and **claim↔source verification** that blocks unsupported citations
+- **Proof, not vibes** — every article ships an [**evidence report**](#evidence-report-proof-not-vibes): the argument it makes + every source ranked by influence (0–100)
+- **Figures that lay themselves out** — the model authors a diagram *spec*; a layout engine places it so labels never overflow
 - **Use it your way** — interactive TUI, one-shot CLI, an embeddable Python API, or a global `writingagent` npm launcher
-- **A TUI that respects you** — pause/resume an autonomous run from the keyboard (`esc`/`m`), glanceable trust signals, structured recovery on every failure, plus reduced-motion (`BOOK_AGENT_REDUCED_MOTION`) and screen-reader (`BOOK_AGENT_A11Y`) modes
-- **Local-first** — everything is plain markdown + JSON on disk; kill a run and it resumes exactly where it stopped
+- **Local-first** — everything is plain markdown + JSON on disk; your own OpenRouter/DeepSeek key; kill a run and it resumes exactly where it stopped
 
-> 📚 **The full manual lives at [docs-writingagent.vercel.app](https://docs-writingagent.vercel.app/).** This README is just the quick tour.
+> 📂 See real output in [**`examples/`**](examples/) · 📚 full manual at [docs-writingagent.vercel.app](https://docs-writingagent.vercel.app/).
+
+## Why not just prompt ChatGPT?
+
+For a quick paragraph, do. For something you'd **put your name on**, the gap is the point:
+
+| | Prompting ChatGPT/Claude | Writing Agent |
+|---|---|---|
+| **Effort** | prompt → paste → reprompt → edit → format | one command → finished, exported file |
+| **Point of view** | whatever the model defaults to | a contestable **thesis** the critic enforces every section |
+| **Sources** | often missing or fabricated | researched, and **each cited claim verified against its source** |
+| **Slop** | up to you to catch | a surgical **humanizer** + a critic that blocks AI tells |
+| **Proof** | none | an **evidence report** (thesis + influence-ranked sources) |
+| **Your data / cost** | in someone's cloud | local markdown on disk; your key; cents per piece; resumable |
+
+It won't replace a conversation when you want to *steer every sentence*. It replaces the *grind* of
+turning a topic into a sourced, non-generic, finished long-form piece.
 
 ---
 
@@ -110,6 +132,32 @@ cleanup and re-exports — with **no model call** (≈0 tokens).
 Deep dives: [Quality machinery ↗](https://docs-writingagent.vercel.app/reference/quality/) ·
 [How it works ↗](https://docs-writingagent.vercel.app/concepts/how-it-works/) ·
 [Architecture ↗](https://docs-writingagent.vercel.app/concepts/architecture/)
+
+---
+
+## Evidence report: proof, not vibes
+
+Every article ships an **`evidence_report.md`** — the receipts behind "argues a thesis, cites real
+sources." It's generated deterministically from the finished piece (no model call), so it's cheap and
+trustworthy:
+
+```markdown
+# Evidence report — Your Voice Assistant's 100ms Problem
+
+## The argument it makes
+> Real-time voice AI at sub-100ms is impossible without streaming partial responses and
+> decoupling LLM inference from audio generation, rendering sequential pipelines obsolete.
+
+## At a glance
+- 46 sources behind the piece   - 13 high-influence (score ≥ 50)   - 27/46 carry a date
+
+## Sources, ranked by influence (0–100)
+1. **100** · 2026 · [LLM Inference Optimization: Quantization to Speculative Decoding](…)
+2. **86**  · 2026 · [LLM Inference Optimization: KV Cache, and Serving at Scale](…)
+…
+```
+
+Regenerate any time with **`writingagent evidence <id>`** (or `Project.evidence_report()`).
 
 ---
 

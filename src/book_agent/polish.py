@@ -185,3 +185,47 @@ def refresh_read_time(md: str) -> str:
     """Rewrite the manuscript's '**Estimated read time:** N min' header in place to the
     current prose-based estimate (used when re-polishing an already-assembled article)."""
     return _READ_TIME_LINE.sub(rf"\g<1>{read_time_min(md)}\g<2>", md, count=1)
+
+
+# ── evidence report (shareable trust artifact) ──────────────────────────────────
+_CLAIM_RE = re.compile(r"(?im)^\*\*Claim:\*\*\s*(.+)$")
+_H1_RE = re.compile(r"(?m)^#\s+(.+)$")
+_REF_SECTION = re.compile(r"(?ims)^##[ \t]*References\b.*?(?=\n##\s|\Z)")
+# One ranked reference row: "12. **87** · 2024 · [Title](url)"
+_REF_ROW = re.compile(r"(?m)^\s*\d+\.\s+\*\*(\d+)\*\*\s*·\s*([^·]+?)\s*·\s*.+$")
+
+
+def build_evidence_report(manuscript_md: str, thesis_md: str = "", title: str = "") -> str:
+    """A shareable 'how grounded is this piece' report, built deterministically (no LLM)
+    from the finished manuscript: the thesis it argues, plus every source ranked by the
+    same 0-100 influence score the References list already carries. Turns the otherwise
+    invisible trust machinery into proof a reader can see. Returns "" when there's nothing
+    to report (no thesis and no ranked references)."""
+    rows = _REF_ROW.findall(manuscript_md or "")
+    cm = _CLAIM_RE.search(thesis_md or "")
+    claim = cm.group(1).strip() if cm else ""
+    if not title:
+        hm = _H1_RE.search(manuscript_md or "")
+        title = hm.group(1).strip() if hm else ""
+    if not rows and not claim:
+        return ""
+    out = ["# Evidence report" + (f" — {title}" if title else ""), "",
+           "*How grounded this piece is: the argument it makes, and the sources behind it. "
+           "Built deterministically from the finished manuscript - no model call.*"]
+    if claim:
+        out += ["", "## The argument it makes", "", f"> {claim}"]
+    if rows:
+        scores = [int(s) for s, _d in rows]
+        high = sum(1 for s in scores if s >= 50)
+        dated = sum(1 for _s, d in rows if d.strip().lower() not in ("n.d.", "", "n/a"))
+        out += ["", "## At a glance", "",
+                f"- **{len(rows)}** sources behind the piece",
+                f"- **{high}** high-influence (score ≥ 50)",
+                f"- **{dated}/{len(rows)}** carry a date"]
+        sec = _REF_SECTION.search(manuscript_md or "")
+        if sec:
+            body = re.sub(r"(?im)^##[ \t]*References\b.*$",
+                          "## Sources, ranked by influence (0–100)",
+                          sec.group(0).strip(), count=1)
+            out += ["", body]
+    return "\n".join(out).rstrip() + "\n"

@@ -52,6 +52,20 @@ def test_max_tokens_for_override_and_default():
     assert "max_tokens" in cfg.to_dict()                    # round-trips for save_config
 
 
+def test_build_evidence_report():
+    from book_agent import polish
+    ms = ("# My Title\n\n*angle*\n\nBody.\n\n---\n\n"
+          "## References\n\n*Ranked by influence on this article (0–100).*\n\n"
+          "1. **100** · 2024 · [A](http://a)\n2. **40** · n.d. · [B](http://b)\n")
+    thesis = "**Claim:** X beats Y.\n**Stakes:** big\n**Arguments:**\n- a"
+    rep = polish.build_evidence_report(ms, thesis)
+    assert "Evidence report" in rep and "My Title" in rep
+    assert "X beats Y." in rep                       # the thesis is the argument
+    assert "**2** sources" in rep and "high-influence" in rep
+    assert "ranked by influence" in rep.lower()
+    assert polish.build_evidence_report("", "") == ""   # nothing -> empty
+
+
 def test_thesis_brief_keeps_claim_and_arguments_only():
     t = S.Thesis(claim="C is true.", stakes="big stakes",
                  arguments=["arg one", "arg two"], counterargument="but X",

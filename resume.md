@@ -271,6 +271,31 @@
 
 ## Session log
 
+### 2026-06-14 (22) - Product (PM) review → implemented P0/P1 + PRD + evidence report
+
+User asked for a product-value review (OSS lens, benchmarked vs rivals), then "implement everything +
+add PRD.md". Review verdict: the engineering is ahead of the go-to-market; the differentiator
+(thesis/critic/claim-verify) is real but *told, not shown*. Implemented the show-don't-tell P0s.
+**Full suite green (~329 tests; +2).**
+
+- **Evidence report** (the headline "proof" artifact): `polish.build_evidence_report(manuscript, thesis,
+  title)` - deterministic, no LLM - emits the thesis + every source ranked by influence (parsed from the
+  References list's 0-100 scores). `orchestrator.build_evidence_report(uid, id)` writes
+  `evidence_report.md`; **auto-generated** at article assembly (`_produce_article`), refreshed by
+  `repolish_manuscript`, and on-demand via the new **`evidence`** CLI command + `Project.evidence_report()`.
+  Verified on the real voicebot article (46 sources, 13 high-influence). +2 tests.
+- **README output-first rewrite**: spearhead one-liner ("argues a thesis and cites real sources - not
+  slop"), a **"Why not just prompt ChatGPT?"** comparison table, an **Evidence report** section with a
+  real sample, leads with articles, links to `examples/`.
+- **`examples/` gallery**: ships the real voicebot `manuscript.md` + `evidence_report.md` + its SVG
+  figures (copied out of gitignored `brain/`), a `SampleRun` pointer (the book), and a **Colab
+  zero-install quickstart** notebook.
+- **`PRD.md`**: full product-requirements doc - problem, target/non-users, JTBD, value/differentiation,
+  scope, OSS success metrics, roadmap (Now/Next/Later), validation plan, risks, competitive landscape.
+- **Next (not yet done; flagged in PRD §8-9):** a hosted/zero-install web demo; a blind A/B harness
+  (this vs ChatGPT long-form) to validate the core quality claim; activation instrumentation
+  (install → first finished piece). These need a human/deploy, not just code.
+
 ### 2026-06-14 (21) - Token/cost-efficiency pass (telemetry-grounded; quality unchanged)
 
 User: review the codebase for token/LLM-cost efficiency, then "implement all of it." Grounded in real

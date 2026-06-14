@@ -38,6 +38,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   opted in). The zero-dependency built-in engine stays the default and the fallback.
 
 ### Added
+- **Evidence report (shareable proof, deterministic).** Every article now ships an
+  `evidence_report.md` - the thesis it argues + every source ranked by influence (0-100), built from
+  the finished manuscript with no model call. Auto-generated at assembly, refreshed by `polish`,
+  regenerated on demand via the new **`evidence`** command and `Project.evidence_report()`. Turns the
+  otherwise-invisible trust machinery into something a reader can see.
+- **Output-first README + positioning.** New spearhead one-liner ("argues a thesis and cites real
+  sources - not slop"), a **"Why not just prompt ChatGPT?"** comparison, an **Evidence report**
+  section with a real sample, and an **`examples/`** gallery shipping a complete generated article +
+  its evidence report (and a Colab zero-install quickstart). Plus a **`PRD.md`** product-requirements
+  doc (problem, users/non-users, JTBD, differentiation, OSS metrics, roadmap, validation, competitors).
 - **TUI UX overhaul (production-grade interaction layer).** A staff-level pass over the terminal
   experience: (1) **no command dead-ends** - a reserved word typed without its slash (`help`,
   `features`, `theme`, `provider`, …) now runs the command with a one-line hint instead of silently

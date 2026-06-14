@@ -870,6 +870,13 @@ in prose. At assembly (`_assemble_article`) the deterministic `polish.py` pass t
 *existing* manuscript with **no LLM call** (≈0 tokens) and refreshes the exports - the cheap way to
 fix an already-generated article.
 
+**Evidence report (`polish.build_evidence_report` → `evidence_report.md`).** A shareable trust
+artifact built deterministically from the finished manuscript: the thesis it argues + every source
+ranked by influence (the same 0-100 score the References list carries). Auto-generated at assembly,
+refreshed by `polish`, and regenerable via the **`evidence`** command / `Project.evidence_report()`.
+It makes the otherwise-invisible quality machinery visible - the OSS "show, don't tell" of the
+"argues a thesis, cites real sources" claim (see `PRD.md`).
+
 **Figure engine.** `diagram_engine: auto` (the default) now uses the **built-in** engine - it measures
 text and lays out compactly (a ~590px figure with title, lane headers, readable boxes), and the
 comparison archetype **de-duplicates repeated relationship labels** (`provides`×3 → ×1) so edge labels
