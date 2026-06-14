@@ -271,6 +271,35 @@
 
 ## Session log
 
+### 2026-06-14 (21) - Token/cost-efficiency pass (telemetry-grounded; quality unchanged)
+
+User: review the codebase for token/LLM-cost efficiency, then "implement all of it." Grounded in real
+telemetry (241 calls: 843k prompt / 602k completion, p/c=1.40, $1.74; **pro = 98% of cost**; prompt
+tokens dominate = repeated prefixes). **Full suite green (~327 tests; +7).** Headline finding: the
+codebase is already cache-friendly (stable system prefix, variable user tail) and already disciplined
+on max_tokens / verify excerpts - so the real win is **claiming the provider prompt-cache discount**,
+not rewriting prompts.
+
+- **F1 cache telemetry** (`llm.py`): capture `prompt_tokens_details.cached_tokens` → `usage_summary`
+  ("N cached, X% of prompt") + JSONL. Makes the caching discount measurable.
+- **F2 lossless schema shrink** (`llm._strip_schema_noise`): drop pydantic auto `"title"` keys from
+  the per-call JSON-Schema dump (~20-30% smaller; lossless).
+- **F6 `use_headroom` default OFF** (config.py + settings.yaml): ~no savings on single-turn payloads
+  and it can perturb the cacheable prefix.
+- **F4 thesis brief** (`nodes.thesis_brief`): critic+judge get claim+arguments only; writer keeps the
+  full thesis (must engage the counterargument). Wired in the main article path.
+- **F5 per-node `max_tokens`** (`ModelConfig.max_tokens_for` + models.yaml `max_tokens:`): tuning lever,
+  defaults unchanged. The codebase already caps tightly (summaries 600-1500, etc.) - ~no savings, just
+  configurability.
+- **F3 `divergent_skeletons`** (opt-in, **default off**): draft variants short → judge → expand the
+  winner. Threaded into run-state + the main article draft loop. Quality-risky, so off by default.
+- **F7** already done (format_documents `excerpt_chars=1500` caps the verify payload). **F9** the one
+  big shared fragment (`NO_SLOP`) is already a constant; unifying the two critics' (intentionally
+  different) rubrics would change prompts for zero token gain - skipped. **F10** chat history 10→8.
+- +`tests/test_token_efficiency.py` (6) + an article skeleton e2e. Docs: CHANGELOG, plan §19.
+- **Next (the real lever):** verify OpenRouter returns a cache discount on DeepSeek; if not, route the
+  hot nodes to DeepSeek-direct (automatic caching). A/B `divergent_skeletons` on a live run.
+
 ### 2026-06-14 (20) - TUI UX overhaul (full spec, all P0-P2 implemented)
 
 User asked for a staff-level UX redesign of the TUI (audit-plan → approval gate → build), then

@@ -87,7 +87,7 @@ def configure_headroom(enabled: bool) -> None:
 # Aggregated across every call since the last reset; surfaced at the end of a run.
 _usage_lock = threading.Lock()
 _usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
-          "cost": 0.0}
+          "cost": 0.0, "cached_tokens": 0}
 _run_id = uuid.uuid4().hex[:12]
 _budget_max = 0           # run token budget; 0 = unlimited (see set_run_budget)
 _tl_ctx = threading.local()   # .unit - which chapter/section/phase a call belongs to
@@ -134,8 +134,20 @@ def reset_usage() -> None:
     global _run_id
     with _usage_lock:
         _usage.update(calls=0, prompt_tokens=0, completion_tokens=0, total_tokens=0,
-                      cost=0.0)
+                      cost=0.0, cached_tokens=0)
     _run_id = uuid.uuid4().hex[:12]
+
+
+def _cached_tokens(u) -> int:
+    """Prompt tokens served from the provider's context cache (cache hit) - reported as
+    usage.prompt_tokens_details.cached_tokens by OpenAI-compatible hosts incl. OpenRouter/
+    DeepSeek. A high ratio vs prompt_tokens means the stable system prefix is being cached."""
+    d = getattr(u, "prompt_tokens_details", None)
+    if d is None:
+        return 0
+    if isinstance(d, dict):
+        return int(d.get("cached_tokens", 0) or 0)
+    return int(getattr(d, "cached_tokens", 0) or 0)
 
 
 def _record_usage(resp) -> None:
@@ -152,6 +164,7 @@ def _record_usage(resp) -> None:
         _usage["completion_tokens"] += getattr(u, "completion_tokens", 0) or 0
         _usage["total_tokens"] += getattr(u, "total_tokens", 0) or 0
         _usage["cost"] += cost
+        _usage["cached_tokens"] += _cached_tokens(u)
 
 
 def current_tokens() -> int:
@@ -175,6 +188,9 @@ def usage_summary() -> str | None:
                 f"{_usage['prompt_tokens']:,} prompt + "
                 f"{_usage['completion_tokens']:,} completion = "
                 f"{_usage['total_tokens']:,} tokens")
+        if _usage["cached_tokens"] > 0:
+            pct = 100 * _usage["cached_tokens"] / max(_usage["prompt_tokens"], 1)
+            line += f" ({_usage['cached_tokens']:,} cached, {pct:.0f}% of prompt)"
         if _usage["cost"] > 0:
             line += f" · ${_usage['cost']:.4f}"
         return line
@@ -201,6 +217,7 @@ def _log_call(kind: str, model: str, t0: float, attempts: int, resp,
         "prompt_tokens": (getattr(u, "prompt_tokens", 0) or 0) if u else 0,
         "completion_tokens": (getattr(u, "completion_tokens", 0) or 0) if u else 0,
         "total_tokens": (getattr(u, "total_tokens", 0) or 0) if u else 0,
+        "cached_tokens": _cached_tokens(u) if u else 0,
         "cost": cost,
         "error": error,
     })
@@ -465,13 +482,26 @@ def stream_text(
             yield delta
 
 
+def _strip_schema_noise(obj):
+    """Drop pydantic's auto-generated 'title' keys from a JSON Schema. Pydantic emits a
+    'title' for every model AND every field (e.g. "title": "Confidence") - pure noise the
+    model ignores, ~20-30% of the schema text. Lossless: types/required/enums/$defs stay."""
+    if isinstance(obj, dict):
+        return {k: _strip_schema_noise(v) for k, v in obj.items() if k != "title"}
+    if isinstance(obj, list):
+        return [_strip_schema_noise(x) for x in obj]
+    return obj
+
+
 @functools.cache
 def _json_instruction(schema: type[BaseModel]) -> str:
     # Cached per schema class - model_json_schema() + dumps is pure CPU repeated on
-    # every structured call otherwise.
+    # every structured call otherwise. The title-strip keeps it lossless but smaller,
+    # and the result is identical every call so it sits inside the cacheable prefix.
     import json
+    compact = _strip_schema_noise(schema.model_json_schema())
     return ("Respond with ONLY a single JSON object (no markdown, no prose) that conforms to this "
-            "JSON Schema:\n" + json.dumps(schema.model_json_schema()))
+            "JSON Schema:\n" + json.dumps(compact, separators=(",", ":")))
 
 
 def _extract_json(text: str) -> str:

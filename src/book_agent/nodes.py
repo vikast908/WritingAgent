@@ -153,7 +153,8 @@ def critique_chapter(
                  + structural_report(prose))
     parts.append(f"Chapter draft:\n{prose}")
     return complete_structured(model, P.CRITIC_SYS, "\n\n".join(parts), S.Critique,
-                               max_tokens=8000, temperature=cfg.temperature_for("critic"))
+                               max_tokens=cfg.max_tokens_for("critic", 8000),
+                               temperature=cfg.temperature_for("critic"))
 
 
 # ── Variant tournament judge (best-of-N, plan §5) ─────────────────────────────
@@ -174,7 +175,7 @@ def rank_variants(
         parts.append(f"━━ DRAFT [{label}] ━━\n{body}")
     parts.append("Rank the drafts best to worst and name the winner.")
     return complete_structured(model, P.VARIANT_JUDGE_SYS, "\n\n".join(parts),
-                               S.VariantRanking, max_tokens=2000,
+                               S.VariantRanking, max_tokens=cfg.max_tokens_for("judge", 2000),
                                temperature=cfg.temperature_for("critic"))
 
 
@@ -191,7 +192,8 @@ def verify_claims(cfg: ModelConfig, draft: str, sources_block: str) -> S.ClaimAu
             + "\n\nDraft to verify (inline [N] citations):\n" + draft
             + "\n\nCheck every specific cited claim against the source it cites.")
     return complete_structured(model, P.CLAIM_VERIFY_SYS, user, S.ClaimAudit,
-                               max_tokens=3000, temperature=cfg.temperature_for("critic"))
+                               max_tokens=cfg.max_tokens_for("verifier", 3000),
+                               temperature=cfg.temperature_for("critic"))
 
 
 # ── Summary + extraction (commit) ─────────────────────────────────────────────
@@ -376,6 +378,30 @@ def render_thesis(thesis: S.Thesis) -> str:
     ])
 
 
+def thesis_brief(thesis_md: str | None) -> str | None:
+    """Claim + arguments only - what the CRITIC and JUDGE need to check 'does this section
+    advance the thesis'. The full thesis (stakes/counterargument/rebuttal/non-goals) goes
+    only to the WRITER, which must engage the counterargument. Saves the rest on every
+    critic/judge call (those tokens sit in the variable user message, so they're never
+    cached). Falls back to the full text if the expected headers aren't found."""
+    if not thesis_md:
+        return thesis_md
+    out, in_args = [], False
+    for ln in thesis_md.splitlines():
+        s = ln.strip()
+        if s.startswith("**Claim:**"):
+            out.append(ln)
+            in_args = False
+        elif s.startswith("**Arguments:**"):
+            out.append(ln)
+            in_args = True
+        elif s.startswith("**"):
+            in_args = False
+        elif in_args and s:
+            out.append(ln)
+    return "\n".join(out) if out else thesis_md
+
+
 def write_article_section(
     cfg: ModelConfig,
     outline: S.ArticleOutline,
@@ -420,7 +446,7 @@ def write_article_section(
         parts.append(length_note)
     parts.append(f'Write section {section.number}: "{section.heading}".')
     return complete_text(model, P.ARTICLE_WRITER_SYS, "\n\n".join(parts),
-                         max_tokens=8000,
+                         max_tokens=cfg.max_tokens_for("writer", 8000),
                          temperature=(temperature if temperature is not None
                                       else cfg.temperature_for("writer")))
 
@@ -460,7 +486,8 @@ def critique_article_section(
                  + structural_report(prose))
     parts.append(f"Section draft:\n{prose}")
     return complete_structured(model, P.ARTICLE_CRITIC_SYS, "\n\n".join(parts), S.Critique,
-                               max_tokens=4000, temperature=cfg.temperature_for("critic"))
+                               max_tokens=cfg.max_tokens_for("critic", 4000),
+                               temperature=cfg.temperature_for("critic"))
 
 
 def research_article(

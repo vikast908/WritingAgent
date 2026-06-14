@@ -93,6 +93,19 @@ def test_article_live_control_pause_then_resume(tmp_brain, fake_llm):
     assert paths.manuscript.exists()
 
 
+def test_article_divergent_skeletons_completes(tmp_brain, fake_llm):
+    """The opt-in skeleton-then-expand path (divergent_skeletons) must run end-to-end:
+    draft short variants, judge, expand the winner, finish."""
+    cfg, settings = load_config(), load_settings()
+    settings.divergent_drafts = 2
+    settings.divergent_skeletons = True
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "skel", 1, 1, autonomous=True)
+    state = orchestrator.run(cfg, "u", aid, log=_silent)
+    assert state["phase"] == "done"
+    assert ArticlePaths(aid, "u").manuscript.exists()
+
+
 def test_article_references_dedup_by_url(tmp_brain, fake_llm):
     """_produce_article must de-duplicate sources by URL when building References."""
     cfg, settings = load_config(), load_settings()

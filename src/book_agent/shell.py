@@ -51,7 +51,7 @@ _MODE_ALIASES = {
 }
 _NIB = "✒"             # the brand glyph: a pen nib (matches the logo)
 _FLEURON = _NIB            # used for the prompt + section/status markers
-_MAX_HISTORY = 10  # max messages kept for multi-turn context (5 user + 5 assistant)
+_MAX_HISTORY = 8   # max messages kept for multi-turn context (4 user + 4 assistant)
 
 # A bare slash-command word typed WITHOUT the slash (e.g. `help`, `features`) used to
 # fall through to the chat assistant - a silent dead end (and a wasted LLM call in real

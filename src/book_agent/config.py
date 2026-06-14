@@ -18,6 +18,7 @@ class ModelConfig:
         self._default = data.get("default", "claude-opus-4-8")
         self._nodes = data.get("nodes", {}) or {}
         self._temperature = data.get("temperature", {}) or {}
+        self._max_tokens = data.get("max_tokens", {}) or {}   # per-node completion caps
 
     def model_for(self, node: str) -> str:
         return self._nodes.get(node, self._default)
@@ -25,6 +26,15 @@ class ModelConfig:
     def temperature_for(self, node: str):
         """May be None. The LLM wrapper drops it for models that reject sampling."""
         return self._temperature.get(node)
+
+    def max_tokens_for(self, node: str, default: int) -> int:
+        """Per-node completion cap from models.yaml `max_tokens:` (falls back to the
+        caller's default). Bounds reasoning runaway / truncation-retries on short nodes
+        without risking the long-form writer, which keeps its generous default."""
+        try:
+            return int(self._max_tokens.get(node, default))
+        except (TypeError, ValueError):
+            return default
 
     @property
     def default(self) -> str:
@@ -43,7 +53,7 @@ class ModelConfig:
 
     def to_dict(self) -> dict:
         return {"default": self._default, "nodes": dict(self._nodes),
-                "temperature": dict(self._temperature)}
+                "temperature": dict(self._temperature), "max_tokens": dict(self._max_tokens)}
 
 
 @dataclass
@@ -55,6 +65,9 @@ class Settings:
     use_researcher: bool = True              # web grounding per unit - off means citations are unverifiable
     deep_research: bool = False               # multi-source fetch+synthesize (needs use_researcher; plan §15)
     divergent_drafts: int = 2                # first-attempt drafts at varied temps; critic picks best (1 = off)
+    divergent_skeletons: bool = False        # draft the N variants SHORT (skeleton), judge, expand only the winner
+    #                                          to full length - cuts discarded completion tokens ~60%. Opt-in: a
+    #                                          short skeleton reveals less about the full draft, so off by default.
     tournament_judge: bool = True            # pick the best divergent draft side-by-side, not by scalar self-score
     min_insight: int = 3                     # critic insight (1-5) required to approve (0 = off)
     verify_claims: bool = True               # check each [N]-cited claim against its source; unsupported = blocking
@@ -68,7 +81,9 @@ class Settings:
     use_images: bool = True                  # fetch Wikimedia Commons images (non-fiction/illustrated)
     diagram_engine: str = "auto"             # SVG layout: auto (D2+ELK if d2 is installed, else builtin) | d2 | builtin
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
-    use_headroom: bool = True               # context compression via headroom-ai (60-95% fewer tokens)
+    use_headroom: bool = False              # context compression via headroom-ai. Default OFF: our calls are
+    #                                         single-turn (system+user), where headroom saves ~nothing, and it
+    #                                         can perturb the system prefix and defeat provider prompt-caching.
     request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
     max_run_tokens: int = 0                 # pause a run once its total tokens exceed this (0 = unlimited)
     mode: str = "article"        # "book" | "article" - default for new projects
@@ -96,6 +111,9 @@ def save_config(cfg: ModelConfig) -> None:
     if data["temperature"]:
         lines += ["", "temperature:"]
         lines += [f"  {k}: {v}" for k, v in data["temperature"].items()]
+    if data.get("max_tokens"):
+        lines += ["", "max_tokens:"]
+        lines += [f"  {k}: {v}" for k, v in data["max_tokens"].items()]
     _MODELS.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

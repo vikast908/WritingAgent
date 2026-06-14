@@ -965,3 +965,30 @@ blocking/nits + confidence; per-user (not per-book) learning, genre-relevance re
 fully autonomous with human escalation via directed instructions; CLI-first. *Later additions:*
 per-node model routing (§12.1); a Book Production layer for front/back matter + assembly (§16,
 re-scoped from the original Post-production agent); a `resume.md` session-log convention (§17).
+
+---
+
+## 19. Token & cost efficiency
+
+Reviewed against real telemetry (`.index/telemetry`): prompt tokens dominate (~58% of spend) and are
+mostly **repeated prefixes** across the ~16-21 calls per unit. The architecture is already
+cache-friendly - every node sends a **stable system prefix** (`prompts.py` constants + the JSON-schema
+dump) with the **variable content in the user message** - so the dominant lever is the provider's
+prompt-cache discount, not prompt rewriting. Durable decisions:
+
+- **Prefix stability is an invariant.** Keep static instruction in the system block and per-unit
+  content in the user message, so the system prefix is byte-identical across calls and the provider
+  caches it. Cache hits are measured via `usage.prompt_tokens_details.cached_tokens` (surfaced in
+  `usage_summary` and the per-call JSONL).
+- **`use_headroom` defaults OFF.** Compression saved ~nothing on single-turn payloads and risked
+  perturbing the cacheable prefix.
+- **Schema dump is lossless-minimized** (`llm._strip_schema_noise` drops pydantic's auto `title`s).
+- **Thesis is split** (`nodes.thesis_brief`): writer gets the full thesis (it must engage the
+  counterargument), critic + judge get claim+arguments only.
+- **Per-node `max_tokens`** via `models.yaml` `max_tokens:` + `ModelConfig.max_tokens_for` (a tuning
+  lever; defaults already tight - summaries 600-1500, verify excerpts capped at 1500 chars/source).
+- **`divergent_skeletons`** (opt-in, default off): draft the divergent variants short, judge, then
+  expand only the winner - cuts discarded-draft completion ~60% at some loss of selection signal, so
+  it is a deliberate quality/cost trade left to the operator.
+- **Do NOT shrink** `NO_SLOP`, the scoring rubric, or the thesis machinery for tokens - cache them
+  instead; trimming raises slop/insight-miss rates and triggers *more* revision loops (net increase).

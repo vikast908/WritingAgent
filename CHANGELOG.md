@@ -7,6 +7,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **Token / cost-efficiency pass** (telemetry-grounded; quality unchanged). Prompt tokens were ~58%
+  of spend, mostly repeated prefixes, so the work targets repetition without touching output: (1)
+  **cache-hit telemetry** - `usage.prompt_tokens_details.cached_tokens` captured per call, rolled into
+  `usage_summary` ("N cached, X% of prompt") + the JSONL, so the provider prompt-cache discount is
+  measurable; (2) **lossless schema shrink** - the JSON-Schema dumped on every structured call drops
+  pydantic's auto `"title"` keys (~20-30% smaller; types/enums/required intact); (3) **`use_headroom`
+  now defaults OFF** - it saved ~nothing on single-turn payloads and could perturb the cacheable
+  system prefix; (4) **thesis brief** - the critic + judge get claim+arguments only
+  (`nodes.thesis_brief`); the full thesis still goes to the writer (it must engage the
+  counterargument); (5) **per-node `max_tokens`** in `models.yaml` + `ModelConfig.max_tokens_for`
+  (defaults unchanged - a tuning lever); (6) chat history 10→8.
+- **`divergent_skeletons` setting (opt-in, default off):** draft the N divergent variants SHORT, judge,
+  then expand only the winner to full length - cuts discarded-draft completion tokens ~60%. Off by
+  default (a skeleton reveals less than a full draft); enable and A/B against telemetry.
 - **Diagrams: structured spec → deterministic renderer.** The model no longer emits SVG
   (it can't measure text, so labels overflowed and edge pills collided). It now returns a
   structured `DiagramSpec` (nodes/edges/labels/archetype) and a new pure-Python layout engine

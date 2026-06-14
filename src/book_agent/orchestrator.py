@@ -1581,6 +1581,7 @@ def start_article(
         "table_read": settings.table_read,
         "table_read_revise": settings.table_read_revise,
         "divergent_drafts": settings.divergent_drafts,
+        "divergent_skeletons": settings.divergent_skeletons,
         "tournament_judge": settings.tournament_judge,
         "verify_claims": settings.verify_claims,
         "min_insight": settings.min_insight,
@@ -1779,23 +1780,36 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     min_insight = int(state.get("min_insight", 0) or 0)
     research_on = bool(state.get("use_researcher"))
     thesis_md = brain.read_text(paths.root / "thesis.md")
+    thesis_brief_md = nodes.thesis_brief(thesis_md)   # critic/judge: claim+arguments only (F4)
+    skeletons = bool(state.get("divergent_skeletons"))
     voice = brain.voice_exemplars(paths.uid)
     crit: S.Critique | None = None
     draft = ""
     best: tuple[str, S.Critique] | None = None
     approved_attempt = -1
 
-    def _write(notes, base, temperature=None):
+    def _write(notes, base, temperature=None, skeleton=False):
+        # Skeleton mode (divergent_skeletons, opt-in): divergent variants are drafted short
+        # so the judge picks a winner cheaply; only the winner is expanded to full length,
+        # cutting discarded-draft completion tokens (~60%).
+        if skeleton:
+            notes = ((notes + "\n\n") if notes else "") + (
+                "Write a SHORT SKELETON of this section (~one third of target): the thesis "
+                "move, the structure as a few topic sentences, and the 2-3 most important "
+                "specifics. This draft is for SELECTION, not publication.")
+            ln = _length_note(0, max(target // 3, 250)) if target else None
+        else:
+            ln = _length_note(0, target)
         return nodes.write_article_section(
             cfg, outline, section, fix_notes=notes, context=full_context,
             skills=skill_bodies, images=images, base_draft=base,
             requirements=requirements, thesis=thesis_md, voice=voice,
-            length_note=_length_note(0, target), temperature=temperature)
+            length_note=ln, temperature=temperature)
 
     def _critique(d):
         return nodes.critique_article_section(
             cfg, outline, section, d, context=full_context, watch_list=watch,
-            requirements=requirements, thesis=thesis_md, research_on=research_on,
+            requirements=requirements, thesis=thesis_brief_md, research_on=research_on,
             length_note=_length_note(len(d.split()), target))
 
     n_div = max(1, int(state.get("divergent_drafts", 1) or 1))
@@ -1810,22 +1824,32 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             temps = _DIVERGENT_TEMPS[:n_div]
             log(f"   drafting {len(temps)} variants (temps {', '.join(map(str, temps))})...")
             drafts = concurrency.gather(
-                {f"v{i}": (lambda t=t, fn=fix_notes: _write(fn, None, t))
+                {f"v{i}": (lambda t=t, fn=fix_notes: _write(fn, None, t, skeleton=skeletons))
                  for i, t in enumerate(temps)},
                 strict=True)
             log("   critiquing variants...")
             crits = concurrency.gather(
                 {k: (lambda d=d: _critique(d)) for k, d in drafts.items()}, strict=True)
             for i, d in enumerate(drafts.values()):
-                _save_version(paths, _unit_tag, d, label=f"variant temp={temps[i]}")
+                _save_version(paths, _unit_tag, d,
+                              label=f"{'skeleton' if skeletons else 'variant'} temp={temps[i]}")
             picker_ask = None if state.get("autonomous") else ask
             draft, crit, judge_note, pref = _pick_variant(
-                cfg, _unit_desc, thesis_md, drafts, crits, picker_ask, log,
+                cfg, _unit_desc, thesis_brief_md, drafts, crits, picker_ask, log,
                 use_judge=bool(state.get("tournament_judge", True)))
             if pref:
                 _record_preference(paths, pref)
             log(f"   picked variant ({sum(1 for c in crits.values() if c.verdict == 'approve')}"
                 f"/{len(temps)} approved)")
+            if skeletons:   # expand only the winning skeleton to full length (F3)
+                log("   expanding the winning skeleton to full length...")
+                draft = _write(((judge_note + "\n") if judge_note else "")
+                               + "Expand this skeleton into the full section at the target "
+                               "length - keep its structure, argument, and specifics; add the "
+                               "prose, examples, and citations.", draft)
+                _save_version(paths, _unit_tag, draft, label="skeleton-expanded")
+                crit = _critique(draft)
+                judge_note = ""   # consumed by the expansion
         else:
             log(f"   writing ({'draft' if attempt == 0 else f'revision {attempt}'})...")
             draft = _write(fix_notes, base_draft)
