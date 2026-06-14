@@ -347,6 +347,29 @@ def _record_author(uid: str, author: str | None) -> None:
 
 
 # ── Setup (human picks a direction, then autonomous) ─────────────────────────
+def _base_run_state(uid, abstract, *, intake, author, max_revisions, autonomous, humanize,
+                    settings) -> dict:
+    """Run-state keys shared by every project (book + article). Callers spread this and add
+    the mode-specific keys (the id, phase, unit counter, and any per-mode quality flags)."""
+    return {
+        "uid": uid, "abstract": abstract,
+        "intake": intake or "", "author": author or "",
+        "max_revisions": max_revisions, "committed": 0, "pending_review": False,
+        "use_researcher": settings.use_researcher,
+        "deep_research": settings.deep_research,
+        "autonomous": autonomous,
+        "humanize": settings.humanize if humanize is None else humanize,
+        "use_images": settings.use_images,
+        "diagram_engine": settings.diagram_engine,
+        "use_embeddings": settings.use_embeddings,
+        "divergent_drafts": settings.divergent_drafts,
+        "tournament_judge": settings.tournament_judge,
+        "min_insight": settings.min_insight,
+        # Autonomous runs never pause on low confidence.
+        "escalate_below_confidence": 0.0 if autonomous else settings.escalate_below_confidence,
+    }
+
+
 def start_book(
     cfg: ModelConfig, settings: Settings, uid: str, abstract: str,
     chosen: S.Direction, book_id_override: str | None,
@@ -369,23 +392,14 @@ def start_book(
     brain.write_text(paths.toc, render.render_toc_md(toc))
 
     state = {
-        "uid": uid, "book_id": book_id, "abstract": abstract,
-        "intake": intake or "", "author": author or "",
+        **_base_run_state(uid, abstract, intake=intake, author=author,
+                          max_revisions=max_revisions, autonomous=autonomous,
+                          humanize=humanize, settings=settings),
+        "book_id": book_id,
         "phase": "chapters", "num_chapters": len(toc.chapters),
-        "max_revisions": max_revisions, "consolidate_every": settings.consolidate_every,
-        "current_chapter": 1, "committed": 0, "pending_review": False,
-        "use_researcher": settings.use_researcher,
-        "deep_research": settings.deep_research,
-        "autonomous": autonomous,
-        "humanize": settings.humanize if humanize is None else humanize,
-        "use_images": settings.use_images,
-        "diagram_engine": settings.diagram_engine,
-        "use_embeddings": settings.use_embeddings,
-        "divergent_drafts": settings.divergent_drafts,
-        "tournament_judge": settings.tournament_judge,
-        "min_insight": settings.min_insight,
-        # Autonomous runs never pause: no confidence/contradiction escalation.
-        "escalate_below_confidence": 0.0 if autonomous else settings.escalate_below_confidence,
+        "consolidate_every": settings.consolidate_every,
+        "current_chapter": 1,
+        # Autonomous runs never pause on contradictions either.
         "escalate_on_contradiction": False if autonomous else settings.escalate_on_contradiction,
     }
     brain.write_json(paths.run_state, state)
@@ -1593,30 +1607,19 @@ def start_article(
     brain.write_text(paths.root / "thesis.md", nodes.render_thesis(thesis))
 
     state = {
-        "uid": uid, "article_id": article_id, "abstract": abstract,
-        "intake": intake or "", "author": author or "",
-        "mode": "article",
+        **_base_run_state(uid, abstract, intake=intake, author=author,
+                          max_revisions=max_revisions, autonomous=autonomous,
+                          humanize=humanize, settings=settings),
+        "article_id": article_id, "mode": "article",
         "phase": "sections", "num_sections": len(outline.sections),
-        "max_revisions": max_revisions, "current_section": 1,
-        "committed": 0, "pending_review": False,
-        "use_researcher": settings.use_researcher,
-        "deep_research": settings.deep_research,
-        "autonomous": autonomous,
-        "humanize": settings.humanize if humanize is None else humanize,
-        "use_images": settings.use_images,
-        "diagram_engine": settings.diagram_engine,
-        "use_embeddings": settings.use_embeddings,
+        "current_section": 1,
         "article_cohesion": settings.article_cohesion,
         "strip_inline_citations": settings.strip_inline_citations,
         "rank_references": settings.rank_references,
         "table_read": settings.table_read,
         "table_read_revise": settings.table_read_revise,
-        "divergent_drafts": settings.divergent_drafts,
         "divergent_skeletons": settings.divergent_skeletons,
-        "tournament_judge": settings.tournament_judge,
         "verify_claims": settings.verify_claims,
-        "min_insight": settings.min_insight,
-        "escalate_below_confidence": 0.0 if autonomous else settings.escalate_below_confidence,
         "escalate_on_contradiction": False,
     }
     brain.write_json(paths.run_state, state)

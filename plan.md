@@ -1016,15 +1016,15 @@ The book (chapter) and article (section) pipelines run near-parallel code in `or
 down **incrementally and test-gated**: these paths have a history of *silent drift* (the revise-parity
 bug), so behavior-preserving extraction + the full suite (and ideally a live run) between steps is
 mandatory. Already shared (do not re-extract): `_pick_variant`, `_save_version`, `_record_preference`,
-`_length_note`, `_merge_fix_notes`, `_escalate`. **Done:** `_run_learner` (shared learner tail).
+`_length_note`, `_merge_fix_notes`, `_escalate`. **Done:** `_run_learner` (shared learner tail);
+`_base_run_state` (shared run-state keys for `start_book`/`start_article`).
 
 Prioritized, by risk:
 
-- **Tier 1 (LOW - do next):** `_init_project_state` - a shared run-state dict builder for
-  `start_book`/`start_article` (mode-specific keys as kwargs; mind the `current_chapter`/`current_section`
-  + `num_*` name differences). `_commit`/`_commit_section` - extract the shared humanize+summarize+
-  version+skill-record scaffold; keep canon-extraction (book) vs citation-renumbering (article) as a
-  `finalize` callback.
+- **Tier 1:** ✅ `_base_run_state` (the shared run-state dict; mode-specific keys spread in by each
+  caller) - **done**. ❌ `_commit`/`_commit_section` - **evaluated and deliberately NOT merged**: the
+  paths differ structurally (canon-extraction + Store updates vs citation-renumber-before-gather), so a
+  shared helper would be callback-soup that reads worse than the ~8 duplicated lines. Leave separate.
 - **Tier 2 (MEDIUM - schema/strategy callbacks):** `_chapter_fetch`/`_section_fetch` - shared
   `concurrency.gather` shell, research/images/skills passed as strategy fns (article also returns
   `source_text` for claim-verify). The divergent-draft + revision attempt loop inside

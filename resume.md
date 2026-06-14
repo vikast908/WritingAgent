@@ -284,11 +284,12 @@ redundancy items are large refactors, left as recommendations.
   source docstrings (`cli`, `orchestrator`, `brain`, `prompts`, …) + the CLAUDE workflow - moving them
   would be high-churn for no gain. `requirements.txt` stays (a documented convenience mirror; pyproject
   is canonical).
-- **Book↔article de-dup STARTED (safe, test-gated):** mapped the duplication (Explore agent), then
-  extracted the leaf-level **`_run_learner`** shared by `_learn`/`_learn_article` (suite green). Committed
-  a prioritized, risk-rated **refactor plan in plan.md §20** for the rest (Tier 1: `_init_project_state`,
-  `_commit` scaffold; Tier 2: fetch + attempt-loop with callbacks; Tier 3 defer the run-loop). Each tier
-  = its own PR, suite + both-mode fake run between steps - deliberately NOT bulldozed (drift-bug history).
+- **Book↔article de-dup IN PROGRESS (safe, test-gated; plan.md §20):** mapped it (Explore agent), then
+  extracted `_run_learner` (learner tail) and **Tier 1 `_base_run_state`** (shared run-state keys for
+  `start_book`/`start_article`; mode-specific keys spread in). Suite green after each. **Deliberately
+  did NOT merge `_commit`/`_commit_section`** - the paths differ structurally (canon vs
+  citation-renumber), so a shared helper reads worse than the small dup (good judgment ≠ blind DRY).
+  Remaining (own PRs): Tier 2 (fetch shell + attempt-loop via callbacks), Tier 3 (defer run-loop).
 - **Still flagged:** giant `shell.py` (144KB) / `orchestrator.py` (115KB) - split AFTER the dedup (do
   §20 first, since the dup is intertwined). Optional: consolidate `SampleRun/`→`examples/`;
   collapse `requirements.txt`→pyproject+lock.
