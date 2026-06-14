@@ -6,7 +6,33 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Learning loop v2 — ablation duels (`skill_duels`, opt-in).** The old skill-efficacy signal was
+  confounded (every applied skill got the same chapter-level credit; no counterfactual). Now, on a unit
+  with an undecided skill, one **extra draft is written with that skill held out** and the critic
+  compares it to the full-skill draft — a true cause-and-effect test of the skill's lift. `reconcile`
+  prefers a smoothed duel win-rate (sample-gated) over the first-pass fallback. Adds a draft only while a
+  skill is undecided; off by default. Also **`skill_distill`** (deterministic, non-destructive retirement
+  of near-duplicate skills; off) and **`watch_blocking`** (watch-list now blocks only *clear/concrete*
+  violations instead of unconditionally; `false` = advisory). `/skills` shows the duel win-rate.
+- **`learning.md`** — a layman's, chronological guided tour of the whole codebase (folders, files, the
+  studio-of-specialists model, the brain-on-disk design, model routing, and the *why* behind each).
+- **Colourblind-safe `highcontrast` theme** (Okabe-Ito; ok = blue, error = vermillion — never a
+  red/green pair). 11 themes total.
+- **Whole-run ETA** on the live dashboard (~Nm left, from this session's average time-per-unit).
+- **First-run onboarding**: with no API key set, the welcome shows how to set the key *or* try the whole
+  flow free with `BOOK_AGENT_FAKE=1`, instead of suggesting a command that would fail.
+
 ### Changed
+- **Internals reorganised into packages (behavior-preserving).** The two largest modules were split
+  behind stable facades so every `orchestrator.X` / `shell.X` import is unchanged: `orchestrator/`
+  (`common · book · article · export · manage · review`) and `shell/` (`branding · help · commands ·
+  dashboard · chat · dispatch · slash · session · repl`). Preceded by a book↔article de-duplication pass
+  (shared draft/critique/finalize/learner scaffolding). No file now exceeds ~1k lines.
+- **Friendlier, recoverable errors** — bad/missing API key, rate-limit, network blip, and locked export
+  files now show a clear next step (`ui.explain_error`) instead of a raw `RuntimeError: …`.
+- **`/features`** lists the new toggles (`skill_duels`, `skill_distill`, `watch_blocking`); live-run
+  controls wording clarified (all interrupts are resumable; `/delete` discards).
 - **Token / cost-efficiency pass** (telemetry-grounded; quality unchanged). Prompt tokens were ~58%
   of spend, mostly repeated prefixes, so the work targets repetition without touching output: (1)
   **cache-hit telemetry** - `usage.prompt_tokens_details.cached_tokens` captured per call, rolled into

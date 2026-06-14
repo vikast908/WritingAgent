@@ -403,7 +403,16 @@ There are three ways in, all backed by the same engine:
    understanding the machinery without spending anything. (It's also how the ~330 automated tests run.)
 
 To do real runs you need a free **API key** from an AI host (e.g. OpenRouter), placed in a file named
-`.env`. An API key is just a password that lets the program use the AI service on your account.
+`.env`. An API key is just a password that lets the program use the AI service on your account. If you
+launch without one, the console *tells you* — and offers the free fake-mode path above — rather than
+failing on the first command.
+
+**Comfort + accessibility, briefly.** Type `/theme` to switch the look (11 themes, including a
+**colourblind-safe** high-contrast one); `/features` toggles capabilities live. For screen readers set
+`BOOK_AGENT_A11Y=1` (plain line-by-line output, no animated redraw); for less motion set
+`BOOK_AGENT_REDUCED_MOTION=1`; set `NO_COLOR=1` (or run with `--plain`) for monochrome. If something
+goes wrong (bad key, rate-limit, network blip, a file open in another program), it shows a plain-English
+fix — and your progress is always saved, so you just run again.
 
 ---
 

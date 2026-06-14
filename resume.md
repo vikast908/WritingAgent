@@ -5,6 +5,18 @@
 
 ## Current status
 
+- **New (2026-06-14 - UX audit P1-P3 + all md docs refreshed):** ran a UX audit (framework: audit-then-
+  approve) and implemented everything. **P1:** `/skills` now shows the duel win-rate (vs 50/50) + count
+  next to first-pass lift, and notes duels decide trusted/retired once a skill has data (closes the debt
+  from learning-v2); first-run no-key onboarding block in the welcome (set key OR try `BOOK_AGENT_FAKE=1`
+  free). **P2:** new toggles (`skill_duels`/`skill_distill`/`watch_blocking`) in `/features` grid + static
+  table; whole-run ETA on the dashboard (`_run_eta`); friendly recoverable errors (`ui.explain_error`:
+  401/429/network/locked-file) wired into the shell + chat error sinks. **P3:** colourblind-safe
+  `highcontrast` theme (Okabe-Ito; ok=blue, error=vermillion); clearer pause/stop wording (all resumable).
+  +4 tests. **339 passed / 1 skipped, ruff clean.** Then refreshed **all state-tracking md files**:
+  `docs.md` (fixed stale "gitignored" claim + package file-refs + new ledger pass-2), `CHANGELOG.md`
+  ([Unreleased] Added/Changed), `plan.md` §13.1, `learning.md`, `README.md`, `PRD.md`. Boilerplate
+  (LICENSE/CONTRIBUTING/SECURITY/CODE_OF_CONDUCT) intentionally untouched.
 - **New (2026-06-14 - learning loop v2: causal skill efficacy):** fixed the loop's *showstopper* (the
   efficacy signal was confounded - `record_chapter` credited every applied skill with the same
   chapter-level `first_pass`, no counterfactual, `target_failures` never written) with the *gamechanger*:

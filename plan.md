@@ -603,6 +603,22 @@ surfaces via the prompt suffix and the escalation picker (the bottom toolbar was
 - **Proactive key check**: the banner warns when the active provider has no API key (before the first
   call fails); `BOOK_AGENT_PROVIDER` now syncs `settings.provider` so the masthead is accurate.
 - **Progressive help**: `/help <topic>` shows only the matching commands.
+- **Second UX pass (2026-06-14, P1–P3):**
+  - **First-run onboarding** — with no API key, the welcome shows a "NO API KEY YET" block (set the key
+    *or* try the whole flow free with `BOOK_AGENT_FAKE=1`) instead of suggesting a command that fails.
+  - **Friendly recoverable errors** (`ui.explain_error`) — bad/missing key (401), rate-limit (429),
+    network blip, and locked files map to a clear next step (every hint notes progress is saved), wired
+    into the shell + chat error sinks; unknown errors fall back to the raw message.
+  - **Whole-run ETA** — `_RunDashboard._run_eta` shows "~Nm left" from this session's average
+    time-per-unit, beside the X/N bar (complements the per-stage soft ETA).
+  - **Colourblind-safe theme** — `highcontrast` (Okabe-Ito; ok = blue, error = vermillion, never a
+    red/green pair; white text). The trust chip was already glyph+word+dot-meter, so status is never
+    colour-only. **11 themes.**
+  - **Duel-aware `/skills`** — shows the ablation-duel win-rate (vs a 50/50 baseline) + count next to
+    first-pass lift, and which signal decides trusted/retired (see §8).
+  - **Discoverability** — the new learning toggles (`skill_duels`, `skill_distill`, `watch_blocking`)
+    appear in `/features` (grid + static table). Live-run controls wording: all interrupts resumable;
+    `/delete` discards.
 - **Reading time** is prose-only — fenced code and the references list are excluded
   (`polish.read_time_min`, `READ_WPM`), so technical pieces no longer over-state "N min read".
 - **Version** is single-sourced from `book_agent.__version__` (pyproject derives it via

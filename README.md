@@ -116,6 +116,7 @@ for a *take*, not just the absence of tells:
 - **claim↔source verification** — a cited claim the source doesn't support is blocking
 - **clean prose, sourced at the end** — inline `[N]` markers are stripped from the body and every source rolls up into one **References list ranked by how much it actually shaped the piece** (cite count + title relevance, scored 0–100, dated)
 - a **surgical humanizer** that rewrites only the sentences with AI tells (citations and numbers preserved)
+- it **learns which craft moves actually work** — after each piece it distills reusable "skills", and with `skill_duels` on it *A/B-tests* them (drafts one version with a skill held out, lets the critic compare) so trust is earned by cause-and-effect, not guesswork. This is accumulating memory, not model retraining.
 - figures that **lay themselves out** — the model authors a spec; a deterministic engine places it (no overflow, no overlap):
 
 <div align="center">

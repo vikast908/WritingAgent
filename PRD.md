@@ -90,18 +90,25 @@ Resolution: **lead with articles**; present everything else as secondary.
 ## 8. Roadmap
 
 ### Now (shipped this session)
-- **Evidence report** — `evidence_report.md` auto-generated per article + `evidence` command +
-  `Project.evidence_report()`. *(Turns invisible trust into a shareable artifact.)*
-- **Output-first README** — spearhead one-liner, a "ChatGPT vs Writing Agent" framing, lead with
-  articles, links to examples + the evidence report.
-- **`examples/` gallery** + a **Colab quickstart** (zero-install try).
+- **Learning loop v2 — ablation duels** (`skill_duels`): the system now earns skill-trust by a true
+  cause-and-effect A/B test (draft with vs without a skill, critic compares), not a confounded proxy.
+  Plus `skill_distill` (de-dup) and a guarded `watch_blocking`. *(Makes "it improves with use" real —
+  and honest: memory, not retraining.)*
+- **UX audit P1–P3**: first-run onboarding (no-key → set key or try fake mode free), friendly
+  recoverable errors, whole-run ETA, a colourblind-safe theme, duel-aware `/skills`.
+- **Internals hardened**: book↔article de-duplication + the orchestrator & shell god-modules split into
+  packages (behavior-preserving) — lowers contributor friction (no file >~1k lines).
+- **`learning.md`** — a layman's guided tour of the whole codebase (onboarding for non-experts).
+- Earlier this session: **Evidence report** (`evidence_report.md` + `evidence` command +
+  `Project.evidence_report()`), **output-first README**, **`examples/` gallery** + **Colab quickstart**.
 - Prior session: token/cost-efficiency pass, TUI UX overhaul, prose read-time, v0.2.0.
 
 ### Next (P1 — weeks)
 - **Hosted/zero-install demo** (HF Space or rate-limited web) — the single biggest acquisition lever.
 - **Blind A/B harness** — 5 prompts, this vs ChatGPT/Claude long-form, blind reads; publish results.
 - **Activation instrumentation** — measure install → first-finished-piece.
-- **First-run cliff** reduction — clearer key setup, a 60-sec asciinema/GIF.
+- **First-run cliff** reduction — *partly shipped* (no-key onboarding + fake-mode nudge); still want a
+  60-sec asciinema/GIF.
 
 ### Later (P2 — only if pull is proven)
 - A thin **web UI** or **VS Code extension** to break the terminal ceiling.
