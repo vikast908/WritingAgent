@@ -70,8 +70,8 @@ def test_chat_stream_error_is_not_prose(tmp_brain, monkeypatch):
         raise RuntimeError("connection reset")
     monkeypatch.setattr("book_agent.llm.stream_text", fake_stream)
     executed = []
-    # _execute_cmd lives in shell.repl now; _chat_respond lazy-imports it from there.
-    monkeypatch.setattr("book_agent.shell.repl._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
+    # _execute_cmd lives in shell.dispatch; _chat_respond lazy-imports it from there.
+    monkeypatch.setattr("book_agent.shell.dispatch._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
 
     cfg, settings = load_config(), load_settings()
     console = _console()
@@ -96,8 +96,8 @@ def test_chat_new_without_goahead_is_held(tmp_brain, monkeypatch):
     monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
     monkeypatch.setattr("book_agent.llm.stream_text", _stream_new_and_run)
     executed = []
-    # _execute_cmd lives in shell.repl now; _chat_respond lazy-imports it from there.
-    monkeypatch.setattr("book_agent.shell.repl._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
+    # _execute_cmd lives in shell.dispatch; _chat_respond lazy-imports it from there.
+    monkeypatch.setattr("book_agent.shell.dispatch._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
 
     cfg, settings = load_config(), load_settings()
     console = _console()
@@ -116,8 +116,8 @@ def test_chat_new_with_goahead_executes(tmp_brain, monkeypatch):
     monkeypatch.delenv("BOOK_AGENT_FAKE", raising=False)
     monkeypatch.setattr("book_agent.llm.stream_text", _stream_new_and_run)
     executed = []
-    # _execute_cmd lives in shell.repl now; _chat_respond lazy-imports it from there.
-    monkeypatch.setattr("book_agent.shell.repl._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
+    # _execute_cmd lives in shell.dispatch; _chat_respond lazy-imports it from there.
+    monkeypatch.setattr("book_agent.shell.dispatch._execute_cmd", lambda cmd, *a, **k: executed.append(cmd))
 
     cfg, settings = load_config(), load_settings()
     console = _console()

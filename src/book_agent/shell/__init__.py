@@ -26,5 +26,8 @@ from .branding import *  # noqa: F401,F403
 from .chat import *  # noqa: F401,F403
 from .commands import *  # noqa: F401,F403
 from .dashboard import *  # noqa: F401,F403
+from .dispatch import *  # noqa: F401,F403
 from .help import *  # noqa: F401,F403
 from .repl import *  # noqa: F401,F403
+from .session import *  # noqa: F401,F403
+from .slash import *  # noqa: F401,F403

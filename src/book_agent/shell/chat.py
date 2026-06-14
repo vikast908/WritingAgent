@@ -175,9 +175,9 @@ def _chat_respond(message: str, console, cfg: ModelConfig, settings: Settings, s
     """Route unrecognised input to the chat model with streaming + spinner UX."""
     from ..llm import stream_text
 
-    # Lazy import: repl imports chat (for _chat_respond), so the back-edge to repl's
-    # command dispatch must be deferred to call time to avoid an import cycle.
-    from .repl import _commands_in_response, _execute_cmd, _is_confirmation
+    # Lazy import: dispatch/slash import chat (for _chat_respond), so the back-edge to
+    # the command dispatcher must be deferred to call time to avoid an import cycle.
+    from .dispatch import _commands_in_response, _execute_cmd, _is_confirmation
 
     system = _build_chat_system(settings, state)
     model = cfg.model_for("chat")

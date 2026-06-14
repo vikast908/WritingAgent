@@ -17,6 +17,7 @@ __all__ = [
     '_MARKUP',
     '_CODE_BLOCK_RE',
     '_CHAT_SYSTEM',
+    '_SLASH_COMPLETIONS',
 ]
 
 
@@ -255,3 +256,31 @@ When the user is just asking a question (what does X do, how do I Y):
 
 Answer concisely. Keep under ~200 words unless the question demands more.\
 """
+
+
+_SLASH_COMPLETIONS = [
+    ("help",        "show all commands + slash commands"),
+    ("features",    "interactive feature-toggle grid (space toggles · ↵ saves)"),
+    ("model",       "show / set model routing"),
+    ("provider",    "list / switch the model host (openrouter, deepseek, ollama, ...)"),
+    ("set",         "change a setting  e.g. /set use_researcher true"),
+    ("skills",      "list craft skills"),
+    ("skill",       "show one skill by name"),
+    ("seed-skills", "install built-in craft skills"),
+    ("use",         "set active book / article"),
+    ("path",        "where finished writing is saved - default + per-project"),
+    ("books",       "list all projects"),
+    ("user",        "switch user"),
+    ("config",      "show model + settings config"),
+    ("update",      "describe changes - AI reviews and suggests next steps"),
+    ("retry",       "resend last chat message"),
+    ("auto",        "autonomous vs manual run mode  on | off"),
+    ("praise",      "mark a chapter/section as great writing"),
+    ("mode",        "show / set mode  book | article"),
+    ("theme",       "list / switch color theme"),
+    ("dashboard",   "telemetry: calls · tokens · cost · errors"),
+    ("reset",       "clear chat memory"),
+    ("compact",     "compress chat memory to one summary"),
+    ("clear",       "clear screen"),
+    ("exit",        "quit"),
+]
