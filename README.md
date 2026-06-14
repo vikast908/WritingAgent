@@ -125,7 +125,7 @@ routes to its own model tier on OpenRouter.
 
 <img src="assets/architecture.svg" alt="Layered architecture and multi-agent workflow: an interface layer (TUI, CLI, npm, API) sends commands to an orchestration layer (the state machine running write→critique→revise→commit); the orchestrator routes every call to the models layer (OpenRouter/DeepSeek) and drives the agents layer, where Writer → Critic → Judge → Humanizer run the per-unit workflow; results commit to the memory layer (the markdown brain of canon, skills, and versions), which feeds the Learner that returns new skills to the orchestrator." width="900">
 
-<sub><i>↑ also drawn by the system itself (D2 + ELK backend) — see [Architecture ↗](https://docs-writingagent.vercel.app/concepts/architecture/) for the full picture</i></sub>
+<sub><i>↑ the layered pipeline, kept compact so it stays legible — see [Architecture ↗](https://docs-writingagent.vercel.app/concepts/architecture/) for the full picture</i></sub>
 
 </div>
 
