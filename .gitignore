@@ -23,3 +23,8 @@ reseed.py
 
 # Playwright MCP browser artifacts (CI debugging)
 .playwright-mcp/
+
+# Docs site lives in its OWN nested git repo (remote: vikast908/writingagentdocs)
+# and is committed/managed independently. The WritingAgent repo must NOT track it.
+# Keep this ignore so the two repos stay separate but sit side-by-side on disk.
+/Writing Agents docs/

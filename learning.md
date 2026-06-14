@@ -139,7 +139,7 @@ Book Agent/
 ├── plan.md                ← the authoritative engineering spec (the "law")
 ├── resume.md              ← the running session log ("what changed last time")
 ├── learning.md            ← THIS file
-├── PRD.md, CHANGELOG.md, docs.md, CONTRIBUTING.md, ...  ← supporting docs
+├── PRD.md, CHANGELOG.md, CONTRIBUTING.md, ...  ← supporting docs
 └── pyproject.toml         ← the project's "ingredients list" (dependencies, how to install)
 ```
 
