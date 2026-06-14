@@ -335,7 +335,7 @@
   - **`read --manuscript` works for articles** (`cli._paths_for` picks ArticlePaths vs BookPaths) - fixes the long-standing pre-existing bug.
   - **+4 technical-writing seed skills:** `technical-explanation`, `runnable-code-examples`, `claims-and-evidence`, `information-architecture` (13 seed skills total).
   - **First article-pipeline tests** (`test_article.py`) + deep-researcher tests (`test_deep_research.py`). **62 tests pass** (was 44); ruff clean.
-- **Agent name:** **WRITING AGENT** (was BOOKWRITER). CLI: `writing-agent` / `bookwriter` / `book` / `python writingagent.py`.
+- **Agent name:** **WRITING AGENT**. CLI: `writing-agent` / `python writingagent.py`.
 - **Article pipeline:** fully built and live-run - "How to think with AI without offloading your brain to AI" (6 sections, DOCX exported).
 - **Book pipeline:** fully built and live-run - *The Misprint File* (3 chapters, 9-page PDF).
 - **New this session (2026-06-10 session 5 - reliability/UX/security hardening, branch `hardening-reliability-ux`):**
@@ -625,7 +625,7 @@ over a standalone/LLM CLI). Built under **`writingagent/`** (zero npm deps, Node
 
 - **`lib/launcher.js`** resolves how to invoke the agent and forwards args with `stdio: 'inherit'`
   (so the TUI works) + propagates the exit code. Resolution order: `$WRITINGAGENT_CMD` →
-  a console script on PATH (`writing-agent`/`bookwriter`/`book`, from `pip install`) →
+  a console script on PATH (`writing-agent`, from `pip install`) →
   `python writingagent.py` (via `$WRITINGAGENT_HOME` or an upward search). Zero-dep cross-platform
   helpers: `whichSync` (honors PATHEXT), `findPython` (`py -3`/python3/python), `findProjectDir`.
   Local commands: `--version`, `--help`, `doctor` (diagnostics); everything else forwards
@@ -1286,7 +1286,7 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 
 ### 2026-06-09 - Rename to WRITING AGENT, /update command, UX overhaul, docs update
 
-**Rename:** `BOOKWRITER` → `WRITING AGENT` throughout - shell wordmark, tagline, `llm.py` `X-Title`, `pyproject.toml` (`writing-agent` entry point added), `CLAUDE.md`, `README.md`, `resume.md`.
+**Rename:** the agent is now **WRITING AGENT** throughout - shell wordmark, tagline, `llm.py` `X-Title`, `pyproject.toml` (`writing-agent` entry point added), `CLAUDE.md`, `README.md`, `resume.md`.
 
 **`/update` slash command:** type `/update [description]` or just `/update` (prompts inline). Reads the active project's `run_state.json` + last 800 chars of manuscript, then asks the chat agent to review and advise. Added to `_SLASH_HELP`, `_SLASH_COMPLETIONS`, and welcome screen.
 
@@ -1421,13 +1421,13 @@ Two commits on a branch off `master` (not pushed): `35bda07` (hardening) + `752f
 - **To enable images:** set `use_images: true` in `config/settings.yaml` before `book new`.
 - **To enable embeddings:** `pip install sentence-transformers` then `use_embeddings: true`.
 
-### 2026-06-09 - TUI redesign (editorial "ink & gilt") + BOOKWRITER branding
+### 2026-06-09 - TUI redesign (editorial "ink & gilt") + shell branding
 
-- Rebranded the shell to **BOOKWRITER** with a distinctive editorial/letterpress look (via the
+- Rebranded the shell with a distinctive editorial/letterpress look (via the
   frontend-design skill): gilt-gradient figlet wordmark, ink-blue tagline + colophon framed by
   rules, fleuron (❧) section headers, borderless command tables, dim studio footer, `❧ <model>`
   prompt. Deliberately unlike the Hermes orange-block aesthetic. Palette in `shell.py` constants.
-- Added a `bookwriter` console-script alias (kept `book`); verified it launches from any directory.
+- Wired up the console-script entry point; verified it launches from any directory.
 - Compiles; 11 tests pass.
 
 ### 2026-06-09 - Slash commands + runtime model switching
