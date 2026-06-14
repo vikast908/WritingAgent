@@ -285,9 +285,13 @@ Followed up on the A/B run's finding that `cached_tokens: 0` on every OpenRouter
 - **Measurement broadened:** `llm._cached_tokens` now also reads DeepSeek-direct's
   `prompt_cache_hit_tokens` (+ pydantic model_extra), so hits show on any host. +2 tests.
 - Wired into both startup paths (`cli.main`, `api._apply_runtime`). Docs: plan §19, CHANGELOG.
-- **A/B pilot (separate, in progress):** case 1 (vector DBs) done - Writing Agent beat the Claude side
-  (deeper, defended thesis, 20 sources) but self-judged + n=1, so indicative only. Cases 2-3 were
-  generating in the background; `benchmarks/blind_ab/cases/` is gitignored (RESULTS.md is the artifact).
+- **A/B pilot COMPLETE (3 prompts; `benchmarks/blind_ab/RESULTS.md`):** Writing Agent 2, tie 1, Claude 0
+  (win-rate excl ties 100%). The honest signal is the **dimension scores**: WA wins **trust/sources
+  4.7 vs 3.7** (15-20 real cited sources + worked examples per piece), Claude wins **readability 5.0 vs
+  4.0** (tighter), **insight ~even** (Claude 4.7 vs WA 4.3). **Not independent** - Claude wrote the
+  competitor side AND judged, so it's indicative, not proof; needs a human/third-model judge. Real
+  defects surfaced: WA repetition, a stray `[N]` in one piece, and resume-template SEO pages padding
+  the microservices citations. `cases/` gitignored; RESULTS.md committed.
 
 ### 2026-06-14 (22) - Product (PM) review → implemented P0/P1 + PRD + evidence report
 
