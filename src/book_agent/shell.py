@@ -19,7 +19,7 @@ import shlex
 import threading
 import time
 
-from . import __version__ as _VERSION   # single source of truth (src/book_agent/__init__.py)
+from . import __version__ as _VERSION  # single source of truth (src/book_agent/__init__.py)
 from . import brain, ui
 from . import skills as skills_mod
 from .config import ModelConfig, Settings, save_config, save_settings
