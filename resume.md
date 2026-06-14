@@ -271,7 +271,23 @@
 
 ## Session log
 
-### 2026-06-14 (23) - Prompt-cache follow-up: claim the DeepSeek discount + A/B pilot
+### 2026-06-14 (24) - Repo structure + redundancy review (cleanups; big items flagged)
+
+Reviewed the layout/standards + redundancy. Verdict: the repo is already well-structured (src layout,
+tests/, config/, conventional root files, good docs). Applied the safe cleanups; the high-value
+redundancy items are large refactors, left as recommendations.
+
+- **Cleanups done:** gitignore `.ruff_cache/` + `.claude/` (were untracked but un-ignored); folded
+  `pytest.ini` → `pyproject.toml [tool.pytest.ini_options]` (verified `pytest -q` still works via it);
+  removed `requirements-dev.txt` (duplicated pyproject `[dev]`, unused by CI). Suite green.
+- **Kept at root deliberately:** `plan.md`/`resume.md` are referenced as "the spec" in dozens of
+  source docstrings (`cli`, `orchestrator`, `brain`, `prompts`, …) + the CLAUDE workflow - moving them
+  would be high-churn for no gain. `requirements.txt` stays (a documented convenience mirror; pyproject
+  is canonical).
+- **Flagged, NOT done (need dedicated careful passes):** (1) **book↔article duplication** (~800 lines
+  across `orchestrator.py`/`shell.py`) - the #1 redundancy. (2) **Giant files**: `shell.py` 144KB,
+  `orchestrator.py` 115KB - split candidates (but the book/article dup is intertwined, so do (1) first).
+  (3) Optional: consolidate `SampleRun/` under `examples/`; collapse `requirements.txt` into pyproject+lock.
 
 Followed up on the A/B run's finding that `cached_tokens: 0` on every OpenRouter call.
 

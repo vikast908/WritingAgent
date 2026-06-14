@@ -98,6 +98,11 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E402", "B011", "E731"]
 
+[tool.pytest.ini_options]
+pythonpath = ["src"]   # tests import book_agent from src without an install
+testpaths = ["tests"]
+addopts = "-q"
+
 [build-system]
 requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
