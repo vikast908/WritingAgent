@@ -168,6 +168,11 @@ class _RunDashboard:
         self.n_research = 0
         self.note = ""              # transient status set by the key-listener thread
         self.live_controls = False  # True when esc/m keys are wired (autonomous + TTY)
+        # Agentic controller surfacing: when set, render() shows a dim line with the
+        # latest controller decision, read (throttled) from the project's trace.
+        self._trace_paths = None    # set by run_with_dashboard when the run is agentic
+        self._ctrl_line = ""        # cached "action: reason" of the last controller decision
+        self._ctrl_t = 0.0          # monotonic ts of the last (throttled) trace read
 
     def _elapsed(self) -> str:
         s = int(time.time() - self.start)
@@ -200,6 +205,28 @@ class _RunDashboard:
             return ""
         secs = int((time.time() - self.start) / completed * remaining)
         return f" · ~{secs // 60}m left" if secs >= 60 else f" · ~{secs}s left"
+
+    def _controller_line(self) -> str:
+        """The latest controller decision as `<action>: <reason>`, refreshed at most
+        once a second from the project's agent_trace.jsonl. No-op (and never raises)
+        unless this is an agentic run; a trace read must never destabilize the render."""
+        if self._trace_paths is None:
+            return self._ctrl_line
+        now = time.monotonic()
+        if now - self._ctrl_t < 1.0:
+            return self._ctrl_line
+        self._ctrl_t = now
+        try:
+            from .. import agentic
+            records = agentic.trace.read(self._trace_paths)
+            if records:
+                last = records[-1]
+                action = last.get("action", "?")
+                reason = (last.get("reason") or "").strip()
+                self._ctrl_line = f"{action}: {reason}" if reason else str(action)
+        except Exception:  # noqa: BLE001 - a trace breadcrumb must never break the render
+            pass
+        return self._ctrl_line
 
     def _stage_label(self) -> str:
         """Active stages (ending in …) get a spinner + cycling dots so a long model
@@ -254,6 +281,9 @@ class _RunDashboard:
         hint = ("  esc pause · m manual · Ctrl-C stop — all resumable" if self.live_controls
                 else "  Ctrl-C pauses — saved & resumable (discard a project with /delete)")
         rows = [head, *rows_brief, bar, stage, Text(hint, style=DIM)]
+        ctrl = self._controller_line()
+        if ctrl:
+            rows.append(Text(f"  controller · {ctrl}", style=DIM))
         if self.note:
             rows.append(Text(f"  {self.note}", style=f"bold {GOLD}"))
         if self.events:
@@ -482,9 +512,15 @@ def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = Fa
                 plan = _brain.read_json(BookPaths(book_id, uid).root / "plan.json") or {}
                 brief = (plan.get("premise") or "").strip()
         except Exception:
-            total, done_so_far = 1, 0
+            st, total, done_so_far = {}, 1, 0
 
         dash = _RunDashboard(book_id, total, done_so_far, brief=brief)
+        # Agentic runs: hand the dashboard the project paths so its render can surface
+        # the latest controller decision (throttled trace tail). Pipeline runs leave it
+        # None, so nothing extra reads the disk.
+        if st.get("controller") == "agentic":
+            art2 = ArticlePaths(book_id, uid)
+            dash._trace_paths = art2 if art2.run_state.exists() else BookPaths(book_id, uid)
         controls = _RunControls()
         # Live keys only for an AUTONOMOUS run on a real TTY: that's the long hands-off
         # case worth interrupting, and it never prompts mid-run (so the key-listener

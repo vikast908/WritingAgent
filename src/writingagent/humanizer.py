@@ -50,15 +50,18 @@ def mechanical_clean(text: str) -> str:
 
 
 # ── Tell detection (the NO_SLOP lexicon, as code instead of prompt hope) ──────
-# One alternation per category keeps the scan cheap; matched case-insensitively
-# on whole words. "optimize" is deliberately absent: in technical prose it is
-# often the precise term (performance optimization) - the LLM judge decides there.
+# These morphologically-tuned alternations mirror slop.py (the single source the writer
+# prompt is generated from); test_quality cross-checks them so they can't drift. One
+# alternation per category keeps the scan cheap; matched case-insensitively on whole words.
+# slop.TECHNICAL_EXCEPTIONS ("optimize", "navigate") are deliberately absent: in technical
+# prose they are often the precise term (performance optimization) - the LLM judge decides.
 _TELL_WORDS = (
     r"delve|delves|delving|leverage[ds]?|leveraging|utiliz\w+|facilitat\w+|foster\w*|"
     r"bolster\w*|underscor\w+|unveil\w*|streamlin\w+|endeavou?r\w*|ascertain\w*|elucidat\w+|"
-    r"robust|comprehensive|pivotal|crucial|transformative|cutting-edge|groundbreaking|"
-    r"seamless(?:ly)?|multifaceted|holistic|tapestry|symphony|beacon|testament|watershed|"
-    r"myriad|plethora|paramount|"
+    r"enhanc\w+|"
+    r"robust|comprehensive|pivotal|crucial|vital|transformative|cutting-edge|groundbreaking|"
+    r"innovative|seamless(?:ly)?|intricate|nuanced|multifaceted|holistic|tapestry|symphony|"
+    r"beacon|realm|testament|watershed|landscape|myriad|plethora|paramount|"
     r"furthermore|moreover|notwithstanding"
 )
 _TELL_PHRASES = (

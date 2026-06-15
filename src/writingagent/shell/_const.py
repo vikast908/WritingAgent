@@ -43,7 +43,8 @@ _SLASH_WORDS = {
     "help", "h", "?", "features", "toggle", "clear", "cls", "model", "models",
     "provider", "providers", "path", "paths", "set", "skill", "seed-skills", "seed",
     "books", "use", "user", "config", "update", "retry", "reset", "compact",
-    "auto", "autonomous", "manual", "praise", "mode", "dashboard", "theme", "themes",
+    "auto", "autonomous", "manual", "agentic", "trace", "praise", "mode",
+    "dashboard", "theme", "themes",
 }
 # Safe to route even WITH trailing args - a genuine writing-chat sentence rarely opens
 # with these. The ambiguous English words (set/use/mode/path/auto/clear/model/update/user)
@@ -51,6 +52,7 @@ _SLASH_WORDS = {
 _STRONG_SLASH = {
     "help", "features", "toggle", "provider", "providers", "theme", "themes",
     "dashboard", "books", "praise", "retry", "reset", "compact", "seed-skills", "seed",
+    "agentic", "trace",
 }
 
 # Slash-command manual, grouped by category (single source for /help; the
@@ -62,6 +64,8 @@ _SLASH_HELP = [
         ("/mode [book|article]", "show or set the project mode (default: book)"),
         ("/path [...]", "where exports are saved - default or per-project, with move"),
         ("/auto [on|off]", "autonomous (never pause) vs manual (review each unit)"),
+        ("/agentic [on|off|llm]", "agentic controller (units self-direct) vs fixed pipeline · policy"),
+        ("/trace", "the active project's controller action trace (agentic runs)"),
         ("/retry", "resend the last chat message"),
         ("/reset · /compact", "clear · summarize the assistant's conversation memory"),
     ]),
@@ -277,6 +281,8 @@ _SLASH_COMPLETIONS = [
     ("update",      "describe changes - AI reviews and suggests next steps"),
     ("retry",       "resend last chat message"),
     ("auto",        "autonomous vs manual run mode  on | off"),
+    ("agentic",     "agentic controller on | off · policy default|llm|trace"),
+    ("trace",       "show the controller's action trace for the active project"),
     ("praise",      "mark a chapter/section as great writing"),
     ("mode",        "show / set mode  book | article"),
     ("theme",       "list / switch color theme"),

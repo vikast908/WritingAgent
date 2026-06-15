@@ -237,6 +237,7 @@ class Agent:
         llm.configure_headroom(self.settings.use_headroom)
         llm.configure_timeout(self.settings.request_timeout)
         llm.configure_openrouter_providers(self.settings.openrouter_providers)
+        llm.configure_fallback(self.models.fallback)
         try:
             llm.configure_provider(self.settings.provider)
         except ValueError:

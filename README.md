@@ -36,7 +36,8 @@ too (multi-chapter, with continuity audits + a production layer).
 - **Proof, not vibes** — every article ships an [**evidence report**](#evidence-report-proof-not-vibes): the argument it makes + every source ranked by influence (0–100)
 - **Figures that lay themselves out** — the model authors a diagram *spec*; a layout engine places it so labels never overflow
 - **Use it your way** — interactive TUI, one-shot CLI, an embeddable Python API, or a global `writingagent` npm launcher
-- **Local-first** — everything is plain markdown + JSON on disk; your own OpenRouter/DeepSeek key; kill a run and it resumes exactly where it stopped
+- **Self-directing mode (opt-in)** — an optional LLM *controller* decides per unit whether to gather research or read canon *before* drafting, instead of always drafting first; off by default, with the fixed pipeline as the fallback (see [Self-directing mode](#self-directing-mode-opt-in))
+- **Local-first** — everything is plain markdown + JSON on disk; your own OpenRouter/DeepSeek key; kill a run and it resumes exactly where it stopped; a global `fallback` model keeps an unattended run alive if a tier has an outage
 
 > 📂 See real output in [**`examples/`**](examples/) · 📚 full manual at [docs-writingagent.vercel.app](https://docs-writingagent.vercel.app/).
 
@@ -140,6 +141,35 @@ cleanup and re-exports — with **no model call** (≈0 tokens).
 Deep dives: [Quality machinery ↗](https://docs-writingagent.vercel.app/reference/quality/) ·
 [How it works ↗](https://docs-writingagent.vercel.app/concepts/how-it-works/) ·
 [Architecture ↗](https://docs-writingagent.vercel.app/concepts/architecture/)
+
+---
+
+## Self-directing mode (opt-in)
+
+By default the pipeline is fixed: every unit drafts immediately. **Agentic mode** is an optional layer
+that puts an LLM *controller* in charge of each unit — before drafting, it can choose to **gather more
+research** or **read the canon** first, then draft. It's **off by default** and the fixed pipeline is
+always the fallback, so nothing changes unless you ask for it. Crucially, the `draft` step is the
+*same* episode the system already learns from, so turning this on doesn't touch the self-improving
+skill-learning loop.
+
+Three policies: `default` (identical to the fixed pipeline), `llm` (a ReAct controller call per unit),
+and `trace` (a learned-policy seam for the future). Every controller decision is appended to an
+`agent_trace.jsonl` you can inspect.
+
+```bash
+/agentic on        # turn it on (uses the llm policy) and flip the active project live
+/agentic llm       # explicitly pick the llm controller
+/agentic default   # behave exactly like the fixed pipeline
+/agentic off       # back to the fixed pipeline
+/trace             # print the active project's agent_trace.jsonl (the controller's decisions)
+```
+
+From the Python API: `Agent(agentic=True, agentic_policy="llm")` opts in; flip an existing project with
+`orchestrator.apply_controller`. Tunables live in `config/settings.yaml` (`agentic`,
+`agentic_policy`, `agentic_controller_model`, `agentic_max_unit_steps`, `agentic_factcheck_panel`) and
+can be set with `/set <field> <value>`. It's an advanced mode — the fixed pipeline remains the
+recommended default for most runs.
 
 ---
 

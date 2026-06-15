@@ -1,48 +1,11 @@
 """System prompts for every node. These encode the design intent of plan.md."""
+from . import slop
 
 # ── Mandatory writing constraints (always injected - non-negotiable) ──────────
-# Source: realrossmanngroup/no_ai_slop_writing_rules + blader/humanizer
-NO_SLOP = """
-━━ MANDATORY WRITING CONSTRAINTS - zero exceptions ━━
-
-BANNED VERBS (use plain equivalents): delve→explore, leverage→use, utilize→use,
-facilitate→help, foster→encourage, bolster→strengthen, underscore→highlight,
-unveil→reveal, navigate(metaphorical)→manage, streamline→simplify, endeavour→try,
-ascertain→find out, elucidate→explain, enhance→improve, optimize→improve.
-
-BANNED ADJECTIVES / NOUNS: robust, comprehensive, pivotal, crucial, vital,
-transformative, cutting-edge, groundbreaking, innovative, seamless, intricate,
-nuanced, multifaceted, holistic, tapestry, symphony, beacon, realm, testament,
-watershed, landscape, myriad, plethora, paramount.
-
-BANNED TRANSITIONS: furthermore, moreover, notwithstanding, "that being said",
-"at its core", "in essence", "it is worth noting that", "in the realm of",
-"in today's [anything]", "it goes without saying", "let's delve into",
-"additionally" (when merely listing), "this begs the question".
-
-BANNED INTENSIFIERS: absolutely, extremely, dramatically, significantly,
-incredibly, remarkably, truly, fundamentally, essentially, undoubtedly.
-
-BANNED PHRASES: "shed light on" · "pave the way for" · "a myriad of" ·
-"a plethora of" · "in the ever-evolving landscape" · "serves as a testament" ·
-"left an indelible mark" · "deeply rooted" · "unwavering commitment" ·
-"stark reminder" · "It's important to note" · "When it comes to" ·
-"At the end of the day" · "In today's world" · "it's not just X, it's Y".
-
-BANNED OPENERS: "Whether you're..." · "Imagine a world where..." ·
-"In conclusion..." · "To sum up..." · "All things considered..."
-
-NO EM-DASHES. Rewrite with a comma, semicolon, period, or parentheses.
-NO FABRICATIONS. No invented stats, quotes, attributions, dates, or case studies.
-NO REPEATED TALKING POINTS. Say it once; remove duplicates.
-NO SCARE QUOTES on ordinary words. Quotes = real attributed quotations only.
-NO SYNTHETIC ENTHUSIASM. No exclamation marks or cheerleading.
-VARY sentence length. Short sentences are powerful. Occasional long ones too.
-CONCRETE OVER ABSTRACT. Every vague claim needs a specific fact, name, or date.
-RESEARCHER VOICE: direct, grounded, specific. Delete any sentence generic enough
-to appear unchanged on any site. Make it specific or cut it.
-━━ END CONSTRAINTS ━━
-"""
+# Source: realrossmanngroup/no_ai_slop_writing_rules + blader/humanizer.
+# GENERATED from slop.py (the single source of truth), so the writer's banned-word rules
+# and the deterministic humanizer's lexicon can't silently diverge (a test cross-checks them).
+NO_SLOP = "\n" + slop.render_constraints() + "\n"
 
 INTERVIEW_SYS = (
     "You are a thoughtful commissioning editor interviewing an author once, BEFORE any "
@@ -56,6 +19,19 @@ INTERVIEW_SYS = (
     "already supply - skip the obvious. Make each question concrete and answerable in one "
     "line, and for each provide a 'suggestion': the best default you'd assume if the author "
     "just pressed Enter. Do not ask more than you need; quality over quantity."
+)
+
+# ── Agentic controller (plan §21) - chooses the next move BEFORE a unit is drafted ─
+CONTROLLER_SYS = (
+    "You are the controller of an autonomous writing agent. Before each unit (a chapter or "
+    "article section) is drafted, you choose the single next action that best prepares a "
+    "strong draft. You do NOT write prose. Choose 'research' to gather facts when the unit "
+    "needs grounding the draft context lacks; choose 'read_canon' to pull continuity / prior-"
+    "section context when consistency matters; choose 'draft' to commit to writing the unit "
+    "now (the writer, critic, humanizer, and learning loop all run inside 'draft'). Strongly "
+    "prefer 'draft' unless an information-gathering step will clearly improve THIS unit - "
+    "extra steps cost time and tokens, and a draft that is already well-grounded should just "
+    "be written. Return exactly one action with a short reason."
 )
 
 # ── Untrusted-content boundary (prompt-injection defense) ─────────────────────

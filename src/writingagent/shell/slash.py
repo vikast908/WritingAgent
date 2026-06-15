@@ -11,6 +11,7 @@ from ._const import _EXIT, _MODE_ALIASES, _SLASH_COMPLETIONS
 from .branding import _out, _section
 from .chat import _chat_respond, _compact_history
 from .commands import (
+    _cmd_agentic,
     _cmd_auto,
     _cmd_dashboard,
     _cmd_model,
@@ -19,6 +20,7 @@ from .commands import (
     _cmd_provider,
     _cmd_set,
     _cmd_setkey,
+    _cmd_trace,
     _print_skill,
     _print_skills,
     _set_theme,
@@ -139,6 +141,10 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
             _out(console, f"[{GOLD}]compacted[/] [dim]{turns_before} turn(s) -> 1 summary[/]")
     elif name in ("auto", "autonomous", "manual"):
         _cmd_auto(console, settings, state, name, rest)
+    elif name == "agentic":
+        _cmd_agentic(console, settings, state, rest)
+    elif name == "trace":
+        _cmd_trace(console, settings, state, rest)
     elif name == "praise":
         _cmd_praise(console, state, rest)
     elif name == "mode":

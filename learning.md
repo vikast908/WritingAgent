@@ -365,6 +365,19 @@ enough context to appreciate each.
   thing that differs is that one skill), not a guess. It's off by default because it costs one extra draft
   on the units where it's still learning a skill's worth.
 
+- **Self-directing (agentic) mode — and why it leaves the learning loop alone.** Normally the pipeline
+  always drafts a unit immediately. There's an optional, *off-by-default* mode where a small AI
+  **controller** decides, per unit, whether to *gather more research* or *re-read the canon* **before**
+  drafting — closer to how a person works. The important thing for *this* chapter: when the controller
+  finally says "draft", that drafting step is the **exact same step the learner already trains on**.
+  Nothing about the skill duels, the efficacy gate, or how a skill earns or loses trust changes — the
+  controller only chooses *what to do before* drafting, never *how* drafting is judged. So you can turn
+  this mode on without any worry that it weakens or games the self-improvement story above. Every
+  decision the controller makes is written to a plain `agent_trace.jsonl` file. Today that's just an
+  audit trail you can read; in the future it becomes a *training corpus* — a record of good and bad
+  "what to do next" choices that a learned policy (the `trace` policy, a planned Phase-5) could learn
+  from, the same way the studio already learns craft skills from finished pieces.
+
 - **The evidence report.** The piece ships with its thesis and **every source ranked by influence**.
   *Why:* it makes the work *auditable* — you can see exactly what carried the argument. Most AI writing
   can show you neither.

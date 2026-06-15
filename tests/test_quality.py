@@ -143,6 +143,22 @@ def test_humanize_fake_mode_is_mechanical_only(fake_llm):
     assert "delve" in out             # no LLM rewrite in fake mode
 
 
+def test_lexicon_single_source_consistency():
+    """The writer prompt (NO_SLOP) is generated from slop.py, and the deterministic
+    humanizer must catch every banned VERB/ADJECTIVE it lists - so the two can't drift -
+    while never stripping a TECHNICAL_EXCEPTION (the old 'optimize' contradiction)."""
+    from writingagent import prompts, slop
+    # The prompt is a derived view of the single source.
+    assert "delve→explore" in prompts.NO_SLOP and "MANDATORY WRITING CONSTRAINTS" in prompts.NO_SLOP
+    # Every banned verb + adjective/noun is also caught by the deterministic stripper.
+    for word in list(slop.BANNED_VERBS) + slop.BANNED_TERMS:
+        assert humanizer._TELL_RE.search(word), f"humanizer misses banned term {word!r}"
+    # Exceptions are neither hard-banned in the prompt nor stripped by the humanizer.
+    for ex in slop.TECHNICAL_EXCEPTIONS:
+        assert not humanizer._TELL_RE.search(ex), f"humanizer wrongly strips exception {ex!r}"
+        assert f"{ex}→" not in prompts.NO_SLOP, f"{ex!r} is hard-banned but is a technical exception"
+
+
 def test_structural_report_metrics():
     text = ("One two three four five.\n\n" * 5) + "Alpha, beta, and gamma walked in."
     rep = humanizer.structural_report(text)

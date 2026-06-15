@@ -985,6 +985,7 @@ def main() -> None:
     _llm.configure_headroom(settings.use_headroom)
     _llm.configure_timeout(settings.request_timeout)
     _llm.configure_openrouter_providers(settings.openrouter_providers)
+    _llm.configure_fallback(cfg.fallback)
     _apply_provider(_llm, settings)
     if len(sys.argv) == 1:  # bare `writing-agent` / `python writingagent.py` -> interactive shell (TUI)
         from .shell import run_shell

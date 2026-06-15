@@ -140,7 +140,7 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
         if first in known_commands:
             _dispatch_command(
                 argv, console, cfg, settings, state, interactive=True, line=line,
-                on_extras=lambda l: _chat_respond(l, console, cfg, settings, state),
+                on_extras=lambda ln: _chat_respond(ln, console, cfg, settings, state),
                 on_done=lambda: _show_post_hint(console, state, settings),
             )
             continue

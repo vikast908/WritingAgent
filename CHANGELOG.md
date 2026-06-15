@@ -7,6 +7,51 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Resilience + safety hardening (from an exhaustive review).** A global **fallback model**
+  (`models.yaml` `fallback:`, default `deepseek/deepseek-v4-flash`): any node whose primary model
+  exhausts its retries (outage / 5xx / content filter) retries **once** on the cheap tier, so one
+  failure degrades the run instead of killing an unattended book. A **context budget**
+  (`Settings.max_context_chars`, default 24000) bounds the assembled canon+summaries+excerpts block by
+  priority, so a long book can't silently overflow the model window. **Crash-safety ordering** in the
+  commit path: canon is now committed to SQLite + rendered *before* the chapter `.md` (the resume
+  marker) is written, so a crash mid-commit re-runs the chapter (idempotent extraction) instead of
+  permanently skipping it with its facts missing from canon. The **web demo** now serializes runs
+  (`_RUN_LOCK`) and clears every prior visitor's provider key from the process env before each run
+  (no cross-visitor key/billing leak), and caps topic length. Plus `Critique` 1–5 scores are clamped,
+  the fact-check panel gates on `deep_research` (can't false-refute on snippet-only sources), and the
+  `ModelConfig` default model matches the DeepSeek-only spec. +6 tests.
+- **Anti-slop single source of truth (`slop.py`).** The banned-word lexicon (verbs, adjectives,
+  transitions, intensifiers, phrases, openers) now lives in one module; the writer's `NO_SLOP`
+  constraint block is **generated** from it, and the deterministic humanizer is cross-checked against
+  it by a test, so the writer's rules and the post-hoc stripper can't silently drift. Resolves the old
+  contradiction where the writer prompt hard-banned "optimize" while the humanizer deliberately allowed
+  it — both now treat `optimize`/`navigate` as documented `TECHNICAL_EXCEPTIONS` (precise in technical
+  prose, the LLM judge decides). The humanizer also now catches every banned adjective the prompt lists.
+- **Config range validation.** `load_settings` clamps out-of-range values (e.g. `min_insight: 99`,
+  negative `max_revisions`, `escalate_below_confidence: 5.0`) to sane bounds, so a typo in
+  `settings.yaml` degrades gracefully instead of producing baffling runtime behavior. +4 tests.
+- **Agentic controller TUI surface.** `/agentic on|off|llm|default` (toggles the setting *and* flips
+  the live project's controller via `orchestrator.apply_controller`), `/trace` (prints the project's
+  `agent_trace.jsonl`), and a controller-decision line in the run dashboard. Phase-3 mid-unit research
+  (an evidence gap pulls one research brief into the next revision) and the fact-check panel are wired
+  into the article pipeline. Live-validated end-to-end on OpenRouter ($0.10, the LLM controller chose
+  research→research→draft).
+- **Agentic controller (opt-in self-directing loop, plan §21).** New `agentic/` package turns the
+  fixed write→critique pipeline into a *self-directing* one: a controller chooses the next move for
+  each unit (gather research / read canon, then draft) instead of always drafting immediately. The
+  core safety property — tools wrap the **existing** functions at their current granularity, so
+  `draft` *is* the unchanged `_process_chapter` / `_process_article_section` episode (duel +
+  `record_chapter` fire inside it untouched) — means agency lives only *between* episodes and the
+  self-improving loop can't regress. Ships **default-off** (`Settings.agentic=False`); enabling it
+  bakes `controller="agentic"` into run-state and routes each unit through `agentic.run_unit`. Three
+  pluggable policies behind one seam: **DefaultPolicy** (== the fixed pipeline; the fallback and the
+  equivalence guarantee), **LlmPolicy** (a ReAct controller call via `CONTROLLER_SYS`, falling back
+  to draft on any illegal/failed choice), and **TracePolicy** (the Phase-5 learned-policy swap seam).
+  Adds an append-only `agent_trace.jsonl` per project, an `extra_context` seam on both unit
+  processors for mid-draft tool use, and `panels.fact_check_panel` (majority-vote claim verification).
+  Opt-in is free across surfaces — `Agent(agentic=True, agentic_policy="llm")` and `/set agentic true`
+  both route through `Settings`. +15 offline tests incl. the agentic-vs-pipeline byte-equivalence
+  check; full suite green.
 - **First-run key wizard + `/setkey` (onboarding friction).** A writer with no API key used to hit a
   dead-end warning. Now the shell opens with a one-keypress choice: **paste a key** (written to `.env`
   *and* applied live — no restart), **try it free** (placeholder output, $0 — set live, no

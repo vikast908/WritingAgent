@@ -436,8 +436,19 @@ def _base_run_state(uid, abstract, *, intake, author, max_revisions, autonomous,
         "divergent_drafts": settings.divergent_drafts,
         "tournament_judge": settings.tournament_judge,
         "min_insight": settings.min_insight,
+        "max_context_chars": settings.max_context_chars,
         "skill_duels": settings.skill_duels,
         "watch_blocking": settings.watch_blocking,
+        # Agentic controller (plan §21): baked at creation like every other toggle. The
+        # default ("pipeline") drives the unchanged fixed loop; "agentic" routes each unit
+        # through agentic.run_unit. The real bounds are the per-unit agentic_max_unit_steps
+        # cap and the token budget; agent_steps is a recorded per-decision counter (telemetry).
+        "controller": "agentic" if settings.agentic else "pipeline",
+        "agentic_policy": settings.agentic_policy,
+        "agentic_controller_model": settings.agentic_controller_model,
+        "agentic_max_unit_steps": settings.agentic_max_unit_steps,
+        "agentic_factcheck_panel": settings.agentic_factcheck_panel,
+        "agent_steps": 0,
         # Autonomous runs never pause on low confidence.
         "escalate_below_confidence": 0.0 if autonomous else settings.escalate_below_confidence,
     }

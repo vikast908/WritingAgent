@@ -23,19 +23,50 @@ _WORD = re.compile(r"[a-z0-9]+")
 # latency and token cost. Consolidation/extraction still see the full canon.
 MAX_CANON_FACTS_PER_CHAR = 12
 
+# Default char budget for the assembled context block (overridable per call via
+# Settings.max_context_chars). Even with the per-char fact cap, canon + summaries +
+# excerpts can grow until a late-chapter writer prompt exceeds the model window and
+# hard-fails the run; this bounds it, dropping lowest-priority parts first.
+MAX_CONTEXT_CHARS = 24000
+
 
 def _tokens(text: str) -> set[str]:
     return {w for w in _WORD.findall(text.lower()) if len(w) > 2}
 
 
-def assemble_context(store: Store, paths: BookPaths, blueprint: ChapterBlueprint) -> str:
+def _within_budget(blocks: list[str], budget: int) -> str:
+    """Join `blocks` (highest priority first) under a char budget. Whole lower-priority
+    blocks are dropped before a higher one is touched; the block that overflows is included
+    as a meaningful partial (with a truncation marker) only if there's real room left."""
+    if budget <= 0:
+        return "\n\n".join(blocks)
+    kept: list[str] = []
+    used = 0
+    for block in blocks:
+        if used + len(block) <= budget:
+            kept.append(block)
+            used += len(block)
+        else:
+            room = budget - used
+            if room > 600:   # a partial of this block beats dropping it whole
+                kept.append(block[:room].rstrip() + "\n\n_[context truncated to fit the budget]_")
+            break
+    return "\n\n".join(kept)
+
+
+def assemble_context(store: Store, paths: BookPaths, blueprint: ChapterBlueprint,
+                     *, max_chars: int | None = None) -> str:
     """Canon + dependency-chapter summaries + relevant excerpts from other chapters.
 
     The excerpt block queries the per-book FTS index with the blueprint's key terms,
     pulling passages from committed chapters *outside* the dependency set - the long-
     range recall that summaries of only the last/dependent chapters can't provide.
+
+    The result is budgeted to `max_chars` (default MAX_CONTEXT_CHARS) by priority -
+    canon (continuity) is kept first, then prior summaries, then cross-chapter excerpts -
+    so a long book can't silently blow the model window (plan §10/§19).
     """
-    parts = [store.canon_context(max_facts_per_char=MAX_CANON_FACTS_PER_CHAR)]
+    canon = store.canon_context(max_facts_per_char=MAX_CANON_FACTS_PER_CHAR)
     dep_chapters = sorted(set(blueprint.depends_on) | ({blueprint.number - 1}
                           if blueprint.number > 1 else set()))
     summaries = []
@@ -45,18 +76,19 @@ def assemble_context(store: Store, paths: BookPaths, blueprint: ChapterBlueprint
         s = brain.read_text(paths.ch_summary(n))
         if s:
             summaries.append(f"### Summary of chapter {n}\n{s}")
-    if summaries:
-        parts.append("## Prior chapter summaries\n" + "\n\n".join(summaries))
+    summaries_block = ("## Prior chapter summaries\n" + "\n\n".join(summaries)) if summaries else ""
 
     covered = {f"ch{n:02d}" for n in dep_chapters if n >= 1}
     covered.add(f"ch{blueprint.number:02d}")
     terms = sorted(_tokens(f"{blueprint.title} {blueprint.purpose} {blueprint.setup} "
                            f"{blueprint.payoff}"))
     excerpts = store.search_excerpts(terms, limit=2, exclude_refs=covered)
-    if excerpts:
-        parts.append("## Relevant excerpts from earlier chapters\n" + "\n\n".join(
-            f"### From {ref}\n...{snip}..." for ref, snip in excerpts))
-    return "\n\n".join(p for p in parts if p.strip())
+    excerpts_block = ("## Relevant excerpts from earlier chapters\n" + "\n\n".join(
+        f"### From {ref}\n...{snip}..." for ref, snip in excerpts)) if excerpts else ""
+
+    blocks = [b for b in (canon, summaries_block, excerpts_block) if b.strip()]
+    budget = MAX_CONTEXT_CHARS if max_chars is None else int(max_chars)
+    return _within_budget(blocks, budget)
 
 
 def _parse_frontmatter(text: str) -> dict:

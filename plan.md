@@ -487,6 +487,16 @@ Defaults route **DeepSeek V4 Pro** to Writer/Planner/Consolidation (the high-lev
 OpenAI SDK (`OPENROUTER_API_KEY`); structured node outputs use **JSON mode + Pydantic validation**
 (with one repair retry), since DeepSeek has no Anthropic-style `messages.parse`.
 
+**Fallback model (resilience).** `models.yaml` carries one global `fallback:` slug (default
+`deepseek/deepseek-v4-flash`, the cheapest reliable tier). After *any* node's primary model exhausts
+its retries - a provider outage, a persistent 5xx, or a content-filter 4xx - `llm.complete_text` /
+`complete_structured` retry the call **once** on the fallback (`_allow_fallback=False` on that call,
+so it can't recurse). One node's failure degrades the run instead of killing an unattended multi-hour
+book. Wired at startup from `ModelConfig.fallback` via `llm.configure_fallback` (api + cli); empty =
+off. **Context budget (`Settings.max_context_chars`, default 24000):** the assembled
+canon+summaries+excerpts block is bounded by priority (canon kept first, then summaries, then
+cross-chapter excerpts) so a long book can't silently overflow the model window and hard-fail.
+
 **Recommendation:** use a *different* model (or family) for the **Critic** than the **Writer**.
 A model tends to be a lenient judge of its own output; an independent critic catches more. This
 is the architectural reason the Critic is a separate node in the first place. *(Current default
@@ -669,6 +679,11 @@ Durable decisions from the hardening pass. All thresholds are tunable config.
 
 | Area | Decision |
 |---|---|
+| **Model fallback (2026-06-16)** | `models.yaml` carries one global `fallback:` slug (default `deepseek/deepseek-v4-flash`, the cheapest reliable tier). After *any* node's primary model exhausts its retries - outage, persistent 5xx, or a content-filter 4xx - `llm.complete_text`/`complete_structured` retry the call **once** on the fallback (`_allow_fallback=False` on that call, so it can't recurse). One node's failure degrades the run instead of killing an unattended book. Wired at startup from `ModelConfig.fallback`; empty = off. |
+| **Context budget (2026-06-16)** | `Settings.max_context_chars` (default 24000) bounds the assembled canon+summaries+excerpts block (`retrieval.assemble_context` / `_within_budget`) **by priority** - canon kept first, then prior summaries, then cross-chapter excerpts - so a long book can't silently overflow the model window and hard-fail. 0 = unbounded. |
+| **Crash-safe commit ordering (2026-06-16)** | `_commit` now writes canon to the store (`update_from_extraction` + `render_canon`) **before** the chapter `.md` - which is the resume guard's "committed" marker - then indexes. A crash mid-commit re-runs the chapter (extraction is idempotent: `INSERT OR IGNORE`) instead of the file existing while its facts are permanently missing from canon. `_commit_section` likewise writes the continuity summary before the section file. |
+| **Anti-slop single source (2026-06-16)** | The banned-word lexicon lives in one module (`slop.py`); the writer's `NO_SLOP` block is **generated** from it and the deterministic humanizer is cross-checked against it by a test, so the writer's rules and the post-hoc stripper can't drift. `TECHNICAL_EXCEPTIONS` (`optimize`, `navigate`) are neither hard-banned nor auto-stripped - precise in technical prose, the LLM judge decides (resolves the old "optimize" contradiction). |
+| **Config validation (2026-06-16)** | `load_settings` clamps out-of-range values (`min_insight∈[0,5]`, `escalate_below_confidence∈[0,1]`, `max_revisions≥0`, `divergent_drafts≥1`, positive `request_timeout`, valid `mode`/`agentic_policy`) so a typo in `settings.yaml` degrades gracefully instead of producing baffling runtime behavior. |
 | **Context compression** | `headroom-ai` is **optional** (lazy import, silent fallback). Pinned to **0.10.17** (the last pure-Python release; ≥0.21 is a Rust/pyo3 ext with no Windows wheel), installed `--no-deps`. `_compress` always tells headroom a **tiktoken** model for counting - compression is model-agnostic, so DeepSeek runs still compress. |
 | **LLM call resilience** | We own retries: classified **exponential backoff + jitter**, honor `Retry-After`, **fail fast on 4xx**, per-request `request_timeout` (default 60s). Structured calls do a **repair retry** (feed the invalid output + error back). The OpenAI SDK's own retries are disabled. |
 | **Concurrency** | The chapter/section *prose* chain is **sequential by design** (continuity: each unit reads the previous summary). Everything independent of prose overlaps via a small thread pool (`concurrency.gather`): (a) within a unit, research ∥ image/SVG ∥ skill retrieval; (b) **unit n+1's research/images/skills are prefetched while unit n is written/critiqued** (they depend only on the plan/TOC; prefetch results are disk-cached so escalations waste nothing); (c) at commit, **humanize ∥ summarize ∥ canon-extraction** run as one batch (`strict=True` - a failed summary/extraction still aborts the commit) since all three derive from the same approved draft; (d) production's front/back-matter components. The SQLite `Store` is only touched on the main thread. |
@@ -1164,3 +1179,272 @@ reach for). Pure code movement, suite-gated per step.
     `_execute_cmd`), `slash` (`_handle_slash`), `session` (`_make_pt_session`), and `repl` (now just
     `_prompt_state` + `run_shell`). The chat→dispatcher lazy back-edge points at `dispatch`. No shell
     file now exceeds ~580 lines.
+
+---
+
+## 21. Agentic controller (self-directing loop over the existing pipeline)
+
+> **Goal.** Make the system *self-directing* (an agent that chooses its next move) and not just
+> *self-correcting* (a fixed pipeline with quality gates). This consciously revisits the §12 caveat
+> ("don't let nodes be more agentic than they need") - correct for v1, now the thing we want. The
+> entire design is built so that turning agency **on** cannot regress the existing pipeline or the
+> self-improving loop: it ships behind a default-**off** toggle and the fixed pipeline remains the
+> agent's fallback policy.
+
+> **Implementation status (2026-06-15 - BUILT, opt-in).** Shipped as the `agentic/` package
+> (`tools` · `controller` · `policy` · `panels` · `trace` · `_schema`) + `CONTROLLER_SYS` in
+> `prompts.py`. `Settings.agentic` (default **False**) bakes `controller` into run-state via
+> `_base_run_state`; `book.run()` / `_run_article` dispatch each unit through `agentic.run_unit`
+> (lazy import) only when agentic. Phases 0-2 are production-complete (tool registry, controller
+> seam + default/LLM policy, action trace, the `extra_context` seam for mid-draft tool use). Phase 3
+> mid-unit research is wired (a BLOCKING evidence gap under the agentic controller pulls one research
+> brief into the next revision). Phase 4 is `panels.fact_check_panel`, wired into the article approval
+> gate behind `agentic_factcheck_panel` (article + `deep_research` only - it inherits the verify-gate's
+> snippet policy so it can't false-refute on thin evidence). Phase 5 is the `TracePolicy` swap seam.
+> **TUI surface:** `/agentic on|off|llm|default` (toggles the setting *and* flips the live project via
+> `orchestrator.apply_controller`), `/trace` (prints `agent_trace.jsonl`), and a controller-decision
+> line in the run dashboard. Opt-in is free across surfaces: `Agent(agentic=True, agentic_policy="llm")`
+> and `/set agentic true` route through `Settings`. **28 offline tests** (`tests/test_agentic.py` 19 +
+> `tests/test_agentic_tui.py` 9), including the **equivalence guarantee** (agentic+DefaultPolicy ==
+> fixed pipeline: byte-identical manuscript + identical episode count) and a live OpenRouter validation
+> run ($0.10, the LLM controller chose research→research→draft). Live-validated on `deepseek/deepseek-v4-pro`.
+> Full suite green (381 passed / 1 skipped), agentic code ruff-clean.
+
+### 21.0 The three invariants (what must never break)
+
+Everything below is constrained by three things that stay exactly as they are today:
+
+1. **The brain is the world model.** Markdown canon + entity graph + synced index (§3) is the
+   substrate the agent perceives and mutates. We do not rebuild or bypass it.
+2. **`WRITE → CRITIQUE` is one atomic, instrumented episode.** The agent decides *when* to draft and
+   *what to do first/next*, never *how to bypass the critic*. Every draft still flows through
+   `critique_*` and still calls `skills.record_chapter` / `record_duel`. Agency lives **between**
+   episodes, not inside them.
+3. **The efficacy gate owns promotion.** §8's `candidate → trusted → retired` machinery (first-pass
+   lift, ablation duels, `reconcile`) is untouched. The controller's *own* choices are a new
+   candidate signal, logged and quarantined - **never auto-promoted** (same circularity guard §8
+   already applies to model-taste).
+
+The mechanism that enforces invariant #2 cheaply: **tools wrap existing orchestrator functions at
+their current granularity.** `draft_unit` *is* `_process_chapter` / `_process_article_section`
+(`book.py:294`, `article.py:232`) - the full divergent-draft + duel + revise-loop + commit +
+`record_chapter`. The controller calls it as one tool; the measured episode is literally the same
+code. There is no raw `write_chapter` tool that could bypass critique.
+
+### 21.1 Layers
+
+| Layer | Status today | Change |
+|---|---|---|
+| **State / world model** (the brain) | strong - §3 | none; the agent reads/writes through it |
+| **Action interface** (tools) | implicit - node fns wired in fixed order | **Phase 0**: expose existing fns as a typed registry |
+| **Controller** (picks next action) | hardcoded `while phase != done` + threshold gates | **Phase 1+**: a policy that *chooses* the next tool, with the fixed loop as the default/fallback |
+
+### 21.2 The tool registry (Phase 0)
+
+New module `agentic/tools.py`. A `Tool` is `{name, description, params (Pydantic/JSON-schema), fn,
+mutates: bool}`. Each tool is a thin adapter over a function that already exists - **pure refactor,
+no behavior change.** Granularity is the existing function, not the raw LLM call.
+
+| Tool | Wraps | Returns | Notes |
+|---|---|---|---|
+| `research(query?)` | `propose_search_queries`+`research`/`deep_research(_article)` | brief attached to ctx | the shallow/deep researcher (§15.2) on demand |
+| `read_canon(query\|entity)` | `store.canon_context` / retrieval (§10) | markdown slice | relevant-slice pull from the graph |
+| `outline()` / `reoutline(guidance?)` | `build_toc` / `build_article_outline` | TOC/outline | re-plan structure |
+| `draft_unit(n, fix_notes?)` | **`_process_chapter` / `_process_article_section`** | `{outcome: commit\|escalate, critique}` | **the atomic episode** - duel + revise-loop + `record_chapter` happen inside, unchanged |
+| `revise_unit(n, instruction)` | `review.revise` path | diff summary | post-commit single-unit rewrite (§7) |
+| `verify_claims(n)` | `_verify_claims_gate` / `verify_claims` | claim audit | evidence gate (§15.6) |
+| `consolidate()` | `_consolidation` | `ConsolidationReport` | cross-unit audit (§9) |
+| `repair_contradiction(n)` | `_repair_contradictions` | none | autonomous fix |
+| `produce()` | `_production` | none | front/back matter + assembly (§16) |
+| `learn()` | `_run_learner` | `LearnerOutput` | distill skills/watch-list (§8) |
+| `evaluate()` / `table_read(persona?)` | `evaluate_manuscript` / `table_read` | report | quality reads (§15.4) |
+| `escalate(reason)` | `_escalate` + `_mark_escalated` | none | hand to human |
+| `done()` | sets `phase="done"` | none | terminal |
+
+Tools that mutate canon (`draft_unit`, `commit`-side-effects, `repair_contradiction`) carry
+`mutates: true` and run through the guard (§21.4). The registry is the only thing the controller can
+call - capability is bounded by what's in the table.
+
+> **Shipped scope (2026-06-15).** The table above is the full *design target*. The shipped `CATALOG`
+> exposes only the three **policy-selectable** unit tools (`draft`, `research`, `read_canon`); the
+> tail tools (`consolidate`/`produce`/`learn`/`done`) are catalogued for inspection but driven by the
+> orchestrator, not chosen by a policy. `outline`/`revise_unit`/`verify_claims`/`repair`/`evaluate`/
+> `escalate` as *controller-selectable* tools remain future work.
+
+### 21.3 The controller seam (Phase 1)
+
+New module `agentic/controller.py`. The loop mirrors `pi-agent-core`'s shape (perceive → decide →
+guard → act → record), with the existing state machine as the **default policy** and **fallback**:
+
+```python
+def controller_run(cfg, state, paths, registry, control, log):
+    while state["phase"] != "done":
+        view   = build_state_view(state, paths)              # perceive (compact, see 21.6)
+        action = policy.next_action(view, registry.schemas)  # decide  (default policy or LLM, 21.3.1)
+        action = before_tool(action, state, registry)        # guard   (21.4) - may rewrite to fallback
+        result = registry[action.name](cfg, paths, state, **action.args)  # act (may be an episode)
+        after_tool(action, result, state, paths)             # record  (21.4) - trace + persist
+        if _apply_run_control(control, state, paths, log):   # existing live pause/manual hook
+            return state
+        if result and result.get("outcome") == "escalate" and not state["autonomous"]:
+            return state                                     # pause for human (unchanged contract)
+    return state
+```
+
+`next_default_action(state)` returns **exactly what today's loop would do** (chapters → consolidate
+→ production → learn → done; within `chapters`, draft the next uncommitted unit). With the LLM
+policy disabled, `controller_run` must produce **byte-identical output to the legacy `run()`** - this
+equivalence is the Phase-1 acceptance test and the core safety proof.
+
+**Dispatch.** In `run()` (`book.py:100`) and `_run_article` (`article.py:110`), after loading state:
+`if state.get("controller") == "agentic": return agentic.controller_run(...)` else the existing loop.
+`agentic` sits *above* the orchestrator seams (imports `common`/`book`/`article`); the dispatch uses a
+**lazy import** to keep the DAG acyclic - the same pattern as the existing `chat → repl` back-edge.
+
+#### 21.3.1 Policy = default | LLM (Phase 2)
+
+`policy.next_action` has two implementations behind one interface (the seam that Phase 5 later
+swaps):
+- **`DefaultPolicy`** - the hardcoded state machine (Phase 1). Always legal, deterministic.
+- **`LlmPolicy`** - a ReAct-style call (Phase 2): a `CONTROLLER_SYS` prompt (new in `prompts.py`) +
+  the compact state view + the tool schemas → one tool choice + args. Routed to a configurable model
+  (`agentic_controller_model`, §21.7) since controller reasoning is light. **On any parse failure,
+  illegal action, or budget pressure it returns `DefaultPolicy.next_action(...)`** - the fixed
+  pipeline is always the floor.
+
+### 21.4 Guard + record hooks (where safety and learning are enforced)
+
+These mirror `pi`'s `beforeToolCall` / `afterToolCall` - the seam that makes invariants #2/#3 hold.
+
+**`before_tool(action, state, registry)`** - runs before execution, can rewrite the action to a
+fallback:
+- **Legality**: can't `commit`/`verify` a unit not yet drafted; can't `produce` before all units
+  committed; unknown tool → `DefaultPolicy`. Illegal → fallback (never crash).
+- **Revision cap**: `draft_unit` enforces `max_revisions` internally (unchanged); the guard also
+  blocks re-drafting an **already-committed** unit (the existing `if paths.ch(n) exists` resume guard
+  protects canon) → maps to the next legal action.
+- **Budget kill-switch**: on `llm.BudgetExceeded` pressure → force `escalate`/`done` + checkpoint
+  (reuses §15.1).
+- **Loop bound**: the per-unit `agentic_max_unit_steps` (default 3) caps gathering steps before the
+  guard forces `draft` (so every unit terminates in ≤ N+1 controller decisions). The run-wide
+  runaway kill-switch is the token budget (§15.1, `BudgetExceeded`); `state["agent_steps"]` is a
+  recorded per-decision counter (telemetry / trace), not itself an enforced cap. *(A dedicated
+  lifetime step cap for a future learned policy is a noted TODO, not yet wired.)*
+
+**`after_tool(action, result, state, paths)`** - runs after execution:
+- Appends `{step, action, args, result_summary, unit, phase}` to **`agent_trace.jsonl`** (new
+  append-only file per project, sibling of `revision_log.md`). Auditable now; the training corpus for
+  Phase 5 later. (Echoes `pi`'s session-sharing ethos - logged traces are the policy-learning fuel.)
+- **Does not touch the learning index.** `record_chapter` / `record_duel` already fired *inside*
+  `draft_unit`. The controller's choices are logged to the trace as candidate signal only -
+  quarantined behind the §8 efficacy gate, never auto-promoted.
+
+### 21.5 Episode & duel integrity (the proof invariant #2/#3 hold)
+
+Because `draft_unit` *is* the unchanged `_process_chapter` / `_process_article_section`:
+- the divergent-draft + ablation **duel** (`common.py:496`, same temp, same context, only the skill
+  list differs) fires exactly as today when `skill_duels` is on;
+- `record_chapter(uid, applied_names, first_pass)` and `record_duel(uid, name, won)` are called with
+  identical arguments;
+- `reconcile` / `distill` (post-hoc, §8) are untouched.
+
+**Acceptance test (the guard against silent regression):** on the same fake-LLM input, an agentic run
+driven by `DefaultPolicy` produces the **same committed text, the same episode count, and the same
+duel count** as the legacy pipeline. If those three match, the self-improving loop provably still
+sees the same signal.
+
+### 21.6 State & resume
+
+`run_state.json` (§6 durable checkpoint) gains these keys, set in `_base_run_state`
+(`common.py`) alongside the existing toggles: `controller` (`"pipeline" | "agentic"`, default
+`"pipeline"`), `agentic_policy`, `agentic_controller_model`, `agentic_max_unit_steps`,
+`agentic_factcheck_panel`, and `agent_steps: int` (a recorded per-decision counter). The compact
+state view is **not** persisted - it's rebuilt each step from the durable state.
+
+`build_state_view(state, paths)` produces the compact perception the policy reasons over: current
+phase + unit, last critique (verdict/confidence/insight/blocking), open contradictions, committed
+count vs. total, budget remaining, and the retrieved skill names for this unit. Kept small (cache-
+friendly, §19).
+
+**Resume is free**: the controller re-enters `controller_run`, rebuilds the view from durable state,
+and continues. `draft_unit`'s own resume guard (committed file exists → skip) means a re-run never
+re-drafts or double-records. Escalation pause/approve (`approve_escalation`, `record_instruction`,
+`apply_autonomous`) work unchanged - the agentic path returns `state` on escalate exactly like the
+pipeline.
+
+### 21.7 Config (tunable, per CLAUDE.md)
+
+Added to `Settings`, threaded through `_base_run_state` like the existing toggles (these are the
+five fields actually shipped):
+- `agentic: bool = False` - master switch. **Default off ⇒ today's behavior, zero risk.**
+- `agentic_policy: str = "default"` - `default` (== fixed pipeline) | `llm` (ReAct controller) |
+  `trace` (Phase-5 seam).
+- `agentic_controller_model: str = "judge"` - per-node routing key for the `llm` policy's model
+  (light reasoning; a flash/judge tier via `models.yaml`, §12.1).
+- `agentic_max_unit_steps: int = 3` - max research/read_canon gathering steps before a unit is drafted.
+- `agentic_factcheck_panel: bool = False` - majority-vote fact-check panel (§21.10; article + deep
+  research only).
+
+### 21.8 Public API & UX surface
+
+- `Agent(agentic=True, agentic_policy="llm", ...)` opts in via the generic `Settings` override path
+  (`dataclasses.replace`), baking `controller="agentic"` at create time. There is **no**
+  `Project.run(agentic=)` arg; flip an **existing** project with `orchestrator.apply_controller`
+  (mirrors `apply_autonomous`) or the shell `/agentic on`. Default stays `"pipeline"` ⇒
+  backward-compatible; web demo + one-shot `write()` are unaffected unless opted in.
+- Shell: a dedicated **`/agentic on|off|llm|default`** command (`shell/commands._cmd_agentic`,
+  registered in `_const`/`slash`/`help`) that toggles the setting *and* flips the live project via
+  `apply_controller`; **`/trace`** prints the project's `agent_trace.jsonl`; and the run dashboard
+  surfaces the latest controller decision. (Not in the `/features` bool grid - it's policy-bearing.)
+
+### 21.9 Build order (end-to-end, suite-gated per step)
+
+| Phase | Deliverable | Gate (offline fake-LLM) |
+|---|---|---|
+| **0. Tool registry** | `agentic/tools.py` - existing fns wrapped, schemas, registry. No control-flow change. | each tool callable; schema validates; output identical to direct call |
+| **1. Controller seam + default policy** | `agentic/controller.py` (`controller_run`, `DefaultPolicy`, `before/after_tool`, `build_state_view`); `run()`/`_run_article` dispatch; `run_state` keys; `Settings.agentic`. LLM policy **off**. | **equivalence test**: agentic+DefaultPolicy == legacy pipeline (text, episode count, duel count); resume mid-run |
+| **2. LLM policy (real agency)** | `LlmPolicy` + `CONTROLLER_SYS`; trace logging; `/agentic` toggle; API flag | fake controller picks a non-default-but-legal sequence (e.g. `research`→`draft_unit`); run completes; learning-signal counts unchanged; illegal action → fallback |
+| **3. Dynamic mid-draft tools** | writer may request `research`/`read_canon` *during* a draft (a bounded sub-loop) - still ends in one draft → one critique | a draft that fires an on-demand research call still records **exactly one** episode |
+| **4. Multi-agent crew (where it earns it)** | reuse the judge panel (`rank_variants`); add an independent fact-checker/critic panel for `verify_claims`; research fan-out already exists (deep_research) | panel verify needs ≥majority; no peer-to-peer chatter built |
+| **5. Learned policy π** | consume `agent_trace.jsonl` + episode outcomes (first_pass, insight, reader-report) as reward; distill a policy that replaces `policy.next_action` | gated through the **same** candidate→trusted validation as skills; never auto-promoted; `next_action` is the clean swap point |
+
+Phases 0–2 deliver the "self-directing loop + real tool use + end-to-end autonomy" the user asked
+for. 3 deepens tool use, 4 is multi-agent, 5 is the endgame. Each is independently shippable behind
+the toggle.
+
+**Status:** 0-2 ✅ built · 3 ✅ seam built (`extra_context` threading + on-demand `research`/
+`read_canon`; full in-generation tool-calling is the next increment) · 4 ✅ `panels.fact_check_panel`
+(wire into the section commit when desired) · 5 ✅ `TracePolicy` swap seam (awaits trace volume + a
+trainer). See the implementation-status note at the top of §21.
+
+### 21.10 Multi-agent - honest scope (Phase 4)
+
+Most "crews" are Phase-2's loop with role prompts; we already have the degenerate form (planner /
+writer / critic / judge as sequential roles). Add **real** parallel agents only where independent
+perspectives beat one pass: the **judge panel** (already seeded by `rank_variants`) and an
+**adversarial fact-checker panel** over `verify_claims` (N skeptics, majority refute ⇒ block). Skip
+free-form agent-to-agent negotiation - it adds latency and nondeterminism that fights the duel
+machinery.
+
+### 21.11 Learned policy π - the endgame (Phase 5)
+
+A trained policy that picks the next tool is the natural top of the self-improving loop, but it is
+*last* for a reason: it needs (a) the tool interface (Phase 0), (b) logged episodes with outcomes
+(`agent_trace.jsonl`, Phase 2+), and (c) a reward signal - which we already have (first-pass
+approval, insight, reader-report). Jumping here first would have no trace data to learn from. When
+ready, it slots in behind `policy.next_action` and is validated by the **same** efficacy gate that
+governs skills - a self-directing policy is just another taste, quarantined identically.
+
+### 21.12 Risk & rollback
+
+- **Default off.** `agentic=False` ⇒ the legacy `run()` path runs verbatim. Opt-in only.
+- **Equivalence test (Phase 1)** is the regression net: any drift between agentic+DefaultPolicy and
+  the pipeline fails CI.
+- **Bounded.** Per-unit gathering cap (`agentic_max_unit_steps`) + budget kill-switch + legality guard ⇒ no
+  runaway, no canon corruption; worst case the run finishes on the deterministic default policy.
+- **Learning loop provably intact.** `draft_unit` wraps the unchanged episode; `record_*` /
+  `reconcile` untouched; the episode/duel-count assertion guards it.
+- **Files.** New: `agentic/{__init__,tools,controller}.py`, `tests/test_agentic.py`, `CONTROLLER_SYS`
+  in `prompts.py`. Edited: `config.py`, `orchestrator/{common,book,article}.py` (state keys +
+  dispatch), `api.py`, `shell/{commands,_const}.py`. The orchestrator seams' `__init__` re-exports are
+  unaffected (the agentic facade is additive).

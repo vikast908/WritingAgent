@@ -12,6 +12,7 @@ __all__ = [
     'delete_book',
     'record_instruction',
     'apply_autonomous',
+    'apply_controller',
     'status',
     'memory_summary',
 ]
@@ -101,6 +102,27 @@ def apply_autonomous(uid: str, book_id: str, autonomous: bool, settings) -> dict
             and state.get("review_kind") in ("chapter", "section")):
         state["pending_review"] = False
         state["review_kind"] = None
+    brain.write_json(paths.run_state, state)
+    return state
+
+
+def apply_controller(uid: str, book_id: str, agentic: bool, settings) -> dict | None:
+    """Switch an existing project between the agentic controller and the fixed pipeline.
+
+    The controller is baked into the run_state at creation (start_book/start_article),
+    so flipping it afterwards means rewriting that state: set ``controller`` and re-derive
+    the controller's policy from settings, so an existing project can become agentic (or go
+    back to the pipeline) without recreating it.
+
+    Returns the updated state, or None if the project has no run_state.
+    """
+    art = ArticlePaths(book_id, uid)
+    paths = art if art.run_state.exists() else BookPaths(book_id, uid)
+    state = brain.read_json(paths.run_state)
+    if state is None:
+        return None
+    state["controller"] = "agentic" if agentic else "pipeline"
+    state["agentic_policy"] = settings.agentic_policy
     brain.write_json(paths.run_state, state)
     return state
 

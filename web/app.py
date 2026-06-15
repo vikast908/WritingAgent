@@ -52,6 +52,12 @@ PROVIDERS: dict[str, dict[str, str]] = {
 # Keep the free preview cheap and snappy: small pieces, researcher off (fake mode has
 # no real web anyway), humanizer on so the AI-tell stripping is visible.
 MAX_UNITS = 8
+MAX_TOPIC_CHARS = 2000   # bound visitor input - an unbounded topic flows into every prompt
+
+# The demo is single-process and mutates process-global env (provider key, fake mode) +
+# the global LLM client. This lock serializes runs so one visitor's key/provider can never
+# be picked up by another's concurrently-running request (cross-visitor key/billing leak).
+_RUN_LOCK = threading.Lock()
 
 
 def configure_runtime(real_run: bool, provider: str, api_key: str) -> str:
@@ -61,9 +67,15 @@ def configure_runtime(real_run: bool, provider: str, api_key: str) -> str:
     installs the visitor's key on the right env var, and selects the provider. Returns
     the provider id ('' in fake mode). Raises ValueError if a real run has no key.
 
-    NB: this mutates process-global env, so a public deployment should run single-worker
-    (the default for a Gradio Space) or serialize runs.
+    NB: this mutates process-global env. Runs are serialized by `_RUN_LOCK` in `generate`,
+    and every provider key a PREVIOUS visitor left in the env is cleared here first, so one
+    visitor's key can never survive into another's run.
     """
+    # Wipe any key/provider a prior run installed - never let a stale key persist (e.g. a
+    # real run followed by a free preview must not leave the real key in the process env).
+    for spec in PROVIDERS.values():
+        os.environ.pop(spec["env"], None)
+    os.environ.pop("WRITINGAGENT_PROVIDER", None)
     if not real_run:
         os.environ["WRITINGAGENT_FAKE"] = "1"
         return ""
@@ -82,14 +94,26 @@ def configure_runtime(real_run: bool, provider: str, api_key: str) -> str:
 def generate(topic: str, mode: str, units: int, provider: str, api_key: str, real_run: bool):
     """Drive one run, streaming (log, manuscript, evidence_report, download_path).
 
-    A generator so the UI can show progress live: the pipeline runs in a worker thread
-    and its progress lines are streamed out as they arrive; the finished manuscript,
-    evidence report, and a downloadable markdown file are yielded at the end.
+    A generator so the UI can show progress live. Serialized by `_RUN_LOCK`: only one run
+    executes at a time, so concurrent visitors can't clobber each other's process-global
+    key/provider (a cross-visitor key/billing leak).
     """
     topic = (topic or "").strip()
     if not topic:
         yield "Enter a topic to begin.", "", "", None
         return
+    topic = topic[:MAX_TOPIC_CHARS]
+    if not _RUN_LOCK.acquire(blocking=False):
+        yield "⏳ Another run is already in progress - please wait a moment and retry.", "", "", None
+        return
+    try:
+        yield from _run(topic, mode, units, provider, api_key, real_run)
+    finally:
+        _RUN_LOCK.release()
+
+
+def _run(topic: str, mode: str, units: int, provider: str, api_key: str, real_run: bool):
+    """The actual run + live stream (holds `_RUN_LOCK` for its whole duration via `generate`)."""
     units = max(1, min(int(units or 4), MAX_UNITS))
     try:
         provider_id = configure_runtime(real_run, provider, api_key)

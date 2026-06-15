@@ -4,6 +4,21 @@ Verification log for recent sessions (newest first). The living suite is `tests/
 (run `pytest -q` with `WRITINGAGENT_FAKE=1`); this file records what was executed,
 where, and what it proved.
 
+## 2026-06-16 (session 13): agentic controller + resilience hardening
+
+| Check | How | Result |
+|---|---|---|
+| Full suite | `pytest -q` (Windows, fake mode) | **390 passed, 1 skipped** (opt-in live test); ruff clean |
+| Agentic controller (opt-in, plan §21) | new `tests/test_agentic.py` | `default`/`llm`/`trace` policies; controller chooses research/canon before drafting; `draft` step is the unchanged episode (learning loop untouched); `agent_trace.jsonl` append-only contract |
+| Agentic shell/TUI surface | new `tests/test_agentic_tui.py` | `/agentic on\|off\|llm\|default` toggles the setting *and* flips the active project's controller live; `/trace` prints the project's trace; dashboard shows the latest decision |
+| Config validation | new `tests/test_config.py` | `load_settings` clamps out-of-range values (`min_insight: 99`, negative `max_revisions`, etc.) to sane bounds instead of baffling runtime behavior |
+| Fallback model on primary exhaustion | `tests/test_hardening.py` | a node whose primary exhausts retries (outage / 5xx / content filter) degrades once onto the global `fallback` tier instead of killing the run |
+| Context budget | `tests/test_retrieval.py` | assembled canon+summaries+excerpts block is priority-bounded by `max_context_chars` (default 24000), so a long book can't silently overflow the window |
+| Anti-slop lexicon single-source | `tests/test_quality.py` | the writer's `NO_SLOP` block and the deterministic humanizer are cross-checked against the one `slop.py` lexicon, so they can't drift (incl. the documented `optimize` TECHNICAL_EXCEPTION) |
+
+Live-validation: a real 1-section article on OpenRouter (~$0.10) with the `llm` controller —
+it chose research→research→draft, recorded in `agent_trace.jsonl`.
+
 ## 2026-06-13 (session 12): diagrams + export images
 
 | Check | How | Result |

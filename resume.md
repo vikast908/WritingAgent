@@ -5,6 +5,132 @@
 
 ## Current status
 
+> **PENDING - review next session (as of 2026-06-16).** Deferred review findings, roughly by value.
+> All are NON-blocking (suite is green, 390/1); pick up here tomorrow.
+> - **A-021 (High):** process-global LLM state (`_client`, `_usage`, `_run_id`, `_fallback_model`) is
+>   module-global with manual `reset_usage()` - fine for one-shot CLI, a latent hazard in the long-lived
+>   TUI (consecutive runs share one namespace) and under any concurrency. Consider a per-run context obj
+>   or document the "serialize runs" invariant. (conftest now resets `_fallback_model` per test.)
+> - **A-022 (Med):** structured/analytical nodes (`extract_canon`, `consolidate`, `learn`) run at the
+>   model-default temperature - should be low/0 for determinism. Set explicit temps in `models.yaml`.
+> - **A-024 (Med):** no `frequency_penalty`/`presence_penalty` despite repetition being the core enemy;
+>   a mild positive freq penalty on the writer node directly attacks the slop the humanizer cleans up.
+> - **B-005 / A-017 (Med):** embedding cache key has no model id (stale-vector contamination if the
+>   model changes) and is written non-atomically/unlocked. Namespace the key by model + use atomic write.
+> - **B-013 (Med):** no `context_length_exceeded` handling - a too-large prompt hard-fails instead of
+>   trimming/summarizing/retrying with headroom on. (The new `max_context_chars` budget mitigates.)
+> - **B-012 (Med):** `stream_text` (TUI chat) has no retry/budget/telemetry - chat calls bypass the
+>   kill-switch and usage accounting. Capture usage from the final stream chunk.
+> - **D-008 (Med):** book pipeline has no cross-chapter repetition/cohesion pass (articles do).
+> - **D-013 (Med):** LLM inputs/outputs are never logged at any verbosity - debugging "why did it
+>   produce/escalate this" needs a re-run. Add an opt-in prompt/completion debug sink.
+> - **C-011 (Med):** `cli.py` is a 1001-line god-module - split into a `cli/` package like shell/.
+> - **D-014 (Low):** `agent_trace.jsonl` isn't joinable to the telemetry JSONL (no shared `run_id`/`ts`).
+> - **C-010 (Low):** `requirements.lock.txt` pins future/unresolvable versions - regenerate from a real freeze.
+> - **A-008 follow-up:** the humanizer still keeps its own tuned regex (now cross-checked against
+>   `slop.py`); fully *generating* the regex from `slop.py` is the remaining single-source step.
+> - **Two deferred showstoppers (older):** independent blind A/B (third-party judge, n≥5) and a real
+>   10+ chapter book validation. The full review reports (A-/B-/C-/D-### with file:line + fix code) are
+>   in the conversation transcript if more detail is needed.
+
+- **New (2026-06-16 - A-008 lexicon single-source + C-007 config validation + all md docs + git - DONE):**
+  closed the "next batch". **A-008:** new `src/writingagent/slop.py` is the single source for the
+  anti-slop lexicon (verbs/terms/transitions/intensifiers/phrases/openers + `TECHNICAL_EXCEPTIONS`);
+  `prompts.NO_SLOP` is now GENERATED from it (`slop.render_constraints()`), the humanizer regex is
+  cross-checked against it by `test_quality.test_lexicon_single_source_consistency`, and the old
+  contradiction is resolved - `optimize`/`navigate` are documented exceptions (not hard-banned, not
+  stripped). Extended the humanizer to catch every banned adjective + `enhance` (it had missed
+  vital/innovative/intricate/nuanced/realm/landscape/enhance). **C-007:** `config._clamp_settings` (run
+  in `load_settings`) clamps out-of-range settings to sane bounds + normalizes `mode`/`agentic_policy`;
+  +`tests/test_config.py` (3) + the consistency test. **Docs:** updated README, PRD, learning.md, test.md
+  (via a doc agent), plus plan §15.1 (4 new hardening rows), CHANGELOG, this file. **390 passed / 1
+  skipped, ruff clean.** Committed + pushed to git. **Next:** the PENDING list above.
+- **New (2026-06-15 - review Critical/High batch fixed - DONE):** fixed the five items I flagged as
+  the next pass. **A-020 fallback model:** `models.yaml` `fallback: deepseek/deepseek-v4-flash` +
+  `ModelConfig.fallback` + `llm.configure_fallback` (wired in api + cli); `complete_text`/
+  `complete_structured` retry ONCE on the fallback after the primary exhausts retries (`_allow_fallback`
+  guards recursion). **A-014 context budget:** `Settings.max_context_chars=24000` threaded into
+  run-state; `retrieval.assemble_context(..., max_chars)` + `_within_budget` drop lowest-priority
+  blocks (excerpts→summaries→canon) so long books can't overflow the window. **A-016 crash-safety:**
+  `_commit` now commits canon (SQLite + render) BEFORE writing the chapter `.md` (the resume marker),
+  then indexes - so a mid-commit crash re-runs the chapter (idempotent INSERT OR IGNORE extraction)
+  instead of skipping it with missing canon; `_commit_section` writes the summary before the section
+  file. **C-002/D-010 web:** `_RUN_LOCK` serializes runs + `configure_runtime` clears all prior provider
+  keys from env before each run (no cross-visitor leak) + `MAX_TOPIC_CHARS` cap. **Cross-test leak
+  caught:** `_fallback_model` is process-global and leaked into `test_complete_text_gives_up_on_fatal`
+  (it fell back instead of raising) - fixed by resetting it in the conftest autouse fixture (also closes
+  review C-004's "isolate global state"). +6 tests (4 fallback in test_hardening, 2 budget in
+  test_retrieval). **386 passed / 1 skipped, ruff clean.** Verified the fallback slug loads live
+  (`deepseek/deepseek-v4-flash`). Docs: plan §12.1, CHANGELOG. **Still deferred (offered):** A-001
+  (mid-unit research can't fire on terminal attempt - assessed as arguably-correct, not a bug),
+  A-008 (anti-slop lexicon drift across 3 files), A-021 (process-global LLM state in long-lived TUI),
+  C-007 (config range validation), C-011 (cli.py god-module), D-013 (no prompt/completion logging).
+- **New (2026-06-15 - agentic TUI + Medium gaps + exhaustive review + fixes - DONE):** (1) **TUI layer**
+  (parallel agent): `/agentic on|off|llm|default` (toggles setting + flips the live project via new
+  `orchestrator.apply_controller`, mirroring `apply_autonomous`), `/trace` (prints `agent_trace.jsonl`),
+  controller-decision line in the run dashboard. (2) **Mediums** (parallel agent): `fact_check_panel`
+  wired into the article approval gate behind `agentic_factcheck_panel`; Phase-3 mid-unit research (a
+  BLOCKING evidence gap under the agentic controller pulls one research brief into the next revision,
+  folded via `extra_context`/`full_context` closure late-binding). All gated on `controller=="agentic"`
+  so the equivalence guarantee holds. (3) **Live validation:** real OpenRouter run ($0.10, 21 calls,
+  2174 words) - the LLM controller chose research→research→draft on `deepseek/deepseek-v4-pro` (so the
+  v4 slugs ARE real, contra the review's speculation). (4) **Bug found + fixed:** a `save_settings`
+  round-trip during the TUI agent's test iteration wrote `export_dir:` (bare) → YAML `None` → literal
+  `export_dir: None`, breaking `test_export_formats`/`test_write_flow` (gitignored settings.yaml, so a
+  `git stash` check mis-reported it as pre-existing). Fixed `save_settings` to emit `""` for empty
+  strings + repaired the file. (5) **Exhaustive 4-agent code review** (17 dimensions) - ~50 findings;
+  applied the safe high-value ones: **B-002** panel now gates on `deep_research` (inherits verify-gate
+  snippet policy, can't false-refute on thin evidence); **B-009** clamp Critique insight/clarity/
+  structure/evidence to [1,5]; **B-004** honest `read_canon` tool desc; **D-006** `ModelConfig` default
+  `claude-opus-4-8`→`deepseek/deepseek-v4-pro`; and **§21 plan-drift** corrections (D-001/2/3/5/7:
+  `agent_steps` is a counter not a backstop, real 5 config fields, no `Project.run(agentic=)`, `/agentic`
+  is a command not a grid toggle, registry scope = 3 policy-selectable tools, test count 15→28).
+  **381 passed / 1 skipped, ruff clean** (only `examples/colab_quickstart.ipynb` E401/I001 remains -
+  upstream notebook). **Deferred from review (offered, not done):** A-020 no fallback model on failure
+  (Critical, pre-existing); A-014 no context token-budget; A-016 `_commit` writes chapter file before
+  canon/index commit (resume guard can skip a chapter with missing canon); C-002/D-010 web demo
+  process-global key/env not serialized under concurrency; C-004 no autouse fake-mode guard in conftest;
+  C-007 no config range validation; A-001 mid-unit research can't fire on the terminal attempt;
+  C-011 `cli.py` 1001-line god-module.
+- **New (2026-06-15 - agentic controller BUILT end-to-end, opt-in, all phases - DONE):** implemented
+  plan §21. New **`agentic/` package**: `_schema` (ControllerDecision), `tools` (Tool catalog + UnitOps
+  + `unit_research`/`unit_research_article`), `policy` (DefaultPolicy / LlmPolicy / TracePolicy +
+  `make_policy`), `controller` (`run_unit` bounded perceive→decide→guard→act→record loop +
+  `build_state_view`), `panels` (`fact_check_panel`), `trace` (append-only `agent_trace.jsonl`).
+  Added `CONTROLLER_SYS` to `prompts.py`; 5 `Settings` fields (`agentic`, `agentic_policy`,
+  `agentic_controller_model`, `agentic_max_unit_steps`, `agentic_factcheck_panel`) threaded through
+  `_base_run_state` (adds `controller`/`agent_steps`); `book.run()` + `_run_article` dispatch each unit
+  through `agentic.run_unit` (lazy import) when `controller=="agentic"`, else the unchanged
+  `_process_chapter`/`_process_article_section`. Added an optional `extra_context` param to both unit
+  processors (mid-draft tool use; None in the fixed path → identical). **Core invariant held:** `draft`
+  IS the existing episode, so duel + `record_chapter` are byte-for-byte unchanged. **Phases:** 0-2
+  production-complete; 3 = `extra_context` + on-demand research/canon seam; 4 = `fact_check_panel`
+  utility; 5 = `TracePolicy` swap seam. Opt-in is free: `Agent(agentic=True, agentic_policy="llm")` and
+  `/set agentic true` both go through the generic Settings path (no API/shell code). **+15 tests
+  (`tests/test_agentic.py`)** incl. the equivalence guarantee (agentic+DefaultPolicy == fixed pipeline:
+  identical manuscript + episode count). **367 passed / 1 skipped; agentic code ruff-clean.** Docs:
+  plan §21 status note + build-order status, CHANGELOG [Unreleased]. **Pre-existing (NOT mine):**
+  `ruff check .` flags `shell/repl.py:143` (E741) + `examples/colab_quickstart.ipynb` (E401/I001) -
+  both came in with the upstream merge (b3458a9); left untouched. **Next:** evaluate `agentic_policy=llm`
+  on a real key (the controller's research/draft choices); decide whether to wire `fact_check_panel`
+  into the article section commit; the two deferred showstoppers (blind A/B, 10+ chapter validation).
+- **New (2026-06-15 - agentic-controller plan written, NOT yet built):** the user wants a *self-directing*
+  writer (choose-next-move agent), not just the current *self-correcting* fixed pipeline - and explicitly
+  asked it not break the self-improving loop. Evaluated `earendil-works/pi` (TS agent harness, 62.8k★): good
+  design reference, wrong runtime for us (TS vs our Python; a coding agent; no brain/efficacy loop). Verdict =
+  borrow the *pattern* (`pi-agent-core`'s perceive→decide→guard→act→record loop + before/afterToolCall hooks),
+  keep our brain + learning loop. Wrote the **end-to-end plan as `plan.md` §21** (Phases 0-5: tool registry →
+  controller seam+default policy → LLM policy → mid-draft tools → multi-agent → learned policy π). **Core
+  safety idea:** tools wrap *existing* orchestrator fns at current granularity, so `draft_unit` IS the
+  unchanged `_process_chapter`/`_process_article_section` - the write→judge→`record_chapter`/`record_duel`
+  episode stays atomic *inside* one tool; agency lives only *between* episodes. Default toggle OFF
+  (`Settings.agentic=False`) ⇒ zero risk; Phase-1 acceptance = agentic+DefaultPolicy is byte-identical to
+  legacy `run()` (same text, episode count, duel count). **Next (build):** Phase 0 - create
+  `agentic/tools.py` registry over existing fns (pure refactor, suite-gated), then Phase 1 controller seam.
+  New files planned: `agentic/{__init__,tools,controller}.py`, `tests/test_agentic.py`, `CONTROLLER_SYS` in
+  `prompts.py`; edits to `config.py`, `orchestrator/{common,book,article}.py`, `api.py`, `shell/{commands,
+  _const}.py`. See plan §21.0-§21.12.
+
 - **New (2026-06-15 - self-review hardening of the day's work - DONE):** critical pass over the same-day
   changes found and fixed two real issues. (1) **`_write_env_key` could crash the shell at startup for
   installed users**: `brain._ROOT` is read-only under site-packages (pip/npm install), and the unwrapped

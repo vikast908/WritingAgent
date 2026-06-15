@@ -162,8 +162,25 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
                             and brain.read_text(paths.ch(k)) is None):
                         prefetch[k] = pool.submit(
                             _chapter_fetch, cfg, paths, plan, toc, state, k, log)
-                outcome = _process_chapter(cfg, paths, plan, toc, store, state, n, log,
-                                           prefetched=prefetch.pop(n, None), ask=ask)
+                pf = prefetch.pop(n, None)
+                if state.get("controller") == "agentic":
+                    # Self-directing path (plan §21): the controller may research / read
+                    # canon before drafting; `draft` is the unchanged _process_chapter call.
+                    from .. import agentic
+                    blueprint = toc.chapters[n - 1]
+                    ops = agentic.UnitOps(
+                        paths=paths, unit_label=f"ch{n:02d}",
+                        research_on=bool(state.get("use_researcher")), has_canon=True,
+                        draft=lambda extra, _pf=pf, _n=n: _process_chapter(
+                            cfg, paths, plan, toc, store, state, _n, log,
+                            prefetched=_pf, ask=ask, extra_context=extra),
+                        research=lambda q, _bp=blueprint: agentic.unit_research(cfg, plan, _bp, q, log),
+                        read_canon=lambda q: store.canon_context(),
+                    )
+                    outcome = agentic.run_unit(cfg, state, ops=ops, log=log)
+                else:
+                    outcome = _process_chapter(cfg, paths, plan, toc, store, state, n, log,
+                                               prefetched=pf, ask=ask)
                 if outcome == "escalate":
                     _mark_escalated(state, paths, "chapter",
                                     f"[!] Chapter {n} escalated. Resolve with `book review` then `book run`.",
@@ -292,7 +309,7 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
 
 
 def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=None,
-                     ask=None) -> str:
+                     ask=None, extra_context=None) -> str:
     llm.set_unit(f"ch{n:02d}")
     blueprint = toc.chapters[n - 1]
     # Resume guard: if this chapter was already committed on a prior run but the
@@ -302,7 +319,12 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         log(f"\n== Chapter {n}: {blueprint.title} ==")
         log("   [resume] already committed - advancing")
         return "commit"
-    base_context = retrieval.assemble_context(store, paths, blueprint)
+    base_context = retrieval.assemble_context(
+        store, paths, blueprint, max_chars=int(state.get("max_context_chars") or 0) or None)
+    # extra_context: research/canon the agentic controller gathered for this unit before
+    # drafting (plan §21.3). None in the fixed pipeline, so behaviour is identical there.
+    if extra_context:
+        base_context = extra_context.rstrip() + "\n\n" + base_context
 
     fetched: dict = {}
     if prefetched is not None:
@@ -335,6 +357,11 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
     draft = ""
     best: tuple[str, S.Critique] | None = None
     approved_attempt = -1
+    # Agentic-only (plan §21): one bounded mid-unit research pull in response to an
+    # evidence gap. No-op under the fixed pipeline, so the equivalence guarantee holds.
+    agentic_on = state.get("controller") == "agentic"
+    research_on = bool(state.get("use_researcher"))
+    did_research = False
 
     # skeleton kwarg: a book chapter has no skeleton mode (that's an article token
     # optimisation); it's accepted so _divergent_first_draft can call _write/_critique
@@ -413,6 +440,22 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
             _record_preference(paths, f"## Revision ({_unit_desc}, attempt {attempt}->{attempt + 1})\n"
                                "Fixed: " + "; ".join(f"{b.type}: {b.detail}"
                                                      for b in crit.blocking[:3]))
+        # Phase 3 (plan §21): pull targeted research IN RESPONSE to an evidence gap the
+        # critique surfaced, once per unit. Agentic-only + researcher-on, so the fixed
+        # pipeline is byte-identical. The brief is prepended to `context`, which the
+        # `_write` closure reads by free-var late binding.
+        if (agentic_on and research_on and not did_research
+                and any(b.type == "evidence" for b in crit.blocking)):
+            from .. import agentic
+            gap = next(b for b in crit.blocking if b.type == "evidence")
+            query = f"{blueprint.title}: {gap.detail}"[:200]
+            brief = agentic.unit_research(cfg, plan, blueprint, query, log) or ""
+            if brief:
+                context = brief.rstrip() + "\n\n" + context
+            did_research = True
+            agentic.trace.append(paths, {
+                "unit": f"ch{n:02d}", "action": "research", "query": query,
+                "reason": "evidence gap", "result": f"+{len(brief)} chars"})
         base_draft = draft   # revise the latest attempt, not regenerate from notes alone
 
     assert crit is not None and best is not None
@@ -447,12 +490,20 @@ def _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pas
     out = concurrency.gather(tasks, strict=True)
 
     final = out.get("humanized") or draft
-    brain.write_text(paths.ch(n), final)
-    brain.write_text(paths.ch_summary(n), out["summary"])
-    _save_version(paths, f"ch{n:02d}", final, label="committed")
     extraction = out["extraction"]
+    # Crash-safety ordering (A-016): the canon (the durable knowledge base) is committed to
+    # SQLite + rendered to markdown BEFORE the chapter .md - which is the resume guard's
+    # "this chapter is committed" marker. If we wrote the .md first, a crash before the canon
+    # commit would make the next run SKIP this chapter (file exists) with its facts
+    # permanently missing from canon. Re-extraction is idempotent (INSERT OR IGNORE), so the
+    # worst case now is a harmless re-run, not silent canon corruption. index_chapter (derived
+    # FTS) runs last - it reads ch(n)+summary from disk, and a missing FTS row only degrades
+    # retrieval, never the knowledge base.
+    brain.write_text(paths.ch_summary(n), out["summary"])
     store.update_from_extraction(n, extraction)
     store.render_canon(paths, names=[ch.name for ch in extraction.characters])
+    brain.write_text(paths.ch(n), final)
+    _save_version(paths, f"ch{n:02d}", final, label="committed")
     store.index_chapter(paths, n)
 
     if sources:

@@ -16,10 +16,16 @@ class ModelConfig:
     """Resolves which model and sampling temperature to use for each node."""
 
     def __init__(self, data: dict):
-        self._default = data.get("default", "claude-opus-4-8")
+        # Matches the shipped config/models.yaml default and the plan's DeepSeek-only
+        # routing (§12.1). Only used when models.yaml is absent; an Anthropic slug here
+        # would silently route every node to a model no configured provider serves.
+        self._default = data.get("default", "deepseek/deepseek-v4-pro")
         self._nodes = data.get("nodes", {}) or {}
         self._temperature = data.get("temperature", {}) or {}
         self._max_tokens = data.get("max_tokens", {}) or {}   # per-node completion caps
+        # The cheapest reliable model to retry on after the primary exhausts its retries
+        # (plan §12.1 fallback). Empty = no fallback. One global slug, not per-node.
+        self._fallback = data.get("fallback", "")
 
     def model_for(self, node: str) -> str:
         return self._nodes.get(node, self._default)
@@ -41,6 +47,12 @@ class ModelConfig:
     def default(self) -> str:
         return self._default
 
+    @property
+    def fallback(self) -> str:
+        """Global fallback model slug (e.g. a flash tier) tried once after the primary
+        model exhausts its retries on a node. Empty string = no fallback (plan §12.1)."""
+        return self._fallback
+
     def set_default(self, model: str) -> None:
         self._default = model
 
@@ -54,7 +66,8 @@ class ModelConfig:
 
     def to_dict(self) -> dict:
         return {"default": self._default, "nodes": dict(self._nodes),
-                "temperature": dict(self._temperature), "max_tokens": dict(self._max_tokens)}
+                "temperature": dict(self._temperature), "max_tokens": dict(self._max_tokens),
+                "fallback": self._fallback}
 
 
 @dataclass
@@ -96,6 +109,9 @@ class Settings:
     #                                         can perturb the system prefix and defeat provider prompt-caching.
     request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
     max_run_tokens: int = 0                 # pause a run once its total tokens exceed this (0 = unlimited)
+    max_context_chars: int = 24000          # budget for the assembled canon+summaries+excerpts block
+    #                                         (drops lowest-priority parts first); guards against blowing
+    #                                         the model window on long books. 0 = unbounded.
     mode: str = "article"        # "book" | "article" - default for new projects
     num_sections: int = 6        # default section count for articles
     theme: str = "editorial"     # TUI color theme (see ui.THEMES; /theme to switch)
@@ -105,6 +121,14 @@ class Settings:
     export_dir: str = ""         # default save folder for exports ("" = each project's own folder; /path)
     strip_inline_citations: bool = True   # remove [N] markers from prose; sourcing lives only in end References
     rank_references: bool = True          # final References scored by influence (0-100), dated, sorted high->low
+    # ── Agentic controller (plan §21) - opt-in self-directing loop over the fixed pipeline ──
+    agentic: bool = False                 # drive units through the controller (choose research/canon then draft)
+    #                                       instead of the fixed pipeline. Default OFF => today's behavior, no risk.
+    agentic_policy: str = "default"       # who chooses the next action: default (always draft, == fixed pipeline) |
+    #                                       llm (a ReAct controller call) | trace (Phase-5 learned-policy seam)
+    agentic_controller_model: str = "judge"  # per-node routing key for the llm policy's model (cheap/light reasoning)
+    agentic_max_unit_steps: int = 3       # max research/read_canon gathering steps before a unit must be drafted
+    agentic_factcheck_panel: bool = False  # multi-agent fact-check panel utility (plan §21.10; majority-vote verify)
 
 
 def load_config() -> ModelConfig:
@@ -118,7 +142,10 @@ def save_config(cfg: ModelConfig) -> None:
     """Persist model routing back to config/models.yaml (e.g. after a /model change)."""
     data = cfg.to_dict()
     lines = ["# Per-node model routing (OpenRouter slugs). Edit here or via the shell /model command.",
-             f"default: {data['default']}", "", "nodes:"]
+             f"default: {data['default']}"]
+    if data.get("fallback"):
+        lines.append(f"fallback: {data['fallback']}   # retried once after the primary fails")
+    lines += ["", "nodes:"]
     lines += [f"  {k}: {v}" for k, v in data["nodes"].items()]
     if data["temperature"]:
         lines += ["", "temperature:"]
@@ -129,13 +156,36 @@ def save_config(cfg: ModelConfig) -> None:
     _MODELS.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _clamp_settings(s: Settings) -> Settings:
+    """Clamp out-of-range values to sane bounds so a typo in settings.yaml can't produce
+    baffling runtime behavior (e.g. min_insight: 99 makes every unit fail the gate forever,
+    a negative max_revisions breaks the loop range). Clamps in place and returns `s` -
+    never raises, so a run degrades rather than refusing to start."""
+    s.num_chapters = max(1, s.num_chapters)
+    s.num_sections = max(1, s.num_sections)
+    s.max_revisions = max(0, s.max_revisions)
+    s.consolidate_every = max(1, s.consolidate_every)
+    s.divergent_drafts = max(1, s.divergent_drafts)
+    s.min_insight = min(5, max(0, s.min_insight))            # 0 = off; the scale is 1-5
+    s.escalate_below_confidence = min(1.0, max(0.0, s.escalate_below_confidence))
+    s.request_timeout = s.request_timeout if s.request_timeout > 0 else 60.0
+    s.max_run_tokens = max(0, s.max_run_tokens)              # 0 = unlimited
+    s.max_context_chars = max(0, s.max_context_chars)        # 0 = unbounded
+    s.agentic_max_unit_steps = max(0, s.agentic_max_unit_steps)
+    if s.mode not in ("book", "article"):
+        s.mode = "article"
+    if s.agentic_policy not in ("default", "llm", "trace"):
+        s.agentic_policy = "default"
+    return s
+
+
 def load_settings() -> Settings:
     if _SETTINGS.exists():
         with open(_SETTINGS, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
         valid = {f.name for f in dataclasses.fields(Settings)}
-        return Settings(**{k: v for k, v in data.items() if k in valid})
-    return Settings()
+        return _clamp_settings(Settings(**{k: v for k, v in data.items() if k in valid}))
+    return _clamp_settings(Settings())
 
 
 def save_settings(s: Settings) -> None:
@@ -143,5 +193,14 @@ def save_settings(s: Settings) -> None:
     lines = ["# Engine settings (tunable; see plan.md §15)."]
     for f in dataclasses.fields(s):
         v = getattr(s, f.name)
-        lines.append(f"{f.name}: {str(v).lower() if isinstance(v, bool) else v}")
+        if isinstance(v, bool):
+            sval = str(v).lower()
+        elif isinstance(v, str) and not v:
+            # An empty string must round-trip as an empty string. Writing a bare
+            # `key:` makes YAML load it back as None (e.g. export_dir -> Path("None")),
+            # which silently corrupts the next save into the literal `key: None`.
+            sval = '""'
+        else:
+            sval = v
+        lines.append(f"{f.name}: {sval}")
     _SETTINGS.write_text("\n".join(lines) + "\n", encoding="utf-8")

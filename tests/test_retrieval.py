@@ -12,6 +12,21 @@ def _plan(genre="thriller", themes=("memory", "fog")):
                       world_rules=[], main_characters=[])
 
 
+def test_within_budget_drops_lowest_priority_first():
+    a, b, c = "A" * 100, "B" * 100, "C" * 100
+    # budget fits the two highest-priority blocks but not the third -> third dropped whole.
+    out = retrieval._within_budget([a, b, c], 230)
+    assert a in out and b in out and "CC" not in out
+    # 0 budget = unbounded (all three joined).
+    assert retrieval._within_budget([a, b, c], 0) == "\n\n".join([a, b, c])
+
+
+def test_within_budget_includes_truncated_partial_of_overflow():
+    big = "X" * 1000
+    out = retrieval._within_budget([big], 700)
+    assert "truncated to fit" in out and len(out) < 1000
+
+
 def _bp(number=2, title="x", depends_on=(1,)):
     return S.ChapterBlueprint(number=number, title=title, purpose="p",
                               emotional_role="e", plot_function="f", setup="s",

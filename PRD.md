@@ -69,7 +69,8 @@ and self-corrects until it isn't slop"** — and you own the data and the spend.
 ## 6. Scope
 
 **In scope (now):** long-form articles + books; research (shallow + deep); the quality machinery;
-6 export formats; diagrams; TUI + CLI + npm launcher + Python API; the markdown brain + learning loop.
+6 export formats; diagrams; TUI + CLI + npm launcher + Python API; the markdown brain + learning loop;
+an opt-in self-directing (agentic) controller atop the fixed pipeline.
 
 **Out of scope (deliberate):** short-form/marketing copy; real-time collaboration; a hosted SaaS;
 a full GUI (revisit only if demand is proven); non-text media.
@@ -90,6 +91,25 @@ Resolution: **lead with articles**; present everything else as secondary.
 ## 8. Roadmap
 
 ### Now (shipped this session)
+- **Self-directing (agentic) mode — opt-in** (`agentic`, plan §21): an LLM *controller* decides per
+  unit whether to gather research / read canon *before* drafting, instead of always drafting first.
+  **Off by default**; the fixed pipeline is unchanged and is the fallback. Three policies — `default`
+  (== fixed pipeline), `llm` (a ReAct controller), `trace` (a learned-policy seam). The `draft` step
+  is the *same* episode the learner already trains on, so this does **not** alter or threaten the
+  learning loop. Every decision is logged to an append-only `agent_trace.jsonl`; new `/agentic` and
+  `/trace` shell commands plus `Agent(agentic=True, agentic_policy="llm")` opt in. *Live-validated on
+  OpenRouter (a real article, ~$0.10; the controller chose research→research→draft).* *(Advanced mode;
+  the fixed pipeline stays the recommended default.)*
+- **Resilience + safety hardening** (from an exhaustive code review): a global **`fallback` model**
+  (any node whose primary exhausts its retries degrades once onto a cheaper tier rather than killing an
+  unattended run); a **context budget** (`max_context_chars`, default 24000) that priority-bounds the
+  assembled canon+summaries+excerpts so a long book can't silently overflow the window;
+  **crash-safety** (canon is committed to the store *before* the chapter `.md` resume marker, so a
+  mid-commit crash re-runs the chapter idempotently instead of skipping it with missing canon); a
+  hardened **web demo** (serialized runs + per-visitor key isolation so there's no cross-visitor key /
+  billing leak; topic length capped); a **single-source anti-slop lexicon** (`slop.py` — the writer's
+  NO_SLOP block and the humanizer are generated from / cross-checked against one module, so they can't
+  drift); and **config validation** that clamps out-of-range settings to sane bounds.
 - **Learning loop v2 — ablation duels** (`skill_duels`): the system now earns skill-trust by a true
   cause-and-effect A/B test (draft with vs without a skill, critic compares), not a confounded proxy.
   Plus `skill_distill` (de-dup) and a guarded `watch_blocking`. *(Makes "it improves with use" real —

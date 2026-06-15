@@ -134,8 +134,26 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log, ask=No
                             and brain.read_text(paths.section(k)) is None):
                         prefetch[k] = pool.submit(
                             _section_fetch, cfg, paths, outline, state, k, log)
-                outcome = _process_article_section(cfg, paths, outline, state, n, log,
-                                                   prefetched=prefetch.pop(n, None), ask=ask)
+                pf = prefetch.pop(n, None)
+                if state.get("controller") == "agentic":
+                    # Self-directing path (plan §21): gather research / prior-section
+                    # context before drafting; `draft` is the unchanged section episode.
+                    from .. import agentic
+                    section = outline.sections[n - 1]
+                    ops = agentic.UnitOps(
+                        paths=paths, unit_label=f"sec{n:02d}",
+                        research_on=bool(state.get("use_researcher")), has_canon=(n > 1),
+                        draft=lambda extra, _pf=pf, _n=n: _process_article_section(
+                            cfg, paths, outline, state, _n, log,
+                            prefetched=_pf, ask=ask, extra_context=extra),
+                        research=lambda q, _sec=section: agentic.unit_research_article(
+                            cfg, outline, _sec, q, log),
+                        read_canon=lambda q, _n=n: _assemble_article_context(paths, _n),
+                    )
+                    outcome = agentic.run_unit(cfg, state, ops=ops, log=log)
+                else:
+                    outcome = _process_article_section(cfg, paths, outline, state, n, log,
+                                                       prefetched=pf, ask=ask)
                 if outcome == "escalate":
                     _mark_escalated(state, paths, "section",
                                     f"[!] Section {n} escalated. Resolve with `review` then `run`.", log)
@@ -230,7 +248,7 @@ def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
 
 
 def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
-                             prefetched=None, ask=None) -> str:
+                             prefetched=None, ask=None, extra_context=None) -> str:
     llm.set_unit(f"sec{n:02d}")
     section = outline.sections[n - 1]
 
@@ -254,7 +272,10 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
 
     # Prior section summaries
     article_context = _assemble_article_context(paths, n)
-    full_context = (context_prefix + article_context).strip() or None
+    # extra_context: research/canon the agentic controller gathered before drafting
+    # (plan §21.3). None in the fixed pipeline => identical behaviour there.
+    prefix = (extra_context.rstrip() + "\n\n") if extra_context else ""
+    full_context = (prefix + context_prefix + article_context).strip() or None
 
     skill_pairs = out.get("skills") or []
     skill_names = [name for name, _ in skill_pairs]
@@ -284,6 +305,18 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     draft = ""
     best: tuple[str, S.Critique] | None = None
     approved_attempt = -1
+    # Agentic-only knobs (plan §21): the multi-agent fact-check panel and one bounded
+    # mid-unit research pull. Both are no-ops under the fixed pipeline / default policy,
+    # so the equivalence guarantee (test_agentic_default_matches_pipeline) holds.
+    agentic_on = state.get("controller") == "agentic"
+    # The panel runs the same verify_claims node as _verify_claims_gate, so it must inherit
+    # that gate's evidence-strength policy (common.py): a snippet-only source is too thin to
+    # confidently REFUTE a claim, so the panel may only BLOCK when the ground truth is
+    # full-text (deep_research). Otherwise a majority of verifiers reading a 200-char snippet
+    # could tank a true claim - the exact false-refutation the verify gate guards against.
+    panel_on = (agentic_on and bool(state.get("agentic_factcheck_panel"))
+                and bool(source_text) and bool(state.get("deep_research")))
+    did_research = False
 
     def _write(notes, base, temperature=None, skeleton=False, skills=None):
         # Skeleton mode (divergent_skeletons, opt-in): divergent variants are drafted short
@@ -344,6 +377,21 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
         # Claim verification: cited claims the source doesn't support become BLOCKING
         # (turns the critic's `evidence` opinion into a structural check).
         crit, verify_note = _verify_claims_gate(cfg, state, draft, source_text, crit, log)
+        # Agentic fact-check panel (plan §21.10): before APPROVING, run an adversarial
+        # N-voter audit over the same draft. A majority-refute blocks the approval this
+        # attempt - the existing revision loop then handles it (bounded by max_rev, after
+        # which _finalize_unit's autonomous "commit best" still applies, so it can't hang).
+        if panel_on and crit.verdict == "approve":
+            from .. import agentic
+            passed, _refutes = agentic.panels.fact_check_panel(cfg, draft, source_text, log=log)
+            if not passed:
+                crit.blocking.append(S.BlockingIssue(
+                    type="evidence", where="(fact-check panel)",
+                    detail="A majority of independent fact-check verifiers found a cited "
+                           "claim the source does not support.",
+                    fix="Recheck each cited claim against its source; cite what the source "
+                        "actually says, soften the claim, or cut it."))
+                crit.verdict = "revise"
         brain.write_json(paths.section_eval(n),
                          {"section": n, "attempt": attempt, **crit.model_dump()})
         log(f"   verdict={crit.verdict} confidence={crit.confidence:.2f} "
@@ -373,6 +421,22 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             _record_preference(paths, f"## Revision ({_unit_desc}, attempt {attempt}->{attempt + 1})\n"
                                "Fixed: " + "; ".join(f"{b.type}: {b.detail}"
                                                      for b in crit.blocking[:3]))
+        # Phase 3 (plan §21): pull targeted research IN RESPONSE to an evidence gap the
+        # critique surfaced, once per unit. Agentic-only + researcher-on, so the fixed
+        # pipeline is byte-identical. The brief is prepended to full_context, which the
+        # `_write` closure reads by free-var late binding (verified by the Phase-3 test).
+        if (agentic_on and research_on and not did_research
+                and any(b.type == "evidence" for b in crit.blocking)):
+            from .. import agentic
+            gap = next(b for b in crit.blocking if b.type == "evidence")
+            query = f"{section.heading}: {gap.detail}"[:200]
+            brief = agentic.unit_research_article(cfg, outline, section, query, log) or ""
+            if brief:
+                full_context = (brief.rstrip() + "\n\n" + (full_context or "")).strip() or None
+            did_research = True
+            agentic.trace.append(paths, {
+                "unit": f"sec{n:02d}", "action": "research", "query": query,
+                "reason": "evidence gap", "result": f"+{len(brief)} chars"})
         base_draft = draft
 
     assert crit is not None and best is not None
@@ -408,8 +472,11 @@ def _commit_section(cfg, paths: ArticlePaths, section, n, draft, skill_names, so
     out = concurrency.gather(tasks, strict=True)
 
     final = out.get("humanized") or draft
-    brain.write_text(paths.section(n), final)
+    # Crash-safety ordering (A-016): write the continuity summary BEFORE the section .md
+    # (the resume guard's "committed" marker), so a crash can't leave a committed section
+    # whose summary - the context the next sections read - never landed.
     brain.write_text(paths.section_summary(n), out["summary"])
+    brain.write_text(paths.section(n), final)
     _save_version(paths, f"section_{n:02d}", final, label="committed")
 
     skills_mod.record_chapter(paths.uid, skill_names, first_pass)

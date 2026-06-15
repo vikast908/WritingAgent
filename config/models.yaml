@@ -2,6 +2,10 @@
 # "Pro" = high tier (planner/writer/consolidation); "Flash" = everything else.
 # DeepSeek accepts temperature; the map below applies to any node that sets one.
 default: deepseek/deepseek-v4-pro
+# Tried once for ANY node after the primary model exhausts its retries (outage, content
+# filter, persistent 5xx) - the cheapest reliable tier, so a node failure degrades instead
+# of killing an unattended run. Empty = no fallback.
+fallback: deepseek/deepseek-v4-flash
 
 nodes:
   planner:       deepseek/deepseek-v4-pro      # sets the book's DNA

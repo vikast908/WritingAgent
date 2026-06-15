@@ -29,6 +29,8 @@ __all__ = [
     '_AUTO_ON',
     '_AUTO_OFF',
     '_cmd_auto',
+    '_cmd_agentic',
+    '_cmd_trace',
     '_cmd_praise',
     '_print_skills',
     '_print_skill',
@@ -528,6 +530,89 @@ def _cmd_auto(console, settings: Settings, state: dict, name: str, rest: list[st
             else:
                 note = f" · {active} will pause for review each unit"
     _out(console, f"mode -> [{GOLD}]{label}[/] [dim](saved{note})[/]")
+
+
+_AGENTIC_POLICIES = ("default", "llm", "trace")
+
+
+def _trace_paths(uid: str, book_id: str):
+    """The run-state paths for the active project (article first, then book) - the
+    object `agentic.trace.read`/`append` expect (it reads `paths.root`)."""
+    from ..brain import ArticlePaths, BookPaths
+    art = ArticlePaths(book_id, uid)
+    return art if art.run_state.exists() else BookPaths(book_id, uid)
+
+
+def _cmd_agentic(console, settings: Settings, state: dict, rest: list[str]) -> None:
+    """Toggle the agentic controller (units choose research/canon before drafting) vs
+    the fixed pipeline, and pick the controller's policy.
+
+    Saves the default for new projects AND, like `/auto`, applies to the active
+    project's run_state - so `/agentic on` flips a live project to the controller
+    without recreating it. With no args it prints the current status plus the active
+    project's last controller decisions from the trace.
+    """
+    from .. import agentic, orchestrator
+    arg = rest[0].lower() if rest else ""
+    if arg in _AGENTIC_POLICIES:
+        settings.agentic_policy = arg
+        save_settings(settings)
+        _out(console, f"agentic policy -> [{GOLD}]{arg}[/] [dim](saved · default = always draft "
+                      f"(== pipeline) · llm = controller chooses · trace = record only)[/]")
+        return
+    if arg in _AUTO_ON:
+        want = True
+    elif arg in _AUTO_OFF:
+        want = False
+    elif arg:
+        _out(console, f"[{ERR}]usage:[/] /agentic [on|off|default|llm|trace]")
+        return
+    else:
+        onoff = "on" if settings.agentic else "off"
+        _out(console, f"agentic: [{GOLD}]{onoff}[/] [dim](policy {settings.agentic_policy} · "
+                      f"max_unit_steps {settings.agentic_max_unit_steps} · switch with "
+                      f"/agentic on|off · policy: /agentic llm|default|trace)[/]")
+        active = state.get("book")
+        if active:
+            recent = agentic.trace.read(_trace_paths(state["uid"], active))[-2:]
+            for r in recent:
+                reason = r.get("reason") or ""
+                _out(console, f"  [dim]controller · {r.get('action', '?')}: {reason}[/]")
+        return
+
+    settings.agentic = want
+    save_settings(settings)
+    label = "on" if want else "off"
+    note = ""
+    active = state.get("book")
+    if active:
+        st = orchestrator.apply_controller(state["uid"], active, want, settings)
+        if st is not None:
+            kind = "agentic controller" if want else "fixed pipeline"
+            note = f" · {active} now runs the {kind}"
+    _out(console, f"agentic -> [{GOLD}]{label}[/] [dim](saved{note})[/]")
+
+
+def _cmd_trace(console, settings: Settings, state: dict, rest: list[str]) -> None:
+    """Print the active project's controller action trace (agent_trace.jsonl) - one
+    line per decision: `unit  action  "reason"  (query)`."""
+    from .. import agentic
+    book = state.get("book")
+    if not book:
+        _out(console, f"[{ERR}]No active project.[/] Use `/use <project>` first.")
+        return
+    records = agentic.trace.read(_trace_paths(state["uid"], book))
+    if not records:
+        _out(console, "[dim]no agentic decisions recorded (enable with /agentic on)[/]")
+        return
+    _section(console, f"AGENT TRACE  ·  {book}") if console else None
+    for r in records:
+        unit = r.get("unit", "?")
+        action = r.get("action", "?")
+        reason = r.get("reason") or ""
+        query = r.get("query") or ""
+        q = f"  [dim]({query})[/]" if query else ""
+        _out(console, f"  [{GOLD}]{unit}[/]  {action}  [dim]\"{reason}\"[/]{q}")
 
 
 def _cmd_praise(console, state: dict, rest: list[str]) -> None:

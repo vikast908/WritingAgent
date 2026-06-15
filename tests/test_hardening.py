@@ -187,7 +187,33 @@ def test_complete_text_retries_then_succeeds(no_sleep, monkeypatch):
 def test_complete_text_gives_up_on_fatal(no_sleep, monkeypatch):
     _install(monkeypatch, [ValueError("401 bad key"), "unused"])
     with pytest.raises(RuntimeError):
-        llm.complete_text("m", "sys", "user")  # fatal error → no retry, raises
+        llm.complete_text("m", "sys", "user")  # fatal error → no retry, no fallback, raises
+
+
+def test_complete_text_falls_back_after_primary_fails(no_sleep, monkeypatch):
+    # With a fallback configured, a primary failure retries ONCE on the fallback model and
+    # succeeds, so one node's outage degrades instead of killing the run (plan §12.1).
+    monkeypatch.setattr(llm, "_fallback_model", "flash")
+    client = _install(monkeypatch, [ValueError("503 model down"), "fallback prose"])
+    out = llm.complete_text("m", "sys", "user")
+    assert out == "fallback prose" and client.chat.completions.calls == 2
+
+
+def test_structured_falls_back_after_primary_fails(no_sleep, monkeypatch):
+    from writingagent.schemas import SearchQueries
+    monkeypatch.setattr(llm, "_fallback_model", "flash")
+    _install(monkeypatch, [ValueError("503 model down"), '{"queries": ["q1", "q2"]}'])
+    out = llm.complete_structured("m", "sys", "user", SearchQueries)
+    assert out.queries == ["q1", "q2"]
+
+
+def test_fallback_not_retried_on_itself(no_sleep, monkeypatch):
+    # The fallback call sets _allow_fallback=False, so a model that IS the fallback fails
+    # straight through (no infinite recursion).
+    monkeypatch.setattr(llm, "_fallback_model", "flash")
+    _install(monkeypatch, [ValueError("401 bad key")])
+    with pytest.raises(RuntimeError):
+        llm.complete_text("flash", "sys", "user")
 
 
 def test_usage_is_recorded(no_sleep, monkeypatch):

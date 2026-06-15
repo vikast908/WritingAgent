@@ -52,6 +52,19 @@ def configure_timeout(seconds: float) -> None:
     _client = None  # force the client to be rebuilt with the new timeout
 
 
+# Global fallback model (plan §12.1): after the primary model exhausts its retries on a
+# call (persistent outage / content filter / 5xx), the call is retried ONCE on this slug -
+# the cheapest reliable tier - so one node's failure degrades instead of killing an
+# unattended run. Empty = no fallback. Set at startup from models.yaml `fallback:`.
+_fallback_model: str = ""
+
+
+def configure_fallback(model: str | None) -> None:
+    """Set the global fallback model (called at startup from `ModelConfig.fallback`)."""
+    global _fallback_model
+    _fallback_model = (model or "").strip()
+
+
 def configure_provider(provider_id: str) -> None:
     """Select the active model host (called at startup and on `/provider`).
 
@@ -449,6 +462,7 @@ def complete_text(
     *,
     max_tokens: int = 16000,
     temperature: float | None = None,
+    _allow_fallback: bool = True,
 ) -> str:
     _check_budget()   # kill-switch: before fake mode too, so tests exercise it offline
     if _fake_mode():
@@ -481,6 +495,10 @@ def complete_text(
                 continue
             break  # non-retryable (e.g. 401/400) or out of attempts - fail fast
     _log_call("text", model, t0, attempt + 1, None, error=str(last_err))
+    if _allow_fallback and _fallback_model and model != _fallback_model:
+        _log.warning("text: %s failed (%s); falling back to %s", model, last_err, _fallback_model)
+        return complete_text(_fallback_model, system, user, max_tokens=max_tokens,
+                             temperature=temperature, _allow_fallback=False)
     raise RuntimeError(f"Text completion failed for {model}: {last_err}")
 
 
@@ -563,6 +581,7 @@ def complete_structured(
     *,
     max_tokens: int = 8000,
     temperature: float | None = None,
+    _allow_fallback: bool = True,
 ) -> T:
     _check_budget()   # kill-switch: before fake mode too, so tests exercise it offline
     if _fake_mode():
@@ -621,4 +640,10 @@ def complete_structured(
                 continue
             break
     _log_call("structured", model, t0, attempt + 1, None, error=str(last_err))
+    if _allow_fallback and _fallback_model and model != _fallback_model:
+        _log.warning("structured: %s failed (%s); falling back to %s",
+                     model, last_err, _fallback_model)
+        return complete_structured(_fallback_model, system, user, schema,
+                                   max_tokens=max_tokens, temperature=temperature,
+                                   _allow_fallback=False)
     raise RuntimeError(f"Structured parse failed for {schema.__name__}: {last_err}")

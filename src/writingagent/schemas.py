@@ -101,6 +101,14 @@ class Critique(BaseModel):
             v = v / 100.0 if v <= 100.0 else 1.0
         return min(1.0, max(0.0, v))
 
+    @field_validator("insight", "clarity", "structure", "evidence")
+    @classmethod
+    def _clamp_score(cls, v: int) -> int:
+        # The 1-5 quality scores gate revision (`insight < min_insight`) and feed the
+        # summary history; a stray 0 or 50 (or a repair-turn artifact) would skew both.
+        # Clamp to the documented [1, 5] range, mirroring `_clamp_confidence`.
+        return min(5, max(1, int(v)))
+
 
 # ── Variant tournament judge (best-of-N selection, plan §5) ───────────────────
 # The critic scores each divergent draft in isolation; this judge reads them SIDE
