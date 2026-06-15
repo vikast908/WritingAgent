@@ -36,13 +36,15 @@ from .common import (
     _register_sources,
     _renumber_citations,
     _replace_manuscript_section,
+    _research_brief_prefix,
     _run_learner,
     _save_version,
     _strip_section_prefix,
+    _svg_diagram_figure,
     _verify_claims_gate,
     _with_intake,
 )
-from .export import build_evidence_report
+from .export import _unique_sources, build_evidence_report
 
 __all__ = [
     'start_article',
@@ -53,6 +55,8 @@ __all__ = [
     '_assemble_article_context',
     '_produce_article',
     '_apply_top_reader_fix',
+    '_rewrite_section_draft',
+    '_save_and_patch_section',
     '_targeted_section_revise',
     '_learn_article',
 ]
@@ -183,22 +187,14 @@ def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
             brief = nodes.deep_research_article(cfg, outline, section, source_text or None)
             # Real fetched sources are more reliable than LLM-copied URLs; prefer them.
             sources = [S.Source(title=d.title, url=d.url) for d in docs] or list(brief.sources)
-            prefix = ("## Research brief\n" + "\n".join([
-                "### Facts", *(f"- {f}" for f in brief.facts),
-                "### Style cues", *(f"- {s}" for s in brief.style_cues),
-                "### Sources", *(f"- [{s.title}]({s.url})" for s in sources),
-            ]) + "\n\n")
+            prefix = _research_brief_prefix(brief.facts, brief.style_cues, sources=sources)
             return (prefix, sources, source_text)
         results = search_mod.web_search(base_query, max_results=5)
         web_results = search_mod.format_results(results)
         if results:
             log(f"   fetched {len(results)} web result(s) for: {base_query[:60]}")
         brief = nodes.research_article(cfg, outline, section, web_results=web_results or None)
-        prefix = ("## Research brief\n" + "\n".join([
-            "### Facts", *(f"- {f}" for f in brief.facts),
-            "### Style cues", *(f"- {s}" for s in brief.style_cues),
-            "### Sources", *(f"- [{s.title}]({s.url})" for s in brief.sources),
-        ]) + "\n\n")
+        prefix = _research_brief_prefix(brief.facts, brief.style_cues, sources=brief.sources)
         return (prefix, brief.sources, web_results or "")
 
     def _do_images():
@@ -211,16 +207,11 @@ def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
             return [r.to_markdown(str(i + 1)) for i, r in enumerate(got)]
         # No Wikimedia image - generate an SVG diagram instead
         ctx = getattr(section, "purpose", "") or getattr(section, "heading", "")
-        svg_text = nodes.generate_svg_diagram(
-            cfg, section.heading, ctx, engine=state.get("diagram_engine", "auto"),
-            on_spec=lambda sp: brain.write_text(
-                paths.root / "versions" / f"section_{n:02d}.diagram.spec.json", sp.model_dump_json(indent=2)))
-        paths.images.mkdir(parents=True, exist_ok=True)
-        svg_path = paths.images / f"section_{n:02d}_diagram.svg"
-        svg_path.write_text(svg_text, encoding="utf-8")
-        log(f"   generated SVG diagram -> {svg_path.name}")
-        return [f"![{section.heading} diagram](images/section_{n:02d}_diagram.svg)\n"
-                f"*Figure: {section.heading}*"]
+        return _svg_diagram_figure(
+            cfg, label=section.heading, context=ctx,
+            engine=state.get("diagram_engine", "auto"),
+            spec_path=paths.root / "versions" / f"section_{n:02d}.diagram.spec.json",
+            svg_path=paths.images / f"section_{n:02d}_diagram.svg", log=log)
 
     def _do_skills():
         # Skills - use angle as genre proxy
@@ -454,14 +445,7 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
 
     # De-duplicate sources by URL. Commit-time _register_sources already dedupes, so
     # this is a safety net; order (= citation numbering) is first-seen and stable.
-    raw_sources = brain.read_json(paths.sources_json) or []
-    seen_urls: set = set()
-    unique: list = []
-    for s in raw_sources:
-        url = s.get("url", "") if isinstance(s, dict) else getattr(s, "url", "")
-        if url and url not in seen_urls:
-            seen_urls.add(url)
-            unique.append(s if isinstance(s, dict) else s.model_dump())
+    unique = _unique_sources(paths)
 
     # Normalize section structure before assembly:
     #  - drop "Section N:" heading prefixes (the producer owns numbering)
@@ -594,12 +578,15 @@ def _apply_top_reader_fix(cfg, paths: ArticlePaths, outline, state, *, log) -> N
         log(f"   [reader-loop] revision skipped ({type(e).__name__})")
 
 
-def _targeted_section_revise(cfg, paths: ArticlePaths, outline, state, n: int,
-                             instruction: str, *, log) -> None:
-    """Apply one instruction to section n in-place (no confirm UI, no usage reset - it
-    runs mid-pipeline). Mirrors revise_unit's article path; patches the section file (if
-    present) and the manuscript. Canon-free: a post-write polish, not a re-run."""
-    section = outline.sections[n - 1]
+def _rewrite_section_draft(cfg, paths: ArticlePaths, outline, state, section, n: int,
+                           instruction: str, base: str, *, log, verbose: bool = False,
+                           length_target: bool = False) -> str:
+    """Produce a revised, ready-to-save draft of section n from `instruction`: write to the
+    instruction, critique once, run a single conditional fix pass, humanize (when on), and
+    strip the heading prefix. The rewrite half shared by the reader-loop revise and the
+    post-completion `revise` command. Deltas: `verbose` emits the interactive progress logs
+    (the reader loop runs silent mid-pipeline); `length_target` puts a per-section word
+    target on the writer calls (the reader-loop path does; `revise` historically did not)."""
     thesis_md = brain.read_text(paths.root / "thesis.md")
     voice = brain.voice_exemplars(paths.uid)
     watch = brain.read_text(brain.watch_list(paths.uid))
@@ -607,6 +594,55 @@ def _targeted_section_revise(cfg, paths: ArticlePaths, outline, state, n: int,
     target = section.target_words or (
         outline.target_word_count // max(1, len(outline.sections))
         if outline.target_word_count else 0)
+    write_ln = _length_note(0, target) if length_target else None
+    if verbose:
+        log(f"== Revising section {n}: {section.heading} ==")
+        log("   rewriting to your instruction...")
+    draft = nodes.write_article_section(
+        cfg, outline, section, fix_notes=instruction, base_draft=base,
+        thesis=thesis_md, voice=voice, requirements=requirements, length_note=write_ln)
+    if verbose:
+        log("   critiquing...")
+    crit = nodes.critique_article_section(
+        cfg, outline, section, draft, thesis=thesis_md,
+        context=_assemble_article_context(paths, n) or None, watch_list=watch,
+        requirements=requirements, research_on=bool(state.get("use_researcher")),
+        length_note=_length_note(len(draft.split()), target))
+    if crit.blocking and crit.verdict != "approve":
+        if verbose:
+            log(f"   {len(crit.blocking)} blocking issue(s) - one fix pass...")
+        draft = nodes.write_article_section(
+            cfg, outline, section, fix_notes=_merge_fix_notes(instruction, crit),
+            base_draft=draft, thesis=thesis_md, voice=voice, requirements=requirements,
+            length_note=write_ln)
+    if state.get("humanize"):
+        if verbose:
+            log("   humanizing...")
+        draft = humanizer.humanize(cfg, draft)
+    return _strip_section_prefix(draft).strip()
+
+
+def _save_and_patch_section(paths: ArticlePaths, n: int, draft: str, ms: str,
+                            instruction: str, *, save_label: str, log_label: str) -> None:
+    """Persist a revised section draft: snapshot a version, overwrite the per-section file
+    (if it still exists - cleaned up after assembly), and patch the section's body inside the
+    assembled manuscript. Append the revision-log entry. Shared save half of both revise paths."""
+    _save_version(paths, f"section_{n:02d}", draft, label=save_label)
+    if brain.read_text(paths.section(n)) is not None:
+        brain.write_text(paths.section(n), draft)
+    if ms:
+        patched = _replace_manuscript_section(ms, n - 1, draft)
+        if patched:
+            brain.write_text(paths.manuscript, patched)
+    brain.append_text(paths.revision_log, f"## Section {n} {log_label}\n{instruction}")
+
+
+def _targeted_section_revise(cfg, paths: ArticlePaths, outline, state, n: int,
+                             instruction: str, *, log) -> None:
+    """Apply one instruction to section n in-place (no confirm UI, no usage reset - it
+    runs mid-pipeline). Mirrors revise_unit's article path; patches the section file (if
+    present) and the manuscript. Canon-free: a post-write polish, not a re-run."""
+    section = outline.sections[n - 1]
     ms = brain.read_text(paths.manuscript) or ""
     base = brain.read_text(paths.section(n))
     if base is None:
@@ -614,31 +650,10 @@ def _targeted_section_revise(cfg, paths: ArticlePaths, outline, state, n: int,
         if n > len(bodies):
             return
         base = bodies[n - 1]
-    draft = nodes.write_article_section(
-        cfg, outline, section, fix_notes=instruction, base_draft=base,
-        thesis=thesis_md, voice=voice, requirements=requirements,
-        length_note=_length_note(0, target))
-    crit = nodes.critique_article_section(
-        cfg, outline, section, draft, thesis=thesis_md,
-        context=_assemble_article_context(paths, n) or None, watch_list=watch,
-        requirements=requirements, research_on=bool(state.get("use_researcher")),
-        length_note=_length_note(len(draft.split()), target))
-    if crit.blocking and crit.verdict != "approve":
-        draft = nodes.write_article_section(
-            cfg, outline, section, fix_notes=_merge_fix_notes(instruction, crit),
-            base_draft=draft, thesis=thesis_md, voice=voice, requirements=requirements,
-            length_note=_length_note(0, target))
-    if state.get("humanize"):
-        draft = humanizer.humanize(cfg, draft)
-    draft = _strip_section_prefix(draft).strip()
-    _save_version(paths, f"section_{n:02d}", draft, label="reader-fix")
-    if brain.read_text(paths.section(n)) is not None:
-        brain.write_text(paths.section(n), draft)
-    if ms:
-        patched = _replace_manuscript_section(ms, n - 1, draft)
-        if patched:
-            brain.write_text(paths.manuscript, patched)
-    brain.append_text(paths.revision_log, f"## Section {n} reader-loop revision\n{instruction}")
+    draft = _rewrite_section_draft(cfg, paths, outline, state, section, n, instruction,
+                                   base, log=log, length_target=True)
+    _save_and_patch_section(paths, n, draft, ms, instruction,
+                            save_label="reader-fix", log_label="reader-loop revision")
     log(f"   [reader-loop] section {n} revised -> manuscript patched")
 
 

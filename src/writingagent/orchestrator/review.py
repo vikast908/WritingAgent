@@ -11,16 +11,18 @@ from .. import schemas as S
 from ..brain import ArticlePaths, BookPaths
 from ..config import ModelConfig
 from ..store import Store
-from .article import _assemble_article_context, _commit_section
+from .article import (
+    _commit_section,
+    _rewrite_section_draft,
+    _save_and_patch_section,
+)
 from .book import _commit, run_production
 from .common import (
     _length_note,
     _load,
     _manuscript_section_bodies,
     _merge_fix_notes,
-    _replace_manuscript_section,
     _save_version,
-    _strip_section_prefix,
 )
 
 __all__ = [
@@ -207,46 +209,16 @@ def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: s
             if n > len(bodies):
                 raise FileNotFoundError(f"Section {n} not found in the manuscript.")
             base = bodies[n - 1]
-        thesis_md = brain.read_text(art.root / "thesis.md")
-        # The critic gets the same context the pipeline critic had: prior-section
-        # summaries (empty after cleanup - acceptable), watch-list, intake, length.
-        watch = brain.read_text(brain.watch_list(uid))
-        requirements = (state.get("intake") or "").strip() or None
-        target = section.target_words or (
-            outline.target_word_count // max(1, len(outline.sections))
-            if outline.target_word_count else 0)
-        log(f"== Revising section {n}: {section.heading} ==")
-        log("   rewriting to your instruction...")
-        draft = nodes.write_article_section(
-            cfg, outline, section, fix_notes=instruction, base_draft=base,
-            thesis=thesis_md, voice=voice, requirements=requirements)
-        log("   critiquing...")
-        crit = nodes.critique_article_section(
-            cfg, outline, section, draft, thesis=thesis_md,
-            context=_assemble_article_context(art, n) or None,
-            watch_list=watch, requirements=requirements,
-            research_on=bool(state.get("use_researcher")),
-            length_note=_length_note(len(draft.split()), target))
-        if crit.blocking and crit.verdict != "approve":
-            log(f"   {len(crit.blocking)} blocking issue(s) - one fix pass...")
-            draft = nodes.write_article_section(
-                cfg, outline, section, fix_notes=_merge_fix_notes(instruction, crit),
-                base_draft=draft, thesis=thesis_md, voice=voice,
-                requirements=requirements)
-        if state.get("humanize"):
-            log("   humanizing...")
-            draft = humanizer.humanize(cfg, draft)
-        draft = _strip_section_prefix(draft).strip()
+        # Shared rewrite half (write -> critique -> one fix pass -> humanize -> strip),
+        # with the interactive progress logs. The critic gets the same context the pipeline
+        # critic had: prior-section summaries (empty after cleanup - acceptable), watch-list,
+        # intake, length. (Historically the writer calls here carried no per-section target.)
+        draft = _rewrite_section_draft(cfg, art, outline, state, section, n, instruction,
+                                       base, log=log, verbose=True)
         if not _confirm_revision(cfg, base, draft, confirm, log):
             return
-        _save_version(art, f"section_{n:02d}", draft, label="revise")
-        if brain.read_text(art.section(n)) is not None:
-            brain.write_text(art.section(n), draft)
-        if ms:
-            patched = _replace_manuscript_section(ms, n - 1, draft)
-            if patched:
-                brain.write_text(art.manuscript, patched)
-        brain.append_text(art.revision_log, f"## Section {n} post-completion revision\n{instruction}")
+        _save_and_patch_section(art, n, draft, ms, instruction,
+                                save_label="revise", log_label="post-completion revision")
         log(f"[OK] Section {n} revised. Re-export to refresh output files.")
         return
 

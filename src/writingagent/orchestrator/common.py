@@ -18,6 +18,8 @@ from ..config import load_settings
 
 __all__ = [
     '_BUDGET_PAUSE_MSG',
+    '_research_brief_prefix',
+    '_svg_diagram_figure',
     '_research_queries',
     '_deep_docs',
     '_merge_fix_notes',
@@ -60,6 +62,37 @@ __all__ = [
 
 _BUDGET_PAUSE_MSG = ("[!] {err} - run paused. Raise the cap (/set max_run_tokens N, "
                      "0 = unlimited) or just run again to continue with a fresh budget.")
+
+
+# ── Research-brief prefix (shared by the chapter + section fetchers) ──────────
+def _research_brief_prefix(facts, style_cues, *, comparisons=None, sources=None) -> str:
+    """Assemble the '## Research brief' context block prepended to the writer's input.
+    Always carries Facts + Style cues; the Comparisons section is rendered when
+    `comparisons` is a list (book deep research - its header stays even when empty), and
+    Sources when `sources` is non-empty. Trailing '\\n\\n' separates the brief from the
+    body that follows. `sources` items expose .title/.url."""
+    lines = ["## Research brief",
+             "### Facts", *(f"- {f}" for f in (facts or [])),
+             "### Style cues", *(f"- {s}" for s in (style_cues or []))]
+    if comparisons is not None:
+        lines += ["### Comparisons", *(f"- {c}" for c in comparisons)]
+    if sources:
+        lines += ["### Sources", *(f"- [{s.title}]({s.url})" for s in sources)]
+    return "\n".join(lines) + "\n\n"
+
+
+def _svg_diagram_figure(cfg, *, label, context, engine, spec_path, svg_path, log) -> list[str]:
+    """Generate one SVG concept diagram and return it as a one-item figure-markdown list
+    (the image-fetch fallback when Wikimedia has nothing). Writes the diagram spec to
+    `spec_path` (under versions/) and the rendered SVG to `svg_path` (under images/); the
+    in-manuscript reference is images/<svg filename>, the convention both pipelines use."""
+    svg_text = nodes.generate_svg_diagram(
+        cfg, label, context, engine=engine,
+        on_spec=lambda sp: brain.write_text(spec_path, sp.model_dump_json(indent=2)))
+    svg_path.parent.mkdir(parents=True, exist_ok=True)
+    svg_path.write_text(svg_text, encoding="utf-8")
+    log(f"   generated SVG diagram -> {svg_path.name}")
+    return [f"![{label} diagram](images/{svg_path.name})\n*Figure: {label}*"]
 
 
 # ── Deep-research query planning ─────────────────────────────────────────────

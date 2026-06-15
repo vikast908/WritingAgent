@@ -236,7 +236,6 @@ def test_image_to_markdown_escapes_caption_and_url():
         title="File:Foo (bar).jpg",
         author="Jane *Doe*",
         license="CC BY 2.0",
-        license_url="https://creativecommons.org/licenses/by/2.0/",
         description="Portrait (1923) *study* [draft]",
     )
     md = r.to_markdown("1")

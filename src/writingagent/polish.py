@@ -188,7 +188,7 @@ def score_sources(sources: list, body: str, keywords_text: str) -> list[dict]:
         cited = counts.get(idx, 0)
         raw = 3.0 * cited + 4.0 * overlap
         src = s if isinstance(s, dict) else s.model_dump()
-        url = src.get("url", "") if isinstance(src, dict) else getattr(src, "url", "")
+        url = src.get("url", "")
         scored.append({"source": src, "cited": cited, "overlap": round(overlap, 3),
                        "authority": source_authority(url), "raw": raw})
     max_raw = max((x["raw"] for x in scored), default=0.0) or 1.0

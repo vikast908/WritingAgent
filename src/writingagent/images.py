@@ -41,7 +41,6 @@ class ImageResult:
     title: str
     author: str
     license: str
-    license_url: str
     description: str
 
     def to_markdown(self, figure_label: str = "") -> str:
@@ -84,7 +83,7 @@ def _fetch_info(titles: list[str]) -> list[ImageResult]:
         "titles": "|".join(titles[:10]),  # API batch limit
         "prop": "imageinfo",
         "iiprop": "url|extmetadata",
-        "iiextmetadatafilter": "LicenseShortName|Artist|ImageDescription|LicenseUrl",
+        "iiextmetadatafilter": "LicenseShortName|Artist|ImageDescription",
     })
     results: list[ImageResult] = []
     # formatversion=2 returns `pages` as a list; v1 as an id-keyed dict. The dict
@@ -106,10 +105,9 @@ def _fetch_info(titles: list[str]) -> list[ImageResult]:
         desc_raw = _TAG.sub("", (meta.get("ImageDescription") or {}).get("value", "")).strip()
         title = page.get("title", "")
         desc = (desc_raw or title.removeprefix("File:"))[:120]
-        lic_url = _TAG.sub("", (meta.get("LicenseUrl") or {}).get("value", "")).strip()
         results.append(ImageResult(
             url=url, title=title, author=author,
-            license=lic, license_url=lic_url, description=desc,
+            license=lic, description=desc,
         ))
     return results
 

@@ -1,6 +1,7 @@
 """Model routing (config/models.yaml) and engine settings (config/settings.yaml)."""
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -130,7 +131,6 @@ def save_config(cfg: ModelConfig) -> None:
 
 def load_settings() -> Settings:
     if _SETTINGS.exists():
-        import dataclasses
         with open(_SETTINGS, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
         valid = {f.name for f in dataclasses.fields(Settings)}
@@ -140,7 +140,6 @@ def load_settings() -> Settings:
 
 def save_settings(s: Settings) -> None:
     """Persist Settings back to config/settings.yaml (e.g. after a /set command)."""
-    import dataclasses
     lines = ["# Engine settings (tunable; see plan.md §15)."]
     for f in dataclasses.fields(s):
         v = getattr(s, f.name)

@@ -29,7 +29,8 @@ def test_assemble_context_includes_excerpts_outside_deps(tmp_brain):
     brain.write_text(paths.ch(1), "The lighthouse keeper counted boats.")
     brain.write_text(paths.ch_summary(2), "Maya rests.")
     st = Store.open(paths)
-    st.index_documents(paths)
+    st.index_chapter(paths, 1)
+    st.index_chapter(paths, 2)
     ctx = retrieval.assemble_context(st, paths, _bp(number=3, title="lighthouse", depends_on=[2]))
     st.close()
     assert "From ch01" in ctx                       # excerpt from outside deps

@@ -35,8 +35,10 @@ from .common import (
     _record_author,
     _record_preference,
     _register_sources,
+    _research_brief_prefix,
     _run_learner,
     _save_version,
+    _svg_diagram_figure,
     _with_intake,
 )
 from .manage import apply_autonomous
@@ -242,22 +244,16 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
                 cfg, f"{plan.genre}: {plan.title} - {plan.premise}",
                 f"{blueprint.title}. {blueprint.purpose}", base_query, log=log)
             brief = nodes.deep_research(cfg, plan, blueprint, dr.format_documents(docs) or None)
-            lines = ["## Research brief",
-                     "### Facts", *(f"- {f}" for f in brief.facts),
-                     "### Style cues", *(f"- {s}" for s in brief.style_cues),
-                     "### Comparisons", *(f"- {c}" for c in brief.comparisons)]
-            if docs:
-                lines += ["### Sources", *(f"- [{d.title}]({d.url})" for d in docs)]
             sources = [S.Source(title=d.title, url=d.url) for d in docs]
-            return ("\n".join(lines) + "\n\n", sources)
+            prefix = _research_brief_prefix(brief.facts, brief.style_cues,
+                                            comparisons=brief.comparisons, sources=sources)
+            return (prefix, sources)
         results = search_mod.web_search(base_query, max_results=5)
         web_results = search_mod.format_results(results)
         if results:
             log(f"   fetched {len(results)} web result(s) for: {base_query[:60]}")
         brief = nodes.research(cfg, plan, blueprint, web_results=web_results or None)
-        prefix = ("## Research brief\n" + "\n".join(
-            ["### Facts", *(f"- {f}" for f in brief.facts),
-             "### Style cues", *(f"- {s}" for s in brief.style_cues)]) + "\n\n")
+        prefix = _research_brief_prefix(brief.facts, brief.style_cues)
         return (prefix, [S.Source(title=r.title, url=r.url) for r in results])
 
     def _do_images():
@@ -273,18 +269,11 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
         # genres. A "concept diagram" dropped into a novel chapter is always wrong.
         if not _NONFICTION_RE.search(plan.genre or ""):
             return None
-        svg_text = nodes.generate_svg_diagram(
-            cfg, blueprint.title, blueprint.purpose or "",
+        return _svg_diagram_figure(
+            cfg, label=blueprint.title, context=blueprint.purpose or "",
             engine=state.get("diagram_engine", "auto"),
-            on_spec=lambda sp: brain.write_text(
-                paths.root / "versions" / f"ch{n:02d}.diagram.spec.json", sp.model_dump_json(indent=2)))
-        svg_dir = paths.root / "images"
-        svg_dir.mkdir(parents=True, exist_ok=True)
-        svg_path = svg_dir / f"ch{n:02d}_diagram.svg"
-        svg_path.write_text(svg_text, encoding="utf-8")
-        log(f"   generated SVG diagram -> {svg_path.name}")
-        return [f"![{blueprint.title} diagram](images/ch{n:02d}_diagram.svg)\n"
-                f"*Figure: {blueprint.title}*"]
+            spec_path=paths.root / "versions" / f"ch{n:02d}.diagram.spec.json",
+            svg_path=paths.root / "images" / f"ch{n:02d}_diagram.svg", log=log)
 
     def _do_skills():
         # Semantic when enabled and sentence-transformers is installed. In the

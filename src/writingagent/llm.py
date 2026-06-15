@@ -449,7 +449,6 @@ def complete_text(
     *,
     max_tokens: int = 16000,
     temperature: float | None = None,
-    thinking: bool = False,  # accepted for API parity; reasoning is model-internal
 ) -> str:
     _check_budget()   # kill-switch: before fake mode too, so tests exercise it offline
     if _fake_mode():

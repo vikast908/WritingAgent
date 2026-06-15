@@ -329,17 +329,9 @@ def cmd_write(args, cfg, settings, uid):
     else:
         orchestrator.run(cfg, uid, pid, log=print)
 
-    exported = []
-    for fmt in fmts:
-        try:
-            out = _EXPORT_FNS[fmt](uid, pid)
-        except Exception as e:  # noqa: BLE001 - one format failing must not lose the rest
-            _export_failed(console, fmt, e)
-            continue
-        exported.append(out)
-        _report_export(console, fmt, out)
-    if exported and console:
-        tail = f"exported {len(exported)} formats" if len(exported) > 1 else "finished"
+    ok = _run_exports(console, fmts, uid, pid)
+    if ok and console:
+        tail = f"exported {ok} formats" if ok > 1 else "finished"
         console.print(f"\n  [bold {ui.ON_CLR}]✓ done[/]  [{ui.DIM}]{tail}[/]")
     return pid
 
@@ -731,6 +723,22 @@ def _export_failed(console, fmt: str, e: Exception) -> None:
         print(f"[FAIL] {fmt}: {hint}  (other formats were still written)")
 
 
+def _run_exports(console, formats, uid, project_id) -> int:
+    """Render every requested format, reporting each result. One format failing must
+    not abort the rest (its error is shown, the loop continues). Returns the count of
+    formats written successfully."""
+    ok = 0
+    for fmt in formats:
+        try:
+            out = _EXPORT_FNS[fmt](uid, project_id)
+        except Exception as e:  # noqa: BLE001 - one bad format must not abort the others
+            _export_failed(console, fmt, e)
+            continue
+        ok += 1
+        _report_export(console, fmt, out)
+    return ok
+
+
 def cmd_export(args, cfg, settings, uid):
     book_id = _resolve_book(uid, args.book_id)
     console = _console()
@@ -759,15 +767,7 @@ def cmd_export(args, cfg, settings, uid):
             console.print(f"  [{ui.ERR}]nothing to export[/]")
             return
         sys.exit("No formats to export.")
-    ok = 0
-    for fmt in formats:
-        try:
-            out = _EXPORT_FNS[fmt](uid, book_id)
-        except Exception as e:  # noqa: BLE001 - one bad format must not abort the others
-            _export_failed(console, fmt, e)
-            continue
-        ok += 1
-        _report_export(console, fmt, out)
+    ok = _run_exports(console, formats, uid, book_id)
     if len(formats) > 1:
         line = f"exported {ok}/{len(formats)} formats"
         console.print(f"  [{ui.DIM}]{line}[/]") if console else print(line)
@@ -793,13 +793,7 @@ def cmd_polish(args, cfg, settings, uid):
         formats = [f for f, name in _DELIVERABLE.items() if (out_dir / name).exists()]
     if console:
         console.print(f"  [bold {ui.ON_CLR}]✓ polished[/]  [dim]{book_id}[/]")
-    for fmt in formats:
-        try:
-            out = _EXPORT_FNS[fmt](uid, book_id)
-        except Exception as e:  # noqa: BLE001 - one format must not abort the rest
-            _export_failed(console, fmt, e)
-            continue
-        _report_export(console, fmt, out)
+    _run_exports(console, formats, uid, book_id)
 
 
 def cmd_evidence(args, cfg, settings, uid):

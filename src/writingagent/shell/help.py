@@ -61,37 +61,14 @@ def _commands_table(console, settings: Settings) -> None:
 
 
 def _features_table(console, settings: Settings) -> None:
-    """Feature toggles with live state (lives under /features; was the welcome screen)."""
-    is_article = settings.mode == "article"
-    rows = [
-        _feat_row("humanize   ", settings.humanize,
-                  "strip AI tells from prose (em-dashes, AI phrasing)"),
-        _feat_row("researcher ", settings.use_researcher,
-                  "web search per section - real facts + inline citations" if is_article
-                  else "DuckDuckGo web search per chapter - grounds facts"),
-        _feat_row("deep search", settings.deep_research,
-                  "multi-query fan-out + full-page fetch + cross-source synthesis "
-                  "(needs researcher)"),
-        _feat_row("embeddings ", settings.use_embeddings,
-                  "semantic skill retrieval (all-MiniLM-L6-v2, local)"),
-        _feat_row("images     ", settings.use_images,
-                  "Wikimedia Commons images for illustrated/technical content"),
-        _feat_row("cohesion   ", settings.article_cohesion,
-                  "whole-article smoothing pass before References (articles)"),
-        _feat_row("tournament ", settings.tournament_judge,
-                  "pick the best divergent draft side-by-side (best-of-N judge)"),
-        _feat_row("verify     ", settings.verify_claims,
-                  "check each cited claim vs its source (blocks under deep research)"),
-        _feat_row("table read ", settings.table_read,
-                  "skeptical whole-piece reader pass (articles)"),
-        _feat_row("reader-loop", settings.table_read_revise,
-                  "autonomous: apply the reader's top fix as one revision"),
-        _feat_row("skill duels", settings.skill_duels,
-                  "A/B-test learned skills (one extra draft) - causal efficacy signal"),
-        _feat_row("distill    ", settings.skill_distill,
-                  "retire near-duplicate skills so retrieval stays sharp"),
-        _feat_row("watch-block", settings.watch_blocking,
-                  "watch-list blocks clear violations (off = advisory, nit only)"),
+    """Feature toggles with live state (lives under /features; was the welcome screen).
+
+    The toggle rows are built from `_FEATURE_KEYS` (the single source of truth, also
+    used by the interactive grid) so the table and grid never drift; the trailing
+    'quality knobs' / '/set' rows are the only hand-maintained, non-toggle entries."""
+    rows = [_feat_row(label, getattr(settings, key, False), desc)
+            for key, label, desc in _FEATURE_KEYS]
+    rows += [
         ("", ""),
         ("quality knobs",
          f"divergent_drafts={settings.divergent_drafts}, min_insight={settings.min_insight}/5"),

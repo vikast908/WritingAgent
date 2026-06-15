@@ -23,9 +23,9 @@ def test_store_canon_and_search(tmp_brain):
         timeline=[S.TimelineEvent(chapter=1, event="arrives")], threads_touched=["fog"])
     st.update_from_extraction(1, ex)
     st.render_canon(paths)
-    st.index_documents(paths)
+    st.index_chapter(paths, 1)
     assert "Maya" in st.canon_context()
-    assert st.search("lighthouse")
+    assert st.search_excerpts(["lighthouse"])
     st.close()
     assert (paths.characters / "maya.md").exists()
 
@@ -52,12 +52,12 @@ def test_index_chapter_is_incremental(tmp_brain):
     brain.write_text(paths.ch_summary(1), "Maya arrives.")
     st = Store.open(paths)
     st.index_chapter(paths, 1)
-    assert st.search("lighthouse")
+    assert st.search_excerpts(["lighthouse"])
     # Re-indexing the same chapter replaces, not duplicates.
     brain.write_text(paths.ch(1), "Maya at the harbour.")
     st.index_chapter(paths, 1)
-    assert st.search("harbour")
-    assert not st.search("lighthouse")
+    assert st.search_excerpts(["harbour"])
+    assert not st.search_excerpts(["lighthouse"])
     st.close()
 
 
@@ -79,7 +79,8 @@ def test_search_excerpts_excludes_refs_and_summaries(tmp_brain):
     brain.write_text(paths.ch_summary(1), "lighthouse summary")
     brain.write_text(paths.ch(2), "Maya walked through the fog to the harbour.")
     st = Store.open(paths)
-    st.index_documents(paths)
+    st.index_chapter(paths, 1)
+    st.index_chapter(paths, 2)
     hits = st.search_excerpts(["lighthouse", "boats"], limit=2)
     assert hits and hits[0][0] == "ch01"
     assert all(ref != "ch01.summary" for ref, _ in hits)   # chapters only, no summaries

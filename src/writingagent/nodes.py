@@ -117,7 +117,7 @@ def write_chapter(
         parts.append(length_note)
     parts.append(f'Write chapter {blueprint.number}: "{blueprint.title}".')
     return complete_text(model, P.WRITER_SYS, "\n\n".join(parts),
-                         max_tokens=16000, thinking=True,
+                         max_tokens=16000,
                          temperature=(temperature if temperature is not None
                                       else cfg.temperature_for("writer")))
 
@@ -592,7 +592,7 @@ def cohesion_edit(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str) -> 
                          max_tokens=16000, temperature=cfg.temperature_for("writer"))
 
 
-def _diagram_spec(cfg: ModelConfig, model: str, heading: str, context: str) -> S.DiagramSpec | None:
+def _diagram_spec(model: str, heading: str, context: str) -> S.DiagramSpec | None:
     """Ask the model for a STRUCTURED diagram spec (nodes/edges/labels). The model is good
     at this; it is bad at SVG geometry, so layout is done deterministically downstream."""
     ctx_block = (f"\n\nContext (draw specific labels/metrics from here):\n{context[:900]}"
@@ -636,11 +636,11 @@ def generate_svg_diagram(cfg: ModelConfig, heading: str, context: str = "",
     if cached:
         return cached
 
-    spec = _diagram_spec(cfg, model, heading, context)
+    spec = _diagram_spec(model, heading, context)
     if spec is None:                # pro reasoned itself out / returned nothing -> flash retry
         fallback = cfg.model_for("diagram_fallback")
         if fallback != model:
-            spec = _diagram_spec(cfg, fallback, heading, context)
+            spec = _diagram_spec(fallback, heading, context)
     if spec is None:
         return _dgm.placeholder(heading[:100] or "Diagram")
 

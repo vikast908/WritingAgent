@@ -185,7 +185,6 @@ def _arrow(x: float, y: float, direction: str) -> str:
     s = 5.5
     pts = {
         "right": f"{x},{y} {x - 2 * s},{y - s} {x - 2 * s},{y + s}",
-        "left":  f"{x},{y} {x + 2 * s},{y - s} {x + 2 * s},{y + s}",
         "down":  f"{x},{y} {x - s},{y - 2 * s} {x + s},{y - 2 * s}",
         "up":    f"{x},{y} {x - s},{y + 2 * s} {x + s},{y + 2 * s}",
     }[direction]
@@ -438,17 +437,12 @@ def _render_layered(spec, nodes, edges) -> str:
             out.append(_path(f"M {s_cx:.0f} {sy0:.0f} V {ytop:.0f} H {t_cx:.0f} V {ty0:.0f}"))
             out.append(_arrow(t_cx, ty0, "down"))
             out.append(_edge_label(xm, ytop, e.label, placed))
-        elif ty0 > sy0:                             # downward between lanes
-            sy, ty = sy0 + box_h, ty0
+        else:                                       # between lanes
+            down = ty0 > sy0
+            sy, ty = (sy0 + box_h, ty0) if down else (sy0, ty0 + box_h)
             out.append(_path(f"M {s_cx:.0f} {sy:.0f} V {(sy + ty) / 2:.0f} "
                              f"H {t_cx:.0f} V {ty:.0f}"))
-            out.append(_arrow(t_cx, ty, "down"))
-            out.append(_edge_label((s_cx + t_cx) / 2, (sy + ty) / 2, e.label, placed))
-        else:                                       # upward between lanes
-            sy, ty = sy0, ty0 + box_h
-            out.append(_path(f"M {s_cx:.0f} {sy:.0f} V {(sy + ty) / 2:.0f} "
-                             f"H {t_cx:.0f} V {ty:.0f}"))
-            out.append(_arrow(t_cx, ty, "up"))
+            out.append(_arrow(t_cx, ty, "down" if down else "up"))
             out.append(_edge_label((s_cx + t_cx) / 2, (sy + ty) / 2, e.label, placed))
 
     for n in nodes:

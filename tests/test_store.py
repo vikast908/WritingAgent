@@ -25,28 +25,27 @@ def test_open_close_persists_across_reopen(tmp_brain):
     st2.close()
 
 
-def test_search_like_fallback_without_fts(tmp_brain):
-    """With fts disabled, search() and search_excerpts() fall back to LIKE scans."""
+def test_search_excerpts_like_fallback_without_fts(tmp_brain):
+    """With fts disabled, search_excerpts() falls back to a LIKE scan."""
     paths = BookPaths("b", "u").ensure()
     brain.write_text(paths.ch(1), "Maya counted the boats at the lighthouse.")
     st = Store.open(paths)
-    st.index_documents(paths)
+    st.index_chapter(paths, 1)
     st.fts = False
-    assert st.search("lighthouse")
     hits = st.search_excerpts(["lighthouse"], limit=2)
     assert hits and hits[0][0] == "ch01"
     assert st.search_excerpts(["lighthouse"], limit=2, exclude_refs={"ch01"}) == []
     st.close()
 
 
-def test_search_punctuation_does_not_raise(tmp_brain):
-    """FTS-operator characters in the query must not surface an fts5 syntax error."""
+def test_search_excerpts_punctuation_does_not_raise(tmp_brain):
+    """FTS-operator characters in the terms must not surface an fts5 syntax error."""
     paths = BookPaths("b", "u").ensure()
     brain.write_text(paths.ch(1), "Maya at the lighthouse.")
     st = Store.open(paths)
-    st.index_documents(paths)
+    st.index_chapter(paths, 1)
     for q in ('light"house AND *', "a:b - c OR d", '"'):
-        assert isinstance(st.search(q), list)   # no exception, list contract holds
+        assert isinstance(st.search_excerpts([q]), list)   # no exception, list contract holds
     st.close()
 
 
@@ -59,16 +58,19 @@ def test_search_excerpts_empty_terms_returns_empty(tmp_brain):
     st.close()
 
 
-def test_index_documents_skips_drafts(tmp_brain):
+def test_index_chapter_skips_drafts(tmp_brain):
     """Uncommitted .draft.md files must never leak into the FTS index."""
     paths = BookPaths("b", "u").ensure()
     brain.write_text(paths.ch(1), "committed harbour text")
     brain.write_text(paths.ch_draft(1), "draftonlyword")
     brain.write_text(paths.ch_summary(1), "summary of harbour")
     st = Store.open(paths)
-    st.index_documents(paths)
-    assert not st.search("draftonlyword")
-    kinds = dict(st.search("harbour", limit=10))
+    st.index_chapter(paths, 1)
+    # The draft never enters docs; both chapter and summary do.
+    assert not st.conn.execute(
+        "SELECT 1 FROM docs WHERE body LIKE '%draftonlyword%'").fetchone()
+    kinds = dict(st.conn.execute(
+        "SELECT ref, kind FROM docs WHERE body LIKE '%harbour%'").fetchall())
     assert kinds == {"ch01": "chapter", "ch01.summary": "summary"}
     st.close()
 

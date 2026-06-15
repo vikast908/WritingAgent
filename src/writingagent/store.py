@@ -56,23 +56,11 @@ class Store:
         self.conn.close()
 
     # ── full-text index over committed chapters + summaries ──────────────────
-    def index_documents(self, paths: BookPaths) -> None:
-        """Full rebuild of the FTS index (initial build / repair)."""
-        c = self.conn
-        c.execute("DELETE FROM docs")
-        for p in sorted(paths.chapters.glob("ch*.md")):
-            if p.name.endswith(".draft.md"):
-                continue
-            kind = "summary" if p.name.endswith(".summary.md") else "chapter"
-            c.execute("INSERT INTO docs (kind, ref, body) VALUES (?,?,?)",
-                      (kind, p.stem, p.read_text(encoding="utf-8")))
-        c.commit()
-
     def index_chapter(self, paths: BookPaths, n: int) -> None:
         """Incrementally (re)index one chapter's text + summary.
 
-        Per-commit replacement for index_documents: re-reading and re-inserting
-        every chapter on every commit is O(n^2) over a run.
+        Re-reading and re-inserting every chapter on every commit would be
+        O(n^2) over a run, so commits index only the chapter that changed.
         """
         c = self.conn
         for p, kind in ((paths.ch(n), "chapter"), (paths.ch_summary(n), "summary")):
@@ -81,29 +69,6 @@ class Store:
                 c.execute("INSERT INTO docs (kind, ref, body) VALUES (?,?,?)",
                           (kind, p.stem, p.read_text(encoding="utf-8")))
         c.commit()
-
-    def search(self, query: str, limit: int = 5) -> list[tuple[str, str]]:
-        c = self.conn
-        if self.fts:
-            # Wrap as a quoted FTS5 phrase so punctuation (", *, :, -, AND/OR) in the
-            # query can't trigger an fts5 syntax error; fall back to LIKE if it still does.
-            phrase = '"' + query.replace('"', '""') + '"'
-            try:
-                rows = c.execute(
-                    "SELECT ref, kind FROM docs WHERE docs MATCH ? LIMIT ?",
-                    (phrase, limit),
-                ).fetchall()
-            except sqlite3.OperationalError:
-                rows = c.execute(
-                    "SELECT ref, kind FROM docs WHERE body LIKE ? LIMIT ?",
-                    (f"%{query}%", limit),
-                ).fetchall()
-        else:
-            rows = c.execute(
-                "SELECT ref, kind FROM docs WHERE body LIKE ? LIMIT ?",
-                (f"%{query}%", limit),
-            ).fetchall()
-        return [(r[0], r[1]) for r in rows]
 
     def search_excerpts(self, terms: list[str], limit: int = 2,
                         exclude_refs: set[str] | None = None) -> list[tuple[str, str]]:

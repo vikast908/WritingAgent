@@ -8,7 +8,7 @@ import io
 import re
 import shlex
 
-from .. import brain
+from .. import brain, ui
 from ..config import Settings
 from ..ui import DIM, ERR, GOLD, INK, explain_error
 from ._const import _CODE_BLOCK_RE
@@ -27,6 +27,7 @@ __all__ = [
     '_normalize_argv',
     '_commands_in_response',
     '_chat_use_project',
+    '_dispatch_command',
     '_execute_cmd',
 ]
 
@@ -169,11 +170,97 @@ def _chat_use_project(cmd_line: str, console, state: dict) -> None:
     # else: unknown/ambiguous/hallucinated id - keep the active project, stay quiet.
 
 
+def _dispatch_command(argv: list[str], console, cfg, settings, state, *,
+                      interactive: bool, line: str = "",
+                      on_extras=None, on_done=None) -> None:
+    """Run one already-recognised book command. Shared by the REPL prompt
+    (interactive=True) and the chat assistant (interactive=False).
+
+    `argv[0]` must already be a known command. The two surfaces differ only in:
+      - error styling: interactive appends a `(try /help)` hint;
+      - `extras` (trailing prose like `read chapter 3`): interactive hands the
+        whole `line` to the chat assistant via `on_extras`; chat ignores them;
+      - post-run: interactive calls `on_done` (the post-completion hint), chat
+        announces the newly-active project instead.
+    """
+    parser = state["_parser"]
+    commands = state["_commands"]
+    first = argv[0]
+    argv = _normalize_argv(argv)
+
+    # Capture argparse stderr to re-style error messages.
+    stderr_buf = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(stderr_buf):
+            args, extras = parser.parse_known_args(argv)
+    except SystemExit:
+        err_text = stderr_buf.getvalue().strip()
+        if err_text:
+            # Strip "book: error: " prefix that argparse prepends.
+            msg = err_text.split(": error: ", 1)[-1] if ": error: " in err_text else err_text
+            hint = "  [dim](try /help)[/]" if interactive else ""
+            _out(console, f"[{ERR}]error:[/] {msg}{hint}")
+        return
+    if extras and on_extras is not None:
+        # "run it", "read chapter 3" - a command word followed by plain English.
+        # Hand the whole line to the assistant rather than dropping the extras.
+        on_extras(line)
+        return
+
+    # `new`/`write` CREATE a project, so they must never inherit the active id.
+    creates_project = first in ("new", "write")
+    if getattr(args, "book_id", None) is None:
+        if first in _NEEDS_PROJECT and not state.get("book"):
+            picked = _auto_or_pick_project(state["uid"], settings, console, state)
+            if not picked:
+                return
+        if state.get("book") and not creates_project:
+            args.book_id = state["book"]
+    user = args.user if args.user != settings.default_user else state["uid"]
+    projects_before = ({p[0] for p in brain.list_projects(user)}
+                       if creates_project else None)
+    try:
+        # Special handling for destructive/interactive commands in the Rich TUI.
+        if first == "run" and console:
+            _cmd_run_rich(args, cfg, settings, user, console)
+        elif (interactive and first == "delete" and console
+              and not getattr(args, "yes", False)):
+            book_id = getattr(args, "book_id", None) or state["book"] or ""
+            answer = console.input(
+                f"  [{ERR}]Delete '{book_id}' permanently?[/] [{DIM}][y/N][/] ")
+            if ui.is_affirmative(answer):
+                args.yes = True
+                commands[args.command](args, cfg, settings, user)
+                if state.get("book") == book_id:
+                    state["book"] = None
+            else:
+                _out(console, "[dim]aborted[/]")
+        else:
+            commands[args.command](args, cfg, settings, user)
+        # After new/write, make the freshly created project active.
+        if projects_before is not None:
+            fresh = [p[0] for p in brain.list_projects(user)
+                     if p[0] not in projects_before]
+            if fresh:
+                state["book"] = fresh[0]
+                if not interactive:
+                    _out(console, f"[dim]active project -> {fresh[0]}[/]")
+        if on_done is not None:
+            on_done()
+    except KeyboardInterrupt:
+        _out(console, f"\n[{ERR}]interrupted[/] [dim]- state saved. Run again to resume.[/]")
+    except SystemExit:
+        pass
+    except Exception as e:  # noqa: BLE001
+        _out(console, f"[{ERR}]error:[/] {explain_error(e) or f'{type(e).__name__}: {e}'}")
+
+
 def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
     """Execute one command string emitted by the chat assistant.
 
     Destructive/config commands are refused here (defense in depth on top of the
     filtering in `_commands_in_response`) - the human must type those directly.
+    The actual command run is delegated to `_dispatch_command` (non-interactive).
     """
     if cmd_line.startswith("/"):
         slash = cmd_line.lstrip("/").split()
@@ -201,47 +288,9 @@ def _execute_cmd(cmd_line: str, console, cfg, settings, state) -> None:
             _out(console, f"[dim](skipped '{first}' - run it yourself to confirm)[/]")
         return
 
-    # Fix unquoted --abstract: `new --abstract can AGI...` → single value
-    argv = _normalize_argv(argv)
-
     # `new` is interactive (angle/direction picking) - inject --pick 1 if missing
     # so it doesn't block waiting for user input in the middle of a chat response.
     if first == "new" and "--pick" not in argv:
         argv += ["--pick", "1"]
 
-    stderr_buf = io.StringIO()
-    try:
-        with contextlib.redirect_stderr(stderr_buf):
-            args, _ = parser.parse_known_args(argv)
-    except SystemExit:
-        err_text = stderr_buf.getvalue().strip()
-        if err_text:
-            msg = err_text.split(": error: ", 1)[-1] if ": error: " in err_text else err_text
-            _out(console, f"[{ERR}]error:[/] {msg}")
-        return
-    # Auto-pick project when command needs one and none is active
-    if first in _NEEDS_PROJECT and getattr(args, "book_id", None) is None and not state.get("book"):
-        picked = _auto_or_pick_project(state["uid"], settings, console, state)
-        if not picked:
-            return
-    if getattr(args, "book_id", None) is None and state.get("book"):
-        args.book_id = state["book"]
-    user = args.user if args.user != settings.default_user else state["uid"]
-    projects_before = set(p[0] for p in brain.list_projects(user)) if first == "new" else None
-    try:
-        if first == "run" and console:
-            _cmd_run_rich(args, cfg, settings, user, console)
-        else:
-            commands[args.command](args, cfg, settings, user)
-        # After `new` succeeds, auto-set the newly created project as active
-        if first == "new" and projects_before is not None:
-            new_projects = [p[0] for p in brain.list_projects(user) if p[0] not in projects_before]
-            if new_projects:
-                state["book"] = new_projects[0]
-                _out(console, f"[dim]active project -> {new_projects[0]}[/]")
-    except KeyboardInterrupt:
-        _out(console, f"\n[{ERR}]interrupted[/] [dim]- state saved. Run again to resume.[/]")
-    except SystemExit:
-        pass
-    except Exception as e:  # noqa: BLE001
-        _out(console, f"[{ERR}]error:[/] {explain_error(e) or f'{type(e).__name__}: {e}'}")
+    _dispatch_command(argv, console, cfg, settings, state, interactive=False)

@@ -127,77 +127,64 @@ def _export_paths_and_title(uid: str, project_id: str):
     return root, manuscript, title, brain.resolve_export_dir(uid, project_id)
 
 
-def export_pdf(uid: str, book_id: str, *, log=print):
+def _export(uid: str, book_id: str, *, filename: str, renderer: str, label: str,
+            log=print, pass_base_dir: bool = True, **extra):
+    """Shared body for every export_*: load the manuscript, render it to `filename`
+    in the project's export dir via the named `export` renderer, log, return the path.
+
+    `renderer` is the attribute name on the `export` module (e.g. "markdown_to_pdf").
+    `pass_base_dir` forwards the project root as base_dir (rich formats); the plain
+    text/markdown renderers take no base_dir. `extra` carries per-format kwargs
+    (e.g. author= for epub)."""
     from .. import export
     root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
     md = brain.read_text(manuscript)
     if not md:
         raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
-    out = out_dir / "manuscript.pdf"
-    export.markdown_to_pdf(md, out, title=title, base_dir=root)
-    log(f"[OK] PDF -> {out}")
+    out = out_dir / filename
+    kwargs = dict(title=title, **extra)
+    if pass_base_dir:
+        kwargs["base_dir"] = root
+    getattr(export, renderer)(md, out, **kwargs)
+    log(f"[OK] {label} -> {out}")
     return out
+
+
+def _epub_author(uid: str) -> str:
+    """Author for the EPUB metadata: the `name:` line from the user profile, else uid."""
+    author_meta = brain.read_text(brain.user_profile(uid)) or ""
+    m = re.search(r"(?m)^name:\s*(.+)$", author_meta)
+    return m.group(1).strip() if m else uid
+
+
+def export_pdf(uid: str, book_id: str, *, log=print):
+    return _export(uid, book_id, filename="manuscript.pdf",
+                   renderer="markdown_to_pdf", label="PDF", log=log)
 
 
 def export_epub(uid: str, book_id: str, *, log=print):
-    from .. import export
-    root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
-    md = brain.read_text(manuscript)
-    if not md:
-        raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
-    author_meta = brain.read_text(brain.user_profile(uid)) or ""
-    import re as _re
-    m = _re.search(r"(?m)^name:\s*(.+)$", author_meta)
-    author = m.group(1).strip() if m else uid
-    out = out_dir / "manuscript.epub"
-    export.markdown_to_epub(md, out, title=title, author=author, base_dir=root)
-    log(f"[OK] EPUB -> {out}")
-    return out
+    return _export(uid, book_id, filename="manuscript.epub",
+                   renderer="markdown_to_epub", label="EPUB", log=log,
+                   author=_epub_author(uid))
 
 
 def export_html(uid: str, book_id: str, *, log=print):
-    from .. import export
-    root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
-    md = brain.read_text(manuscript)
-    if not md:
-        raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
-    out = out_dir / "manuscript.html"
-    export.markdown_to_html(md, out, title=title, base_dir=root)
-    log(f"[OK] HTML -> {out}")
-    return out
+    return _export(uid, book_id, filename="manuscript.html",
+                   renderer="markdown_to_html", label="HTML", log=log)
 
 
 def export_docx(uid: str, book_id: str, *, log=print):
-    from .. import export
-    root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
-    md = brain.read_text(manuscript)
-    if not md:
-        raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
-    out = out_dir / "manuscript.docx"
-    export.markdown_to_docx(md, out, title=title, base_dir=root)
-    log(f"[OK] DOCX -> {out}")
-    return out
+    return _export(uid, book_id, filename="manuscript.docx",
+                   renderer="markdown_to_docx", label="DOCX", log=log)
 
 
 def export_txt(uid: str, book_id: str, *, log=print):
-    from .. import export
-    root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
-    md = brain.read_text(manuscript)
-    if not md:
-        raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
-    out = out_dir / "manuscript.txt"
-    export.markdown_to_txt(md, out, title=title)
-    log(f"[OK] TXT -> {out}")
-    return out
+    return _export(uid, book_id, filename="manuscript.txt",
+                   renderer="markdown_to_txt", label="TXT", log=log,
+                   pass_base_dir=False)
 
 
 def export_md(uid: str, book_id: str, *, log=print):
-    from .. import export
-    root, manuscript, title, out_dir = _export_paths_and_title(uid, book_id)
-    md = brain.read_text(manuscript)
-    if not md:
-        raise FileNotFoundError(f"No manuscript for '{book_id}'. Run it first.")
-    out = out_dir / "manuscript_export.md"
-    export.markdown_to_md(md, out, title=title)
-    log(f"[OK] MD -> {out}")
-    return out
+    return _export(uid, book_id, filename="manuscript_export.md",
+                   renderer="markdown_to_md", label="MD", log=log,
+                   pass_base_dir=False)
