@@ -300,3 +300,114 @@ def test_feature_keys_match_settings_and_table(tmp_brain):
     # pytest has no interactive stdin -> _toggle_grid degrades to the table.
     assert shell._toggle_grid(console, load_settings()) is False
     assert "humanize" in console.file.getvalue()
+
+
+# ── First-run key wizard + /setkey (onboarding friction fixes) ───────────────────
+class _FakeConsole:
+    """A console that records prints and replays scripted answers to input()."""
+    def __init__(self, answers):
+        self._answers = list(answers)
+        self.out = []
+
+    def print(self, *a, **_k):
+        self.out.append(" ".join(str(x) for x in a))
+
+    def input(self, prompt=""):
+        self.print(prompt)
+        if self._answers:
+            return self._answers.pop(0)
+        raise EOFError
+
+
+def test_write_env_key_creates_then_updates_in_place(tmp_path, monkeypatch):
+    import os
+
+    from writingagent import brain, shell
+    monkeypatch.setattr(brain, "_ROOT", tmp_path)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    shell._write_env_key("OPENROUTER_API_KEY", "sk-aaa")
+    assert os.environ["OPENROUTER_API_KEY"] == "sk-aaa"          # applied live, no restart
+    assert (tmp_path / ".env").read_text(encoding="utf-8").strip() == "OPENROUTER_API_KEY=sk-aaa"
+    shell._write_env_key("OPENROUTER_API_KEY", "sk-bbb")
+    txt = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "sk-bbb" in txt and "sk-aaa" not in txt              # updated, not appended
+    assert txt.count("OPENROUTER_API_KEY=") == 1
+
+
+def test_write_env_key_readonly_location_sets_live_without_crashing(tmp_path, monkeypatch):
+    """On a pip/npm-installed copy brain._ROOT is read-only. The key must still apply to
+    THIS session (the live os.environ set comes first) and the write must degrade to None,
+    never raise - a crash here would hit the first-run wizard at startup."""
+    import os
+
+    from writingagent import brain, shell
+    monkeypatch.setattr(brain, "_ROOT", tmp_path)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    def _boom(*_a, **_k):
+        raise PermissionError("read-only")
+    monkeypatch.setattr(type(tmp_path / ".env"), "write_text", _boom)
+    result = shell._write_env_key("OPENROUTER_API_KEY", "sk-live")
+    assert result is None                                   # persistence failed, gracefully
+    assert os.environ["OPENROUTER_API_KEY"] == "sk-live"    # but the session works
+
+
+def test_first_run_setup_enter_picks_free_preview(monkeypatch):
+    import sys
+    import types
+
+    from writingagent import shell
+    from writingagent.config import Settings
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(sys, "stdin", types.SimpleNamespace(isatty=lambda: True))
+    console = _FakeConsole([""])                                # just press Enter
+    shell._first_run_setup(console, Settings(provider="deepseek"))
+    import os
+    assert os.environ.get("WRITINGAGENT_FAKE") == "1"          # free preview on, no restart
+    assert any("free preview" in o for o in console.out)
+
+
+def test_first_run_setup_paste_key(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    from writingagent import brain, shell
+    from writingagent.config import Settings
+    monkeypatch.setattr(brain, "_ROOT", tmp_path)
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(sys, "stdin", types.SimpleNamespace(isatty=lambda: True))
+    console = _FakeConsole(["1", "sk-zzz"])                     # paste a key
+    shell._first_run_setup(console, Settings(provider="deepseek"))
+    import os
+    assert os.environ["DEEPSEEK_API_KEY"] == "sk-zzz"
+    assert (tmp_path / ".env").read_text(encoding="utf-8").strip().endswith("sk-zzz")
+
+
+def test_first_run_setup_noop_when_key_present(monkeypatch):
+    import sys
+    import types
+
+    from writingagent import shell
+    from writingagent.config import Settings
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-present")
+    monkeypatch.setattr(sys, "stdin", types.SimpleNamespace(isatty=lambda: True))
+    console = _FakeConsole(["1", "x"])
+    shell._first_run_setup(console, Settings(provider="deepseek"))
+    assert console.out == []                                    # nothing shown - key already set
+
+
+def test_cmd_setkey_saves_key_and_clears_fake(tmp_path, monkeypatch):
+    import os
+
+    from writingagent import brain
+    from writingagent.config import Settings
+    from writingagent.shell.commands import _cmd_setkey
+    monkeypatch.setattr(brain, "_ROOT", tmp_path)
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    _cmd_setkey(_FakeConsole([]), Settings(provider="deepseek"), ["sk-direct"])
+    assert os.environ["DEEPSEEK_API_KEY"] == "sk-direct"
+    assert "WRITINGAGENT_FAKE" not in os.environ                # a real key turns real runs on
+    assert (tmp_path / ".env").read_text(encoding="utf-8").strip().endswith("sk-direct")

@@ -5,6 +5,63 @@
 
 ## Current status
 
+- **New (2026-06-15 - self-review hardening of the day's work - DONE):** critical pass over the same-day
+  changes found and fixed two real issues. (1) **`_write_env_key` could crash the shell at startup for
+  installed users**: `brain._ROOT` is read-only under site-packages (pip/npm install), and the unwrapped
+  `write_text` would raise *before* the live `os.environ` set - so the first-run wizard's "paste a key"
+  would both crash and not even apply the key. Fixed: set the live env FIRST (always works this session),
+  wrap the persist in try/except, return `Path | None`; wizard + `/setkey` now show a "set for this
+  session - couldn't write .env" message on failure. +1 test. (2) **Critic citation-padding rule was
+  unconditionally BLOCKING**, fighting the project's `watch_blocking` anti-thrash philosophy - softened so
+  only a *decorative* citation (source doesn't back its sentence) blocks; padding/low-authority/off-topic
+  are nits. Docs corrected (CHANGELOG, plan §13/§18.1). **352 passed / 2 skipped, ruff clean.**
+- **New (2026-06-15 - writer-journey friction pass - DONE):** mapped the journey for a non-technical
+  writer and found the friction is *front-loaded* - the in-shell loop (review menu, live cost/ETA
+  dashboard, default-laden interview) is already strong; writers bounce **before the first word** on
+  install + the API-key wall. Fixes shipped: (1) **first-run key wizard** (`branding._first_run_setup`,
+  called from `repl.run_shell` before the welcome) - at an interactive prompt with no key, offers
+  *paste a key* / *try free* / *skip* in one keypress; paste writes `.env` **and** applies live,
+  "try free" sets `WRITINGAGENT_FAKE=1` **live** (kills the "restart with the env var" dance). (2)
+  **`/setkey [<key>]`** (`commands._cmd_setkey`, aliases `key`/`apikey`) - saves the active provider's key
+  to `.env`, applies live, clears fake mode; the "add a key later" path, in `/help` + completions. (3)
+  **`branding._write_env_key`** - upsert a `KEY=value` into `brain._ROOT/.env` (the file the CLI
+  auto-loads) and set it live. (4) **Welcome progressive disclosure** - leads with one action (`write`),
+  no-key block points at `/setkey`, manual framed as "press `m` to pause & steer"; still ≤14 lines
+  (renders at 12). (5) **`README` front-door CTA** - "Try it in your browser - no install, no key" before
+  the install steps. (6) **Exports print the absolute path** (`cli._report_export`) so "where's my file?"
+  is answered. +5 tests (`test_ui.py`: env writer, wizard free/paste/no-op, `/setkey`). **351 passed / 2
+  skipped, ruff clean.** Docs: CHANGELOG, plan §13. **Next (still open):** the two deferred showstoppers
+  - independent blind A/B and a real 10+ chapter book validation.
+- **New (2026-06-15 - zero-install web demo, #4 of the "what's next" review - DONE):** added `web/app.py`
+  - a Gradio front-end over the **public `Agent`/`Project` facade** (never touches internals), so a
+  non-developer can try the pipeline in a browser. **Free preview** (default) forces `WRITINGAGENT_FAKE=1`
+  → runs the whole flow offline with placeholder output (no key, no cost, shows the run's shape);
+  **real run** toggle takes a BYO provider key (OpenRouter/DeepSeek/OpenAI/Gemini) and produces a genuine
+  piece + populated evidence report. Streams progress live via a worker thread + queue feeding the Gradio
+  generator; outputs manuscript + evidence tabs + a `.md` download. gradio is imported **lazily** (only in
+  `build_ui`), so the runtime helpers stay testable without it - mirrors the `deep`/`headroom` optional-dep
+  pattern. New `[web]` extra in `pyproject.toml`; HF Space deploy files (`web/requirements.txt`,
+  `web/README.md` with the gradio-SDK front-matter). +5 smoke tests (`test_web.py`, incl. a full offline
+  run through the demo). **346 passed / 2 skipped, ruff clean** (src+web+tests). Docs: CHANGELOG, plan
+  §13. **Next:** the two showstoppers the user deferred - independent blind A/B (third-party judge, n≥5)
+  and a real 10+ chapter book validation. Caveat to revisit: `configure_runtime` mutates process-global
+  env, so a public deploy must stay single-worker or serialize runs.
+- **New (2026-06-15 - citation-quality gate, #3 of the "what's next" review - DONE):** closed the
+  blind-A/B "citation quantity ≫ quality" weakness (the model padded with low-authority sources -
+  resume-template sites - to hit volume). Added a **deterministic source-authority heuristic** in
+  `polish.py`: `source_authority(url)` scores a domain 0–100 (`AUTH_HIGH` gov/standards/primary research,
+  `AUTH_REPUTABLE` established outlets & official docs, `AUTH_NEUTRAL` unknown = no penalty, `AUTH_LOW`
+  SEO/template/content-farm signals; all tiers tunable). Wired in three places: (1) `score_sources` adds
+  an `authority` field and uses it to **break influence ties** (a heavily-cited low-authority pad ranks
+  below an equally-cited credible source); (2) `build_references` drops an *uncited low-authority* pad,
+  not just zero-overlap noise (References row format unchanged → existing tests stable); (3)
+  `build_evidence_report` now surfaces **credibility** - high-authority count, average authority, and a
+  ⚠️ flag listing low-authority sources (parses the URL already in each ranked row, so the row format
+  didn't change). Reinforced by prompt gates in `ARTICLE_CRITIC_SYS` + `CRITIC_SYS` (decorative / padded /
+  off-topic citations are BLOCKING). +3 tests (`test_polish.py`); **full suite green, ruff clean.** Docs:
+  plan §13 (References block), CHANGELOG [Unreleased]. **Next:** #4 zero-install web demo (decide
+  framework - Gradio HF Space reusing the `Agent`/`Project` facade is the lightest path).
+
 - **New (2026-06-14 - UX audit P1-P3 + all md docs refreshed):** ran a UX audit (framework: audit-then-
   approve) and implemented everything. **P1:** `/skills` now shows the duel win-rate (vs 50/50) + count
   next to first-pass lift, and notes duels decide trusted/retired once a skill has data (closes the debt

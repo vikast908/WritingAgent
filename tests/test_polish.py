@@ -59,6 +59,47 @@ def test_build_references_format_dates_and_drops_noise():
     assert "· n.d. ·" in polish.build_references(scored, drop_noise=False)  # missing date
 
 
+def test_source_authority_tiers():
+    assert polish.source_authority("https://www.cdc.gov/x") == polish.AUTH_HIGH      # .gov
+    assert polish.source_authority("https://ox.ac.uk/paper") == polish.AUTH_HIGH     # .ac.uk
+    assert polish.source_authority("https://arxiv.org/abs/1") == polish.AUTH_HIGH    # primary
+    assert polish.source_authority("https://en.wikipedia.org/x") == polish.AUTH_REPUTABLE
+    assert polish.source_authority("https://best-resume-templates.io/x") == polish.AUTH_LOW
+    assert polish.source_authority("https://some-random-blog.xyz/x") == polish.AUTH_NEUTRAL
+    assert polish.source_authority("") == polish.AUTH_NEUTRAL                        # no signal
+
+
+def test_score_sources_authority_breaks_ties_and_padding_dropped():
+    # Two equally cited+relevant sources; the high-authority one must rank first.
+    body = "Latency matters [1] and also [2]."
+    sources = [
+        {"title": "latency study", "url": "https://low-quality-resume.io/latency", "date": ""},
+        {"title": "latency study", "url": "https://arxiv.org/abs/2", "date": "2024"},
+    ]
+    scored = polish.score_sources(sources, body, "latency study")
+    assert scored[0]["source"]["url"] == "https://arxiv.org/abs/2"   # authority wins the tie
+    # An uncited low-authority pad is dropped from References even with some overlap.
+    padded = [
+        {"source": {"title": "real cited", "url": "https://nist.gov/a", "date": "2023"},
+         "cited": 3, "overlap": 0.5, "score": 100, "authority": polish.AUTH_HIGH},
+        {"source": {"title": "resume template tips", "url": "https://x-resume-templates.com/y",
+                    "date": ""}, "cited": 0, "overlap": 0.4, "score": 0,
+         "authority": polish.AUTH_LOW},
+    ]
+    out = polish.build_references(padded)
+    assert "real cited" in out and "resume template tips" not in out
+
+
+def test_evidence_report_surfaces_credibility():
+    ms = ("# T\n\nBody.\n\n---\n\n## References\n\n*Ranked by influence on this article.*\n\n"
+          "1. **100** · 2024 · [Gov](https://www.cdc.gov/a)\n"
+          "2. **40** · n.d. · [Pad](https://best-resume-templates.io/b)\n")
+    rep = polish.build_evidence_report(ms, "**Claim:** X.\n**Arguments:**\n- a")
+    assert "average source authority" in rep
+    assert "high-authority domains" in rep
+    assert "low-authority source(s)" in rep        # the resume-template pad is flagged
+
+
 def test_dedupe_figures_drops_heading_and_redundant_svg():
     md = (
         "## Transport\n\n"

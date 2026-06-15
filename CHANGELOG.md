@@ -7,6 +7,32 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **First-run key wizard + `/setkey` (onboarding friction).** A writer with no API key used to hit a
+  dead-end warning. Now the shell opens with a one-keypress choice: **paste a key** (written to `.env`
+  *and* applied live — no restart), **try it free** (placeholder output, $0 — set live, no
+  "restart with `WRITINGAGENT_FAKE=1`" dance), or **skip** and add one later. New **`/setkey [<key>]`**
+  command saves the active provider's key to `.env`, applies it live, and turns off fake mode — the
+  "I'll add a key later" path. The welcome leads with one action (`write`), points the no-key block at
+  `/setkey`, and frames manual control as "press `m` to pause & steer" rather than a separate command.
+- **Web demo is the front-door CTA.** `README.md` now opens with "Try it in your browser — no install,
+  no key," linking the web demo before the install steps.
+- **Zero-install web demo (`web/app.py`, `pip install -e ".[web]"`).** A small Gradio front-end over
+  the public `Agent`/`Project` facade so anyone can try the pipeline in a browser — no terminal, no
+  install, no key. A **free preview** runs the whole flow offline (fake mode) to show its shape at zero
+  cost; a **real run** lets a visitor paste their own provider key and get a genuine piece plus the
+  populated evidence report. Streams live progress, and ships with a Hugging Face Space config
+  (`web/README.md`). The package never imports gradio (the demo imports it lazily). Lowers `PRD.md`'s
+  #1 adoption barrier (CLI + API key).
+- **Citation-quality gate (source authority).** Sources are now scored for *credibility*, not just
+  influence: a deterministic `source_authority(url)` rates each domain 0–100 (government / standards /
+  primary research and established outlets promoted; SEO / template / content-farm pages demoted; unknown
+  domains stay neutral). Authority breaks influence ties so a heavily-cited low-authority pad ranks below
+  an equally-cited credible source, an uncited low-authority pad is dropped from the References list, and
+  the **evidence report now shows credibility** (high-authority count, average authority, and a ⚠️ flag
+  when low-authority sources are present). The article/book critics flag a *decorative* citation (the
+  source doesn't back its sentence) as BLOCKING and treat padding / low-authority / off-topic citations
+  as nits (deliberately not blocking, to avoid revision thrash). Closes the blind-A/B "citation quantity
+  ≫ quality" weakness. All authority tiers are tunable constants in `polish.py`.
 - **Learning loop v2 — ablation duels (`skill_duels`, opt-in).** The old skill-efficacy signal was
   confounded (every applied skill got the same chapter-level credit; no counterfactual). Now, on a unit
   with an undecided skill, one **extra draft is written with that skill held out** and the critic
@@ -24,6 +50,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   flow free with `WRITINGAGENT_FAKE=1`, instead of suggesting a command that would fail.
 
 ### Changed
+- **Exports show their absolute path** — `✓ pdf  /abs/path/manuscript.pdf` (clickable) so "where's my
+  file?" is never a guess; the default export dir is the project's brain folder, not the writer's cwd.
 - **Internals reorganised into packages (behavior-preserving).** The two largest modules were split
   behind stable facades so every `orchestrator.X` / `shell.X` import is unchanged: `orchestrator/`
   (`common · book · article · export · manage · review`) and `shell/` (`branding · help · commands ·

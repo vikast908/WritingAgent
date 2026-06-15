@@ -535,7 +535,16 @@ and canon in any editor):
   rollup, autocomplete + persistent history, and a `❧ <model>` prompt. No bottom toolbar (it
   read as noise; state lives in the prompt prefix + welcome footer). Type commands directly (no
   command-name prefix); lines starting with `/` are slash commands; anything else is free chat.
+  **First-run key wizard** (`_first_run_setup`, before the welcome): with no key at an interactive
+  prompt, the writer gets a one-keypress choice - *paste a key* (written to `.env` **and** applied
+  live, no restart), *try it free* (`WRITINGAGENT_FAKE=1` set **live**, no restart dance), or *skip*.
+  **`/setkey [<key>]`** is the "add a key later" path (upserts `.env` via `_write_env_key`, applies
+  live, clears fake mode). The welcome leads with one action (`write`) and points the no-key block at
+  `/setkey`. **Front door:** the README opens with the zero-install web demo (§18.1) so a writer can
+  try the whole flow before any install or key.
 - **One-shot CLI** - `python writingagent.py <command> ...` (same commands), for scripting.
+  Exports print the **absolute** path (the default export dir is the project's brain folder, not the
+  cwd) so "where's my file?" is never a guess.
 
 | Command | Does |
 |---|---|
@@ -897,6 +906,17 @@ in prose. At assembly (`_assemble_article`) the deterministic `polish.py` pass t
   emits one `## References` list **sorted most-influential first**, each line `N. **score** · date ·
   [title](url)` (0–100). Dates normalized (`n.d.` when unknown). Zero-influence noise is pruned only
   when there's signal to rank against. `rank_references` setting (default on).
+- **Source authority (citation-quality gate, deterministic).** `source_authority(url)` scores each
+  source's domain 0–100 (`AUTH_HIGH` gov/standards/primary research · `AUTH_REPUTABLE` established
+  outlets & official docs · `AUTH_NEUTRAL` unknown — absence of signal is not a penalty · `AUTH_LOW`
+  SEO/template/content-farm signals). Authority **breaks influence ties** (a heavily-cited low-authority
+  pad ranks below an equally-cited credible source) and lets `build_references` drop an *uncited
+  low-authority* pad. The evidence report surfaces it (high-authority count, average authority, and a
+  ⚠️ flag when low-authority sources are present). All tiers/tables are tunable constants in `polish.py`.
+  This closes the blind-A/B "citation quantity ≫ quality" loophole *deterministically*; the critic
+  prompts (`ARTICLE_CRITIC_SYS` / `CRITIC_SYS`) reinforce it by flagging a *decorative* citation (source
+  doesn't back its sentence) as BLOCKING, with padding/low-authority/off-topic raised only as nits (not
+  blocking, to avoid revision thrash).
 - **Citations stripped.** `strip_inline_citations` (setting, default on) removes every `[N]` from the
   prose *after* scoring, so the body reads clean and all sourcing lives in the end list.
 - **Stray dumps removed.** `strip_reference_dumps` pulls writer-emitted reference lists out of the
@@ -989,6 +1009,31 @@ one-shot `write()` convenience layered on top.
 - **Versioning.** `writingagent.__version__` (kept in step with `pyproject`'s); the API module's
   docstring states the no-break-within-major contract. Surface is covered by `tests/test_api.py`
   (offline, `WRITINGAGENT_FAKE`).
+
+### 18.1 Zero-install web demo (`web/app.py`)
+
+**Why:** the terminal + own-API-key requirement is `PRD.md`'s #1 adoption barrier - a non-developer
+can't try the product at all. A hosted browser demo is the try-before-you-build front door.
+
+**Shape:** a small **Gradio** front-end built *only* on the public `Agent`/`Project` facade (§18) -
+it never imports an internal module, so it stays stable across releases. Topic + mode + size in;
+live progress, the manuscript, the evidence report, and a `.md` download out.
+
+- **Free preview (default).** No key: `configure_runtime` forces `WRITINGAGENT_FAKE=1`, so the whole
+  pipeline runs offline with placeholder output - a visitor sees the *shape* of a run (plan → draft →
+  critique → verify → humanize → assemble) at zero cost and zero setup.
+- **Real run (BYO key).** A toggle reveals a provider dropdown + key field; the key is installed on
+  the provider's env var for that run only (nothing persisted), fake mode is cleared, and the run
+  produces a genuine piece with a populated evidence report.
+- **Streaming.** The blocking `Project.run(progress=)` runs in a worker thread; its log lines flow
+  through a queue into the Gradio generator so progress is live.
+- **Packaging.** A `[web]` optional extra (gradio only); gradio is imported **lazily** (inside
+  `build_ui`) so the runtime helpers stay importable/testable without it (mirrors `deep`/`headroom`).
+  Ships HF-Space deploy files (`web/requirements.txt`, `web/README.md` front-matter). Covered by
+  `tests/test_web.py` (offline, incl. a full fake-mode run through the demo).
+- **Caveat (tracked):** `configure_runtime` mutates process-global env, so a public deploy must stay
+  single-worker (the Gradio default) or serialize runs; a key-less public deploy needs a server-side
+  key + rate-limiting first.
 
 ---
 

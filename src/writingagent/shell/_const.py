@@ -66,6 +66,7 @@ _SLASH_HELP = [
         ("/reset · /compact", "clear · summarize the assistant's conversation memory"),
     ]),
     ("configuration", [
+        ("/setkey [<key>]", "add your provider API key - saved to .env, applied live (real runs on)"),
         ("/features", "interactive toggle grid - ↑↓ move · space toggle · ↵ save"),
         ("/set <key> <value>", "change one setting live (e.g. /set use_researcher true)"),
         ("/provider [<id>]", "list or switch the model host (openrouter, deepseek, openai, ollama, ...)"),
@@ -263,6 +264,7 @@ _SLASH_COMPLETIONS = [
     ("features",    "interactive feature-toggle grid (space toggles · ↵ saves)"),
     ("model",       "show / set model routing"),
     ("provider",    "list / switch the model host (openrouter, deepseek, ollama, ...)"),
+    ("setkey",      "add your provider API key (saved to .env, real runs on)"),
     ("set",         "change a setting  e.g. /set use_researcher true"),
     ("skills",      "list craft skills"),
     ("skill",       "show one skill by name"),

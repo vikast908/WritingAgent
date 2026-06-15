@@ -16,7 +16,7 @@ from ._const import (
     _SLASH_WORDS,
     _STRONG_SLASH,
 )
-from .branding import _banner, _make_console, _out, _welcome
+from .branding import _banner, _first_run_setup, _make_console, _out, _welcome
 from .chat import _chat_respond, _show_post_hint
 from .dashboard import _cmd_run_rich
 from .dispatch import _NEEDS_PROJECT, _auto_or_pick_project, _normalize_argv
@@ -68,6 +68,7 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
     pt_session, patch_stdout = _make_pt_session(known_commands, state, cfg, settings)
 
     _banner(console, cfg, settings)
+    _first_run_setup(console, settings)   # offer key / free-mode before the welcome reflects it
     _welcome(console, cfg, settings, state["uid"])
 
     while True:

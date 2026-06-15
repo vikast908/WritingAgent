@@ -11,7 +11,10 @@
 
 **One command → a researched, self-critiqued, fact-checked, exported article (or book).** Local-first, on your own model key, for cents.
 
-[Quickstart](#quickstart) · [Install](#install) · [Why not just prompt ChatGPT?](#why-not-just-prompt-chatgpt) · [Examples](examples/) · [**Docs ↗**](https://docs-writingagent.vercel.app/)
+#### ▶ Try it in your browser — no install, no key
+A **[web demo](web/)** runs the whole pipeline behind a simple UI: a **free preview** (placeholder output, $0, no key) shows exactly how a run works, or paste your own key for a real piece. Run it with `pip install -e ".[web]" && python web/app.py`, or deploy it as a Hugging Face Space ([guide](web/README.md)).
+
+[Try in browser](web/) · [Quickstart](#quickstart) · [Install](#install) · [Why not just prompt ChatGPT?](#why-not-just-prompt-chatgpt) · [Examples](examples/) · [**Docs ↗**](https://docs-writingagent.vercel.app/)
 
 </div>
 
@@ -99,6 +102,11 @@ git clone https://github.com/vikast908/WritingAgent && cd WritingAgent
 pip install -e .                     # gives you the `writing-agent` command (hyphen) directly
 ```
 
+**Prefer a browser?** A zero-install **web demo** (`web/app.py`) runs the whole pipeline behind a
+Gradio UI — try it free in fake mode with no key, or paste your own key for a real run. Run it with
+`pip install -e ".[web]" && python web/app.py`, or deploy it as a Hugging Face Space (see
+[`web/README.md`](web/README.md)).
+
 With npm, `setup` is optional — the first run of `writingagent` offers to install the engine for
 you. Later, **`writingagent update`** pulls the latest engine. Optional extras (context compression,
 deep research, DOCX export, D2 diagrams, embeddings) each degrade gracefully — see the
@@ -113,7 +121,7 @@ for a *take*, not just the absence of tells:
 
 - a contestable **thesis** the critic enforces, and a **side-by-side judge** that picks the strongest of N divergent drafts
 - **claim↔source verification** — a cited claim the source doesn't support is blocking
-- **clean prose, sourced at the end** — inline `[N]` markers are stripped from the body and every source rolls up into one **References list ranked by how much it actually shaped the piece** (cite count + title relevance, scored 0–100, dated)
+- **clean prose, sourced at the end** — inline `[N]` markers are stripped from the body and every source rolls up into one **References list ranked by how much it actually shaped the piece** (cite count + title relevance, scored 0–100, dated), and **scored for credibility** — a deterministic source-authority check demotes SEO/template padding and promotes gov/standards/primary sources, so citation *quality* counts, not just quantity
 - a **surgical humanizer** that rewrites only the sentences with AI tells (citations and numbers preserved)
 - it **learns which craft moves actually work** — after each piece it distills reusable "skills", and with `skill_duels` on it *A/B-tests* them (drafts one version with a skill held out, lets the critic compare) so trust is earned by cause-and-effect, not guesswork. This is accumulating memory, not model retraining.
 - figures that **lay themselves out** — the model authors a spec; a deterministic engine places it (no overflow, no overlap):
@@ -149,7 +157,11 @@ trustworthy:
 > decoupling LLM inference from audio generation, rendering sequential pipelines obsolete.
 
 ## At a glance
-- 46 sources behind the piece   - 13 high-influence (score ≥ 50)   - 27/46 carry a date
+- **46** sources behind the piece
+- **13** high-influence (score ≥ 50)
+- **31/46** from high-authority domains (gov · standards · primary research · established outlets)
+- **71/100** average source authority
+- **27/46** carry a date
 
 ## Sources, ranked by influence (0–100)
 1. **100** · 2026 · [LLM Inference Optimization: Quantization to Speculative Decoding](…)
