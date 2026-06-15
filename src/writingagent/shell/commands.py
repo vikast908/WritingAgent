@@ -15,6 +15,7 @@ from .help import _model_catalog
 __all__ = [
     '_cmd_model',
     '_cmd_provider',
+    '_cmd_setkey',
     '_norm_dir',
     '_ensure_dir',
     '_print_path_status',
@@ -118,6 +119,47 @@ def _cmd_provider(console, settings: Settings, rest: list[str]) -> None:
     elif p.id != "openrouter":
         note = " · [dim]models use this host's slugs - set them with /model[/]"
     _out(console, f"provider -> [{GOLD}]{p.id}[/] [dim]({p.name}, saved)[/]{note}")
+
+
+def _cmd_setkey(console, settings: Settings, rest: list[str]) -> None:
+    """Add the active provider's API key the easy way: `/setkey <key>` (or `/setkey`, which
+    prompts). Writes it to .env, applies it live (no restart), and clears fake mode so real
+    runs turn on immediately. The "I'll add a key later" path the first-run wizard points to."""
+    import os
+
+    from .. import llm, providers
+    from .branding import _write_env_key
+    p = providers.get(settings.provider) or providers.REGISTRY.get(providers.resolve(settings.provider))
+    if p is None:
+        _out(console, f"[{ERR}]no active provider — set one with /provider first[/]")
+        return
+    if getattr(p, "local", False):
+        _out(console, f"[dim]{p.name} is a local provider — no API key needed.[/]")
+        return
+    env = p.key_env[0] if p.key_env else None
+    if not env:
+        _out(console, f"[{ERR}]{p.name} has no key env var configured[/]")
+        return
+    key = rest[0].strip() if rest else ""
+    if not key and console:
+        try:
+            key = console.input(f"  paste your {p.name} key ([dim]{env}[/]): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            key = ""
+    if not key:
+        _out(console, f"[dim]no key entered — usage: /setkey <your {env}>[/]")
+        return
+    path = _write_env_key(env, key)
+    os.environ.pop("WRITINGAGENT_FAKE", None)        # a real key means real runs
+    try:
+        llm.configure_provider(p.id)
+    except ValueError:
+        pass
+    if path:
+        _out(console, f"[bold {ON_CLR}]✓ key saved[/] [dim]→ {path}  ·  {p.name} real runs are on[/]")
+    else:
+        _out(console, f"[bold {ON_CLR}]✓ key set for this session[/] [dim]— couldn't write .env "
+                      f"(read-only?); set {env} in your shell to persist it[/]")
 
 
 def _norm_dir(raw: str):

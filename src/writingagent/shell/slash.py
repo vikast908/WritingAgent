@@ -18,6 +18,7 @@ from .commands import (
     _cmd_praise,
     _cmd_provider,
     _cmd_set,
+    _cmd_setkey,
     _print_skill,
     _print_skills,
     _set_theme,
@@ -48,6 +49,8 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
         _cmd_model(console, cfg, rest)
     elif name in ("provider", "providers"):
         _cmd_provider(console, settings, rest)
+    elif name in ("setkey", "key", "apikey"):
+        _cmd_setkey(console, settings, rest)
     elif name in ("path", "paths"):
         _cmd_path(console, settings, state, rest)
     elif name == "set":

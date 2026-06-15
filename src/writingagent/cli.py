@@ -692,15 +692,21 @@ def _resolve_formats(raw: str) -> tuple[list[str], list[str]]:
 def _report_export(console, fmt: str, out) -> None:
     if console and out is not None:
         kb = out.stat().st_size / 1024
-        # Rich renders an OSC-8 hyperlink in terminals that support it.
-        # Path.as_uri() yields a valid file:// URI on Windows, macOS, and Linux.
+        # Show the ABSOLUTE path so "where's my file?" is never a guess - the export dir
+        # defaults to the project's brain folder, not the writer's cwd. Rich renders an
+        # OSC-8 hyperlink where supported; as_uri() is valid on Windows/macOS/Linux.
         try:
-            uri = out.resolve().as_uri()
+            full = out.resolve()
+            uri = full.as_uri()
         except ValueError:
-            uri = str(out)
+            full, uri = out, str(out)
         console.print(f"  [bold {ui.ON_CLR}]✓ {fmt}[/]  "
-                      f"[link={uri}]{out}[/]  [{ui.DIM}]({kb:.0f} KB)[/]")
+                      f"[link={uri}]{full}[/]  [{ui.DIM}]({kb:.0f} KB)[/]")
     else:
+        try:
+            out = out.resolve() if out is not None else out
+        except (OSError, ValueError):
+            pass
         print(f"[OK] {fmt} -> {out}")
 
 

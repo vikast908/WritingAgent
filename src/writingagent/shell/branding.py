@@ -3,6 +3,7 @@ table/section rendering primitives."""
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from .. import __version__ as _VERSION
 from .. import brain, ui
@@ -31,7 +32,18 @@ __all__ = [
     '_feat_row',
     '_book_status_rows',
     '_welcome',
+    '_write_env_key',
+    '_first_run_setup',
+    'SIGNUP_URLS',
 ]
+
+#: Where a writer gets an API key, per provider id - shown in the first-run wizard.
+SIGNUP_URLS = {
+    "openrouter": "https://openrouter.ai/keys",
+    "deepseek": "https://platform.deepseek.com/api_keys",
+    "openai": "https://platform.openai.com/api-keys",
+    "google": "https://aistudio.google.com/app/apikey",
+}
 
 
 def _sync_palette() -> None:
@@ -216,8 +228,89 @@ def _key_warning(settings: Settings | None) -> str:
     if p is None or not _provider_needs_key(settings):
         return ""
     env = (p.key_env[0] if getattr(p, "key_env", None) else "the API key")
-    return (f"⚠ no API key for {p.name} — set {env} in .env or your shell, "
-            f"or /provider to switch host")
+    return (f"⚠ no API key yet for {p.name} — run /setkey to add one, or set {env} in .env")
+
+
+def _write_env_key(env_name: str, value: str) -> Path | None:
+    """Apply ``ENV_NAME=value`` live in this process (always) and persist it to the project
+    ``.env`` (the same file the CLI auto-loads on startup) when that file is writable.
+
+    The live set comes FIRST so the key works this session even if persistence fails - for a
+    pip/npm-installed copy ``brain._ROOT`` lives under a read-only site-packages tree, where
+    the write would raise. Returns the .env path on success, or ``None`` when it couldn't be
+    written (the caller tells the user it's session-only)."""
+    os.environ[env_name] = value                       # session-live first - never lost
+    env_path = brain._ROOT / ".env"
+    line = f"{env_name}={value}"
+    try:
+        try:
+            existing = env_path.read_text(encoding="utf-8").splitlines()
+        except (FileNotFoundError, OSError):
+            existing = []
+        for i, ln in enumerate(existing):
+            if ln.strip().startswith(f"{env_name}="):
+                existing[i] = line
+                break
+        else:
+            existing.append(line)
+        env_path.write_text("\n".join(existing).strip("\n") + "\n", encoding="utf-8")
+        return env_path
+    except OSError:                                    # read-only location, etc. - session-only
+        return None
+
+
+def _first_run_setup(console, settings) -> None:
+    """A one-time, friendly key step shown only at an interactive prompt when no key is set.
+
+    Turns the dead-end "⚠ no API key" warning into a choice a new writer can act on in one
+    keypress: paste a key (saved to .env *and* applied live), try the whole flow free with
+    placeholder output (set live - no "restart with WRITINGAGENT_FAKE=1" dance), or skip and
+    add one later with /setkey. No-op when not a TTY, already in fake mode, or a key exists."""
+    import sys
+    if not console or os.getenv("WRITINGAGENT_FAKE") or not _provider_needs_key(settings):
+        return
+    if not getattr(sys.stdin, "isatty", lambda: False)():
+        return
+    from rich.text import Text
+    p = _active_provider(settings)
+    name = p.name if p else "your provider"
+    env = (p.key_env[0] if p and getattr(p, "key_env", None) else "the API key")
+    url = SIGNUP_URLS.get(getattr(p, "id", ""), "")
+    _section(console, "WELCOME  ·  LET'S GET YOU WRITING")
+    console.print(Text(f"  No API key yet for {name} — pick how to start "
+                       "(you can change this later):", style=PARCH))
+    _cmd_table(console, [
+        ("1", f"Paste a {name} key now  ·  saved to .env, used right away"),
+        ("Enter", "Try it free now  ·  the whole flow, placeholder output, $0"),
+        ("s", "Skip — I'll add a key later with /setkey"),
+    ])
+    if url:
+        console.print(Text(f"  Need a key? Get one free at {url}", style=DIM))
+    try:
+        choice = console.input(f"  [{GOLD}]choice[/] [dim][Enter = try free]:[/] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        console.print()
+        return
+    if choice == "1":
+        try:
+            key = console.input(f"  paste your {env}: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            key = ""
+        if key:
+            path = _write_env_key(env, key)
+            if path:
+                _out(console, f"[bold {ON_CLR}]✓ key saved[/] [dim]→ {path}  ·  real runs are on[/]")
+            else:
+                _out(console, f"[bold {ON_CLR}]✓ key set for this session[/] [dim]— couldn't write "
+                              f".env (read-only?); set {env} in your shell to keep it[/]")
+        else:
+            _out(console, "[dim]no key entered — run /setkey when you're ready[/]")
+    elif choice in ("s", "skip"):
+        _out(console, f"[dim]ok — real runs need a key; run /setkey anytime (or set {env} in .env)[/]")
+    else:
+        os.environ["WRITINGAGENT_FAKE"] = "1"
+        _out(console, f"[bold {GOLD}]✓ free preview on[/] [dim]— placeholder output, $0. "
+                      "Add a key later with /setkey for real runs.[/]")
 
 
 def _banner(console, cfg: ModelConfig | None = None, settings: Settings | None = None) -> None:
@@ -315,8 +408,8 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     # canned text with zero indication why (chat replies with the same boilerplate,
     # runs "succeed" with placeholder prose).
     fake = os.getenv("WRITINGAGENT_FAKE", "").lower() in ("1", "true", "yes")
-    fake_msg = ("⚠ FAKE MODE is on (WRITINGAGENT_FAKE env var) - no real AI calls; chat and runs "
-                "return canned text. Fix: Remove-Item Env:WRITINGAGENT_FAKE  then restart.")
+    fake_msg = ("⚠ FAKE MODE — placeholder output, no real AI calls ($0). Add a key with "
+                "/setkey for real runs (or unset WRITINGAGENT_FAKE).")
 
     if not console:
         if fake:
@@ -339,30 +432,30 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     if fake:
         console.print(Text(f"  {fake_msg}", style=f"bold {ERR}"))
 
-    # ── First run with no API key: don't suggest a command that will just fail. ─
+    # ── No API key yet: point at the one command that fixes it (the wizard ran first). ─
     if _provider_needs_key(settings):
         p = _active_provider(settings)
         env = (p.key_env[0] if p and getattr(p, "key_env", None) else "the API key")
-        _section(console, "FIRST RUN  ·  NO API KEY YET")
+        _section(console, "ADD YOUR KEY")
         _cmd_table(console, [
-            ("real runs", f"set [bold]{env}[/] in a .env file  (or [bold]/provider[/] to switch host)"),
-            ("try it free now", "restart with [bold]WRITINGAGENT_FAKE=1[/] — the whole flow, "
-                                "placeholder output, $0"),
+            ("/setkey", f"paste your {env} once — saved to .env, real runs turn on"),
         ])
 
-    # ── Start here ────────────────────────────────────────────────────────────
+    # ── Start here ──────────────────────────────────────────────────────────────
     _section(console, "START")
     unit = "section" if is_article else "chapter"
     start_rows = [
-        ("write --abstract \"...\"", "★ one command - a few questions upfront, then it "
-                                     "researches, writes, and exports the finished file"),
-        ("new --abstract \"...\"", f"step-by-step - outline → `run` (write · critique · "
-                                   f"humanise per {unit}) → `export`"),
+        ("write --abstract \"...\"", "★ one command — answer a few questions, then it researches, "
+                                     "writes & self-edits the whole piece (press m to pause & steer)"),
     ]
     if not projects:
         example = ("How Python async/await actually works" if is_article
                    else "A thriller set on Mars in 2089")
         start_rows.append(("try it", f'write --abstract "{example}"'))
+        start_rows.append(("step by step", "[dim]new → run → export · see /help[/]"))
+    else:
+        start_rows.append(("new --abstract \"...\"", f"step-by-step — outline → `run` (write · "
+                                                     f"critique · humanise per {unit}) → `export`"))
     _cmd_table(console, start_rows)
 
     # ── Projects ──────────────────────────────────────────────────────────────
