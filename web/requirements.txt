@@ -1,0 +1,4 @@
+# Dependencies for the hosted web demo (Hugging Face Space or any host).
+# Installs the published package straight from the repo, plus Gradio.
+writing-agent @ git+https://github.com/vikast908/WritingAgent
+gradio>=4.0
