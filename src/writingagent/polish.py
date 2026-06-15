@@ -12,6 +12,7 @@ Two jobs, shared by assembly-time and the cheap re-fix of an existing manuscript
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 # ── citations ─────────────────────────────────────────────────────────────────
 # An inline marker: [12], [N1], and chains like [38][39]. A bracketed bare number is
@@ -105,11 +106,75 @@ def _norm_date(raw: str) -> str:
     return m.group(0) if m else raw
 
 
+# ── source authority (credibility heuristic, deterministic) ──────────────────────
+# A source's domain is a cheap, deterministic proxy for how much weight a reader should
+# give a citation. The blind A/B pilot found the writer padding citations with low-
+# authority sources (e.g. resume-template sites) to hit volume: authority lets the
+# evidence report SURFACE that and the References ranking DEMOTE it, without any model
+# call. Scores are 0-100; an unknown domain gets a neutral baseline - absence of signal
+# is not a penalty. All tables/constants are tunable (plan §15.5).
+AUTH_NEUTRAL = 60       # unknown / no strong domain signal
+AUTH_HIGH = 95          # government, standards bodies, primary research
+AUTH_REPUTABLE = 80     # established reference works, official docs, major outlets
+AUTH_LOW = 25           # SEO / template / content-farm signals
+
+_HIGH_TLDS = (".gov", ".mil", ".int", ".edu")
+_HIGH_TLD_PARTS = (".gov.", ".edu.", ".ac.")      # e.g. nih.gov.uk, ox.ac.uk, anu.edu.au
+_HIGH_DOMAINS = frozenset("""
+arxiv.org nature.com science.org sciencedirect.com ieee.org acm.org ietf.org
+rfc-editor.org w3.org whatwg.org nist.gov ncbi.nlm.nih.gov pubmed.ncbi.nlm.nih.gov
+doi.org springer.com link.springer.com jstor.org plos.org who.int oecd.org
+""".split())
+_REPUTABLE_DOMAINS = frozenset("""
+wikipedia.org developer.mozilla.org docs.python.org python.org postgresql.org
+kubernetes.io reuters.com apnews.com bbc.com bbc.co.uk nytimes.com wsj.com
+economist.com ft.com theguardian.com github.com gitlab.com stackoverflow.com
+""".split())
+# Substrings in the host that flag a low-authority SEO / template / content-farm page.
+# Kept conservative so a legitimate domain is not penalised by accident.
+_LOW_SIGNALS = ("template", "resume", "-cv", "cv-", "topten", "top-10",
+                "listicle", "best-of-", "freelancer")
+
+
+def _domain_of(url: str) -> str:
+    """Registrable-ish host for a URL, leading 'www.' stripped ('' on error)."""
+    try:
+        net = urlparse(url).netloc.lower()
+        return net[4:] if net.startswith("www.") else net
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _domain_in(dom: str, table: frozenset) -> bool:
+    return dom in table or any(dom.endswith("." + d) for d in table)
+
+
+def source_authority(url: str) -> int:
+    """A 0-100 credibility proxy for a source, derived from its domain alone (no model
+    call). Unknown domains get a neutral baseline; SEO/template signals are demoted;
+    government/standards/primary research and established outlets are promoted. Tunable
+    via the tables above (plan §15.5)."""
+    dom = _domain_of(url)
+    if not dom:
+        return AUTH_NEUTRAL
+    if any(sig in dom for sig in _LOW_SIGNALS):
+        return AUTH_LOW
+    if dom.endswith(_HIGH_TLDS) or any(p in dom for p in _HIGH_TLD_PARTS):
+        return AUTH_HIGH
+    if _domain_in(dom, _HIGH_DOMAINS):
+        return AUTH_HIGH
+    if _domain_in(dom, _REPUTABLE_DOMAINS):
+        return AUTH_REPUTABLE
+    return AUTH_NEUTRAL
+
+
 def score_sources(sources: list, body: str, keywords_text: str) -> list[dict]:
     """Rank sources by influence on the article. Influence = how often the source is
     actually cited in the body (weighted heavily) + how well its title matches the
-    article's thesis/headings. Returns dicts with score (0-100), cited, overlap, sorted
-    most-influential first. `body` must still contain inline [N] markers."""
+    article's thesis/headings. Each source also carries an `authority` (0-100, from its
+    domain) that breaks ties so a heavily-cited low-authority pad ranks below an equally-
+    cited credible source. Returns dicts with score (0-100), cited, overlap, authority,
+    sorted most-influential first. `body` must still contain inline [N] markers."""
     kw = set(_tokens(keywords_text))
     counts: dict[int, int] = {}
     for m in re.finditer(r"\[(\d+)\]", body):
@@ -123,11 +188,13 @@ def score_sources(sources: list, body: str, keywords_text: str) -> list[dict]:
         cited = counts.get(idx, 0)
         raw = 3.0 * cited + 4.0 * overlap
         src = s if isinstance(s, dict) else s.model_dump()
-        scored.append({"source": src, "cited": cited, "overlap": round(overlap, 3), "raw": raw})
+        url = src.get("url", "") if isinstance(src, dict) else getattr(src, "url", "")
+        scored.append({"source": src, "cited": cited, "overlap": round(overlap, 3),
+                       "authority": source_authority(url), "raw": raw})
     max_raw = max((x["raw"] for x in scored), default=0.0) or 1.0
     for x in scored:
         x["score"] = round(100 * x["raw"] / max_raw)
-    scored.sort(key=lambda x: (x["score"], x["cited"]), reverse=True)
+    scored.sort(key=lambda x: (x["score"], x["authority"], x["cited"]), reverse=True)
     return scored
 
 
@@ -139,7 +206,12 @@ def build_references(scored: list[dict], *, drop_noise: bool = True) -> str:
     has_signal = any(x["cited"] or x["overlap"] for x in scored)
     rows: list[str] = []
     for x in scored:
-        if drop_noise and has_signal and x["cited"] == 0 and x["overlap"] == 0:
+        auth = x.get("authority", AUTH_NEUTRAL)
+        # Drop a source that never earned its place: pure noise (never cited, no topical
+        # overlap), OR an uncited low-authority pad (cited 0 + SEO/template domain) - the
+        # citation-padding failure mode the blind A/B pilot caught.
+        if (drop_noise and has_signal and x["cited"] == 0
+                and (x["overlap"] == 0 or auth <= AUTH_LOW)):
             continue
         s = x["source"]
         title = (s.get("title") or "Source").strip()
@@ -191,8 +263,9 @@ def refresh_read_time(md: str) -> str:
 _CLAIM_RE = re.compile(r"(?im)^\*\*Claim:\*\*\s*(.+)$")
 _H1_RE = re.compile(r"(?m)^#\s+(.+)$")
 _REF_SECTION = re.compile(r"(?ims)^##[ \t]*References\b.*?(?=\n##\s|\Z)")
-# One ranked reference row: "12. **87** · 2024 · [Title](url)"
-_REF_ROW = re.compile(r"(?m)^\s*\d+\.\s+\*\*(\d+)\*\*\s*·\s*([^·]+?)\s*·\s*.+$")
+# One ranked reference row: "12. **87** · 2024 · [Title](url)" -> (score, date, tail)
+_REF_ROW = re.compile(r"(?m)^\s*\d+\.\s+\*\*(\d+)\*\*\s*·\s*([^·]+?)\s*·\s*(.+)$")
+_ROW_URL = re.compile(r"\]\(([^)]+)\)")
 
 
 def build_evidence_report(manuscript_md: str, thesis_md: str = "", title: str = "") -> str:
@@ -215,13 +288,26 @@ def build_evidence_report(manuscript_md: str, thesis_md: str = "", title: str = 
     if claim:
         out += ["", "## The argument it makes", "", f"> {claim}"]
     if rows:
-        scores = [int(s) for s, _d in rows]
+        scores = [int(s) for s, _d, _t in rows]
         high = sum(1 for s in scores if s >= 50)
-        dated = sum(1 for _s, d in rows if d.strip().lower() not in ("n.d.", "", "n/a"))
+        dated = sum(1 for _s, d, _t in rows if d.strip().lower() not in ("n.d.", "", "n/a"))
+        auths = []
+        for _s, _d, tail in rows:
+            um = _ROW_URL.search(tail)
+            auths.append(source_authority(um.group(1) if um else ""))
+        credible = sum(1 for a in auths if a >= AUTH_REPUTABLE)
+        low = sum(1 for a in auths if a <= AUTH_LOW)
+        avg_auth = round(sum(auths) / len(auths)) if auths else AUTH_NEUTRAL
         out += ["", "## At a glance", "",
                 f"- **{len(rows)}** sources behind the piece",
                 f"- **{high}** high-influence (score ≥ 50)",
+                f"- **{credible}/{len(rows)}** from high-authority domains "
+                "(gov · standards · primary research · established outlets)",
+                f"- **{avg_auth}/100** average source authority",
                 f"- **{dated}/{len(rows)}** carry a date"]
+        if low:
+            out += [f"- ⚠️ **{low}** low-authority source(s) (SEO/template-style) - "
+                    "treat their claims with extra caution"]
         sec = _REF_SECTION.search(manuscript_md or "")
         if sec:
             body = re.sub(r"(?im)^##[ \t]*References\b.*$",
