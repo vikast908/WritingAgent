@@ -443,6 +443,10 @@ def _base_run_state(uid, abstract, *, intake, author, max_revisions, autonomous,
         # Register craft layer (plan §22): surgical show-don't-tell / de-passive toggle.
         # `register`/`field`/`citation_style` are set per-mode (book/article) at creation.
         "craft_passes": getattr(settings, "craft_passes", True),
+        # Compositor manner layers (plan §23): a selected persona voice + a per-run emotional
+        # target. Both optional; the compositor drops a persona that doesn't fit the register.
+        "persona": getattr(settings, "persona", "") or "",
+        "emotion": getattr(settings, "emotion", "") or "",
         # Agentic controller (plan §21): baked at creation like every other toggle. The
         # default ("pipeline") drives the unchanged fixed loop; "agentic" routes each unit
         # through agentic.run_unit. The real bounds are the per-unit agentic_max_unit_steps

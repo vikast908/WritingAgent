@@ -4,6 +4,24 @@ Verification log for recent sessions (newest first). The living suite is `tests/
 (run `pytest -q` with `WRITINGAGENT_FAKE=1`); this file records what was executed,
 where, and what it proved.
 
+## 2026-06-17 (session 15): craft engine (§22) + compositor (§23)
+
+Built and verified two layers: the **craft engine** (plan §22, branch `feat/craft-engine-all-tiers`)
+- register-parameterized writing - and the **compositor** (plan §23, branch
+`feat/compositor-personas-emotions`) - personas/emotions/voice-layer composition.
+
+| Check | How | Result |
+|---|---|---|
+| Full offline suite | `python -m pytest -q` (Windows, `WRITINGAGENT_FAKE=1`) + `ruff check src tests` | **250 passed, 1 skipped** (opt-in live-net test); ruff clean |
+| Craft engine (plan §22) | new `tests/test_craft_engine.py` | registers, register-aware anti-slop, craft metrics, few-shot exemplars, surgical passes, field templates, citation styles, voice-drift report |
+| Compositor (plan §23) | new `tests/test_compositor.py` | personas, emotions, the voice-layer precedence + conflict resolution |
+| Byte-for-byte back-compat | `tests/test_craft_engine.py` | `register=None`/`nonfiction` reproduces the old `slop.render_constraints()` / `tell_pattern()` **byte-for-byte** - every pre-existing run is unchanged |
+| Offline/key-less safety | `tests/test_craft_engine.py`, `tests/test_compositor.py` | surgical + compositor passes are **no-ops in fake mode**, so offline/key-less runs and the suite are unaffected |
+| Register/persona conflict resolution | `tests/test_compositor.py` | a persona incompatible with the register is **dropped + logged** (the register wins; compositor never silently concatenates) |
+
+Cross-platform target unchanged: Linux · macOS · Windows × py3.10-3.13. Both branches are
+deterministic-test-only (no live spend this session).
+
 ## 2026-06-16 (session 14): fully-agentic controller build-out + LIVE validation
 
 | Check | How | Result |

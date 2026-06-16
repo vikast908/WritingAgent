@@ -33,6 +33,7 @@ too (multi-chapter, with continuity audits + a production layer).
 
 - **One command** — `write` asks a few questions upfront, then researches, writes, self-critiques, fact-checks, humanises, and exports the finished file with zero babysitting
 - **Argues, doesn't just cover** — a per-piece *thesis* the critic enforces, a side-by-side *judge* that picks the strongest of N drafts, and **claim↔source verification** that blocks unsupported citations
+- **Writes in any field, even on a cheap model** — a **craft engine** parameterized by *register* (nonfiction, fiction, academic, journalism, copywriting, poetry, screenplay, and more) plus selectable **personas** and **emotions**, so it adapts its rules, voice, and structure to the field instead of forcing one "researcher voice" everywhere (see [Write in any field](#write-in-any-field--registers-personas--the-craft-engine))
 - **Proof, not vibes** — every article ships an [**evidence report**](#evidence-report-proof-not-vibes): the argument it makes + every source ranked by influence (0–100)
 - **Figures that lay themselves out** — the model authors a diagram *spec*; a layout engine places it so labels never overflow
 - **Use it your way** — interactive TUI, one-shot CLI, an embeddable Python API, or a global `writingagent` npm launcher
@@ -51,6 +52,7 @@ For a quick paragraph, do. For something you'd **put your name on**, the gap is 
 | **Point of view** | whatever the model defaults to | a contestable **thesis** the critic enforces every section |
 | **Sources** | often missing or fabricated | researched, and **each cited claim verified against its source** |
 | **Slop** | up to you to catch | a surgical **humanizer** + a critic that blocks AI tells |
+| **Range** | one default voice for everything | a **register** per field (fiction → academic → copy), selectable **personas** & **emotions**, working even on a cheap model |
 | **Proof** | none | an **evidence report** (thesis + influence-ranked sources) |
 | **Your data / cost** | in someone's cloud | local markdown on disk; your key; cents per piece; resumable |
 
@@ -141,6 +143,87 @@ cleanup and re-exports — with **no model call** (≈0 tokens).
 Deep dives: [Quality machinery ↗](https://docs-writingagent.vercel.app/reference/quality/) ·
 [How it works ↗](https://docs-writingagent.vercel.app/concepts/how-it-works/) ·
 [Architecture ↗](https://docs-writingagent.vercel.app/concepts/architecture/)
+
+---
+
+## Write in any field — registers, personas & the craft engine
+
+The same machinery that fights slop also makes the agent a **good writer in many fields, even on a
+basic, cheap model**. The bet: most craft used to live *inside the model*, reached by zero-shot
+instructions a weak model can't reliably obey. The **craft engine** moves it to **demonstrations the
+model imitates and deterministic checks it can't escape** — the part that doesn't depend on how clever
+the model is — and **parameterizes all of it by *register***.
+
+**Registers — the craft contract as data.** A register decides *which* anti-slop bans apply (some
+**invert** by field: literary fiction keeps the em-dash, academic keeps "moreover" and *requires*
+hedging, copywriting keeps the exclamation and the rule of three), the voice and concreteness lines,
+rhythm and diction guidance, the citation style, the target reading grade, and which deterministic
+craft metrics matter. **Eleven ship:**
+
+> `nonfiction` (default) · `technical` · `literary-fiction` · `genre-fiction` · `academic` ·
+> `journalism` · `copywriting` · `business` · `poetry` · `screenplay` · `children`
+
+The register is **inferred from your genre/angle** unless you pin it with `register`. Leave it alone
+and nothing changes: `register=nonfiction` reproduces the historical anti-slop behavior byte-for-byte.
+
+**Why it works on a cheap model — demonstrations + deterministic checks:**
+
+- **Few-shot, not just rules** — before/after pairs for the humanizer and 5-vs-2 *score anchors* for
+  the critic. Weak models imitate; they don't follow abstractions.
+- **A shipped gold corpus** — genre-tagged "match this" exemplars injected by default through the voice
+  slot. A weak model imitating a strong paragraph beats one told to "write vivid prose."
+- **Genre-aware craft metrics** — sentence-rhythm variance, passive-voice ratio, adverb density,
+  Flesch–Kincaid grade, clichés, and weak openings/closings; fiction registers swap in filter-verb
+  density, dialogue ratio, said-bookisms, POV/tense consistency, and sensory density. Computed as
+  evidence and handed to the critic — model-independent.
+- **Surgical craft passes** — the humanizer's *detect → rewrite-only-the-flaw → guard → splice* pattern
+  (citations and numbers preserved, the defect required to strictly reduce) generalized to
+  **show-don't-tell** and **passive → active**. Approved prose is never regenerated end-to-end, so a
+  cheap micro-edit can't drift your facts. Plus a cross-chapter **voice-drift** report (function-word
+  stylometry) folded into the book cohesion audit.
+
+**Field templates & citation styles.** Field templates inject a *structural grammar* into the outline
+architect — inverted-pyramid, IMRaD, AIDA/PAS, BLUF, how-to, three-act, screenplay — chosen by the
+register or pinned with `field`. References render in your chosen convention via `citation_style`:
+`influence` (default · ranked, the existing output) · `numeric` · `apa` · `mla` · `chicago` · `ap` · `none`.
+
+**Personas — a *manner* layer.** A persona flavors diction, rhythm, and stance *within* the register's
+rules (it can't break them). Each ships a signature card, an **original-pastiche** exemplar, and the
+registers it's compatible with; a persona that doesn't fit the chosen register is **dropped and
+logged** (a Nietzschean API reference is not a thing). **Ten ship** — six archetypes
+(`wry-skeptic`, `warm-mentor`, `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`,
+`firebrand-essayist`) and four public-domain *manners* (`shakespearean`, `nietzschean`, `austen-ironic`,
+`twain-vernacular`). **No living or in-copyright authors** — exemplars are original pastiche, so there's
+zero copyright surface; for a specific modern voice, train your own with `voice/` + `/praise`.
+
+**Emotions — anti-cliché, not a glossary.** A symptom dictionary ("fear = racing heart, sweaty palms")
+is a *cliché generator*, so the inverse ships: per-emotion **deny-lists** wired into the cliché detector
+(so "her heart raced" gets flagged wherever it appears) plus a one-line *show-don't-name* cue. Believable
+emotion is carried by the deny-list and the show-don't-tell pass, not a lookup table. Eight emotions,
+alias-tolerant (`dread` resolves to fear).
+
+**One composition model, not five.** Register, field, persona, emotion, and skills are all
+voice/constraint layers over a single draft, so they compose in a strict precedence **cascade** —
+outer wins:
+
+```
+register  ⊃  field  ⊃  persona  ⊃  emotion  ⊃  skills
+(rules+voice) (structure) (manner)  (affect)   (technique, ≤3)
+```
+
+The honest constraint behind this: *more layers is worse, not better* — a weak model handed several
+voices at once averages them into mush. So the cascade **selects and resolves conflicts; it never
+accumulates.** Upper layers are single-select (one register, one field, one persona, one emotion); only
+skills stack, and they were already capped and efficacy-gated. The writer gets one "match this" anchor,
+resolved by precedence — compatible persona > your own voice > register gold — with the emotion cue
+appended.
+
+**New settings** (all tunable with `/set <field> <value>`): `register`, `field`, `citation_style`,
+`craft_passes`, `persona`, `emotion`. All clamped to their known sets; leave them empty and the agent
+infers sensible defaults and behaves exactly as before.
+
+> Spec: `plan.md` §22 (the craft engine) and §23 (the compositor). Validated across **250 tests**
+> (1 skipped), ruff-clean, on Linux · macOS · Windows × Python 3.10–3.13.
 
 ---
 

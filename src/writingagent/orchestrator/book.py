@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from .. import brain, concurrency, fields, humanizer, llm, nodes, registers, render, retrieval
+from .. import brain, compositor, concurrency, fields, humanizer, llm, nodes, registers, render, retrieval
 from .. import schemas as S
 from .. import skills as skills_mod
 from ..brain import ArticlePaths, BookPaths
@@ -643,7 +643,9 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
     threshold = state.get("escalate_below_confidence", 0.0)
     min_insight = int(state.get("min_insight", 0) or 0)
     register = state.get("register") or None     # genre/register profile (plan §22)
-    voice = brain.style_exemplars(paths.uid, register)
+    # Compositor (plan §23): persona voice (register-gated) > user voice > register gold,
+    # plus the per-run emotional cue.
+    voice = compositor.voice(paths.uid, register, state.get("persona"), state.get("emotion"), log=log)
     crit: S.Critique | None = None
     draft = ""
     best: tuple[str, S.Critique] | None = None

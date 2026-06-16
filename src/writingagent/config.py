@@ -155,6 +155,13 @@ class Settings:
     #                              (fields.names(): inverted-pyramid, imrad, aida, bluf, how-to, three-act, ...)
     citation_style: str = ""     # "" = register default; else influence|numeric|apa|mla|chicago|ap|none
     craft_passes: bool = True    # run surgical show-don't-tell / de-passive on each committed unit (plan §22)
+    # ── Compositor manner layers (plan §23) ──
+    persona: str = ""            # "" = none; else a voice (personas.names(): wry-skeptic, warm-mentor,
+    #                              hard-boiled-minimalist, lyrical-maximalist, deadpan-technical,
+    #                              firebrand-essayist, shakespearean, nietzschean, austen-ironic,
+    #                              twain-vernacular). Dropped if it doesn't fit the register.
+    emotion: str = ""            # "" = none; else a per-run emotional target (emotions.names(): fear,
+    #                              anger, grief, joy, love, shame, tension, hope) - show-don't-name cue
     # ── Agentic controller (plan §21) - opt-in self-directing loop over the fixed pipeline ──
     agentic: bool = False                 # drive units through the controller (choose research/canon then draft)
     #                                       instead of the fixed pipeline. Default OFF => today's behavior, no risk.
@@ -236,6 +243,15 @@ def _clamp_settings(s: Settings) -> Settings:
         norm = s.citation_style.strip().lower()
         s.citation_style = norm if norm in (
             "influence", "numeric", "apa", "mla", "chicago", "ap", "none") else ""
+    # Persona / emotion (compositor manner layers, plan §23): validate against the known
+    # sets (emotion tolerates aliases via emotions.get); unknown -> "" (= none).
+    from . import emotions as _emotions
+    from . import personas as _personas
+    if s.persona:
+        norm = s.persona.strip().lower().replace("_", "-")
+        s.persona = norm if norm in _personas.names() else ""
+    if s.emotion:
+        s.emotion = s.emotion.strip().lower() if _emotions.get(s.emotion) else ""
     return s
 
 

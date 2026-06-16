@@ -167,7 +167,9 @@ _CLICHES = (
 
 
 def _m_cliche(c: _Ctx) -> str | None:
+    from . import emotions  # emotion clichés ('her heart raced') are the anti-symptom-dict deny-list
     hits = [p for p in _CLICHES if p in c.lower]
+    hits += [p for p in emotions.avoid_phrases() if p in c.lower]
     if not hits:
         return None
     return f"- clichés detected ({len(hits)}): " + "; ".join(hits[:5])

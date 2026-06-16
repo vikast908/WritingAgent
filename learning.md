@@ -526,7 +526,204 @@ Three honesty notes, in keeping with the rest of this guide:
 
 ---
 
-## 9. How you actually run it
+## 9. Writing *well*, in *many* fields, on a *cheap* model — the craft engine + compositor
+
+Everything so far made the writer **trustworthy**: it won't produce slop, it won't contradict itself,
+it backs up its claims, and it argues a real point. But trustworthy is not the same as *good*, and
+there were two honest gaps left over.
+
+**Gap one: it spoke in one voice for everything.** The same "clear, plain researcher" voice was baked
+into every instruction. That voice is *right* for a blog post — and *wrong* for a novel, a journal
+paper, or an advertisement. A rule like "never use an em-dash" or "cut all hedging words" is sensible
+for punchy nonfiction and actively *harmful* in literary fiction (where the em-dash is a tool) or
+academic writing (where careful hedging — "this *suggests*", "*may* indicate" — is the whole point).
+The agent was, in the project's word, **monovocal**: one voice, applied everywhere.
+
+**Gap two: most of the craft lived inside the model's head.** Recall the difference from §3 and §7
+between things done by *plain code* (mechanical, free, always the same) and things done by *the AI*
+(smart but variable). The agent's quality **floor** — no slop, no contradictions — was enforced by
+code, so it held up no matter how clever the model was. But the higher craft — *write vividly*, *vary
+your rhythm*, *show, don't tell* — was just **instructions in English** and a hope that the model was
+clever enough to obey them. On a top-tier model, fine. On the **cheap, basic model** this project is
+meant to run well on, "write vivid prose" mostly produces… prose, blandly. The good stuff was
+*prompt-hope*, and prompt-hope is exactly what a weak model can't deliver.
+
+This chapter is the layer that closes both gaps. It comes in two parts that work together: the **craft
+engine** (genre-specific rulebooks + ways to coach a weak model) and the **compositor** (the thing
+that lets you also pick a *voice* and an *emotion*, and that keeps them from piling up into mush).
+
+### 9.1 Registers — a rulebook *and* a voice, per genre
+
+The cornerstone idea is the **register**. Think of a register as **the rulebook plus the house voice
+for one kind of writing**. (In everyday English, "register" already means the way you adjust your
+speech for the occasion — you don't talk to a judge the way you text a friend. Same word, same idea.)
+
+Crucially, a register isn't buried in code as a fixed set of rules — it's stored as plain **data** you
+can read and tweak. Each register says, for *its* genre:
+
+- which anti-slop bans apply — and, importantly, **which ones flip**. Academic writing *requires* the
+  hedging that blog-writing bans; advertising *keeps* the exclamation mark and the rule-of-three
+  ("faster, simpler, cheaper") that nonfiction cuts; fiction *keeps* the em-dash as a voice tool.
+- the voice and concreteness it wants, and guidance on rhythm and word choice;
+- which **citation style** to use (a journal uses APA; an article just credits sources inline);
+- the target **reading grade** (children's writing aims low on purpose; a journal paper aims high);
+- and **which of the code-based craft measurements actually matter** for that genre.
+
+**Eleven registers ship.** `nonfiction` is the default; the others are `technical`, `literary-fiction`,
+`genre-fiction`, `academic`, `journalism`, `copywriting`, `business`, `poetry`, `screenplay`, and
+`children`. The system **infers** the right one from your topic and angle, unless you pin one yourself
+in settings.
+
+> **The single most important safety promise here** (and it mirrors the one in §8): if you *don't* pick
+> a register, the system behaves **exactly** as it always did — the old nonfiction rules, byte for
+> byte. There's even an automated test that proves it. So this whole layer is pure addition: every
+> existing run is untouched, and you only opt into the new genres when you want them.
+
+### 9.2 How you actually coach a *weak* model (the key idea)
+
+This is the heart of the chapter, and it rests on one plain truth about cheap AI models:
+
+> **A weak model is a far better *imitator* than it is a *rule-follower*.** Tell it "write vividly" (an
+> abstraction) and it shrugs. *Show* it a great paragraph and say "match this", and it can rise toward
+> it. So the craft engine replaces *abstract instructions* with *concrete things to copy and concrete
+> things to measure.*
+
+It does this three ways:
+
+1. **Show, don't tell — to the model itself (examples, not adjectives).** Instead of describing good
+   writing, the system hands the model **before-and-after pairs** (here's a flat sentence; here's the
+   fixed one) so it can pattern-match the fix. And it gives the **critic** "anchors" — a worked example
+   of what a *5-out-of-5* looks like next to what a *2* looks like, on each thing it grades. A weak
+   critic told to "rate the rhythm 1–5" guesses; a critic shown a real 5 and a real 2 can *compare*.
+
+2. **A "gold" paragraph to match, per genre.** Each register ships one shipped-quality example
+   paragraph — its **gold corpus** — and that paragraph is quietly handed to the writer as the "this is
+   the bar, write like this" sample. (If *you've* marked your own writing as good with `/praise`, your
+   voice is used instead — see §9.5.) A weak model imitating a strong paragraph beats the same model
+   told to "be excellent."
+
+3. **Measure craft with plain code, not opinion.** This is the part that doesn't care how smart the
+   model is. Ordinary, deterministic code now reads each draft and reports hard numbers: how much the
+   **sentence rhythm** varies (all-same-length sentences are a robotic tell), how many sentences start
+   with the same word in a row, the **passive-voice** ratio, **adverb** density, the **reading grade**
+   (the Flesch-Kincaid score you may have seen in word processors), **cliché** hits, and whether the
+   opening and closing are weak. For *fiction* it swaps in the measurements that matter there instead:
+   **filter words** ("she saw", "he felt" — words that put a pane of glass between the reader and the
+   scene), how much is dialogue, tired dialogue tags, and whether the point-of-view and tense stay
+   consistent. These numbers are handed to the critic as **evidence** — facts it can act on, computed
+   the same way every time, free of charge, on any model.
+
+Put together: the model is *shown* what good looks like (gold + before/after), the critic is *shown*
+how to score (anchors), and the result is *measured* by code (metrics). None of those three depend on
+the model being clever — which is precisely why they lift a cheap model.
+
+### 9.3 Surgical fixes — repair one flaw, never rewrite the whole thing
+
+Back in §7 you met the **humanizer**: it strips robotic phrasing from approved prose *without* changing
+the meaning. The craft engine generalises that same careful trick to other flaws. The pattern is
+always: **find the specific flaw → rewrite only that one bit → check the repair → splice it back in.**
+
+Two new surgical passes join the humanizer:
+
+- **Show-don't-tell:** it spots a sentence that *names* a feeling ("she was afraid") and rewrites just
+  that sentence into the thing that *shows* it (what her hands do, what she stops noticing) — for
+  fiction registers.
+- **Passive → active:** it turns "mistakes were made" into "the team made mistakes" — for prose
+  registers.
+
+The word **surgical** is doing real work. The system never regenerates an approved passage from
+scratch, because a fresh full rewrite — especially by a cheap model — is exactly when facts quietly
+drift, numbers change, and citations break. Instead it edits the **one offending sentence** and runs
+**guards** before accepting the change: the facts and numbers must be unchanged, the specific flaw must
+actually be reduced, no new slop may sneak in, and the length must stay sane. If a guard fails, the
+edit is thrown away. So even a weak model doing a tiny touch-up *cannot* corrupt the meaning. (Like the
+rest of this layer it's on by default but does nothing in the free fake mode.)
+
+### 9.4 The compositor — and why *more* is *worse*
+
+So far we can set the **genre** (the register). The second half of this layer lets you also choose a
+**voice** and an **emotion** to write in. But the moment you allow several of those at once, you hit a
+trap that's specific to weak models:
+
+> **Pile three different voices onto a cheap model and it doesn't blend them — it *averages* them into
+> grey mush.** Tell it to be witty *and* lyrical *and* hard-boiled *and* to follow ten craft skills,
+> and it does none of them well. More instructions make a weak model write *worse*, not better.
+
+The fix is a small traffic-controller called the **compositor**, and its job is the opposite of what
+you'd expect: it's about **choosing and dropping**, not adding. It arranges every voice-shaping layer
+into a fixed pecking order — a **cascade**:
+
+```
+register  →  field  →  persona  →  emotion  →  skills
+(the genre)  (structure) (the voice) (the feeling) (learned tricks)
+```
+
+The rule is simple: **outer layers win.** A genre's rules outrank a chosen voice; the voice outranks
+the emotion; and so on. An inner layer is only allowed to fill the freedom the outer layer leaves
+open — it can never break the outer layer's rules. And — this is the anti-mush part — the system picks
+**exactly one** of each upper layer: one genre, one structure, one voice, one emotion. (Only the
+"learned skills" can be plural, and those were already capped at a handful and proven useful back in
+§7.) The compositor is the single place that decides what's kept, what's dropped, and it **writes down
+why** — it never silently staples instructions together.
+
+### 9.5 Personas — pick a voice to write in
+
+A **persona** is a *manner* — a way of speaking — that flavours the writing *within* whatever the genre
+already allows. It changes the diction, the rhythm, how often it reaches for a rhetorical flourish, and
+its stance — but it can never overrule the genre's rules (that's the cascade from §9.4).
+
+**Ten personas ship**, in two families:
+
+- **Six archetypes** — invented voices you can name: the **wry skeptic**, the **warm mentor**, the
+  **hard-boiled minimalist** (short, flat, unsentimental), the **lyrical maximalist** (rich, musical,
+  long-lined), the **deadpan technical**, and the **firebrand essayist**.
+- **Four public-domain *manners*** — written in the *spirit* of long-dead, out-of-copyright authors:
+  **Shakespearean**, **Nietzschean**, **Austen-ironic**, and **Twain-vernacular**.
+
+Two boundaries are drawn firmly and on purpose. First, these are the *manner* only — the writing stays
+in plain modern language; a "Shakespearean" piece doesn't invent fake-archaic words or pretend to be
+from 1600, it just borrows the cadence and wit. Second, and importantly: **no living or in-copyright
+authors, ever**, and even the examples that ship are **original homage written fresh for this project —
+never the real authors' text.** So there is no copying and no copyright problem. (If you genuinely want
+a specific *modern* voice, that's what the `/praise` path is for — you feed it your *own* writing.)
+
+Each persona declares which genres it suits. Ask for a voice that doesn't fit the genre — a Nietzschean
+software manual, say — and the compositor politely **drops it and notes why**. The genre wins; you're
+never handed a contradiction.
+
+### 9.6 Emotions — done the *opposite* of how you'd guess
+
+You'd think "write this scene with *fear*" would work by handing the model a list like *fear = racing
+heart, sweaty palms, cold sweat*. The project tried that idea and **rejected it outright**, because
+that list is precisely a **cliché generator** — "her heart raced" and "blood ran cold" are the *worn-
+out* phrases that mark amateur writing. Feeding the model the clichés guarantees you get the clichés.
+
+So emotions are built **inside-out**. For each emotion, the system ships:
+
+- a **deny-list of the clichés to ban** — the tired phrases are wired straight into the code-based
+  cliché detector (from §9.2), so "her heart raced" gets *flagged* wherever it appears, deterministically;
+- and **one plain craft cue** on how to *actually* land the feeling — almost always a version of *show
+  it, don't name it* (for fear: "render what the body does without permission, and the small thing that
+  stops mattering"). That one tip is handed to the writer; the believable emotion is then carried by
+  the deny-list plus the show-don't-tell surgical pass from §9.3 — not by a glossary of symptoms.
+
+**Eight emotions ship:** fear, anger, grief, joy, love, shame, tension, and hope. And because you might
+type the *feeling* rather than the exact label, there's gentle synonym-matching — ask for "dread",
+"fury", or "yearning" and it resolves to fear, anger, and hope respectively.
+
+### 9.7 The one-line takeaway for this chapter
+
+> The writer used to speak in **one voice** and lean on the model being **clever**. This layer gives it
+> **eleven genre rulebooks** (registers) that bend the rules per field; coaches even a **cheap** model
+> by *showing* it gold examples and *measuring* craft with plain code instead of just *telling* it to
+> be good; **surgically** repairs one flaw at a time without ever risking the facts; and lets you pick
+> a **voice** (persona) and a **feeling** (emotion) — while a **compositor** keeps those from piling
+> into mush by choosing exactly one of each and dropping whatever clashes. Off-the-shelf, with no
+> register chosen, it behaves exactly as before.
+
+---
+
+## 10. How you actually run it
 
 There are three ways in, all backed by the same engine:
 
@@ -564,7 +761,7 @@ fix — and your progress is always saved, so you just run again.
 
 ---
 
-## 10. Mini-glossary (every jargon word, in plain English)
+## 11. Mini-glossary (every jargon word, in plain English)
 
 - **AI model / LLM (Large Language Model):** the text-generating AI, like the engine behind ChatGPT.
 - **Node:** in this project, one specialised AI "worker" (planner, writer, critic, …).
@@ -583,6 +780,30 @@ fix — and your progress is always saved, so you just run again.
 - **Controller:** the small decision-maker that, in agentic mode, picks the next move from a fixed menu.
 - **In-generation tools:** helpers the writer can use *mid-draft* (look something up, fact-check a
   claim) before carrying on — capped so it can't go down a research rabbit-hole.
+- **Register:** the rulebook *plus* the house voice for one genre, stored as editable data. Eleven ship
+  (nonfiction default, technical, literary-fiction, genre-fiction, academic, journalism, copywriting,
+  business, poetry, screenplay, children). Rules *bend* per genre — academic keeps hedging, fiction
+  keeps the em-dash, ads keep the exclamation mark.
+- **Monovocal:** the old limitation — one writing voice applied to *every* genre. The registers fixed it.
+- **Gold corpus:** one shipped, genre-tagged "match this" example paragraph per register, handed to the
+  writer so a weak model imitates a strong sample instead of being told to "write well."
+- **Score anchors:** worked examples of a 5-out-of-5 vs a 2-out-of-5 given to the critic so it can
+  *compare* rather than guess when scoring a draft.
+- **Craft metrics:** plain-code measurements of a draft (sentence-rhythm variance, passive-voice ratio,
+  reading grade, clichés, filter words, etc.) — model-independent evidence fed to the critic.
+- **Surgical pass:** a fix that repairs *one* flawed sentence (e.g. show-don't-tell, passive→active)
+  with guards so facts, numbers, and citations can't change — never a full rewrite of approved prose.
+- **Compositor:** the traffic-controller that arranges voice-shaping layers into a fixed cascade
+  (register → field → persona → emotion → skills), picks exactly **one** of each upper layer, drops
+  whatever clashes, and logs why. Its job is *selection*, not accumulation — because piling instructions
+  on a weak model produces mush.
+- **Persona:** a chosen *voice/manner* (e.g. the wry skeptic, the lyrical maximalist, a Shakespearean
+  cadence) that flavours the writing within the register's rules. Ten ship — six archetypes + four
+  public-domain manners; never living/in-copyright authors, and examples are original homage, not the
+  real authors' text.
+- **Emotion (craft):** writing a passage with a target feeling, done *inside-out* — a deny-list of the
+  emotion's clichés (banned via the cliché detector) plus one "show it, don't name it" cue. Eight ship
+  (fear, anger, grief, joy, love, shame, tension, hope), with synonym-matching for free-text feelings.
 - **Escalation:** when a draft can't pass the quality bar, the run pauses and asks you (in manual mode).
 - **Canon (books):** the tracked facts of a story — characters, timeline, world rules — kept consistent.
 - **Brain:** the `brain/` folder where all state and output is stored as plain files.
@@ -598,7 +819,7 @@ fix — and your progress is always saved, so you just run again.
 
 ---
 
-## 11. The shortest possible summary
+## 12. The shortest possible summary
 
 > You type a topic. A **conductor** (the orchestrator) walks it through a **studio of AI specialists**
 > — plan, research, write several drafts, judge the best, critique, fact-check, revise, humanise — and

@@ -90,9 +90,9 @@ version = { attr = "writingagent.__version__" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-# Ship the shipped gold-corpus exemplars (registers.gold_exemplars) inside the wheel;
-# they are data, not modules, so packages.find alone would drop them.
-writingagent = ["gold/*.md"]
+# Ship the gold-corpus (registers.gold_exemplars) and persona (personas.block) exemplars
+# inside the wheel; they are data, not modules, so packages.find alone would drop them.
+writingagent = ["gold/*.md", "personas/*.md"]
 
 [tool.ruff]
 line-length = 110

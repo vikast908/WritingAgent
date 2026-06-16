@@ -13,6 +13,14 @@ for cents.
 
 Lead with **articles** (fast, cheap, shareable, large audience); books are the "it also does that."
 
+**As of this session the writer is also a *great writer across many fields*, not just argumentative
+nonfiction** — and on a *basic* model, not only a frontier one. A register-parameterized **craft
+engine** (plan §22) + a **compositor** (plan §23) move craft from zero-shot instructions the model
+must be clever enough to obey to *demonstrations it imitates and deterministic checks it can't escape*,
+selectable by genre: eleven registers (technical, literary/genre fiction, academic, journalism, copy,
+business, poetry, screenplay, children, …), ten personas (manner), and emotion as anti-cliché craft.
+The historical "researcher voice" nonfiction default is preserved **byte-for-byte**.
+
 ## 2. The problem
 
 Generic AI writing is **fluent slop**: confident, samey, structurally identical, often unsourced or
@@ -61,6 +69,8 @@ and self-corrects until it isn't slop"** — and you own the data and the spend.
 | Differentiator | What it is | Who else has it |
 |---|---|---|
 | **Anti-slop machinery** | Per-piece *thesis* the critic enforces, a side-by-side *judge*, an *insight gate*, a surgical *humanizer* | Rare — ChatGPT/Claude don't self-critique; Jasper/Sudowrite don't enforce a thesis; STORM is neutral/encyclopedic |
+| **A great writer across many fields — on a basic model** | A register-parameterized **craft engine** (plan §22): the anti-slop/craft contract as *data*, with **11 genre profiles** (nonfiction default, technical, literary-fiction, genre-fiction, academic, journalism, copywriting, business, poetry, screenplay, children) that invert the rules per register (fiction keeps the em-dash; academic *requires* hedging; copy keeps the exclamation). It runs well on a *weak* model because craft moves out of zero-shot prompts and into **few-shot exemplars**, a shipped **genre gold corpus** as a default style anchor, and **genre-aware deterministic craft metrics** the model can't argue with. Plus surgical show-don't-tell / passive→active passes, voice-drift stylometry, and per-field structural templates + 7 citation styles. | No OSS long-form writer parameterizes its anti-slop contract by genre or compensates for a basic model with exemplars + a gold corpus + deterministic metrics; ChatGPT/Claude are monovocal per prompt |
+| **Composable voice — persona, emotion, register, all selected (not stacked)** | A **compositor** (plan §23): one precedence cascade `register ⊃ field ⊃ persona ⊃ emotion ⊃ skills` that *selects + resolves conflicts and logs why*, never accumulates (more layers is worse on a weak model). **10 personas** (6 archetypes + 4 public-domain *manners* — Shakespearean, Nietzschean, Austen-ironic, Twain-vernacular; **no living authors**, original-pastiche exemplars, register-gated and dropped-with-a-log on mismatch). **Emotion as anti-cliché** — deny-lists wired into the cliché detector + show-don't-name cues, *not* a symptom dictionary (which only generates clichés). | Sudowrite has style tools but no register-gated conflict resolution; nobody else treats emotion as a deterministic anti-cliché deny-list |
 | **Self-directing *and* self-improving** | Opt-in **agentic controller** (plan §21): instead of a fixed order, an agent *chooses its next move* — gather research / read canon / draft / re-outline / revise / consolidate / repair / table-read / produce / learn / escalate — and the writer can call tools (research, canon lookup, fact-verify) *mid-draft*. A **learned policy**, distilled from the agent's own action trace, improves the choices with use. The fixed pipeline remains the safety floor (default-off). | Few OSS writers are self-directing; fewer pair it with a self-improving loop *and* a deterministic fallback |
 | **Claim↔source verification** | Cited claims checked against the actual source; unsupported = blocking; opt-in **multi-agent panels** (majority-vote fact-check, diverse-lens critique) | Almost no one |
 | **Evidence report** | A shareable artifact: thesis + every source ranked by influence (0–100) | Unique |
@@ -71,15 +81,19 @@ and self-corrects until it isn't slop"** — and you own the data and the spend.
 
 **In scope (now):** long-form articles + books; research (shallow + deep); the quality machinery;
 6 export formats; diagrams; TUI + CLI + npm launcher + Python API; the markdown brain + learning loop;
-an opt-in self-directing (agentic) controller atop the fixed pipeline — a run-level macro-action
-controller, in-generation tool use, a learned (trace-distilled) policy, and multi-agent panels, all
-default-off and bounded by call-caps + a token budget.
+a register-parameterized **craft engine** (11 genre profiles + persona/emotion **compositor**) that
+makes the writer good across many fields on a basic model, with the nonfiction default unchanged
+byte-for-byte; an opt-in self-directing (agentic) controller atop the fixed pipeline — a run-level
+macro-action controller, in-generation tool use, a learned (trace-distilled) policy, and multi-agent
+panels, all default-off and bounded by call-caps + a token budget.
 
 **Out of scope (deliberate):** short-form/marketing copy; real-time collaboration; a hosted SaaS;
 a full GUI (revisit only if demand is proven); non-text media.
 
-**Watch (scope risk):** "books + articles + diagrams + themes + API" dilutes the one-line pitch.
-Resolution: **lead with articles**; present everything else as secondary.
+**Watch (scope risk):** "books + articles + diagrams + themes + API + 11 genres + personas" dilutes the
+one-line pitch. Resolution: **lead with articles** (technical long-form is still the bullseye); present
+the craft engine / compositor as *depth* (better prose in any field on a basic model), not a new
+audience — and keep the nonfiction default byte-for-byte so the wedge persona sees zero behavior change.
 
 ## 7. Success metrics (open-source)
 
@@ -90,6 +104,10 @@ Resolution: **lead with articles**; present everything else as secondary.
 - **Virality:** shares of generated artifacts + evidence reports; GitHub stars/forks trend.
 - **Contribution:** external PRs; good-first-issues closed.
 - **Quality proof:** blind-A/B win-rate vs ChatGPT long-form (target: clearly >50%).
+- **Craft-engine proof (basic-model claim):** the deterministic craft metrics (`craft.py`) improve
+  register-over-register with the engine on, *and* a register/persona run on a **basic** model reads as
+  on-genre to blind readers — i.e. the engine earns the "great writer across many fields, on a basic
+  model" claim rather than merely being told. Measure per register vs the nonfiction baseline.
 - **Agentic efficacy (when opt-in):** does the self-directing controller *beat its own fixed pipeline*?
   Measure first-pass rate, insight-gate pass rate, and cost/latency for `agentic` runs vs `default`,
   at equal token budget — the agentic mode has to *earn* its caps. Learned-policy uplift only becomes
@@ -98,6 +116,64 @@ Resolution: **lead with articles**; present everything else as secondary.
 ## 8. Roadmap
 
 ### Now (shipped this session)
+- **Craft engine — a great writer across many fields, on a basic model** (plan §22, branch
+  `feat/craft-engine-all-tiers`): the pipeline guaranteed a *floor* (no slop) and an argument *ceiling*
+  (thesis, counterargument) but its craft contract was **monovocal** — one "researcher voice" baked
+  into every prompt — and the rest of craft lived *inside the model*, reached by zero-shot instructions
+  that only a clever model obeys. This layer moves craft to *demonstrations the model imitates +
+  deterministic checks it can't escape, parameterized by register*. What shipped:
+  - **Registers as data** (`registers.py`): the anti-slop/craft contract is now a `Register` profile,
+    not hard-code. **11 ship** — `nonfiction` (default), `technical`, `literary-fiction`,
+    `genre-fiction`, `academic`, `journalism`, `copywriting`, `business`, `poetry`, `screenplay`,
+    `children`. Each says which bans apply, which **invert** (fiction *keeps* em-dashes; academic
+    *requires* hedging + keeps "moreover"; copy *keeps* the exclamation), plus voice/rhythm/diction,
+    reading-grade target, and which craft metrics matter.
+  - **Built to run on a *basic* model** (the point), three compensations for weak zero-shot craft:
+    (a) **few-shot exemplars** (`exemplars.py`) — humanizer before/after pairs + critic 5-vs-2 score
+    anchors (weak models imitate; they don't follow abstractions); (b) a shipped **genre gold corpus**
+    (`gold/*.md`) injected as the *default* style anchor (a weak model imitating a strong paragraph
+    beats one told to "write vivid prose"); (c) **genre-aware deterministic craft metrics** (`craft.py`)
+    — sentence-rhythm variance, passive/adverb density, Flesch-Kincaid, cliché hits, opening/closing
+    weakness, and for fiction filter-verb density / dialogue ratio / said-bookisms / POV-tense / sensory
+    density — computed as model-independent evidence to the critic.
+  - **Tier 2 surgical craft passes** (`surgery.py`): generalize the humanizer's detect → rewrite-only-
+    the-flaw → **guard** → splice pattern to **show-don't-tell** (filter verbs + told emotion → image)
+    and **passive→active**, so approved prose is never regenerated end-to-end and a micro-edit can't
+    drift facts. Plus an opening/closing detector and a deterministic **voice-drift stylometry** report.
+  - **Tier 3 field templates + citation styles** (`fields.py`): a structural grammar injected into the
+    outline architect — inverted-pyramid / IMRaD / AIDA-PAS / BLUF / how-to / three-act / screenplay —
+    and 7 citation conventions (`influence` default · `numeric` · `apa` · `mla` · `chicago` · `ap` ·
+    `none`).
+  - **Settings:** `register`, `field`, `citation_style`, `craft_passes` (all clamped/tunable).
+  - **Invariant:** `register=None` / the `nonfiction` profile reproduce the historical nonfiction
+    behavior **byte-for-byte** (asserted by test), so every pre-existing run is unchanged.
+- **Compositor — composable voice without mush** (plan §23, branch
+  `feat/compositor-personas-emotions`): builds the §22.6 deferral. The insight: register (rules+voice),
+  persona (manner), emotion (affect), and skills (technique) are all *voice/constraint layers over one
+  draft* — so it's **one composition model**, not three feature silos — and the honest constraint is
+  that *more layers is worse, not better* (a weak model given several voices at once averages them into
+  mush). The compositor's job is therefore **selection + conflict resolution, never accumulation**.
+  What shipped:
+  - **The cascade** (`compositor.py`): `register ⊃ field ⊃ persona ⊃ emotion ⊃ skills`. Outer layers
+    win; upper layers are **single-select** (only skills are multi, already capped + efficacy-gated).
+    One place decides what's selected, what's dropped, and **logs why** — it never silently concatenates.
+  - **Personas** (`personas.py` + `personas/*.md`): a **manner** layer (diction, rhythm, device-density)
+    *within* the register's rules. **10 ship** — 6 archetypes (`wry-skeptic`, `warm-mentor`,
+    `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`, `firebrand-essayist`) + 4
+    public-domain *manners* (`shakespearean`, `nietzschean`, `austen-ironic`, `twain-vernacular`).
+    **Hard boundaries:** manner only, **no living/in-copyright authors**, exemplars are **original
+    pastiche** (zero copyright surface). A persona incompatible with the register is **dropped and
+    logged** — the register wins.
+  - **Emotions** (`emotions.py`, anti-dictionary): a symptom dictionary ("fear = racing heart") is a
+    *cliché generator* and was rejected; the inverse ships — per-emotion **anti-cliché deny-lists** wired
+    into the `craft.py` cliché detector (deterministic, model-independent) + a show-don't-name **cue**.
+    Believable emotion is carried by the deny-list + the show-don't-tell pass, not a glossary.
+  - **The voice layer:** `compositor.voice()` resolves the writer's single "match this" anchor by
+    precedence — **compatible persona > user voice (`/praise`) > register gold** — then appends the
+    emotion cue, replacing the bare style-exemplar call at every writer site. One slot, no new node
+    params.
+  - **Settings:** `persona`, `emotion` (both ""=none, clamped against the known sets).
+  - **Suite:** 250 passed / 1 skipped, ruff clean, cross-platform Python 3.10–3.13.
 - **Self-directing (agentic) controller — opt-in** (`agentic`, plan §21): the system is now optionally
   an *agent that chooses its next move*, not only a fixed pipeline with quality gates. **Off by default**
   (`Settings.agentic`); when off, behavior is byte-identical to the fixed pipeline, which remains the
@@ -163,6 +239,11 @@ Resolution: **lead with articles**; present everything else as secondary.
   confirm the in-generation loop + caps hold up and that agentic beats `default` at equal budget;
   (b) **a learned-policy trace corpus large enough to bite** — accumulate enough labelled action traces
   that `train_policy` produces a decided, net-positive policy (today it correctly abstains on thin data).
+- **Compositor — additive next steps** (plan §23.6; the cascade seam is in place, these are additive):
+  **per-unit emotion** (map a book chapter's `emotional_role` → an emotion key instead of one run-level
+  target), a **persona-aware critic** (don't flag a persona's deliberate choices as defects), a
+  "blend = author a new persona" workflow, and **surfacing the cascade in the TUI** (today persona /
+  emotion / register / field are settable but not yet a first-class dashboard control).
 
 ### Later (P2 — only if pull is proven)
 - A thin **web UI** or **VS Code extension** to break the terminal ceiling.
@@ -179,6 +260,10 @@ Resolution: **lead with articles**; present everything else as secondary.
 5. **Agentic efficacy:** does the opt-in self-directing controller beat its own fixed pipeline at equal
    token budget (first-pass / insight / cost-latency)? → many real `agentic` vs `default` runs at volume
    (today: a single live run validated the loop end-to-end, not its uplift).
+6. **Craft-engine / basic-model claim:** does a register/persona run on a **basic** model actually read
+   as on-genre to blind readers (not just to the deterministic metrics)? → per-register blind reads +
+   craft-metric deltas vs the nonfiction baseline (the engine ships and the suite passes; the
+   reads-as-good-on-a-weak-model uplift is built-for, not yet measured at volume).
 
 ## 10. Risks & mitigations
 
@@ -190,6 +275,10 @@ Resolution: **lead with articles**; present everything else as secondary.
 | Book quality unproven | Med | Validate before promoting; lead with articles |
 | **Agentic mode adds cost/latency or loops** (extra controller + tool calls; an eager model over-researches) | Med | **Default-off** (opt-in only); per-round + total tool-call caps; a token budget that drops optional polish actions under pressure; the fixed pipeline is the always-legal fallback. *(A live run did surface tool over-calling — caught and capped.)* |
 | **Agentic mode unproven at scale** (single live run; learned policy needs corpus volume) | Med | Frame honestly as advanced/opt-in; the deterministic `default` pipeline stays recommended; learned policy never auto-promoted (efficacy gate owns promotion); validate at volume before promoting (roadmap/Next) |
+| **Craft engine widens genres → dilutes the wedge** (11 registers + personas can read as "tool for everyone") | Med | Lead with technical articles; frame the engine as *depth* (better prose on a basic model), not a new audience; nonfiction default stays byte-for-byte so the wedge persona sees no change |
+| **Composing layers degrades a weak model** (several voices at once average into mush) | Med | The compositor **selects + resolves conflicts, never accumulates**; upper layers are single-select; incompatible persona is dropped + logged; the register always wins |
+| **Persona = author-impersonation / copyright surface** | Med | **No living/in-copyright authors**; public-domain personas are *manners* only; all exemplars are **original pastiche**, not the authors' text (zero copyright surface); incompatible personas dropped |
+| **Basic-model craft claim unproven on real basic models** (built for it; not yet measured at volume) | Med | Deterministic craft metrics give model-independent evidence; validate per-register quality on a basic model via the blind-read / craft-metric proof (§7) before promoting the claim hard |
 | Scope dilutes the pitch | Med | One-line spearhead; articles first; agentic mode is opt-in, not the headline |
 
 ## 11. Verdict (from the product review)
@@ -214,7 +303,10 @@ win a small loyal niche as-is; it spreads only once there's a zero-install try a
   audits *and* learns from its own trace (with a deterministic fallback floor), local-first, repeatable,
   cheap.
 - **Sudowrite / NovelCrafter** — fiction, polished web UI, subscription. *Our edge:* autonomy, cost,
-  local-first, verification, articles too. *Their edge:* UX, fiction tooling, community.
+  local-first, verification, articles too — and now a **register-gated craft engine** (fiction *and*
+  nonfiction genres from one tool, with deterministic fiction metrics — filter-verb density, said-
+  bookisms, POV/tense, sensory density) plus a **compositor** that composes persona + emotion without
+  averaging them into mush. *Their edge:* UX, fiction tooling, community.
 - **Jasper / Copy.ai** — marketing/short-form SaaS. Different segment; not a real competitor.
 - **Stanford STORM (OSS)** — the closest analog for researched articles; very popular. *Their edge:*
   hosted demo, mindshare. *Our edge:* a *thesis/stance* (STORM is neutral/encyclopedic), the quality

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 
-from .. import brain, humanizer, llm, nodes, retrieval
+from .. import brain, compositor, humanizer, llm, nodes, retrieval
 from .. import schemas as S
 from ..brain import ArticlePaths, BookPaths
 from ..config import ModelConfig
@@ -223,7 +223,7 @@ def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: s
 
     paths, state, plan, toc = _load(uid, book_id)
     register = state.get("register") or None
-    voice = brain.style_exemplars(uid, register)
+    voice = compositor.voice(uid, register, state.get("persona"), state.get("emotion"), log=log)
     if not (1 <= n <= len(toc.chapters)):
         raise ValueError(f"Chapter {n} out of range (1-{len(toc.chapters)}).")
     blueprint = toc.chapters[n - 1]

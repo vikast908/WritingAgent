@@ -7,6 +7,59 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The compositor — personas, emotions, and layer composition (plan §23, 2026-06-17).** Built the
+  §22.6 deferral as **one composition model**, not three feature silos: register (rules+voice), field
+  (structure), persona (manner), emotion (affect), and skills (technique) are all voice/constraint
+  layers over one draft. `compositor.py` resolves a precedence **cascade** —
+  `register ⊃ field ⊃ persona ⊃ emotion ⊃ skills` — where outer layers win conflicts, upper layers are
+  single-select, and the one place that decides what is selected/dropped **logs why** (it never silently
+  concatenates, because a weak model given several voices at once averages them into mush).
+  **Personas** (`personas.py` + `personas/*.md`) add a manner layer flavoring diction/rhythm/device-
+  density within the register's rules — ten ship: six archetypes (`wry-skeptic`, `warm-mentor`,
+  `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`, `firebrand-essayist`) and four
+  public-domain *manners* (`shakespearean`, `nietzschean`, `austen-ironic`, `twain-vernacular`), each a
+  signature card + an **original-pastiche** exemplar declaring its compatible registers. Hard boundaries:
+  manner only, **no living/in-copyright authors** (the user's own `voice/` + `/praise` path covers a
+  specific modern voice), zero copyright surface; a persona incompatible with the register is **dropped
+  and logged** (the register wins). **Emotions** (`emotions.py`) ship the inverse of a symptom dictionary
+  (a cliché generator, deliberately rejected): per-emotion **anti-cliché deny-lists** (wired into the
+  `craft.py` cliché detector, so "her heart raced" is flagged wherever it appears — deterministic,
+  model-independent) plus a one-line show-don't-name **cue**; believable emotion is then carried by the
+  deny-list + the show-don't-tell surgical pass (§22.3), not a glossary. Eight emotions with alias
+  tolerance (`dread`→fear). The voice layer is wired now: `compositor.voice()` resolves the writer's
+  single "match this" anchor by precedence — **compatible persona (signature + exemplar) > user voice
+  (`/praise`) > register gold (§22.2)** — then appends the emotion cue, replacing the bare
+  `brain.style_exemplars` call at every writer site. New tunable settings (clamped against the known
+  sets): `persona`, `emotion` (both `""`=none), stored in run-state so both modes carry them. New files:
+  `personas.py`, `emotions.py`, `compositor.py`, `personas/*.md`, `tests/test_compositor.py`.
+- **The craft engine — register-parameterized writing (plan §22, 2026-06-16).** Moves craft from
+  *instructions the model must be clever enough to obey* to *demonstrations it imitates and deterministic
+  checks it can't escape, parameterized by register* — the audit finding it answers is that the pipeline
+  guaranteed a floor (no slop, no contradictions) and an argument ceiling (thesis, counterargument) but
+  the craft contract was **monovocal**. **Register/genre profiles** (`registers.py`) encode the craft
+  contract as **data**: eleven profiles tailor the anti-slop contract per genre — `nonfiction` (default),
+  `technical`, `literary-fiction`, `genre-fiction`, `academic`, `journalism`, `copywriting`, `business`,
+  `poetry`, `screenplay`, `children` — with bans that filter/invert per register (fiction keeps the
+  em-dash; academic keeps `moreover` *and requires hedging*; copy keeps the exclamation and the rule of
+  three). **Invariant:** `register=None` / the `nonfiction` profile reproduce the historical
+  `slop.render_constraints()` / `tell_pattern()` **byte-for-byte** (test-asserted), so every pre-existing
+  run is unchanged. To compensate for a basic model: **few-shot exemplars** (`exemplars.py`) — humanizer
+  before/after pairs + critic 5-vs-2 score anchors (weak models imitate, they don't follow abstractions);
+  a shipped **genre-tagged gold corpus** (`gold/*.md`) injected through the voice-exemplar slot as the
+  **default** style anchor (`brain.style_exemplars` = user voice if any, else the register's gold); and
+  **genre-aware deterministic craft metrics** (`craft.py`) — sentence-rhythm variance + opening-word runs,
+  passive-voice ratio, adverb density, Flesch-Kincaid grade, cliché hits, opening/closing weakness, with
+  fiction swapping in filter-verb density, dialogue ratio, said-bookisms, POV/tense consistency, and
+  sensory density. **Surgical craft passes** (`surgery.py`) generalize the humanizer's
+  detect → rewrite-only-the-flaw → guard → splice pattern to **show-don't-tell** and **passive → active**
+  (citations/numbers preserved, defect strictly reduced, never an end-to-end regeneration), plus a
+  deterministic **voice-drift** report (`polish.voice_drift`) folded into the book cohesion report.
+  **Field structural templates** (`fields.py`) inject a structural grammar into the outline architect —
+  inverted-pyramid, IMRaD, AIDA/PAS, BLUF, how-to, three-act, screenplay. **Citation styles** in
+  references (`polish.build_references(style=...)`): `influence` (default, byte-for-byte the old output) ·
+  `numeric` · `apa` · `mla` · `chicago` · `ap` · `none`. New tunable settings (all clamped): `register`,
+  `field`, `citation_style`, `craft_passes`. New files: `registers.py`, `craft.py`, `exemplars.py`,
+  `surgery.py`, `fields.py`, `gold/*.md`, `tests/test_craft_engine.py`.
 - **Agentic controller — the "fully agentic" batch (8 gaps, plan §21).** (1) **Rich perception:** the
   run/unit views now carry per-unit quality + the weakest committed unit, open contradictions, and the
   token budget. (2) **`reoutline`** — the controller can regenerate the not-yet-written units' plan when

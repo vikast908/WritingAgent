@@ -25,6 +25,9 @@ in `PRD.md`: "you must be comfortable with a CLI and your own key."
 - **Real run (bring your own key).** Toggle it on, pick a provider, paste your key, and
   it produces a genuine article/book — and the **evidence report** (sources ranked by
   influence *and* credibility) actually populates.
+- **Writes across genres.** A register profile (nonfiction, fiction, academic, journalism,
+  copywriting, poetry, screenplay, …) tailors the craft contract per genre, with selectable
+  personas and a per-piece emotional cue — engineered to hold up even on a basic model.
 
 The underlying engine also supports an optional self-directing (agentic) mode — off by
 default and not exposed in this demo.

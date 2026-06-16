@@ -110,6 +110,14 @@ A 60-second map (full detail in `plan.md` and the README's Architecture section)
 - `telemetry.py` - per-call JSONL records + the `/dashboard` aggregation.
 - `brain.py` / `store.py` - markdown filesystem layout + SQLite/FTS canon & graph.
 - `search.py` / `deep_research.py` / `images.py` / `cache.py` - the optional research stack.
+- `registers.py` / `craft.py` / `exemplars.py` / `surgery.py` / `fields.py` - the craft engine:
+  genre/register profiles, deterministic craft metrics, few-shot exemplars, surgical
+  show-don't-tell / passive passes, and structural templates (`plan.md` §22).
+- `compositor.py` / `personas.py` (+ `personas/*.md`) / `emotions.py` - the layer cascade that
+  selects one voice from register ⊃ field ⊃ persona ⊃ emotion ⊃ skills: selectable personas
+  (manner) and anti-cliché emotion deny-lists (`plan.md` §23).
+- `gold/*.md` - the per-register genre style corpus (the default "match this" voice exemplar).
+  The gold/persona corpora and the register profiles are **tunable data**, not hard-code.
 - `shell.py` / `cli.py` / `ui.py` - Rich TUI, one-shot CLI, and the theme registry
   (10 themes: palette + wordmark figlet per theme).
 - `export.py` - pdf · epub · html · docx · txt · md renderers.

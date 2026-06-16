@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from .. import brain, concurrency, fields, humanizer, llm, nodes, registers, render, retrieval
+from .. import brain, compositor, concurrency, fields, humanizer, llm, nodes, registers, render, retrieval
 from .. import schemas as S
 from .. import skills as skills_mod
 from ..brain import ArticlePaths
@@ -489,7 +489,8 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     thesis_brief_md = nodes.thesis_brief(thesis_md)   # critic/judge: claim+arguments only (F4)
     skeletons = bool(state.get("divergent_skeletons"))
     register = state.get("register") or None     # genre/register profile (plan §22)
-    voice = brain.style_exemplars(paths.uid, register)
+    # Compositor (plan §23): persona voice (register-gated) > user voice > gold + emotion cue.
+    voice = compositor.voice(paths.uid, register, state.get("persona"), state.get("emotion"), log=log)
     crit: S.Critique | None = None
     draft = ""
     best: tuple[str, S.Critique] | None = None
@@ -884,7 +885,7 @@ def _rewrite_section_draft(cfg, paths: ArticlePaths, outline, state, section, n:
     target on the writer calls (the reader-loop path does; `revise` historically did not)."""
     thesis_md = brain.read_text(paths.root / "thesis.md")
     register = state.get("register") or None
-    voice = brain.style_exemplars(paths.uid, register)
+    voice = compositor.voice(paths.uid, register, state.get("persona"), state.get("emotion"), log=log)
     watch = brain.read_text(brain.watch_list(paths.uid))
     requirements = (state.get("intake") or "").strip() or None
     target = section.target_words or (

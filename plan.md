@@ -1577,3 +1577,69 @@ in the voice slot, public-domain + original; never living-author impersonation),
 *anti-cliché deny-lists + the show-don't-tell pass* (NOT a symptom dictionary, which is a cliché
 generator). Decision recorded: finish these tiers first, then add the compositor; personas = archetypes
 + public-domain.
+
+## 23. The compositor - personas, emotions, and layer composition (2026-06-17)
+
+Built the §22.6 deferral. The insight (from `docs/proposal-personas-emotions-composition.md`):
+register (rules+voice), persona (manner), emotion (affect), and skills (technique) are all
+**voice/constraint layers over one draft**, and the system already had three of them - so the work is
+**one composition model**, not three feature silos. And the honest constraint: *more layers is worse,
+not better* - a weak model given several voices at once averages them into mush. The compositor's job
+is **selection + conflict resolution**, not accumulation.
+
+### 23.1 The cascade
+
+```
+register  ⊃  field  ⊃  persona  ⊃  emotion  ⊃  skills
+(rules+voice) (structure) (manner)  (affect)   (technique, ≤3)
+```
+
+Outer layers win conflicts; an inner layer may only fill the freedom the outer leaves open, never
+break it. Upper layers are **single-select** (one register, one field, one persona, one emotion); only
+skills are multi, and they were already capped + efficacy-gated (§8). `compositor.py` is the one place
+that decides what is selected, what is dropped, and **logs why** - it never silently concatenates.
+
+### 23.2 Personas - `personas.py` + `personas/*.md`
+
+A persona is a **manner** layer: it flavors diction, rhythm, device-density, and stance *within* the
+register's rules. Each ships a **signature card** (the manner nudge) + an **exemplar** (original
+pastiche prose) and declares its **compatible registers**. Ten ship: six archetypes (`wry-skeptic`,
+`warm-mentor`, `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`,
+`firebrand-essayist`) and four public-domain *manners* (`shakespearean`, `nietzschean`,
+`austen-ironic`, `twain-vernacular`). **Hard boundaries:** manner only (obey the register, stay in the
+present, invent no archaic words); **no living/in-copyright authors** (for a specific modern voice the
+user's own `voice/` + `/praise` path already exists); exemplars are **original pastiche**, not the
+authors' text, so there is zero copyright surface. A persona incompatible with the register is
+**dropped and logged** (a Nietzschean API reference is not a thing) - the register wins.
+
+### 23.3 Emotions - `emotions.py` (anti-dictionary)
+
+A symptom dictionary ("fear = racing heart, sweaty palms") is a **cliché generator** and was rejected.
+The inverse ships: per-emotion **anti-cliché deny-lists** (wired into the `craft.py` cliché detector, so
+"her heart raced" is flagged wherever it appears - deterministic, model-independent) + a one-line craft
+**cue** (the show-don't-name technique) injected by the compositor. Believable emotion is then carried
+by the deny-list + the show-don't-tell surgical pass (§22.3), not a glossary. Eight emotions with alias
+tolerance (`dread`→fear) so a free-text role resolves.
+
+### 23.4 The voice layer (what's wired now)
+
+`compositor.voice(uid, register, persona, emotion, log)` resolves the writer's single "match this"
+anchor by precedence: **compatible persona (signature + exemplar) > user voice (`/praise`) > register
+gold (§22.2)**, then appends the emotion cue. It replaces the bare `brain.style_exemplars` call at every
+writer site (book, article, review, reader-loop). One slot, no new node params - persona + emotion are
+manner guidance for the *writer*; the critic already enforces the register and the deterministic metrics.
+
+### 23.5 Config & wiring
+
+New tunable settings (clamped against the known sets): `persona`, `emotion` (both ""=none). Stored in
+run-state (`_base_run_state`, so both modes) and read by the writer sites via the compositor. New files:
+`personas.py`, `emotions.py`, `compositor.py`, `personas/*.md`, `tests/test_compositor.py`. Edited:
+`config.py`, `craft.py` (emotion clichés), `pyproject.toml` (package-data), `orchestrator/{common,book,
+article,review}.py`.
+
+### 23.6 Deferred (next)
+
+Per-unit emotion (map a book chapter's `emotional_role` → an emotion key instead of one run-level
+target), persona-aware critic notes (don't flag a persona's deliberate choices), a "blend = author a new
+persona" workflow, and surfacing the cascade in the TUI. The cascade seam is in place; these are
+additive.

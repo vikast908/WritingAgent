@@ -5,6 +5,9 @@ self-correcting (and optionally self-directing) autonomous writing system for bo
 the Python engine; this package just gives you a `writingagent` command on your PATH that forwards
 to it (passing your terminal straight through, so the interactive TUI works).
 
+The engine writes across genres via its craft engine + compositor (plan §22/§23): register-parameterized
+writing, selectable personas, and per-piece emotions.
+
 ## Install
 
 ```bash

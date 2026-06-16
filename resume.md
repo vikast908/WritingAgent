@@ -5,6 +5,33 @@
 
 ## Current status
 
+- **New (2026-06-17 - the compositor: personas, emotions, layer composition - DONE, branch
+  `feat/compositor-personas-emotions`, stacked on the craft-engine branch):** built the §22.6 deferral
+  (the next chapter after the craft engine). Insight: register/persona/emotion/skills are all *voice
+  layers over one draft*, so the work is **one composition model**, not silos - and *more layers is
+  worse*, so the compositor **selects + resolves conflicts**, never accumulates. Suite green throughout
+  (now 250 passed, 1 skipped; ruff clean):
+  - **Personas (`personas.py` + `personas/*.md`)** - a *manner* layer (signature card + original-
+    pastiche exemplar + compatible registers). 10 ship: 6 archetypes (wry-skeptic, warm-mentor,
+    hard-boiled-minimalist, lyrical-maximalist, deadpan-technical, firebrand-essayist) + 4 public-domain
+    *manners* (shakespearean, nietzschean, austen-ironic, twain-vernacular). **No living authors**
+    (legal/quality); exemplars are original pastiche (zero copyright surface); a persona that doesn't
+    fit the register is dropped + logged (register wins).
+  - **Emotions (`emotions.py`)** - the *inverse* of a symptom dictionary (which is a cliché generator):
+    per-emotion **anti-cliché deny-lists** wired into the `craft.py` cliché detector ('her heart raced'
+    now flagged) + a show-don't-name **cue**. 8 emotions, alias-tolerant.
+  - **Compositor (`compositor.py`)** - the cascade register⊃field⊃persona⊃emotion⊃skills, single-select
+    upper layers. v1 owns the **voice layer**: `compositor.voice()` resolves persona(signature+exemplar)
+    > user voice > register gold, + emotion cue; replaces `brain.style_exemplars` at every writer site
+    (book/article/review/reader-loop). One slot, no new node params.
+  - **Wiring:** `persona`/`emotion` settings (clamped) → `_base_run_state` → writer sites. Spec in
+    **plan.md §23**; design+critique in `docs/proposal-personas-emotions-composition.md` (now marked
+    ADOPTED/built). Tests in `tests/test_compositor.py`.
+  - **NEXT STEP:** §23.6 deferrals - per-unit emotion (map a chapter's `emotional_role` → emotion key),
+    persona-aware critic notes, "blend = a new persona" workflow, surface the cascade in the TUI. Both
+    branches (`feat/craft-engine-all-tiers`, `feat/compositor-personas-emotions`) pushed, not yet
+    merged - open PRs / merge to master when ready.
+
 - **New (2026-06-16 - craft engine: register-parameterized writing, all tiers - DONE, branch
   `feat/craft-engine-all-tiers`):** acted on a craft-POV review that found the agent excellent at the
   *floor* (anti-slop) and the argument *ceiling* (thesis) but **monovocal** (one researcher voice forced
