@@ -449,6 +449,8 @@ def _base_run_state(uid, abstract, *, intake, author, max_revisions, autonomous,
         "agentic_controller_model": settings.agentic_controller_model,
         "agentic_max_unit_steps": settings.agentic_max_unit_steps,
         "agentic_factcheck_panel": settings.agentic_factcheck_panel,
+        "agentic_inline_tools": settings.agentic_inline_tools,
+        "agentic_critique_panel": settings.agentic_critique_panel,
         "agent_steps": 0,
         # Autonomous runs never pause on low confidence.
         "escalate_below_confidence": 0.0 if autonomous else settings.escalate_below_confidence,
@@ -612,6 +614,21 @@ def _run_learner(cfg, paths, plan, instructions: str, findings: str, *, log) -> 
     log(f"   [learn] +{len(out.skills)} skills, {len(out.watch_items)} watch items; "
         f"reconciled {len(statuses)} skills"
         + (f", distilled {len(distilled)} duplicate(s)" if distilled else ""))
+    _train_agentic_policy(paths, log)
+
+
+def _train_agentic_policy(paths, log) -> None:
+    """Distill/refresh the learned controller policy from the action trace (plan §21.11),
+    compounding run-over-run. Only fires when this project has a trace (agentic runs); a
+    thin/undecided corpus writes nothing. Best-effort - never breaks the learn phase."""
+    from .. import agentic
+    try:
+        if not agentic.trace.trace_path(paths).exists():
+            return
+        if agentic.train_policy(paths.uid):
+            log("   [agentic] learned policy refreshed from the action trace")
+    except Exception:  # noqa: BLE001 - policy training must never break a run
+        pass
 
 
 def _escalate(paths, n, crit: S.Critique, draft: str) -> None:

@@ -34,6 +34,19 @@ CONTROLLER_SYS = (
     "be written. Return exactly one action with a short reason."
 )
 
+RUN_CONTROLLER_SYS = (
+    "You are the director of an autonomous writing agent producing a whole article or book. "
+    "At each step you choose the single next MACRO-action over the whole piece - you do NOT "
+    "write prose. The actions: 'draft' writes the next un-written chapter/section (its own "
+    "write->critique->commit episode); 'consolidate' audits the book so far for continuity "
+    "contradictions; 'repair' rewrites chapters an open contradiction touches; 'table_read' "
+    "reads the assembled piece cold as a skeptical reader; 'produce' assembles the final "
+    "manuscript; 'learn' distills reusable craft skills; 'done' finishes. Drive toward a "
+    "finished, coherent, well-evidenced piece: draft the remaining units, audit continuity on "
+    "a long book before it drifts, and only produce once everything is written, then learn, "
+    "then finish. Choose only from the legal actions offered. Return one action + a short reason."
+)
+
 # ── Untrusted-content boundary (prompt-injection defense) ─────────────────────
 # Everything fetched from the public web (search snippets, full page text) is
 # attacker-controllable input that crosses into LLM prompts. wrap_untrusted()

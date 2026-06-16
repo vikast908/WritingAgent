@@ -5,12 +5,76 @@
 
 ## Current status
 
+- **New (2026-06-16 - "make it completely agentic": all 8 review gaps built - DONE):** closed every gap
+  from the agentic review. **#1 rich perception:** `build_run_view`/`build_state_view` now carry per-unit
+  quality + weakest unit (`weakest_committed_unit`), open contradictions, and the token budget
+  (`_budget_line`). **#2 reoutline + #4 start-of-run:** new `reoutline` macro-action regenerates the
+  not-yet-written units' plan (books: TOC; articles: outline.sections), preserving committed units +
+  count; legal *before* drafting too = structural agency at the start. **#3 revise:** `revise` rewrites
+  the weakest committed unit by re-processing it with a targeted instruction (idempotent canon
+  extraction makes it safe; per-unit score arrays re-aligned after). **#5 escalate:** the controller can
+  deliberately defer to the human (pause). **#6 richer policy:** `train_policy` is context-conditioned
+  (book vs article) on a composite first-pass+insight reward; `research_decision(model, ctx)` consumed by
+  `TracePolicy`. **#7 tools+panels:** `verify_fact` in-generation writer tool + `panels.critique_panel`
+  (diverse-lens majority) wired into the article gate behind `agentic_critique_panel`; `lens` kwarg added
+  to the article critic. **#8 self-monitoring:** budget in the view + `runner._legal_now` drops optional
+  polish actions (`OPTIONAL_RUN_ACTIONS`) under budget pressure so low-budget runs still converge.
+  Caps `_MAX_REOUTLINE=2`/`_MAX_REVISE=3` bound the autonomy; `RunDecision` Literal widened. All new
+  actions are `llm`/`trace`-only → `default` stays the legacy loop → equivalence guarantee intact. +12
+  tests (`test_agentic` 36->44). **432 passed / 2 skipped, ruff clean.** Smoke-ran both pipelines with
+  all flags (inline tools + critique panel + trace policy) to `done`. Docs: plan §21, CHANGELOG. **Only
+  scale remains (not code):** live tool-call validation on a tool-capable provider + a larger trace
+  corpus for the learned policy to bite.
+
+- **New (2026-06-16 - "fill the gaps": in-generation tool use + trained policy - DONE):** closed the two
+  remaining agentic gaps from the review. **Gap 1 (Phase 3, in-generation tool-calling):**
+  `llm.complete_text_with_tools` is a real OpenAI tool-use loop (model emits `tool_calls` → we run
+  `tool_runner(name,args)` → feed results back → repeat until prose; final round drops tools to force the
+  draft). The writer nodes (`write_chapter`/`write_article_section`) gained `tools`/`tool_runner` params
+  and use it when set; the orchestrator builds a runner (`_chapter_tool_runner`/`_section_tool_runner` →
+  `unit_research`/`_read_canon_slice`) behind the new `agentic_inline_tools` setting (agentic only,
+  default off). Robust: fake mode + any provider/tool error fall back to a plain draft, so a draft is
+  always produced; the loop is still ONE episode. `agentic.WRITER_TOOL_SCHEMAS` defines the tool surface.
+  **Gap 2 (Phase 5, trained policy):** new `agentic/learn.py` `train_policy(uid)` distills a value model
+  from the accumulated trace corpus across the user's projects (off-policy estimation: first-pass rate
+  with vs. without gathering; `_MIN_PER_ARM=3` guard → undecided writes nothing), persisted to
+  `user_dir/agent_policy.json`, refreshed at every learn phase (`common._train_agentic_policy`, fires
+  only when a trace exists). Unit outcomes (`first_pass`) are now labelled into the trace at commit
+  (`scope:"unit-outcome"`) so decisions join to results. `TracePolicy`/`TraceRunPolicy` load the model
+  and follow it (a learned verdict overrides the online heuristic; falls back when undecided). Opt-in
+  only (the `trace` policy), never auto-promoted into the default (invariant §21.0 #3). +9 tests
+  (`test_hardening` tool-loop ×3, `test_agentic` ×6). **424 passed / 2 skipped, ruff clean.** Docs: plan
+  §21 (status + §21.9), CHANGELOG. **Only scale remains** (not code): live tool-call validation on a
+  tool-capable provider + a larger trace corpus for the trained policy to bite.
+
 > **PENDING - remaining items (as of 2026-06-16).** The 9-item deferred-review batch plus C-011, C-010,
 > and the A-008 follow-up are all **DONE** (see the top session entries). Suite green (406/2). What's left:
 > - **Two deferred showstoppers (older):** independent blind A/B (third-party judge, n≥5) and a real
 >   10+ chapter book validation. Both need real API spend (and a human/third-model judge for the A/B) -
 >   they cannot be completed in this sandbox. These are the only open review items.
 
+- **New (2026-06-16 - "make it completely agentic": run-level controller + macro agency - DONE):**
+  reviewed the agentic system and found agency was confined to per-unit gathering inside a hardcoded
+  phase machine; built the macro level. New **`agentic/runner.py`** (`run_loop`) drives the WHOLE run via
+  a `RunPolicy`: it chooses the next macro-action (`draft`/`consolidate`/`repair`/`table_read`/`produce`/
+  `learn`/`done`) from `RunOps.legal_actions` instead of the fixed `while phase != "done"` loop. New
+  `RunDecision` schema, `RUN_CONTROLLER_SYS` prompt, `DefaultRunPolicy`/`LlmRunPolicy`/`TraceRunPolicy`,
+  `make_run_policy`, `tools.RunOps`/`RUN_ACTIONS`/`build_run_view`. **Routing (the safety design):**
+  `agentic_policy == "default"` STAYS on the legacy phase loop (so the equivalence guarantee +
+  unit-only trace are byte-identical - both pinned by tests); only `llm`/`trace` engage `run_loop`, with
+  the unit controller (`run_unit`) running inside each `draft`. Mode-specific `_book_run_ops` /
+  `_article_run_ops` built at the orchestrator call sites (closures over store/prefetch/plan/toc),
+  faithfully reproducing escalation/budget/consolidation-cadence; book exposes `consolidate`/`repair`
+  as genuine mid-run choices. Also closed the two narrower review gaps: **read_canon is now
+  query-relevant** (`book._read_canon_slice` -> FTS `search_excerpts`, not the whole canon block), and
+  **`TracePolicy`/`TraceRunPolicy` are activated** as online trace-conditioned policies (research up
+  front after a prior evidence gap; audit early after a past contradiction). +10 tests
+  (`test_agentic.py` 21->31), incl. full macro runs of both pipelines through `run_loop` and the
+  unchanged equivalence/trace guarantees. **416 passed / 2 skipped, ruff clean.** Docs: plan §21
+  (status note + §21.2/§21.9), CHANGELOG. **Honest remaining gap toward "fully autonomous":** true
+  in-generation tool-calling (writer calls tools mid-draft, vs today's reactive `extra_context` pull)
+  and a *trained* policy π (offline ML on accumulated traces) - seams exist for both, but neither is
+  doable in this sandbox (needs a training corpus + a deeper writer-node change).
 - **New (2026-06-16 - C-010 + A-008 follow-up: low-priority items closed - DONE):** **A-008:** the
   anti-slop lexicon is now FULLY single-sourced. The humanizer's tell-detector `_TELL_RE` is generated
   from `slop.tell_pattern()` (new) instead of a parallel hand-maintained regex - the morphology rules

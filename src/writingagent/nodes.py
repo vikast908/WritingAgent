@@ -8,7 +8,7 @@ import re as _re
 from . import prompts as P
 from . import schemas as S
 from .config import ModelConfig
-from .llm import complete_structured, complete_text
+from .llm import complete_structured, complete_text, complete_text_with_tools
 
 # SVG fills paths BLACK by default: a multi-segment connector that doesn't declare
 # fill="none" renders as a solid black polygon over the diagram (the "random black
@@ -91,6 +91,8 @@ def write_chapter(
     requirements: str | None = None,
     voice: str | None = None,
     temperature: float | None = None,
+    tools: list[dict] | None = None,
+    tool_runner=None,
 ) -> str:
     model = cfg.model_for("writer")
     parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
@@ -116,12 +118,14 @@ def write_chapter(
     if length_note:
         parts.append(length_note)
     parts.append(f'Write chapter {blueprint.number}: "{blueprint.title}".')
-    return complete_text(model, P.WRITER_SYS, "\n\n".join(parts),
-                         max_tokens=16000,
-                         temperature=(temperature if temperature is not None
-                                      else cfg.temperature_for("writer")),
-                         frequency_penalty=cfg.frequency_penalty_for("writer"),
-                         presence_penalty=cfg.presence_penalty_for("writer"))
+    temp = temperature if temperature is not None else cfg.temperature_for("writer")
+    fp, pp = cfg.frequency_penalty_for("writer"), cfg.presence_penalty_for("writer")
+    if tools and tool_runner is not None:   # in-generation tool use (plan §21 Phase 3)
+        return complete_text_with_tools(model, P.WRITER_SYS, "\n\n".join(parts),
+                                        tools=tools, tool_runner=tool_runner, max_tokens=16000,
+                                        temperature=temp, frequency_penalty=fp, presence_penalty=pp)
+    return complete_text(model, P.WRITER_SYS, "\n\n".join(parts), max_tokens=16000,
+                         temperature=temp, frequency_penalty=fp, presence_penalty=pp)
 
 
 # ── Critic ────────────────────────────────────────────────────────────────────
@@ -436,6 +440,8 @@ def write_article_section(
     thesis: str | None = None,
     voice: str | None = None,
     temperature: float | None = None,
+    tools: list[dict] | None = None,
+    tool_runner=None,
 ) -> str:
     model = cfg.model_for("writer")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section to write:\n{_ctx(section)}"]
@@ -464,12 +470,15 @@ def write_article_section(
     if length_note:
         parts.append(length_note)
     parts.append(f'Write section {section.number}: "{section.heading}".')
-    return complete_text(model, P.ARTICLE_WRITER_SYS, "\n\n".join(parts),
-                         max_tokens=cfg.max_tokens_for("writer", 8000),
-                         temperature=(temperature if temperature is not None
-                                      else cfg.temperature_for("writer")),
-                         frequency_penalty=cfg.frequency_penalty_for("writer"),
-                         presence_penalty=cfg.presence_penalty_for("writer"))
+    mt = cfg.max_tokens_for("writer", 8000)
+    temp = temperature if temperature is not None else cfg.temperature_for("writer")
+    fp, pp = cfg.frequency_penalty_for("writer"), cfg.presence_penalty_for("writer")
+    if tools and tool_runner is not None:   # in-generation tool use (plan §21 Phase 3)
+        return complete_text_with_tools(model, P.ARTICLE_WRITER_SYS, "\n\n".join(parts),
+                                        tools=tools, tool_runner=tool_runner, max_tokens=mt,
+                                        temperature=temp, frequency_penalty=fp, presence_penalty=pp)
+    return complete_text(model, P.ARTICLE_WRITER_SYS, "\n\n".join(parts), max_tokens=mt,
+                         temperature=temp, frequency_penalty=fp, presence_penalty=pp)
 
 
 def critique_article_section(
@@ -485,9 +494,12 @@ def critique_article_section(
     thesis: str | None = None,
     research_on: bool = True,
     watch_blocking: bool = True,
+    lens: str | None = None,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section blueprint:\n{_ctx(section)}"]
+    if lens:   # diverse-perspective panel (plan §21.10): review through one specific lens
+        parts.append(f"ADOPT THIS REVIEWER LENS for your critique: {lens}")
     if requirements:
         parts.append("AUTHOR REQUIREMENTS (gathered upfront; treat a clear violation - wrong "
                      f"audience, length, tone, or a missing must-include - as BLOCKING):\n{requirements}")

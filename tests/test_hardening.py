@@ -176,6 +176,84 @@ def _install(monkeypatch, script):
     return client
 
 
+# ── In-generation tool use (plan §21 Phase 3): a tool_call turn then prose ───────
+import types as _types  # noqa: E402
+
+
+class _ToolCall:
+    def __init__(self, cid, name, args):
+        self.id, self.type = cid, "function"
+        self.function = _types.SimpleNamespace(name=name, arguments=args)
+
+
+class _ToolMsg:
+    def __init__(self, content=None, tool_calls=None):
+        self.content, self.tool_calls = content, tool_calls
+
+
+class _ToolResp:
+    def __init__(self, msg):
+        self.choices = [_types.SimpleNamespace(message=msg, finish_reason="stop")]
+        self.usage = _Usage(5, 5)
+
+
+class _ToolCompletions:
+    def __init__(self, script):
+        self._script = list(script)
+        self.calls = 0
+        self.seen_tools = []
+
+    def create(self, **kw):
+        self.seen_tools.append("tools" in kw)
+        msg = self._script[self.calls]
+        self.calls += 1
+        return _ToolResp(msg)
+
+
+class _ToolClient:
+    def __init__(self, script):
+        self.completions = _ToolCompletions(script)
+        self.chat = self
+
+
+def test_tool_loop_executes_tool_then_returns_prose(no_sleep, monkeypatch):
+    ran = []
+
+    def runner(name, args):
+        ran.append((name, args.get("query")))
+        return "TOOL RESULT"
+    client = _ToolClient([
+        _ToolMsg(content=None, tool_calls=[_ToolCall("c1", "research", '{"query":"q"}')]),
+        _ToolMsg(content="FINAL DRAFT", tool_calls=None),
+    ])
+    monkeypatch.setattr(llm, "_get_client", lambda: client)
+    out = llm.complete_text_with_tools(
+        "m", "sys", "user",
+        tools=[{"type": "function", "function": {"name": "research", "parameters": {}}}],
+        tool_runner=runner, max_tool_rounds=3)
+    assert out == "FINAL DRAFT"
+    assert ran == [("research", "q")]        # the tool actually ran mid-generation
+    assert client.completions.calls == 2     # tool-call turn + prose turn
+
+
+def test_tool_loop_fake_mode_skips_tools(monkeypatch):
+    monkeypatch.setattr(llm, "_fake_mode", lambda: True)
+
+    def boom(*_a, **_k):
+        raise AssertionError("tool_runner must not run in fake mode")
+    out = llm.complete_text_with_tools("m", "sys", "u", tools=[{"x": 1}], tool_runner=boom)
+    assert out == llm._FAKE_TEXT
+
+
+def test_tool_loop_falls_back_to_plain_draft_on_error(no_sleep, monkeypatch):
+    # A provider that rejects `tools` (or any transport error) must still yield a draft.
+    client = _FakeClient([ValueError("tools unsupported"), "PLAIN DRAFT"])
+    monkeypatch.setattr(llm, "_get_client", lambda: client)
+    out = llm.complete_text_with_tools("m", "sys", "u", tools=[{"x": 1}],
+                                       tool_runner=lambda *_a: "", max_tool_rounds=2)
+    assert out == "PLAIN DRAFT"              # fell back to complete_text
+
+
 def test_complete_text_retries_then_succeeds(no_sleep, monkeypatch):
     from openai import APITimeoutError
     client = _install(monkeypatch, [APITimeoutError.__new__(APITimeoutError), "the prose"])

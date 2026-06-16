@@ -10,35 +10,67 @@ lazy import) only when ``state["controller"] == "agentic"``.
 """
 from __future__ import annotations
 
-from . import panels, trace
-from ._schema import ControllerDecision
+from . import learn, panels, trace
+from ._schema import ControllerDecision, RunDecision
 from .controller import build_state_view, run_unit
-from .policy import DefaultPolicy, LlmPolicy, TracePolicy, make_policy
+from .learn import load_policy, train_policy
+from .policy import (
+    DefaultPolicy,
+    DefaultRunPolicy,
+    LlmPolicy,
+    LlmRunPolicy,
+    TracePolicy,
+    TraceRunPolicy,
+    make_policy,
+    make_run_policy,
+)
+from .runner import run_loop
 from .tools import (
     CATALOG,
+    OPTIONAL_RUN_ACTIONS,
+    RUN_ACTIONS,
     UNIT_ACTIONS,
+    WRITER_TOOL_SCHEMAS,
+    RunOps,
     UnitOps,
+    build_run_view,
     catalog_summary,
     unit_research,
     unit_research_article,
+    weakest_committed_unit,
 )
 
 __all__ = [
     "ControllerDecision",
+    "RunDecision",
     "DefaultPolicy",
     "LlmPolicy",
     "TracePolicy",
+    "DefaultRunPolicy",
+    "LlmRunPolicy",
+    "TraceRunPolicy",
     "make_policy",
+    "make_run_policy",
     "build_state_view",
+    "build_run_view",
     "run_unit",
+    "run_loop",
     "UnitOps",
+    "RunOps",
     "CATALOG",
+    "RUN_ACTIONS",
+    "OPTIONAL_RUN_ACTIONS",
     "UNIT_ACTIONS",
+    "WRITER_TOOL_SCHEMAS",
+    "weakest_committed_unit",
     "catalog_summary",
     "unit_research",
     "unit_research_article",
     "panels",
     "trace",
+    "learn",
+    "load_policy",
+    "train_policy",
     "enabled",
 ]
 

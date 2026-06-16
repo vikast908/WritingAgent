@@ -116,6 +116,14 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log, ask=No
     prefetch: dict[int, object] = {}
     pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="unit-prefetch")
     try:
+        # Macro-agentic path (plan §21.3): a RunPolicy chooses the next macro-action over the
+        # whole article. The DEFAULT policy stays on the legacy loop below, so the equivalence
+        # guarantee + the unit-only trace are untouched; only llm/trace policies drive run_loop.
+        if state.get("controller") == "agentic" and state.get("agentic_policy") in ("llm", "trace"):
+            from .. import agentic
+            agentic.run_loop(cfg, state, log=log, run_ops=_article_run_ops(
+                cfg, paths, outline, prefetch, pool, log, ask, control))
+            return _finish_article(paths, state, log)
         while state["phase"] != "done":
             if _apply_run_control(control, state, paths, log):
                 return state
@@ -177,8 +185,177 @@ def _run_article(cfg, paths: ArticlePaths, state, outline, *, force, log, ask=No
         return state
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
-    _log_run_complete("Article", paths.article_id, paths.manuscript, log)
+    return _finish_article(paths, state, log)
+
+
+def _finish_article(paths, state, log) -> dict:
+    """Completion footer - only when the run actually reached `done` (not a pause)."""
+    if state.get("phase") == "done":
+        _log_run_complete("Article", paths.article_id, paths.manuscript, log)
     return state
+
+
+# Caps on the agent's optional structural moves (bounded autonomy; token budget is the backstop).
+_MAX_REOUTLINE = 2
+_MAX_REVISE = 3
+
+
+def _section_tool_runner(cfg, outline, section, paths, n, state, log):
+    """(tools, runner) for the writer's in-generation tool use on a section (plan §21 Phase 3).
+    The writer may call `research` (a web brief) or `read_canon` (prior-section context) WHILE
+    drafting; the runner dispatches to the same implementations the unit controller uses."""
+    from .. import agentic
+    research_on = bool(state.get("use_researcher"))
+
+    def runner(name, args):
+        a = args or {}
+        if name == "research" and research_on:
+            return agentic.unit_research_article(cfg, outline, section, a.get("query", ""), log)
+        if name == "verify_fact" and research_on:
+            return agentic.unit_research_article(cfg, outline, section, f"verify: {a.get('claim', '')}", log)
+        if name == "read_canon":
+            return _assemble_article_context(paths, n)
+        return ""
+    return agentic.WRITER_TOOL_SCHEMAS, runner
+
+
+def _article_run_ops(cfg, paths: ArticlePaths, outline, prefetch, pool, log, ask, control):
+    """Build the RunOps the macro-controller drives for an article (plan §21.3).
+
+    Article structure is linear (draft each section -> produce -> learn -> done), so the
+    legal set is one action per step and the LLM/trace policy follows it; the real
+    self-direction is at the unit level (research/read_canon before each section, via the
+    unit controller invoked inside the `draft` action)."""
+    from .. import agentic
+
+    def _draft(state, log):
+        n = state["current_section"]
+        for k in (n, n + 1):
+            if (k <= state["num_sections"] and k not in prefetch
+                    and brain.read_text(paths.section(k)) is None):
+                prefetch[k] = pool.submit(_section_fetch, cfg, paths, outline, state, k, log)
+        pf = prefetch.pop(n, None)
+        section = outline.sections[n - 1]
+        ops = agentic.UnitOps(
+            paths=paths, unit_label=f"sec{n:02d}",
+            research_on=bool(state.get("use_researcher")), has_canon=(n > 1),
+            draft=lambda extra, _pf=pf, _n=n: _process_article_section(
+                cfg, paths, outline, state, _n, log, prefetched=_pf, ask=ask, extra_context=extra),
+            research=lambda q, _sec=section: agentic.unit_research_article(cfg, outline, _sec, q, log),
+            read_canon=lambda q, _n=n: _assemble_article_context(paths, _n),
+        )
+        outcome = agentic.run_unit(cfg, state, ops=ops, log=log)
+        if outcome == "escalate":
+            _mark_escalated(state, paths, "section",
+                            f"[!] Section {n} escalated. Resolve with `review` then `run`.", log)
+            return "pause"
+        state["committed"] += 1
+        state["current_section"] = n + 1
+        if state["current_section"] > state["num_sections"]:
+            state["phase"] = "produce"
+        brain.write_json(paths.run_state, state)
+        return "continue"
+
+    def _reoutline(state, log):
+        """Regenerate the not-yet-written sections' plan (committed sections + total count
+        preserved), so the agent can fix a plan that's going wrong (§21 #2/#4)."""
+        from .. import schemas as S
+        n = state["current_section"]
+        angle = S.ArticleAngle(title=getattr(outline, "title", "") or "",
+                               angle=getattr(outline, "angle", "") or "",
+                               audience=getattr(outline, "audience", "") or "", hook="")
+        fresh = nodes.build_article_outline(cfg, state.get("abstract", ""), angle,
+                                            state["num_sections"])
+        for i in range(n - 1, min(len(outline.sections), len(fresh.sections))):
+            sec = fresh.sections[i]
+            sec.number = i + 1
+            outline.sections[i] = sec
+        brain.write_json(paths.outline_json, outline.model_dump())
+        state["reoutlines"] = state.get("reoutlines", 0) + 1
+        brain.write_json(paths.run_state, state)
+        agentic.trace.append(paths, {"scope": "run-result", "action": "reoutline", "from_unit": n})
+        log(f"   [agentic] reoutlined sections {n}..{state['num_sections']}")
+        return "continue"
+
+    def _revise(state, log):
+        """Rewrite the weakest committed section to lift its score (§21 #3)."""
+        n = agentic.weakest_committed_unit(state)
+        if not n or n > state.get("committed", 0):
+            return "continue"
+        sc = (state.get("scores") or [{}])[n - 1]
+        dim = min(("insight", "clarity", "structure", "evidence"), key=lambda k: sc.get(k, 5))
+        brain.write_text(paths.instruction_of(n),
+                         f"Strengthen the {dim} of this section - it scored lowest there. "
+                         "Keep everything that already works; change only what lifts it.")
+        brain.write_text(paths.section_draft(n), brain.read_text(paths.section(n)) or "")
+        paths.section(n).unlink(missing_ok=True)              # clear the resume guard -> re-draft
+        _process_article_section(cfg, paths, outline, state, n, log, ask=ask)
+        paths.section_draft(n).unlink(missing_ok=True)
+        paths.instruction_of(n).unlink(missing_ok=True)
+        for key in ("scores", "insights"):                    # keep per-unit arrays aligned
+            arr = state.get(key) or []
+            if len(arr) > state.get("committed", 0):
+                arr[n - 1] = arr.pop()
+        state["revisions_done"] = state.get("revisions_done", 0) + 1
+        brain.write_json(paths.run_state, state)
+        agentic.trace.append(paths, {"scope": "run-result", "action": "revise",
+                                     "unit": f"sec{n:02d}", "dim": dim})
+        log(f"   [agentic] revised section {n} (weakest: {dim})")
+        return "continue"
+
+    def dispatch(action, state, log):
+        llm.set_unit(state.get("phase"))
+        if action == "draft":
+            return _draft(state, log)
+        if action == "reoutline":
+            return _reoutline(state, log)
+        if action == "revise":
+            return _revise(state, log)
+        if action == "escalate":
+            _mark_escalated(state, paths, "section",
+                            "[!] Controller escalated. Resolve with `review` then `run`.", log)
+            return "pause"
+        if action == "produce":
+            _produce_article(cfg, paths, outline, state, log=log)
+            state["phase"] = "learn"
+            brain.write_json(paths.run_state, state)
+            return "continue"
+        if action == "learn":
+            _learn_article(cfg, paths, outline, log=log)
+            paths.cleanup_sections()
+            state["phase"] = "done"
+            brain.write_json(paths.run_state, state)
+            return "continue"
+        return "continue"
+
+    def legal_actions(state):
+        phase = state.get("phase")
+        if phase == "done":
+            return []
+        acts: list[str] = []
+        if phase == "sections":
+            acts.append("draft")
+            if state.get("reoutlines", 0) < _MAX_REOUTLINE:
+                acts.append("reoutline")
+        elif phase == "produce":
+            acts.append("produce")
+        elif phase == "learn":
+            acts.append("learn")
+        # revise a weak committed unit any time before assembly (drafting or about to produce).
+        if (phase in ("sections", "produce") and state.get("committed", 0) >= 1
+                and state.get("revisions_done", 0) < _MAX_REVISE):
+            acts.append("revise")
+        acts.append("escalate")                               # the agent may always defer
+        return acts
+
+    def default_next(state):
+        phase = state.get("phase")
+        return {"sections": "draft", "produce": "produce", "learn": "learn"}.get(phase, "done")
+
+    return agentic.RunOps(
+        paths=paths, legal_actions=legal_actions, default_next=default_next, dispatch=dispatch,
+        step_budget=lambda st: st.get("num_sections", 6) + _MAX_REOUTLINE + _MAX_REVISE + 4,
+        control_check=lambda st: _apply_run_control(control, st, paths, log))
 
 
 def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
@@ -317,6 +494,11 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     panel_on = (agentic_on and bool(state.get("agentic_factcheck_panel"))
                 and bool(source_text) and bool(state.get("deep_research")))
     did_research = False
+    # In-generation tool use (plan §21 Phase 3): when enabled, the writer may call research /
+    # read_canon WHILE drafting. Built once per section; None => the plain writer.
+    _tools, _tool_runner = _section_tool_runner(
+        cfg, outline, section, paths, n, state, log) if (agentic_on and state.get("agentic_inline_tools")) \
+        else (None, None)
 
     def _write(notes, base, temperature=None, skeleton=False, skills=None):
         # Skeleton mode (divergent_skeletons, opt-in): divergent variants are drafted short
@@ -335,7 +517,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             cfg, outline, section, fix_notes=notes, context=full_context,
             skills=skill_bodies if skills is None else skills, images=images, base_draft=base,
             requirements=requirements, thesis=thesis_md, voice=voice,
-            length_note=ln, temperature=temperature)
+            length_note=ln, temperature=temperature, tools=_tools, tool_runner=_tool_runner)
 
     def _critique(d):
         return nodes.critique_article_section(
@@ -392,6 +574,27 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
                     fix="Recheck each cited claim against its source; cite what the source "
                         "actually says, soften the claim, or cut it."))
                 crit.verdict = "revise"
+        # Agentic critique panel (plan §21.10): a diverse-lens majority review before approving.
+        if (agentic_on and bool(state.get("agentic_critique_panel"))
+                and crit.verdict == "approve"):
+            from .. import agentic
+
+            def _critique_lens(lens, _d=draft, _ctx=full_context, _wl=watch,
+                               _tgt=target, _req=requirements, _th=thesis_brief_md, _ro=research_on):
+                return nodes.critique_article_section(
+                    cfg, outline, section, _d, context=_ctx, watch_list=_wl,
+                    length_note=_length_note(len(_d.split()), _tgt), requirements=_req,
+                    thesis=_th, research_on=_ro,
+                    watch_blocking=bool(state.get("watch_blocking", True)), lens=lens)
+            passed, _blocks = agentic.panels.critique_panel(_critique_lens, log=log)
+            if not passed:
+                crit.blocking.append(S.BlockingIssue(
+                    type="quality", where="(critique panel)",
+                    detail="A majority of independent reviewers (distinct lenses) raised a "
+                           "blocking concern with this section.",
+                    fix="Address the strongest shared concern: tighten vague claims, ground "
+                        "them concretely, and cut filler."))
+                crit.verdict = "revise"
         brain.write_json(paths.section_eval(n),
                          {"section": n, "attempt": attempt, **crit.model_dump()})
         log(f"   verdict={crit.verdict} confidence={crit.confidence:.2f} "
@@ -447,6 +650,10 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
         _commit_section(cfg, paths, section, n, draft, skill_names, sources, first_pass,
                         log, humanize=bool(state.get("humanize")))
         paths.section_draft(n).unlink(missing_ok=True)
+        if agentic_on:   # label the controller's gather decisions with this unit's outcome (§21.11)
+            from .. import agentic
+            agentic.trace.append(paths, {"scope": "unit-outcome", "unit": f"sec{n:02d}",
+                                         "first_pass": bool(first_pass), "insight": crit.insight})
         return "commit"
     _escalate(paths, n, crit, draft)
     return "escalate"

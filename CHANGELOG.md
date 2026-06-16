@@ -6,6 +6,45 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Agentic controller — the "fully agentic" batch (8 gaps, plan §21).** (1) **Rich perception:** the
+  run/unit views now carry per-unit quality + the weakest committed unit, open contradictions, and the
+  token budget. (2) **`reoutline`** — the controller can regenerate the not-yet-written units' plan when
+  the structure is wrong (also available before drafting = agentic start-of-run structural agency, #4).
+  (3) **`revise`** — it can rewrite the weakest committed unit (re-processes it; canon extraction is
+  idempotent so it's safe), capped. (5) **`escalate`** — it can choose to defer to the human. (6)
+  **Richer learned policy:** `train_policy` is context-conditioned (book vs. article) on a composite
+  first-pass+insight reward. (7) **Broader tools + multi-agent:** a `verify_fact` in-generation writer
+  tool and a diverse-lens `critique_panel` (behind `agentic_critique_panel`, articles). (8)
+  **Self-monitoring:** budget is in the view and a guard drops optional polish actions
+  (reoutline/revise/table_read) under budget pressure so a low-budget run still converges. All new
+  macro-actions are chosen only by `llm`/`trace` policies; the `default` policy stays the legacy loop,
+  so the equivalence guarantee holds. New caps (`_MAX_REOUTLINE`/`_MAX_REVISE`) bound the autonomy.
+  +12 tests.
+- **In-generation tool use + a trained controller policy (plan §21 Phases 3 & 5).** The writer can now
+  call tools **mid-draft**: `llm.complete_text_with_tools` runs a real OpenAI tool-use loop, and the
+  writer nodes invoke `research`/`read_canon` while drafting (behind `agentic_inline_tools`, agentic runs
+  only; falls back to a plain draft on any provider/tool error, so it's always safe). The whole loop is
+  still one episode. And the controller policy is now **learned, not just heuristic**: `agentic/learn.py`
+  `train_policy` distills a value model from the accumulated action-trace corpus (does gathering context
+  before a draft lift the first-pass rate?), persisted per user and refreshed at every learn phase;
+  `TracePolicy`/`TraceRunPolicy` consult it (a learned verdict overrides the online heuristic). Unit
+  outcomes (`first_pass`) are now labelled into the trace at commit so decisions join to results. The
+  model is opt-in (used only by the `trace` policy) and never auto-promoted into the default. +9 tests.
+- **Run-level agentic controller — the phase machine is now self-directing (plan §21).** Beyond the
+  existing per-unit controller, a new `agentic/runner.py` (`run_loop`) lets a policy choose the next
+  MACRO-action over the whole piece — `draft` the next unit, `consolidate` (audit continuity), `repair`
+  contradictions, `produce`, `learn`, `done` — instead of the hardcoded `while phase != "done"` loop.
+  Engaged for `agentic_policy` `llm`/`trace`; the `default` policy stays on the legacy loop, so the
+  equivalence guarantee (agentic+default == fixed pipeline, byte-identical) and the unit-only trace are
+  preserved. `read_canon` is now **query-relevant** (an FTS slice via `store.search_excerpts`, not the
+  whole canon block). `TracePolicy`/`TraceRunPolicy` are **activated** as online trace-conditioned
+  policies (gather research up front once the trace shows a prior evidence gap; audit continuity early
+  once it shows a past contradiction) — the swap point for a fully-trained policy remains. New
+  `RUN_CONTROLLER_SYS` prompt, `RunDecision`/`RunOps` schema, `make_run_policy`. +10 tests. Both
+  pipelines validated end-to-end through the macro controller (offline). Remaining toward full autonomy:
+  true in-generation tool-calling and a trained policy π (seams in place for both).
+
 ### Removed
 - **The checked-in `requirements.lock.txt` (C-010).** It pinned unresolvable versions and a stale
   editable git self-reference, and nothing consumed it (CI installs via `pyproject.toml` extras, which

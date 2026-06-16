@@ -624,6 +624,88 @@ def complete_text(
     raise RuntimeError(f"Text completion failed for {model}: {last_err}")
 
 
+def complete_text_with_tools(
+    model: str,
+    system: str,
+    user: str,
+    *,
+    tools: list[dict],
+    tool_runner,
+    max_tool_rounds: int = 3,
+    max_tokens: int = 16000,
+    temperature: float | None = None,
+    frequency_penalty: float | None = None,
+    presence_penalty: float | None = None,
+) -> str:
+    """A chat-completions TOOL-USE loop: the model may call tools mid-generation; each call
+    is executed via ``tool_runner(name, args_dict) -> str`` and the result fed back, until the
+    model returns prose (or the round budget is spent, after which a final no-tools turn forces
+    the draft). This is true in-generation tool use - the writer gathers WHILE drafting, not via
+    a fixed pre/post step. The whole loop is still ONE episode (invariant §21.0): the returned
+    text flows through the unchanged critic/commit path.
+
+    Robust by construction: fake mode returns the placeholder (no tool calls); any transport
+    error or a provider that rejects ``tools`` falls back to plain ``complete_text`` so a draft
+    is always produced. ``tools`` are OpenAI tool schemas."""
+    import json
+    _check_budget()
+    if _fake_mode():
+        return _FAKE_TEXT
+    messages: list[dict] = [{"role": "system", "content": system},
+                            {"role": "user", "content": user}]
+    t0 = time.time()
+    extra: dict = {}
+    if temperature is not None:
+        extra["temperature"] = temperature
+    if frequency_penalty is not None:
+        extra["frequency_penalty"] = frequency_penalty
+    if presence_penalty is not None:
+        extra["presence_penalty"] = presence_penalty
+    try:
+        for round_i in range(max_tool_rounds + 1):
+            # On the final round, drop the tools so the model must return prose.
+            offer_tools = round_i < max_tool_rounds
+            kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages,
+                            **extra, **_cost_kwargs()}
+            if offer_tools:
+                kwargs["tools"] = tools
+                kwargs["tool_choice"] = "auto"
+            resp = _get_client().chat.completions.create(**kwargs)
+            _record_usage(resp)
+            msg = resp.choices[0].message
+            calls = list(getattr(msg, "tool_calls", None) or [])
+            if not calls:
+                content = (getattr(msg, "content", None) or "").strip()
+                if content:
+                    _log_call("text+tools", model, t0, round_i + 1, resp)
+                    _debug_dump("text+tools", model, messages, content)
+                    return content
+                break   # no content and no calls -> give up the loop, fall back below
+            # Echo the assistant's tool-call turn, then run each tool and feed results back.
+            messages.append({
+                "role": "assistant", "content": msg.content or "",
+                "tool_calls": [{"id": tc.id, "type": "function",
+                                "function": {"name": tc.function.name,
+                                             "arguments": tc.function.arguments or "{}"}}
+                               for tc in calls]})
+            for tc in calls:
+                try:
+                    args = json.loads(tc.function.arguments or "{}")
+                except (ValueError, TypeError):
+                    args = {}
+                try:
+                    result = tool_runner(tc.function.name, args) or ""
+                except Exception:  # noqa: BLE001 - a tool that errors must not kill the draft
+                    result = ""
+                messages.append({"role": "tool", "tool_call_id": tc.id,
+                                 "content": str(result)[:8000] or "(no result)"})
+    except Exception as e:  # noqa: BLE001 - tool use is best-effort; never fail the draft
+        _log.warning("tool-use loop failed (%s); falling back to a plain draft", type(e).__name__)
+    # Fallback: a plain completion (no tools) always yields a draft.
+    return complete_text(model, system, user, max_tokens=max_tokens, temperature=temperature,
+                         frequency_penalty=frequency_penalty, presence_penalty=presence_penalty)
+
+
 def stream_text(
     model: str,
     system: str,

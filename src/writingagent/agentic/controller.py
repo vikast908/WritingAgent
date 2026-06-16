@@ -20,7 +20,9 @@ from .tools import UnitOps
 
 
 def build_state_view(state, ops: UnitOps, gathered: int, step: int) -> str:
-    """The compact perception the policy reasons over (kept small; cache-friendly)."""
+    """The compact perception the policy reasons over (kept small; cache-friendly). Carries
+    the budget line so the policy can stop gathering when tokens run low (plan §21.6)."""
+    from .tools import _budget_line
     max_steps = state.get("agentic_max_unit_steps", 3)
     have = "nothing yet" if not gathered else f"{gathered} context brief(s) already gathered"
     return (
@@ -28,7 +30,8 @@ def build_state_view(state, ops: UnitOps, gathered: int, step: int) -> str:
         f"Run mode: {'autonomous' if state.get('autonomous') else 'manual'}.\n"
         f"Researcher enabled: {ops.research_on}. Canon/prior-context available: {ops.has_canon}.\n"
         f"Context gathered for this unit so far: {have}.\n"
-        f"This is step {step} of at most {max_steps} gathering steps before drafting.\n"
+        f"This is step {step} of at most {max_steps} gathering steps before drafting."
+        + _budget_line() + "\n"
         f"Available actions: {', '.join(ops.available())}.\n"
         "Pick 'research' or 'read_canon' ONLY if it will clearly improve THIS unit and you "
         "have not already gathered enough; otherwise pick 'draft' to write it now."

@@ -1210,24 +1210,46 @@ names tests reach for). Pure code movement, suite-gated per step.
 > self-improving loop: it ships behind a default-**off** toggle and the fixed pipeline remains the
 > agent's fallback policy.
 
-> **Implementation status (2026-06-15 - BUILT, opt-in).** Shipped as the `agentic/` package
-> (`tools` · `controller` · `policy` · `panels` · `trace` · `_schema`) + `CONTROLLER_SYS` in
-> `prompts.py`. `Settings.agentic` (default **False**) bakes `controller` into run-state via
-> `_base_run_state`; `book.run()` / `_run_article` dispatch each unit through `agentic.run_unit`
-> (lazy import) only when agentic. Phases 0-2 are production-complete (tool registry, controller
-> seam + default/LLM policy, action trace, the `extra_context` seam for mid-draft tool use). Phase 3
-> mid-unit research is wired (a BLOCKING evidence gap under the agentic controller pulls one research
-> brief into the next revision). Phase 4 is `panels.fact_check_panel`, wired into the article approval
-> gate behind `agentic_factcheck_panel` (article + `deep_research` only - it inherits the verify-gate's
-> snippet policy so it can't false-refute on thin evidence). Phase 5 is the `TracePolicy` swap seam.
-> **TUI surface:** `/agentic on|off|llm|default` (toggles the setting *and* flips the live project via
-> `orchestrator.apply_controller`), `/trace` (prints `agent_trace.jsonl`), and a controller-decision
-> line in the run dashboard. Opt-in is free across surfaces: `Agent(agentic=True, agentic_policy="llm")`
-> and `/set agentic true` route through `Settings`. **28 offline tests** (`tests/test_agentic.py` 19 +
-> `tests/test_agentic_tui.py` 9), including the **equivalence guarantee** (agentic+DefaultPolicy ==
-> fixed pipeline: byte-identical manuscript + identical episode count) and a live OpenRouter validation
-> run ($0.10, the LLM controller chose research→research→draft). Live-validated on `deepseek/deepseek-v4-pro`.
-> Full suite green (381 passed / 1 skipped), agentic code ruff-clean.
+> **Implementation status (2026-06-16 - BUILT, two-tier controller, opt-in).** Shipped as the
+> `agentic/` package (`tools` · `controller` (unit) · `runner` (run) · `policy` · `panels` · `trace` ·
+> `_schema`) + `CONTROLLER_SYS`/`RUN_CONTROLLER_SYS` in `prompts.py`. `Settings.agentic` (default
+> **False**) bakes `controller` into run-state via `_base_run_state`. **Two decision scopes now exist:**
+> a **unit controller** (`run_unit`: gather research/`read_canon` then draft one unit) and a **run
+> controller** (`run_loop`: choose the next MACRO-action over the whole piece - draft / consolidate /
+> repair / produce / learn / done - instead of the hardcoded `while phase != done`). Both share the
+> default/llm/trace policy design. **Routing:** `agentic_policy == "default"` stays on the legacy phase
+> loop (so the equivalence guarantee + the unit-only trace are byte-identical); `llm`/`trace` policies
+> drive `run_loop` (macro agency) with the unit controller inside each `draft`. The fixed pipeline is
+> always the floor (`DefaultPolicy`/`DefaultRunPolicy` == the legacy order; the guard maps any illegal
+> pick to it). **`read_canon` is now query-relevant** (FTS slice via `store.search_excerpts`, not the
+> whole canon block). **`TracePolicy`/`TraceRunPolicy` are activated** as online trace-conditioned
+> policies (the unit policy gathers research up front once the trace shows a prior evidence gap; the run
+> policy audits continuity early once the trace shows a past contradiction) - the swap point for a
+> fully-trained π remains. Phase 4 is `panels.fact_check_panel` (article + `deep_research`, behind
+> `agentic_factcheck_panel`). **TUI surface:** `/agentic on|off|llm|default`, `/trace`, a controller line
+> in the dashboard. Opt-in is free: `Agent(agentic=True, agentic_policy="llm")` and `/set agentic true`.
+> **41 offline tests** (`tests/test_agentic.py` 31 + `tests/test_agentic_tui.py` 9 + `test_agentic_tui`),
+> including the equivalence guarantee and full macro runs of both pipelines through `run_loop`. Full
+> suite green (424 passed / 2 skipped), agentic code ruff-clean. **In-generation tool use is now built**
+> (`llm.complete_text_with_tools` - a real OpenAI tool-use loop; the writer may call `research`/
+> `read_canon` WHILE drafting, behind `agentic_inline_tools`, falling back to a plain draft on any
+> provider/tool error). **The learned policy is now built** (`agentic/learn.py`): `train_policy` distills
+> a model from the accumulated trace corpus (off-policy value estimation - does gathering lift the
+> first-pass rate?), persisted per user and refreshed at every learn phase; `TracePolicy`/`TraceRunPolicy`
+> consult it (a learned model overrides the online heuristic).
+>
+> **"Fully agentic" batch (2026-06-16).** Eight gaps from the self-review closed: (1) **rich perception**
+> (per-unit quality + weakest unit, open contradictions, token budget in the run/unit views); (2)
+> **`reoutline`** (regenerate the un-written units' plan) and (4) the same available *before* drafting =
+> agentic start-of-run structural agency; (3) **`revise`** the weakest committed unit (re-processes it,
+> idempotent, capped); (5) **`escalate`** as a deliberate defer-to-human choice; (6) **context-conditioned
+> learned policy** (book vs. article, composite first-pass+insight reward); (7) a **`verify_fact`**
+> in-generation tool + a diverse-lens **`critique_panel`** (`agentic_critique_panel`); (8) **self-monitoring**
+> (budget in the view + a guard dropping optional polish actions under budget pressure). All new macro
+> actions are `llm`/`trace`-only (default == legacy → equivalence holds), bounded by `_MAX_REOUTLINE`/
+> `_MAX_REVISE` + the token budget. The only things left are *scale*, not code: live tool-call validation
+> on a tool-capable provider, and a trace corpus large enough for the learned policy to bite (it correctly
+> stays undecided on thin data). Suite 432 passed / 2 skipped, ruff clean.
 
 ### 21.0 The three invariants (what must never break)
 
@@ -1284,11 +1306,14 @@ Tools that mutate canon (`draft_unit`, `commit`-side-effects, `repair_contradict
 `mutates: true` and run through the guard (§21.4). The registry is the only thing the controller can
 call - capability is bounded by what's in the table.
 
-> **Shipped scope (2026-06-15).** The table above is the full *design target*. The shipped `CATALOG`
-> exposes only the three **policy-selectable** unit tools (`draft`, `research`, `read_canon`); the
-> tail tools (`consolidate`/`produce`/`learn`/`done`) are catalogued for inspection but driven by the
-> orchestrator, not chosen by a policy. `outline`/`revise_unit`/`verify_claims`/`repair`/`evaluate`/
-> `escalate` as *controller-selectable* tools remain future work.
+> **Shipped scope (2026-06-16).** Two registries are now policy-selectable. The **unit** tools
+> (`UNIT_ACTIONS`: `draft`, `research`, `read_canon`) are chosen by the unit controller before each
+> draft. The **run/macro** tools (`RUN_ACTIONS`: `draft`, `consolidate`, `repair`, `table_read`,
+> `produce`, `learn`, `done`) are chosen by the run controller (`runner.run_loop`) - so the phase
+> machine is no longer hardcoded for `llm`/`trace` policies; the policy decides when to draft, audit
+> continuity, repair, produce, and finish (the legal subset per step comes from `RunOps.legal_actions`).
+> Still future work as *controller-selectable*: `outline`/`reoutline`, `revise_unit`, and a standalone
+> `verify_claims`/`evaluate` action (the verify gate + fact-check panel already run inside `draft`).
 
 ### 21.3 The controller seam (Phase 1)
 
@@ -1431,10 +1456,16 @@ Phases 0–2 deliver the "self-directing loop + real tool use + end-to-end auton
 for. 3 deepens tool use, 4 is multi-agent, 5 is the endgame. Each is independently shippable behind
 the toggle.
 
-**Status:** 0-2 ✅ built · 3 ✅ seam built (`extra_context` threading + on-demand `research`/
-`read_canon`; full in-generation tool-calling is the next increment) · 4 ✅ `panels.fact_check_panel`
-(wire into the section commit when desired) · 5 ✅ `TracePolicy` swap seam (awaits trace volume + a
-trainer). See the implementation-status note at the top of §21.
+**Status:** 0-2 ✅ built · **the run-level controller (`runner.run_loop`) now lifts the whole phase
+machine into a policy** for `llm`/`trace` runs (macro actions draft/consolidate/repair/produce/learn/
+done), so agency is no longer confined to per-unit gathering; `default` stays on the legacy loop for
+the equivalence floor · 3 ✅ **true in-generation tool use built** (`llm.complete_text_with_tools`: the
+writer calls `research`/relevance-sliced `read_canon` mid-draft, behind `agentic_inline_tools`), with the
+reactive `extra_context` pull retained as a complement · 4 ✅ `panels.fact_check_panel` (wired into the
+article gate behind `agentic_factcheck_panel`) · 5 ✅ **trained policy built** (`agentic/learn.py`
+`train_policy` distills a value model from the trace corpus, persisted per user + refreshed each learn
+phase; `Trace*Policy` consult it). Remaining is *scale*, not code: live tool-call validation + a larger
+trace corpus. See the implementation-status note at the top of §21.
 
 ### 21.10 Multi-agent - honest scope (Phase 4)
 

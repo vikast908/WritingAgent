@@ -53,6 +53,37 @@ CATALOG: tuple[Tool, ...] = (
 #: The actions the unit-phase policy may choose among.
 UNIT_ACTIONS: tuple[str, ...] = tuple(t.name for t in CATALOG if t.phase == "unit")
 
+#: OpenAI tool schemas the WRITER may call mid-draft (in-generation tool use, plan §21 Phase 3).
+#: Same capabilities as the unit gathering tools, but invoked by the model *while writing* via
+#: llm.complete_text_with_tools, not as a fixed pre-step. Gated by `agentic_inline_tools`.
+WRITER_TOOL_SCHEMAS: tuple[dict, ...] = (
+    {"type": "function", "function": {
+        "name": "research",
+        "description": "Search the web and return a short grounded brief (facts + style cues) "
+                       "for a specific question. Use when you need a fact, statistic, name, or "
+                       "date you are unsure of - never invent one.",
+        "parameters": {"type": "object",
+                       "properties": {"query": {"type": "string",
+                                                "description": "The specific thing to look up."}},
+                       "required": ["query"]}}},
+    {"type": "function", "function": {
+        "name": "read_canon",
+        "description": "Pull the established facts / prior-section context relevant to a query, "
+                       "to stay consistent with what has already been written.",
+        "parameters": {"type": "object",
+                       "properties": {"query": {"type": "string",
+                                                "description": "What continuity detail to check."}}}}},
+    {"type": "function", "function": {
+        "name": "verify_fact",
+        "description": "Before asserting a specific statistic, date, quote, or attribution you are "
+                       "unsure of, confirm it against fresh sources. Returns supporting material or "
+                       "nothing - if nothing comes back, do NOT state the claim as fact.",
+        "parameters": {"type": "object",
+                       "properties": {"claim": {"type": "string",
+                                                "description": "The exact claim to confirm."}},
+                       "required": ["claim"]}}},
+)
+
 
 def catalog_summary() -> str:
     """One line per tool - for the `/agentic` view and docs."""
@@ -80,6 +111,105 @@ class UnitOps:
         if self.has_canon:
             actions.append("read_canon")
         return actions
+
+
+# ── RunOps: the bound capabilities the RUN-phase controller drives (plan §21.3) ──
+# Like UnitOps, built at the orchestrator call site (the dispatch closures need
+# orchestrator internals - the store, prefetch pool, plan/outline - that this package
+# must not import), so it stays a plain data holder of closures.
+@dataclass
+class RunOps:
+    paths: object
+    legal_actions: Callable[[dict], list[str]]     # state -> legal macro-actions now
+    default_next: Callable[[dict], str]            # state -> what the legacy loop would do
+    dispatch: Callable[..., str]                   # (action, state, log) -> "continue" | "pause"
+    step_budget: Callable[[dict], int]             # state -> lifetime step cap for run_loop
+    control_check: Callable[[dict], bool] | None = None   # state -> True to pause (live esc/manual)
+
+
+# Run-phase actions a policy may choose among, with one-line descriptions for the
+# controller prompt + the /agentic view. The legal subset per step comes from RunOps.
+RUN_ACTIONS: dict[str, str] = {
+    "draft": "Write the next un-written chapter/section (the full draft->critique->commit episode).",
+    "reoutline": "Regenerate the plan for the not-yet-written units when the current structure isn't working.",
+    "consolidate": "Audit the whole book so far for continuity contradictions (books only).",
+    "repair": "Rewrite the chapters an open contradiction touches (books only).",
+    "revise": "Rewrite the weakest already-committed unit to lift its quality.",
+    "table_read": "Read the assembled piece cold as a skeptical target reader (a report; changes nothing).",
+    "produce": "Assemble front/back matter + the final manuscript.",
+    "learn": "Distill reusable craft skills + a watch-list from the finished piece.",
+    "escalate": "Pause and hand control to the human when stuck or a decision genuinely needs them.",
+    "done": "Finish the run.",
+}
+
+#: Optional/skippable macro-actions (vs. forward-progress ones). Dropped under budget
+#: pressure (§21 self-monitoring) so a low-budget run still finishes rather than polishing.
+OPTIONAL_RUN_ACTIONS: frozenset[str] = frozenset({"reoutline", "revise", "table_read"})
+
+
+def _budget_line() -> str:
+    """A budget-awareness line for the controller view (self-monitoring, plan §21.4/§15.1).
+    Empty when no run budget is set."""
+    from .. import llm
+    cap = llm.run_budget()
+    if not cap:
+        return ""
+    used = llm.current_tokens()
+    left = max(0, cap - used)
+    return (f"\nToken budget: {used:,}/{cap:,} used ({100 * used / cap:.0f}%); {left:,} left"
+            f"{' - LOW, wrap up' if left < cap * 0.15 else ''}.")
+
+
+def _quality_line(state: dict, unit: str) -> str:
+    """A per-unit quality summary (avg score + the weakest committed unit) for the view."""
+    scores = state.get("scores") or []
+    if not scores:
+        return ""
+
+    def _avg(s):
+        return (s.get("insight", 0) + s.get("clarity", 0)
+                + s.get("structure", 0) + s.get("evidence", 0)) / 4.0
+    avgs = [_avg(s) for s in scores]
+    weakest = min(range(len(avgs)), key=lambda i: avgs[i])
+    per = ", ".join(f"{unit}{i + 1}:{a:.1f}" for i, a in enumerate(avgs))
+    return f"\nCommitted-unit quality (avg/5): {per}; weakest = {unit}{weakest + 1}."
+
+
+def weakest_committed_unit(state: dict) -> int | None:
+    """1-based index of the lowest-average-score committed unit, or None if none scored.
+    Shared by the run view and the `revise` action so they target the same unit."""
+    scores = state.get("scores") or []
+    if not scores:
+        return None
+
+    def _avg(s):
+        return (s.get("insight", 0) + s.get("clarity", 0)
+                + s.get("structure", 0) + s.get("evidence", 0)) / 4.0
+    return min(range(len(scores)), key=lambda i: _avg(scores[i])) + 1
+
+
+def build_run_view(state: dict, legal: list[str]) -> str:
+    """The macro-perception the run policy reasons over: progress, per-unit quality and the
+    weakest unit, open contradictions, token budget, and the legal next actions (plan §21.6)."""
+    is_article = state.get("mode") == "article" or "num_sections" in state
+    unit = "section" if is_article else "chapter"
+    cur = state.get("current_section" if is_article else "current_chapter", "?")
+    tot = state.get("num_sections" if is_article else "num_chapters", "?")
+    committed = state.get("committed", 0)
+    contradictions = state.get("open_contradictions", 0)
+    contra = f"\nOpen continuity contradictions: {contradictions}." if contradictions else ""
+    opts = "\n".join(f"  - {a}: {RUN_ACTIONS.get(a, a)}" for a in legal)
+    return (
+        f"Directing the whole {'article' if is_article else 'book'}.\n"
+        f"Phase: {state.get('phase')}. {unit.capitalize()}s committed: {committed} of {tot} "
+        f"(next un-written: {cur})."
+        + _quality_line(state, unit) + contra + _budget_line()
+        + f"\nRun mode: {'autonomous' if state.get('autonomous') else 'manual'}.\n"
+        f"Legal next actions:\n{opts}\n"
+        "Pick the action that best advances a finished, coherent, well-evidenced piece. Draft "
+        "remaining units before producing; reoutline or revise only when the plan/a weak unit "
+        "needs it; only finish once it is assembled and learned."
+    )
 
 
 # ── Research tool implementations (reused by both pipelines' UnitOps) ────────────

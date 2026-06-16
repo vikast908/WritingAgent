@@ -85,8 +85,10 @@ def test_agentic_default_writes_only_draft_actions(tmp_brain, fake_llm):
     orchestrator.run(cfg, "ua", bid, log=_silent)
     tr = agentic.trace.read(ArticlePaths(bid, "ua"))
     episodes = skills_mod.load_index("ua")["_baseline"]["chapters"]
-    # default policy => exactly one 'draft' action per committed unit, nothing else.
-    assert tr and len(tr) == episodes and all(r["action"] == "draft" for r in tr)
+    # default policy => exactly one 'draft' DECISION per committed unit, nothing else.
+    # (unit-outcome labels - scope set, no action - are not decisions; filter them out.)
+    decisions = [r for r in tr if r.get("action")]
+    assert decisions and len(decisions) == episodes and all(r["action"] == "draft" for r in decisions)
 
 
 def test_agentic_book_completes(tmp_brain, fake_llm):
@@ -369,3 +371,258 @@ def test_trace_append_keeps_caller_supplied_keys(tmp_brain):
     agentic.trace.append(paths, {"action": "research", "run_id": "explicit"})
     recs = agentic.trace.read(paths)
     assert recs[-1]["run_id"] == "explicit"   # caller value wins over the auto-stamp
+
+
+# ── Run-level controller: the macro-agentic loop (plan §21.3) ───────────────────
+def _book_dir():
+    return S.Direction(title="Dir", premise="p", tone="dark", themes=["fog"],
+                       hook="h", why_it_works="w")
+
+
+def test_run_actions_catalogued():
+    assert {"draft", "consolidate", "repair", "produce", "learn", "done"} <= set(agentic.RUN_ACTIONS)
+
+
+def test_run_loop_book_macro_completes(tmp_brain, fake_llm):
+    """A book under a macro policy (llm) drives itself to done via run_loop, recording
+    run-scope decisions (draft -> final consolidate -> produce -> learn)."""
+    cfg = load_config()
+    bid = orchestrator.start_book(cfg, _settings(agentic=True, agentic_policy="llm"),
+                                  "umb", "abstract", _book_dir(), "mbk", 2, 1, autonomous=True)
+    state = orchestrator.run(cfg, "umb", bid, log=_silent)
+    assert state["phase"] == "done"
+    assert BookPaths(bid, "umb").manuscript.exists()
+    runs = [r["action"] for r in agentic.trace.read(BookPaths(bid, "umb")) if r.get("scope") == "run"]
+    assert "draft" in runs and "consolidate" in runs and "produce" in runs and "learn" in runs
+
+
+def test_run_loop_article_macro_completes(tmp_brain, fake_llm):
+    cfg = load_config()
+    aid = orchestrator.start_article(cfg, _settings(agentic=True, agentic_policy="trace"),
+                                     "uma", "abstract", _angle(), "mar", 2, 1, autonomous=True)
+    state = orchestrator.run(cfg, "uma", aid, log=_silent)
+    assert state["phase"] == "done"
+    assert ArticlePaths(aid, "uma").manuscript.exists()
+    runs = [r["action"] for r in agentic.trace.read(ArticlePaths(aid, "uma")) if r.get("scope") == "run"]
+    assert runs and runs[-1] == "learn"      # macro loop drove produce -> learn -> done
+
+
+def test_default_policy_uses_no_run_scope_trace(tmp_brain, fake_llm):
+    """The DEFAULT policy stays on the legacy loop, so it never writes run-scope trace
+    entries - the macro controller engages only for llm/trace policies."""
+    cfg = load_config()
+    aid = orchestrator.start_article(cfg, _settings(agentic=True), "umd", "abstract",
+                                     _angle(), "mdf", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "umd", aid, log=_silent)
+    assert not any(r.get("scope") == "run" for r in agentic.trace.read(ArticlePaths(aid, "umd")))
+
+
+def test_run_guard_forces_legal_default():
+    from writingagent.agentic._schema import RunDecision
+    from writingagent.agentic.runner import _run_guard
+    # legal pick passes through; illegal collapses to the default.
+    assert _run_guard(RunDecision(action="produce"), ["produce", "learn"], "learn").action == "produce"
+    assert _run_guard(RunDecision(action="draft"), ["produce"], "produce").action == "produce"
+
+
+def test_run_policy_resolution():
+    cfg = load_config()
+    paths = BookPaths("rp", "urp")
+    assert agentic.make_run_policy({"agentic_policy": "default"}, cfg, paths).name == "default"
+    assert agentic.make_run_policy({"agentic_policy": "llm"}, cfg, paths).name == "llm"
+    assert agentic.make_run_policy({"agentic_policy": "trace"}, cfg, paths).name == "trace"
+
+
+def test_llm_run_policy_falls_back_on_illegal(fake_llm):
+    # fake mode returns the first enum ("draft"); when draft is illegal the guard in the
+    # policy itself maps it to the legal default.
+    pol = agentic.LlmRunPolicy(load_config(), "m")
+    assert pol.decide("view", ["produce"], "produce").action == "produce"
+
+
+def test_trace_run_policy_audits_after_contradiction():
+    pol = agentic.TraceRunPolicy.__new__(agentic.TraceRunPolicy)
+    pol.history = [{"action": "consolidate", "contradictions": 2}]
+    # a past contradiction + consolidate legal + default draft -> audit early
+    assert pol.decide("v", ["draft", "consolidate"], "draft").action == "consolidate"
+    # but if consolidate isn't legal, fall back to the default
+    assert pol.decide("v", ["draft"], "draft").action == "draft"
+    # no past contradictions -> follow the default
+    pol.history = [{"action": "consolidate", "contradictions": 0}]
+    assert pol.decide("v", ["draft", "consolidate"], "draft").action == "draft"
+
+
+def test_trace_policy_researches_after_evidence_gap():
+    pol = agentic.TracePolicy.__new__(agentic.TracePolicy)
+    pol.history = [{"action": "research", "reason": "evidence gap"}]
+    pol.model = None                                       # no learned model -> heuristic layer
+    view = "Context gathered for this unit so far: nothing yet."
+    assert pol.decide(view, ["draft", "research"]).action == "research"   # learns to gather up front
+    assert pol.decide(view, ["draft"]).action == "draft"                  # research unavailable
+    pol.history = []
+    assert pol.decide(view, ["draft", "research"]).action == "draft"      # no signal -> draft
+
+
+def test_read_canon_slice_is_query_relevant():
+    from writingagent.orchestrator import book
+
+    class _Stub:
+        def search_excerpts(self, terms, limit=3):
+            return [("ch01", "matched snippet")] if terms else []
+
+        def canon_context(self, **_k):
+            return "WHOLE CANON BLOCK"
+    stub = _Stub()
+    assert "matched snippet" in book._read_canon_slice(stub, "alpha beta")   # relevant slice
+    assert book._read_canon_slice(stub, "") == "WHOLE CANON BLOCK"           # no query -> whole
+
+
+# ── Gap 2: trained policy distilled from the trace corpus (plan §21.11) ──────────
+def test_train_policy_fits_and_persists(tmp_brain, monkeypatch):
+    from writingagent.agentic import learn
+    units = {("p", f"g{i}"): {"gathered": True, "first_pass": True} for i in range(3)}
+    units.update({("p", f"d{i}"): {"gathered": False, "first_pass": False} for i in range(3)})
+    monkeypatch.setattr(learn, "_collect_units", lambda uid: units)
+    model = learn.train_policy("ufit")
+    assert model and model["global"]["research_helps"] is True       # gathering lifts the reward here
+    assert learn.research_decision(learn.load_policy("ufit"), None) is True   # persisted + consulted
+
+
+def test_train_policy_undecided_on_thin_data(tmp_brain, monkeypatch):
+    from writingagent.agentic import learn
+    monkeypatch.setattr(learn, "_collect_units",
+                        lambda uid: {("p", "u1"): {"gathered": True, "first_pass": True}})
+    assert learn.train_policy("uthin") is None                  # < MIN_PER_ARM -> no model
+    assert learn.load_policy("uthin") is None                   # nothing written
+
+
+def test_trace_policy_follows_learned_model():
+    pol = agentic.TracePolicy.__new__(agentic.TracePolicy)
+    pol.history = []
+    pol._learn = agentic.learn
+    view = "Preparing to draft unit 'sec01'. Context gathered for this unit so far: nothing yet."
+    pol.model = {"global": {"research_helps": True}}
+    assert pol.decide(view, ["draft", "research"]).action == "research"   # learned: gather
+    pol.model = {"global": {"research_helps": False}}
+    assert pol.decide(view, ["draft", "research"]).action == "draft"      # learned: draft directly
+
+
+def test_agentic_run_records_unit_outcome(tmp_brain, fake_llm):
+    cfg = load_config()
+    aid = orchestrator.start_article(cfg, _settings(agentic=True, agentic_policy="llm"),
+                                     "uo", "abstract", _angle(), "uor", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "uo", aid, log=_silent)
+    recs = agentic.trace.read(ArticlePaths(aid, "uo"))
+    assert any(r.get("scope") == "unit-outcome" and "first_pass" in r for r in recs)
+
+
+def test_inline_tools_setting_threads_into_state(tmp_brain, fake_llm):
+    cfg = load_config()
+    aid = orchestrator.start_article(cfg, _settings(agentic=True, agentic_inline_tools=True),
+                                     "uit", "abstract", _angle(), "uitr", 1, 1, autonomous=True)
+    st = brain.read_json(ArticlePaths(aid, "uit").run_state)
+    assert st["agentic_inline_tools"] is True       # writer in-generation tools opt-in is durable
+
+
+# ── The 8-gap batch: wider action space, panels, self-monitoring ─────────────────
+def test_run_actions_include_planning_and_escalate():
+    assert {"reoutline", "revise", "escalate"} <= set(agentic.RUN_ACTIONS)
+    assert agentic.OPTIONAL_RUN_ACTIONS == frozenset({"reoutline", "revise", "table_read"})
+
+
+def test_writer_tools_include_verify_fact():
+    names = {t["function"]["name"] for t in agentic.WRITER_TOOL_SCHEMAS}
+    assert {"research", "read_canon", "verify_fact"} <= names
+
+
+def test_weakest_committed_unit():
+    state = {"scores": [
+        {"insight": 5, "clarity": 5, "structure": 5, "evidence": 5},
+        {"insight": 2, "clarity": 2, "structure": 3, "evidence": 2},   # weakest
+        {"insight": 4, "clarity": 4, "structure": 4, "evidence": 4}]}
+    assert agentic.weakest_committed_unit(state) == 2
+    assert agentic.weakest_committed_unit({}) is None
+
+
+def test_run_view_surfaces_quality_contradictions_budget(monkeypatch):
+    from writingagent import llm
+    monkeypatch.setattr(llm, "run_budget", lambda: 1000)
+    monkeypatch.setattr(llm, "current_tokens", lambda: 900)
+    state = {"mode": "book", "phase": "chapters", "current_chapter": 2, "num_chapters": 3,
+             "committed": 1, "open_contradictions": 2,
+             "scores": [{"insight": 2, "clarity": 2, "structure": 2, "evidence": 2}]}
+    view = agentic.build_run_view(state, ["draft", "consolidate"])
+    assert "weakest = chapter1" in view and "contradictions: 2" in view
+    assert "Token budget" in view and "LOW" in view          # self-monitoring perception
+
+
+def test_run_loop_exercises_reoutline_and_revise(tmp_brain, fake_llm, monkeypatch):
+    from writingagent.agentic import policy as pol_mod
+
+    class Greedy:                      # take every optional structural move while it's legal
+        name = "greedy"
+        def decide(self, view, legal, default):
+            for a in ("reoutline", "revise"):
+                if a in legal:
+                    return agentic.RunDecision(action=a)
+            return agentic.RunDecision(action=default)
+    monkeypatch.setattr(pol_mod, "make_run_policy", lambda *a, **k: Greedy())
+    cfg = load_config()
+    aid = orchestrator.start_article(cfg, _settings(agentic=True, agentic_policy="llm"),
+                                     "urx", "abstract", _angle(), "urxr", 2, 1, autonomous=True)
+    state = orchestrator.run(cfg, "urx", aid, log=_silent)
+    assert state["phase"] == "done"                          # still converges despite the detours
+    assert state.get("reoutlines", 0) == 2                   # capped
+    assert state.get("revisions_done", 0) == 3               # capped
+    acts = [r["action"] for r in agentic.trace.read(ArticlePaths(aid, "urx"))
+            if r.get("scope") == "run-result"]
+    assert "reoutline" in acts and "revise" in acts
+
+
+def test_run_loop_escalate_pauses(tmp_brain, fake_llm, monkeypatch):
+    from writingagent.agentic import policy as pol_mod
+
+    class Defer:
+        name = "defer"
+        def decide(self, view, legal, default):
+            return agentic.RunDecision(action="escalate")
+    monkeypatch.setattr(pol_mod, "make_run_policy", lambda *a, **k: Defer())
+    cfg = load_config()
+    aid = orchestrator.start_article(cfg, _settings(agentic=True, agentic_policy="llm"),
+                                     "ues", "abstract", _angle(), "uesr", 2, 1, autonomous=True)
+    state = orchestrator.run(cfg, "ues", aid, log=_silent)
+    assert state["phase"] != "done" and state.get("pending_review")   # the agent deferred
+
+
+def test_budget_pressure_drops_optional_actions(monkeypatch):
+    from writingagent import llm
+    from writingagent.agentic import runner
+    monkeypatch.setattr(llm, "run_budget", lambda: 1000)
+    monkeypatch.setattr(llm, "current_tokens", lambda: 950)   # 95% spent -> pressured
+
+    class _Ops:
+        def legal_actions(self, st):
+            return ["draft", "reoutline", "revise", "produce"]
+    legal = runner._legal_now(_Ops(), {})
+    assert "reoutline" not in legal and "revise" not in legal   # polish dropped
+    assert "draft" in legal and "produce" in legal              # progress kept
+
+
+def test_critique_panel_majority(monkeypatch, fake_llm):
+    from writingagent import schemas as S
+    from writingagent.agentic import panels
+
+    def all_clean(lens):
+        return S.Critique(verdict="approve", confidence=0.9, blocking=[], nits=[])
+    passed, blocks = panels.critique_panel(all_clean, log=_silent)
+    assert passed and blocks == 0
+
+    calls = {"n": 0}
+    def two_block(lens):
+        calls["n"] += 1
+        bad = calls["n"] <= 2     # 2 of 3 lenses block
+        return S.Critique(verdict="revise" if bad else "approve", confidence=0.5,
+                          blocking=[S.BlockingIssue(type="quality", where="w", detail="d", fix="f")]
+                          if bad else [], nits=[])
+    passed, blocks = panels.critique_panel(two_block, log=_silent)
+    assert not passed and blocks == 2

@@ -155,6 +155,11 @@ class Settings:
     agentic_controller_model: str = "judge"  # per-node routing key for the llm policy's model (cheap/light reasoning)
     agentic_max_unit_steps: int = 3       # max research/read_canon gathering steps before a unit must be drafted
     agentic_factcheck_panel: bool = False  # multi-agent fact-check panel utility (plan §21.10; majority-vote verify)
+    agentic_inline_tools: bool = False    # let the WRITER call research/read_canon mid-draft (in-generation
+    #                                       tool use, plan §21 Phase 3). Off by default: needs a tool-calling
+    #                                       provider and costs extra round-trips; agentic runs only.
+    agentic_critique_panel: bool = False  # diverse-lens majority critique before approving a section
+    #                                       (plan §21.10; articles; agentic runs only)
 
 
 def load_config() -> ModelConfig:

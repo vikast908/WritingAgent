@@ -32,3 +32,32 @@ def fact_check_panel(cfg, draft: str, source_text: str, *, voters: int = 3,
     log(f"   [panel] fact-check: {voters - refutes}/{voters} verifiers clean "
         f"-> {'pass' if passed else 'block'}")
     return passed, refutes
+
+
+#: Distinct reviewer lenses for the critique panel - decorrelated blind spots beat one pass.
+CRITIQUE_LENSES: tuple[str, ...] = (
+    "a skeptical domain expert checking every claim for rigor",
+    "a first-time reader who needs each idea made clear and concrete",
+    "a sharp editor hunting for filler, vagueness, and unsupported assertions",
+)
+
+
+def critique_panel(critique_fn, *, lenses: tuple[str, ...] = CRITIQUE_LENSES,
+                   log=print) -> tuple[bool, int]:
+    """Diverse-perspective critique (plan §21.10): run independent critics over the SAME draft,
+    each through a distinct lens, and BLOCK only if a majority raise a blocking concern - so one
+    lens's blind spot can't sink a good draft, and a real flaw seen by most still blocks.
+    `critique_fn(lens) -> Critique`. Returns (passed, block_votes)."""
+    def _blocks(lens: str) -> bool:
+        try:
+            crit = critique_fn(lens)
+        except Exception:  # noqa: BLE001 - a critic that errors is not a block
+            return False
+        return crit.verdict != "approve" or bool(crit.blocking)
+
+    votes = concurrency.gather({f"c{i}": (lambda ln=ln: _blocks(ln)) for i, ln in enumerate(lenses)})
+    blocks = sum(1 for v in votes.values() if v)
+    passed = blocks < (len(lenses) / 2.0)
+    log(f"   [panel] critique: {len(lenses) - blocks}/{len(lenses)} lenses clear "
+        f"-> {'pass' if passed else 'block'}")
+    return passed, blocks

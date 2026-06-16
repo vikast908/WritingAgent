@@ -149,6 +149,15 @@ def _run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
     prefetch: dict[int, object] = {}
     pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="unit-prefetch")
     try:
+        # Macro-agentic path (plan §21.3): a RunPolicy chooses the next macro-action over the
+        # whole book - draft / audit-continuity / repair / produce / learn / done - instead of
+        # the fixed phase order below. DEFAULT policy stays on the legacy loop (equivalence +
+        # unit-only trace preserved); only llm/trace policies drive run_loop.
+        if state.get("controller") == "agentic" and state.get("agentic_policy") in ("llm", "trace"):
+            from .. import agentic
+            agentic.run_loop(cfg, state, log=log, run_ops=_book_run_ops(
+                cfg, paths, plan, toc, store, prefetch, pool, log, ask, control))
+            return _finish_book(book_id, paths, state, log)
         while state["phase"] != "done":
             if _apply_run_control(control, state, paths, log):
                 return state
@@ -245,6 +254,266 @@ def _run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
         store.close()
+
+
+# ── Macro-agentic run ops (plan §21.3) ───────────────────────────────────────
+def _finish_book(book_id, paths, state, log) -> dict:
+    """Completion footer - only when the run actually reached `done` (not a pause)."""
+    if state.get("phase") == "done":
+        _log_run_complete("Book", book_id, paths.manuscript, log)
+    return state
+
+
+def _read_canon_slice(store, query: str) -> str:
+    """Query-relevant canon (plan §21 read_canon): FTS-matched excerpts for the query's
+    terms when given, else the whole canon block. Replaces the previous whole-block return,
+    so the controller can pull the slice that matters for THIS unit's consistency."""
+    import re as _re
+    terms = [t for t in _re.findall(r"[A-Za-z0-9']+", query or "") if len(t) > 2]
+    if terms:
+        ex = store.search_excerpts(terms, limit=3)
+        if ex:
+            return "\n\n".join(f"### {ref}\n{snip}" for ref, snip in ex)
+    return store.canon_context()
+
+
+# Caps on the agent's optional structural moves (bounded autonomy; the token budget is the
+# run-wide backstop). Tunable; small so a misbehaving policy can't loop on re-planning.
+_MAX_REOUTLINE = 2
+_MAX_REVISE = 3
+
+
+def _chapter_tool_runner(cfg, plan, blueprint, store, state, log):
+    """(tools, runner) for the writer's in-generation tool use on a chapter (plan §21 Phase 3).
+    The writer may call `research` (a web brief) or `read_canon` (a relevant canon slice) WHILE
+    drafting; the runner dispatches to the same implementations the unit controller uses."""
+    from .. import agentic
+    research_on = bool(state.get("use_researcher"))
+
+    def runner(name, args):
+        a = args or {}
+        if name == "research" and research_on:
+            return agentic.unit_research(cfg, plan, blueprint, a.get("query", ""), log)
+        if name == "verify_fact" and research_on:
+            return agentic.unit_research(cfg, plan, blueprint, f"verify: {a.get('claim', '')}", log)
+        if name == "read_canon":
+            return _read_canon_slice(store, a.get("query", ""))
+        return ""
+    return agentic.WRITER_TOOL_SCHEMAS, runner
+
+
+def _book_run_ops(cfg, paths, plan, toc, store, prefetch, pool, log, ask, control):
+    """RunOps the macro-controller drives for a book: draft the next chapter, audit
+    continuity (consolidate) on demand, repair contradictions, then produce + learn. The
+    `draft` action invokes the unit controller (gather research/canon, then the unchanged
+    write->critique->commit episode), so episodes/duels/learning stay byte-identical."""
+    from .. import agentic
+
+    def _draft(state, log):
+        n = state["current_chapter"]
+        for k in (n, n + 1):
+            if (k <= state["num_chapters"] and k not in prefetch
+                    and brain.read_text(paths.ch(k)) is None):
+                prefetch[k] = pool.submit(_chapter_fetch, cfg, paths, plan, toc, state, k, log)
+        pf = prefetch.pop(n, None)
+        blueprint = toc.chapters[n - 1]
+        ops = agentic.UnitOps(
+            paths=paths, unit_label=f"ch{n:02d}",
+            research_on=bool(state.get("use_researcher")), has_canon=True,
+            draft=lambda extra, _pf=pf, _n=n: _process_chapter(
+                cfg, paths, plan, toc, store, state, _n, log,
+                prefetched=_pf, ask=ask, extra_context=extra),
+            research=lambda q, _bp=blueprint: agentic.unit_research(cfg, plan, _bp, q, log),
+            read_canon=lambda q: _read_canon_slice(store, q),
+        )
+        if agentic.run_unit(cfg, state, ops=ops, log=log) == "escalate":
+            _mark_escalated(state, paths, "chapter",
+                            f"[!] Chapter {n} escalated. Resolve with `book review` then `book run`.",
+                            log)
+            return "pause"
+        state["committed"] += 1
+        state["current_chapter"] = n + 1
+        brain.write_json(paths.run_state, state)
+        return "continue"
+
+    def _record_consolidation(tag, report):
+        agentic.trace.append(paths, {"scope": "run-result", "action": "consolidate",
+                                     "tag": tag, "contradictions": len(report.contradictions)})
+
+    def _consolidate(state, log):
+        all_drafted = state["current_chapter"] > state["num_chapters"] or state.get("phase") == "consolidate"
+        if not all_drafted:                                   # mid-run continuity audit
+            committed = state["committed"]
+            report = _consolidation(cfg, paths, plan, store, tag=f"after-ch{committed:02d}", log=log)
+            state["consolidated_at"] = committed
+            state["open_contradictions"] = len(report.contradictions)
+            _record_consolidation(f"after-ch{committed:02d}", report)
+            if state.get("escalate_on_contradiction") and report.contradictions:
+                _write_consolidation_review(paths, f"after-ch{committed:02d}", report)
+                state.update(pending_review=True, review_kind="consolidation")
+                brain.write_json(paths.run_state, state)
+                log(f"[!] Consolidation found {len(report.contradictions)} contradiction(s) -> review.")
+                return "pause"
+            brain.write_json(paths.run_state, state)
+            return "continue"
+        report = _consolidation(cfg, paths, plan, store, tag="final", log=log)   # final audit
+        _record_consolidation("final", report)
+        if (state.get("escalate_on_contradiction") and report.contradictions
+                and not state.get("final_acked")):
+            _write_consolidation_review(paths, "final", report)
+            state.update(pending_review=True, review_kind="consolidation")
+            brain.write_json(paths.run_state, state)
+            log(f"[!] Final consolidation found {len(report.contradictions)} contradiction(s) -> review.")
+            return "pause"
+        if state.get("autonomous") and report.contradictions:
+            _repair_contradictions(cfg, paths, plan, toc, store, report,
+                                   humanize=bool(state.get("humanize")), log=log)
+            _consolidation(cfg, paths, plan, store, tag="final-postrepair", log=log)
+        state.update(phase="production", open_contradictions=0)
+        brain.write_json(paths.run_state, state)
+        return "continue"
+
+    def _repair(state, log):
+        report = _consolidation(cfg, paths, plan, store, tag="repair-scan", log=log)
+        if report.contradictions:
+            _repair_contradictions(cfg, paths, plan, toc, store, report,
+                                   humanize=bool(state.get("humanize")), log=log)
+            _consolidation(cfg, paths, plan, store, tag="post-repair", log=log)
+        state["open_contradictions"] = 0
+        brain.write_json(paths.run_state, state)
+        return "continue"
+
+    def _reoutline(state, log):
+        """Regenerate the blueprints of the NOT-YET-WRITTEN chapters (committed chapters and
+        the total count are preserved), so the agent can fix a plan that's going wrong (§21 #2/#4)."""
+        n = state["current_chapter"]                          # first un-written chapter (1-based)
+        fresh = nodes.build_toc(cfg, plan, state["num_chapters"])
+        for i in range(n - 1, min(len(toc.chapters), len(fresh.chapters))):
+            bp = fresh.chapters[i]
+            bp.number = i + 1                                 # keep numbering stable
+            toc.chapters[i] = bp
+        brain.write_json(paths.root / "toc.json", toc.model_dump())
+        brain.write_text(paths.toc, render.render_toc_md(toc))
+        state["reoutlines"] = state.get("reoutlines", 0) + 1
+        brain.write_json(paths.run_state, state)
+        agentic.trace.append(paths, {"scope": "run-result", "action": "reoutline", "from_unit": n})
+        log(f"   [agentic] reoutlined chapters {n}..{state['num_chapters']}")
+        return "continue"
+
+    def _revise(state, log):
+        """Rewrite the weakest committed chapter to lift its score (§21 #3). Re-processes the
+        unit with a targeted instruction; canon re-extraction is idempotent so this is safe."""
+        n = agentic.weakest_committed_unit(state)
+        if not n or n > state.get("committed", 0):
+            return "continue"
+        sc = (state.get("scores") or [{}])[n - 1]
+        dim = min(("insight", "clarity", "structure", "evidence"), key=lambda k: sc.get(k, 5))
+        brain.write_text(paths.instruction_of(n),
+                         f"Strengthen the {dim} of this chapter - it scored lowest there. "
+                         "Keep everything that already works; change only what lifts it.")
+        brain.write_text(paths.ch_draft(n), brain.read_text(paths.ch(n)) or "")  # revise from committed
+        paths.ch(n).unlink(missing_ok=True)                   # clear the resume guard -> re-draft
+        _process_chapter(cfg, paths, plan, toc, store, state, n, log, ask=ask)
+        paths.ch_draft(n).unlink(missing_ok=True)
+        paths.instruction_of(n).unlink(missing_ok=True)
+        # _finalize_unit APPENDED a fresh score/insight; move it onto unit n so the per-unit
+        # arrays stay aligned with committed units (n stays committed, count unchanged).
+        for key in ("scores", "insights"):
+            arr = state.get(key) or []
+            if len(arr) > state.get("committed", 0):
+                arr[n - 1] = arr.pop()
+        state["revisions_done"] = state.get("revisions_done", 0) + 1
+        brain.write_json(paths.run_state, state)
+        agentic.trace.append(paths, {"scope": "run-result", "action": "revise",
+                                     "unit": f"ch{n:02d}", "dim": dim})
+        log(f"   [agentic] revised chapter {n} (weakest: {dim})")
+        return "continue"
+
+    def _escalate_run(state, log):
+        _mark_escalated(state, paths, "chapter",
+                        "[!] Controller escalated. Resolve with `book review` then `book run`.", log)
+        return "pause"
+
+    def dispatch(action, state, log):
+        llm.set_unit(state.get("phase"))
+        if action == "draft":
+            return _draft(state, log)
+        if action == "reoutline":
+            return _reoutline(state, log)
+        if action == "revise":
+            return _revise(state, log)
+        if action == "escalate":
+            return _escalate_run(state, log)
+        if action == "consolidate":
+            return _consolidate(state, log)
+        if action == "repair":
+            return _repair(state, log)
+        if action == "produce":
+            _production(cfg, paths, plan, store, log=log)
+            if state.get("book_cohesion", True):
+                _write_cohesion_report(paths, log)
+            state["phase"] = "learn"
+            brain.write_json(paths.run_state, state)
+            return "continue"
+        if action == "learn":
+            _learn(cfg, paths, plan, log=log)
+            state["phase"] = "done"
+            brain.write_json(paths.run_state, state)
+            return "continue"
+        return "continue"
+
+    def legal_actions(state):
+        phase = state.get("phase")
+        if phase == "done":
+            return []
+        acts: list[str] = []
+        if phase == "chapters":
+            if state["current_chapter"] <= state["num_chapters"]:
+                acts.append("draft")
+                if state.get("committed", 0) >= 1:
+                    acts.append("consolidate")
+                if state.get("reoutlines", 0) < _MAX_REOUTLINE:    # re-plan remaining structure
+                    acts.append("reoutline")
+            else:
+                acts.append("consolidate")                         # all drafted -> final audit
+        elif phase == "consolidate":
+            acts.append("consolidate")
+        elif phase == "production":
+            acts.append("produce")
+        elif phase == "learn":
+            acts.append("learn")
+        # repair when an audit found contradictions; revise a weak committed unit - both any
+        # time before production (they operate on already-committed chapters).
+        if phase in ("chapters", "consolidate"):
+            if state.get("autonomous") and state.get("open_contradictions", 0) > 0:
+                acts.append("repair")
+            if state.get("committed", 0) >= 1 and state.get("revisions_done", 0) < _MAX_REVISE:
+                acts.append("revise")
+        acts.append("escalate")                                    # the agent may always defer
+        return acts
+
+    def default_next(state):
+        phase = state.get("phase")
+        if phase == "chapters":
+            committed = state.get("committed", 0)
+            every = state.get("consolidate_every", 5) or 5
+            if committed >= 1 and committed % every == 0 and state.get("consolidated_at") != committed:
+                return "consolidate"                          # cadence interleave (legacy)
+            if state["current_chapter"] <= state["num_chapters"]:
+                return "draft"
+            return "consolidate"
+        if phase == "consolidate":
+            return "consolidate"
+        if phase == "production":
+            return "produce"
+        if phase == "learn":
+            return "learn"
+        return "done"
+
+    return agentic.RunOps(
+        paths=paths, legal_actions=legal_actions, default_next=default_next, dispatch=dispatch,
+        step_budget=lambda st: st.get("num_chapters", 8) * 2 + _MAX_REOUTLINE + _MAX_REVISE + 6,
+        control_check=lambda st: _apply_run_control(control, st, paths, log))
 
 
 # ── Per-chapter loop ─────────────────────────────────────────────────────────
@@ -371,6 +640,11 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
     agentic_on = state.get("controller") == "agentic"
     research_on = bool(state.get("use_researcher"))
     did_research = False
+    # In-generation tool use (plan §21 Phase 3): when enabled, the writer itself may call
+    # research / read_canon WHILE drafting. Built once per unit; None => the plain writer.
+    _tools, _tool_runner = _chapter_tool_runner(
+        cfg, plan, blueprint, store, state, log) if (agentic_on and state.get("agentic_inline_tools")) \
+        else (None, None)
 
     # skeleton kwarg: a book chapter has no skeleton mode (that's an article token
     # optimisation); it's accepted so _divergent_first_draft can call _write/_critique
@@ -382,7 +656,7 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
                                    skills=skill_bodies if skills is None else skills,
                                    base_draft=base, requirements=requirements, voice=voice,
                                    length_note=_length_note(0, blueprint.target_words),
-                                   temperature=temperature)
+                                   temperature=temperature, tools=_tools, tool_runner=_tool_runner)
 
     def _critique(d):
         return nodes.critique_chapter(
@@ -475,6 +749,10 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass,
                 log, humanize=bool(state.get("humanize")), sources=ch_sources)
         paths.ch_draft(n).unlink(missing_ok=True)   # escalation draft resolved
+        if agentic_on:   # label the controller's gather decisions with this unit's outcome (§21.11)
+            from .. import agentic
+            agentic.trace.append(paths, {"scope": "unit-outcome", "unit": f"ch{n:02d}",
+                                         "first_pass": bool(first_pass), "insight": crit.insight})
         return "commit"
     _escalate(paths, n, crit, draft)
     return "escalate"
