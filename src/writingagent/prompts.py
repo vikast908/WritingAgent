@@ -1,4 +1,6 @@
 """System prompts for every node. These encode the design intent of plan.md."""
+from . import exemplars as _ex
+from . import registers as _registers
 from . import slop
 
 # ── Mandatory writing constraints (always injected - non-negotiable) ──────────
@@ -323,6 +325,25 @@ HUMANIZER_SURGICAL_SYS = (
     "rewrite. Return one edit per flagged sentence, keyed by its number."
 )
 
+# ── Surgical craft passes (plan §22 Tier 2 - per-sentence, guarded, fact-safe) ────
+SHOW_DONT_TELL_SYS = (
+    "You are a fiction line editor. You will receive numbered sentences that TELL emotion or "
+    "lean on a filter verb ('she felt', 'he saw', 'it seemed', 'she was afraid'). Rewrite EACH "
+    "minimally to SHOW instead: replace the filter verb or the named emotion with the concrete "
+    "sensory detail, action, or gesture that conveys it, so the reader infers the feeling. Keep "
+    "the same meaning, characters, facts, numbers, and any inline citation markers like [1] "
+    "EXACTLY. Do not add new plot or new claims. Prefer the shortest vivid rewrite. Return one "
+    "edit per flagged sentence, keyed by its number."
+)
+
+DE_PASSIVE_SYS = (
+    "You are a line editor. You will receive numbered sentences written in the passive voice. "
+    "Rewrite EACH in the active voice where active reads better: name the actor and use a direct "
+    "verb, keeping the same meaning, facts, numbers, and any inline citation markers like [1] "
+    "EXACTLY. If a sentence is genuinely better passive (the actor is unknown or deliberately "
+    "demoted), return it unchanged. Return one edit per flagged sentence, keyed by its number."
+)
+
 ARTICLE_ANGLES_SYS = (
     "You are an editorial strategist. Given a topic or abstract, propose distinct editorial "
     "angles - each a genuinely different take, thesis, or audience lens on the same subject. "
@@ -488,3 +509,79 @@ DIAGRAM_SPEC_SYS = (
     "Keep labels short (they wrap, but tight reads better). Be specific to the topic; a spec "
     "that could describe a different article is a failure."
 )
+
+
+# ── Register-aware prompt builders (plan §22) ─────────────────────────────────────
+# Each builder returns a system prompt tailored to a writing register (registers.py):
+# the writer/cohesion prompts swap in the register-tuned anti-slop block and append the
+# register's positive guidance; the critic prompts append score-anchor few-shot plus a
+# register override note (so a novel's em-dash isn't flagged, an academic paper's hedging
+# is required, etc.). register=None / the default `nonfiction` profile returns the
+# historical constant verbatim, so every existing caller is byte-for-byte unchanged.
+def _is_default(register) -> bool:
+    return not register or _registers.get(register).name == _registers.DEFAULT
+
+
+def _guidance(register) -> str:
+    reg = _registers.get(register)
+    return f"\n\nWRITING REGISTER: {reg.name} - {reg.description}\n{reg.guidance}\n"
+
+
+def _swap_constraints(base: str, register) -> str:
+    """Replace the default NO_SLOP block embedded in `base` with the register-tuned one."""
+    return base.replace(NO_SLOP, "\n" + slop.render_constraints(register) + "\n")
+
+
+def writer_sys(register=None) -> str:
+    if _is_default(register):
+        return WRITER_SYS
+    return _swap_constraints(WRITER_SYS, register) + _guidance(register)
+
+
+def article_writer_sys(register=None) -> str:
+    if _is_default(register):
+        return ARTICLE_WRITER_SYS
+    return _swap_constraints(ARTICLE_WRITER_SYS, register) + _guidance(register)
+
+
+def cohesion_sys(register=None) -> str:
+    if _is_default(register):
+        return COHESION_SYS
+    return _swap_constraints(COHESION_SYS, register)
+
+
+def humanizer_surgical_sys(register=None) -> str:
+    """The surgical line-editor prompt plus before/after few-shot (register-neutral)."""
+    return HUMANIZER_SURGICAL_SYS + _ex.humanizer_fewshot()
+
+
+def _critic_register_note(register) -> str:
+    """Tell the critic which default bans this register relaxes (or requires), so it judges
+    against the register's conventions instead of the nonfiction default."""
+    if _is_default(register):
+        return ""
+    reg = _registers.get(register)
+    relax = []
+    if reg.allow_em_dash:
+        relax.append("em-dashes are voice here - do NOT flag them")
+    if reg.allow_enthusiasm:
+        relax.append("exclamation marks and energy are allowed")
+    if reg.allow_intensifiers:
+        relax.append("intensifiers are allowed where they earn it")
+    if reg.allow_transitions:
+        relax.append("connectives like 'moreover'/'furthermore' are fine")
+    if reg.hedging_required:
+        relax.append("hedging ('may', 'suggests', 'appears to') is REQUIRED, not a fault")
+    note = f"\n\nREGISTER OVERRIDE - judge this draft as {reg.name}. {reg.voice_line}"
+    if relax:
+        note += "\nIn this register: " + "; ".join(relax) + "."
+    note += f"\n{reg.guidance}"
+    return note
+
+
+def critic_sys(register=None) -> str:
+    return CRITIC_SYS + _ex.critic_anchors() + _critic_register_note(register)
+
+
+def article_critic_sys(register=None) -> str:
+    return ARTICLE_CRITIC_SYS + _ex.critic_anchors() + _critic_register_note(register)

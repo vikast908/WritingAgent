@@ -193,7 +193,6 @@ def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: s
     the knowledge base later chapters were already written against)."""
     llm.reset_usage()
     llm.set_project(book_id)
-    voice = brain.voice_exemplars(uid)
 
     art = ArticlePaths(book_id, uid)
     if art.run_state.exists():
@@ -223,6 +222,8 @@ def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: s
         return
 
     paths, state, plan, toc = _load(uid, book_id)
+    register = state.get("register") or None
+    voice = brain.style_exemplars(uid, register)
     if not (1 <= n <= len(toc.chapters)):
         raise ValueError(f"Chapter {n} out of range (1-{len(toc.chapters)}).")
     blueprint = toc.chapters[n - 1]
@@ -242,21 +243,21 @@ def revise_unit(cfg: ModelConfig, uid: str, book_id: str, n: int, instruction: s
     log("   rewriting to your instruction...")
     draft = nodes.write_chapter(cfg, plan, blueprint, fix_notes=instruction,
                                 base_draft=base, voice=voice,
-                                requirements=requirements)
+                                requirements=requirements, register=register)
     log("   critiquing...")
     crit = nodes.critique_chapter(
         cfg, plan, blueprint, draft, context=context, watch_list=watch,
-        requirements=requirements,
+        requirements=requirements, register=register,
         length_note=_length_note(len(draft.split()), blueprint.target_words))
     if crit.blocking and crit.verdict != "approve":
         log(f"   {len(crit.blocking)} blocking issue(s) - one fix pass...")
         draft = nodes.write_chapter(cfg, plan, blueprint,
                                     fix_notes=_merge_fix_notes(instruction, crit),
                                     base_draft=draft, voice=voice,
-                                    requirements=requirements)
+                                    requirements=requirements, register=register)
     if state.get("humanize"):
         log("   humanizing...")
-        draft = humanizer.humanize(cfg, draft)
+        draft = humanizer.humanize(cfg, draft, register)
     if not _confirm_revision(cfg, base, draft, confirm, log):
         return
     _save_version(paths, f"ch{n:02d}", draft, label="revise")

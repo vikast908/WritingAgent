@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from .. import brain, concurrency, humanizer, llm, nodes, render, retrieval
+from .. import brain, concurrency, fields, humanizer, llm, nodes, registers, render, retrieval
 from .. import schemas as S
 from .. import skills as skills_mod
 from ..brain import ArticlePaths, BookPaths
@@ -78,7 +78,12 @@ def start_book(
     if intake:
         brain.write_text(paths.root / "intake.md", intake)
 
-    toc = nodes.build_toc(cfg, plan, num_chapters)
+    # Genre/register profile (plan §22): inferred from the book's genre unless the author
+    # pinned one. Drives the anti-slop contract, craft metrics, gold-corpus style anchor,
+    # the critic's register overrides, and the field structure the TOC is built around.
+    register = registers.infer(plan.genre, "book", explicit=getattr(settings, "register", ""))
+    toc = nodes.build_toc(cfg, plan, num_chapters,
+                          structure=fields.resolve(register, getattr(settings, "field", "")))
     brain.write_json(paths.root / "toc.json", toc.model_dump())
     brain.write_text(paths.toc, render.render_toc_md(toc))
 
@@ -90,6 +95,9 @@ def start_book(
         "phase": "chapters", "num_chapters": len(toc.chapters),
         "consolidate_every": settings.consolidate_every,
         "current_chapter": 1,
+        "register": register,
+        "field": getattr(settings, "field", "") or "",
+        "citation_style": getattr(settings, "citation_style", "") or "",
         # Autonomous runs never pause on contradictions either.
         "escalate_on_contradiction": False if autonomous else settings.escalate_on_contradiction,
     }
@@ -230,7 +238,8 @@ def _run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
                     return state
                 if state.get("autonomous") and report.contradictions:
                     _repair_contradictions(cfg, paths, plan, toc, store, report,
-                                           humanize=bool(state.get("humanize")), log=log)
+                                           humanize=bool(state.get("humanize")), log=log,
+                                           register=state.get("register") or None)
                     _consolidation(cfg, paths, plan, store, tag="final-postrepair", log=log)
                 state["phase"] = "production"
                 brain.write_json(paths.run_state, state)
@@ -367,7 +376,8 @@ def _book_run_ops(cfg, paths, plan, toc, store, prefetch, pool, log, ask, contro
             return "pause"
         if state.get("autonomous") and report.contradictions:
             _repair_contradictions(cfg, paths, plan, toc, store, report,
-                                   humanize=bool(state.get("humanize")), log=log)
+                                   humanize=bool(state.get("humanize")), log=log,
+                                   register=state.get("register") or None)
             _consolidation(cfg, paths, plan, store, tag="final-postrepair", log=log)
         state.update(phase="production", open_contradictions=0)
         brain.write_json(paths.run_state, state)
@@ -377,7 +387,8 @@ def _book_run_ops(cfg, paths, plan, toc, store, prefetch, pool, log, ask, contro
         report = _consolidation(cfg, paths, plan, store, tag="repair-scan", log=log)
         if report.contradictions:
             _repair_contradictions(cfg, paths, plan, toc, store, report,
-                                   humanize=bool(state.get("humanize")), log=log)
+                                   humanize=bool(state.get("humanize")), log=log,
+                                   register=state.get("register") or None)
             _consolidation(cfg, paths, plan, store, tag="post-repair", log=log)
         state["open_contradictions"] = 0
         brain.write_json(paths.run_state, state)
@@ -387,7 +398,8 @@ def _book_run_ops(cfg, paths, plan, toc, store, prefetch, pool, log, ask, contro
         """Regenerate the blueprints of the NOT-YET-WRITTEN chapters (committed chapters and
         the total count are preserved), so the agent can fix a plan that's going wrong (§21 #2/#4)."""
         n = state["current_chapter"]                          # first un-written chapter (1-based)
-        fresh = nodes.build_toc(cfg, plan, state["num_chapters"])
+        fresh = nodes.build_toc(cfg, plan, state["num_chapters"],
+                                structure=fields.resolve(state.get("register"), state.get("field", "")))
         for i in range(n - 1, min(len(toc.chapters), len(fresh.chapters))):
             bp = fresh.chapters[i]
             bp.number = i + 1                                 # keep numbering stable
@@ -630,7 +642,8 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
     max_rev = state["max_revisions"]
     threshold = state.get("escalate_below_confidence", 0.0)
     min_insight = int(state.get("min_insight", 0) or 0)
-    voice = brain.voice_exemplars(paths.uid)
+    register = state.get("register") or None     # genre/register profile (plan §22)
+    voice = brain.style_exemplars(paths.uid, register)
     crit: S.Critique | None = None
     draft = ""
     best: tuple[str, S.Critique] | None = None
@@ -656,14 +669,16 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
                                    skills=skill_bodies if skills is None else skills,
                                    base_draft=base, requirements=requirements, voice=voice,
                                    length_note=_length_note(0, blueprint.target_words),
-                                   temperature=temperature, tools=_tools, tool_runner=_tool_runner)
+                                   temperature=temperature, register=register,
+                                   tools=_tools, tool_runner=_tool_runner)
 
     def _critique(d):
         return nodes.critique_chapter(
             cfg, plan, blueprint, d, context=context, watch_list=watch,
             skills=skill_bodies, requirements=requirements,
             watch_blocking=bool(state.get("watch_blocking", True)),
-            length_note=_length_note(len(d.split()), blueprint.target_words))
+            length_note=_length_note(len(d.split()), blueprint.target_words),
+            register=register)
 
     n_div = max(1, int(state.get("divergent_drafts", 1) or 1))
     _unit_tag = f"ch{n:02d}"
@@ -746,8 +761,12 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         draft, crit, first_pass = _finalize_unit(
             state, approved_attempt=approved_attempt, best=best, draft=draft,
             crit=crit, instruction=instruction, log=log)
+        if state.get("craft_passes", True):   # surgical show-don't-tell / de-passive (plan §22)
+            from .. import surgery
+            draft = surgery.apply(cfg, draft, register)
         _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass,
-                log, humanize=bool(state.get("humanize")), sources=ch_sources)
+                log, humanize=bool(state.get("humanize")), sources=ch_sources,
+                register=register)
         paths.ch_draft(n).unlink(missing_ok=True)   # escalation draft resolved
         if agentic_on:   # label the controller's gather decisions with this unit's outcome (§21.11)
             from .. import agentic
@@ -759,7 +778,7 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
 
 
 def _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass, log,
-            *, humanize: bool = False, sources=()) -> None:
+            *, humanize: bool = False, sources=(), register: str | None = None) -> None:
     # The humanizer rewrite, the summary, and the canon extraction all derive from the
     # same approved draft, so they run as one concurrent batch instead of three serial
     # LLM round-trips. Summary/extraction read the pre-humanized draft - the humanizer
@@ -773,7 +792,7 @@ def _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pas
     }
     if humanize:
         log("   humanizing...")
-        tasks["humanized"] = lambda: humanizer.humanize(cfg, draft)
+        tasks["humanized"] = lambda: humanizer.humanize(cfg, draft, register)
     out = concurrency.gather(tasks, strict=True)
 
     final = out.get("humanized") or draft
@@ -842,7 +861,7 @@ def _consolidation(cfg, paths, plan, store, *, tag, log):
 
 
 def _repair_contradictions(cfg, paths, plan, toc, store, report, *, humanize, log,
-                           max_chapters=2) -> None:
+                           max_chapters=2, register: str | None = None) -> None:
     """Autonomous best-effort fix: rewrite the chapters a contradiction cites (bounded, 1 round)."""
     targets: list[int] = []
     for c in report.contradictions:
@@ -856,14 +875,15 @@ def _repair_contradictions(cfg, paths, plan, toc, store, report, *, humanize, lo
                  "the chapter intact:\n"
                  + "\n".join(f"- {c.detail} (fix: {c.fix})" for c in relevant))
         context = retrieval.assemble_context(store, paths, bp)
-        draft = nodes.write_chapter(cfg, plan, bp, fix_notes=notes, context=context)
+        draft = nodes.write_chapter(cfg, plan, bp, fix_notes=notes, context=context,
+                                    register=register)
         known = store.canon_context()   # main thread: sqlite conns are thread-bound
         tasks = {
             "summary": lambda b=bp, d=draft: nodes.summarize_chapter(cfg, b, d),
             "extraction": lambda b=bp, d=draft, k=known: nodes.extract_canon(cfg, b, d, k),
         }
         if humanize:
-            tasks["humanized"] = lambda d=draft: humanizer.humanize(cfg, d)
+            tasks["humanized"] = lambda d=draft: humanizer.humanize(cfg, d, register)
         out = concurrency.gather(tasks, strict=True)
         brain.write_text(paths.ch(n), out.get("humanized") or draft)
         brain.write_text(paths.ch_summary(n), out["summary"])

@@ -111,6 +111,19 @@ def voice_exemplars(uid: str = "default", max_chars: int = 2400) -> str | None:
     return "\n\n".join(chunks) or None
 
 
+def style_exemplars(uid: str = "default", register: str | None = None,
+                    max_chars: int = 2400) -> str | None:
+    """The writer's 'match this' style anchor: the user's own voice exemplars if any exist,
+    otherwise the register's shipped gold corpus (registers.gold_exemplars). A default anchor
+    matters most on a basic model - showing a target paragraph beats describing the voice in
+    adjectives. Returns None only when there are neither user nor gold exemplars."""
+    user = voice_exemplars(uid, max_chars=max_chars)
+    if user:
+        return user
+    from . import registers
+    return registers.gold_exemplars(register, max_chars=min(max_chars, 1200))
+
+
 # ── Book scope ───────────────────────────────────────────────────────────────
 class BookPaths:
     """All paths for one book. The brain on disk is the source of truth."""

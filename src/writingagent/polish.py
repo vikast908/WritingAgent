@@ -198,9 +198,38 @@ def score_sources(sources: list, body: str, keywords_text: str) -> list[dict]:
     return scored
 
 
-def build_references(scored: list[dict], *, drop_noise: bool = True) -> str:
-    """A dated, influence-scored, rank-sorted References section. Drops pure noise
-    (sources never cited and unrelated to the article) unless drop_noise is False."""
+_STYLE_LABEL = {"numeric": "", "apa": " (APA-style)", "mla": " (MLA-style)",
+                "chicago": " (Chicago-style)", "ap": " (AP-style)"}
+
+
+def _ref_row(style: str, i: int, title: str, url: str, date: str) -> str:
+    """One reference row in a named citation style. Best-effort: our captured source fields
+    are title/url/date (no author/publisher), so the author-name styles approximate by
+    leading with the title - honest within the data we have, not a full bibliographic entry."""
+    link = f"[{title}]({url})" if url else title
+    dated = "" if date in ("", "n.d.") else date
+    if style == "apa":
+        return f"{i}. {title}. ({date}). {url}".rstrip()
+    if style == "mla":
+        return f'{i}. "{title}." {url}{(" (" + dated + ")") if dated else ""}'.rstrip()
+    if style == "chicago":
+        return f'{i}. "{title}." Accessed {date}. {url}'.rstrip(" .") + "."
+    if style == "ap":
+        return f"{i}. {title}" + (f", {dated}" if dated else "") + (f" — {url}" if url else "")
+    # "numeric": plain dated link list
+    return f"{i}. {link}" + (f" ({dated})" if dated else "")
+
+
+def build_references(scored: list[dict], *, drop_noise: bool = True,
+                     style: str = "influence") -> str:
+    """A References section. `style='influence'` (default) is the dated, 0-100 influence-
+    ranked, sorted list (unchanged); other styles (numeric/apa/mla/chicago/ap) render the
+    same filtered, ranked sources in that citation convention; 'none' emits nothing.
+
+    Drops pure noise (sources never cited and unrelated to the article) unless drop_noise
+    is False, in every style."""
+    if style == "none":
+        return ""
     # Only prune zero-influence sources when SOME source has signal to rank against -
     # otherwise (e.g. researcher off, no inline citations) keep them all, just listed.
     has_signal = any(x["cited"] or x["overlap"] for x in scored)
@@ -217,12 +246,17 @@ def build_references(scored: list[dict], *, drop_noise: bool = True) -> str:
         title = (s.get("title") or "Source").strip()
         url = (s.get("url") or "").strip()
         date = _norm_date(s.get("date", ""))
-        link = f"[{title}]({url})" if url else title
-        rows.append(f"{len(rows) + 1}. **{x['score']}** · {date} · {link}")
+        if style == "influence":
+            link = f"[{title}]({url})" if url else title
+            rows.append(f"{len(rows) + 1}. **{x['score']}** · {date} · {link}")
+        else:
+            rows.append(_ref_row(style, len(rows) + 1, title, url, date))
     if not rows:
         return ""
-    return ("## References\n\n*Ranked by influence on this article (0–100; higher = more "
-            "influence). Dated where known.*\n\n" + "\n".join(rows))
+    if style == "influence":
+        return ("## References\n\n*Ranked by influence on this article (0–100; higher = more "
+                "influence). Dated where known.*\n\n" + "\n".join(rows))
+    return f"## References{_STYLE_LABEL.get(style, '')}\n\n" + "\n".join(rows)
 
 
 # ── reading time ────────────────────────────────────────────────────────────────
@@ -370,14 +404,70 @@ def cross_chapter_repetition(
     return {"phrases": phrases, "openers": openers}
 
 
+# ── voice-drift (stylometric consistency across chapters, plan §22) ───────────────
+# A function-word distribution is a style fingerprint that's stable within one author's
+# work (classic stylometry); when chapters are written by independent model calls, a
+# chapter whose function-word profile drifts far from the book's centroid reads as a
+# DIFFERENT voice even when no single phrase repeats. This is a deterministic, free
+# detector (no model call) - a human editor would call it "this chapter doesn't sound
+# like the rest." Reported, never auto-rewritten.
+_FUNCTION_WORDS = (
+    "the a an of to in and that it is was for on with as at by from but or if this these "
+    "those i you he she we they his her their our your my not no be are were been has have "
+    "had will would can could may should do did so then than there here what when which who "
+    "how all any more most some such only").split()
+_FW_INDEX = {w: i for i, w in enumerate(_FUNCTION_WORDS)}
+
+
+def _function_word_profile(prose: str) -> list[float]:
+    """Normalized frequency of each tracked function word in a chapter (a style vector)."""
+    words = re.findall(r"[a-z']+", _prose_only(prose).lower())
+    total = len(words) or 1
+    vec = [0.0] * len(_FUNCTION_WORDS)
+    for w in words:
+        i = _FW_INDEX.get(w)
+        if i is not None:
+            vec[i] += 1
+    return [v / total for v in vec]
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
+    na = sum(x * x for x in a) ** 0.5
+    nb = sum(y * y for y in b) ** 0.5
+    return dot / (na * nb) if na and nb else 0.0
+
+
+def voice_drift(chapters: list[tuple[str, str]], *, z: float = 1.3) -> list[tuple[str, float]]:
+    """Chapters whose function-word profile is a statistical outlier from the book's
+    centroid (distance > mean + z·std). Returns [(label, distance), ...], worst first.
+    Needs >= 4 chapters to have a meaningful distribution; fewer -> []."""
+    profs = [(label, _function_word_profile(prose)) for label, prose in chapters
+             if prose and prose.strip()]
+    if len(profs) < 4:
+        return []
+    dim = len(_FUNCTION_WORDS)
+    centroid = [sum(p[i] for _, p in profs) / len(profs) for i in range(dim)]
+    dists = [(label, 1.0 - _cosine(p, centroid)) for label, p in profs]
+    vals = [d for _, d in dists]
+    mean = sum(vals) / len(vals)
+    std = (sum((v - mean) ** 2 for v in vals) / len(vals)) ** 0.5
+    if std == 0:
+        return []
+    out = [(label, round(d, 3)) for label, d in dists if d > mean + z * std]
+    return sorted(out, key=lambda x: -x[1])
+
+
 def cohesion_report(chapters: list[tuple[str, str]]) -> str:
-    """Markdown report of cross-chapter repetition (see `cross_chapter_repetition`).
-    Always returns a report - a clean book gets an explicit all-clear line."""
+    """Markdown report of cross-chapter repetition (see `cross_chapter_repetition`) plus
+    stylometric voice drift (see `voice_drift`). Always returns a report - a clean book
+    gets an explicit all-clear line."""
     found = cross_chapter_repetition(chapters)
+    drift = voice_drift(chapters)
     out = ["# Cross-chapter cohesion report", "",
-           f"Scanned {len(chapters)} chapter(s) for verbatim repetition across chapters.", ""]
-    if not found["phrases"] and not found["openers"]:
-        out += ["No significant cross-chapter repetition detected. ✓"]
+           f"Scanned {len(chapters)} chapter(s) for verbatim repetition and voice drift.", ""]
+    if not found["phrases"] and not found["openers"] and not drift:
+        out += ["No significant cross-chapter repetition or voice drift detected. ✓"]
         return "\n".join(out) + "\n"
     if found["phrases"]:
         out += ["## Repeated phrasings", "",
@@ -388,6 +478,12 @@ def cohesion_report(chapters: list[tuple[str, str]]) -> str:
         out += ["## Formulaic openers", "",
                 "Chapter pairs that begin almost identically:", ""]
         out += [f"- {a} ↔ {b}" for a, b in found["openers"]]
+        out += [""]
+    if drift:
+        out += ["## Voice drift", "",
+                "Chapters whose prose style (function-word profile) reads as an outlier "
+                "from the rest of the book - check that the voice holds:", ""]
+        out += [f"- {label} (drift {dist})" for label, dist in drift]
         out += [""]
     out += ["_Report only - nothing was rewritten. Use `revise --chapter N` to address._"]
     return "\n".join(out).rstrip() + "\n"

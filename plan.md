@@ -1498,3 +1498,82 @@ governs skills - a self-directing policy is just another taste, quarantined iden
   in `prompts.py`. Edited: `config.py`, `orchestrator/{common,book,article}.py` (state keys +
   dispatch), `api.py`, `shell/{commands,_const}.py`. The orchestrator seams' `__init__` re-exports are
   unaffected (the agentic facade is additive).
+
+## 22. The craft engine - register-parameterized writing (2026-06-16)
+
+The agentic loop made the agent *self-directing*; this layer makes it a *great writer in more
+than one field*. The audit finding it answers: the pipeline guaranteed a **floor** (no slop, no
+contradictions) and an argument **ceiling** (thesis, counterargument) - but the craft contract was
+**monovocal** (one "researcher voice" baked into every prompt and the stripper), and almost all
+remaining craft (voice, rhythm, show-don't-tell) lived **inside the model**, reached by zero-shot
+instructions. Both fail the standing goal of running well on a **basic model**: the floor is code
+(model-independent), the ceiling was prompt-hope (model-dependent). This layer moves craft from
+*instructions the model must be clever enough to obey* to *demonstrations it imitates and
+deterministic checks it can't escape, parameterized by register*.
+
+### 22.1 Registers (the spine) - `registers.py`
+
+A `Register` is the craft contract as **data**, not hard-code: which anti-slop bans apply, which
+**invert** (academic *requires* hedging; copy *keeps* the exclamation and the rule of three; fiction
+*keeps* the em-dash), the voice/concreteness lines, rhythm/diction guidance, the citation style, the
+target reading grade, and **which deterministic craft metrics matter** for the genre. Eleven ship:
+`nonfiction` (default), `technical`, `literary-fiction`, `genre-fiction`, `academic`, `journalism`,
+`copywriting`, `business`, `poetry`, `screenplay`, `children`. `registers.infer(genre, mode, explicit)`
+picks one from the project's genre/angle unless `register:` is pinned in settings.
+
+**Invariant:** `register=None` (and the `nonfiction` profile) reproduce the historical
+`slop.render_constraints()` / `slop.tell_pattern()` **byte-for-byte** (a test asserts it), so every
+pre-existing run is unchanged. `slop.render_constraints(register)` / `tell_pattern(register)` filter
+the banned lists by the register's allowances; `humanizer` compiles a per-register tell matcher and
+keeps em-dashes where the register treats them as voice.
+
+### 22.2 Compensating for a basic model (the point)
+
+- **Few-shot, not just rules** (`exemplars.py`): before/after pairs in the surgical humanizer and
+  **score anchors** (a 5 vs a 2 per dimension) in the critic. Weak models imitate; they don't follow
+  abstractions. Stable, so they sit in the (cached) system prompt.
+- **Gold corpus** (`gold/<register>.md`, shipped as package-data): a genre-tagged "match this"
+  exemplar injected through the voice-exemplar slot by **default** (`brain.style_exemplars` = user
+  voice if any, else the register's gold). A weak model imitating a strong paragraph beats one told
+  to "write vivid prose."
+- **Genre-aware craft metrics** (`craft.py`): `structural_report(text, register)` now also computes
+  sentence-rhythm variance + opening-word runs, passive-voice ratio, adverb density, Flesch-Kincaid
+  grade, cliché hits, opening/closing weakness - and for fiction swaps in filter-verb density,
+  dialogue ratio, said-bookisms, POV/tense consistency, and sensory density. Computed evidence to the
+  critic, model-independent. (The historical four nonfiction lines are preserved exactly.)
+
+### 22.3 Surgical craft passes (Tier 2) - `surgery.py`
+
+Generalizes the humanizer's detect → rewrite-only-the-flaw → **guard** → splice pattern (citations +
+numbers preserved, defect strictly reduced, no new slop, length sane) to: **show-don't-tell** (filter
+verbs + told emotion → the concrete image; fiction registers) and **passive → active** (prose
+registers). Approved prose is never regenerated end-to-end, so a Flash micro-edit can't drift facts.
+Gated by `craft_passes` (default on); no-op in fake mode. Plus an opening/closing detector and a
+deterministic **voice-drift** report (`polish.voice_drift`: function-word-profile outliers across
+chapters, folded into the book cohesion report).
+
+### 22.4 Field templates + citation styles (Tier 3)
+
+`fields.py` injects a **structural grammar** into the outline architect (TOC / article outline):
+inverted-pyramid, IMRaD, AIDA/PAS, BLUF, how-to, three-act, screenplay - chosen by the register's
+default or a pinned `field:`. `polish.build_references(style=...)` renders the same ranked sources in
+the register's citation convention (`influence` default · `numeric` · `apa` · `mla` · `chicago` · `ap`
+· `none`); `influence` is byte-for-byte the old output.
+
+### 22.5 Config & wiring
+
+New tunable settings (all clamped): `register`, `field`, `citation_style` (""=infer/register-default),
+`craft_passes` (bool). Threaded as run-state keys and passed to `nodes.write_*/critique_*/cohesion_edit`
+and `humanizer.humanize` via a `register` argument (default `None` ⇒ unchanged). New files:
+`registers.py`, `craft.py`, `exemplars.py`, `surgery.py`, `fields.py`, `gold/*.md`,
+`tests/test_craft_engine.py`. Edited: `slop.py`, `humanizer.py`, `polish.py`, `prompts.py`, `nodes.py`,
+`config.py`, `brain.py`, `pyproject.toml` (package-data), `orchestrator/{common,book,article,review}.py`.
+
+### 22.6 Deliberately deferred (see `docs/proposal-personas-emotions-composition.md`)
+
+The **compositor** (a precedence cascade: register ⊃ field ⊃ persona ⊃ emotion ⊃ skills, single-select
+upper layers, conflict-resolution by precedence), **author/archetype personas** (curated voice bundles
+in the voice slot, public-domain + original; never living-author impersonation), and **emotions** as
+*anti-cliché deny-lists + the show-don't-tell pass* (NOT a symptom dictionary, which is a cliché
+generator). Decision recorded: finish these tiers first, then add the compositor; personas = archetypes
++ public-domain.

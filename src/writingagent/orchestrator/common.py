@@ -440,6 +440,9 @@ def _base_run_state(uid, abstract, *, intake, author, max_revisions, autonomous,
         "skill_duels": settings.skill_duels,
         "watch_blocking": settings.watch_blocking,
         "book_cohesion": settings.book_cohesion,
+        # Register craft layer (plan §22): surgical show-don't-tell / de-passive toggle.
+        # `register`/`field`/`citation_style` are set per-mode (book/article) at creation.
+        "craft_passes": getattr(settings, "craft_passes", True),
         # Agentic controller (plan §21): baked at creation like every other toggle. The
         # default ("pipeline") drives the unchanged fixed loop; "agentic" routes each unit
         # through agentic.run_unit. The real bounds are the per-unit agentic_max_unit_steps

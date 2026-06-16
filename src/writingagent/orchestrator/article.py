@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from .. import brain, concurrency, humanizer, llm, nodes, render, retrieval
+from .. import brain, concurrency, fields, humanizer, llm, nodes, registers, render, retrieval
 from .. import schemas as S
 from .. import skills as skills_mod
 from ..brain import ArticlePaths
@@ -71,7 +71,12 @@ def start_article(
 ) -> str:
     brain.ensure_user(uid)
     _record_author(uid, author)
-    outline = nodes.build_article_outline(cfg, _with_intake(abstract, intake), chosen, num_sections)
+    # Register/field (plan §22): inferred from the editorial angle unless pinned in settings.
+    register = registers.infer(chosen.angle if chosen else "", "article",
+                               explicit=getattr(settings, "register", ""))
+    outline = nodes.build_article_outline(
+        cfg, _with_intake(abstract, intake), chosen, num_sections,
+        structure=fields.resolve(register, getattr(settings, "field", "")))
     article_id = article_id_override or brain.slugify(outline.title)
     paths = ArticlePaths(article_id, uid).ensure()
 
@@ -94,6 +99,11 @@ def start_article(
         "article_id": article_id, "mode": "article",
         "phase": "sections", "num_sections": len(outline.sections),
         "current_section": 1,
+        # Genre/register profile (plan §22): tailors the anti-slop contract, craft metrics,
+        # style anchor, the critic's register overrides, and the outline field structure.
+        "register": register,
+        "field": getattr(settings, "field", "") or "",
+        "citation_style": getattr(settings, "citation_style", "") or "",
         "article_cohesion": settings.article_cohesion,
         "strip_inline_citations": settings.strip_inline_citations,
         "rank_references": settings.rank_references,
@@ -264,8 +274,9 @@ def _article_run_ops(cfg, paths: ArticlePaths, outline, prefetch, pool, log, ask
         angle = S.ArticleAngle(title=getattr(outline, "title", "") or "",
                                angle=getattr(outline, "angle", "") or "",
                                audience=getattr(outline, "audience", "") or "", hook="")
-        fresh = nodes.build_article_outline(cfg, state.get("abstract", ""), angle,
-                                            state["num_sections"])
+        fresh = nodes.build_article_outline(
+            cfg, state.get("abstract", ""), angle, state["num_sections"],
+            structure=fields.resolve(state.get("register"), state.get("field", "")))
         for i in range(n - 1, min(len(outline.sections), len(fresh.sections))):
             sec = fresh.sections[i]
             sec.number = i + 1
@@ -477,7 +488,8 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
     thesis_md = brain.read_text(paths.root / "thesis.md")
     thesis_brief_md = nodes.thesis_brief(thesis_md)   # critic/judge: claim+arguments only (F4)
     skeletons = bool(state.get("divergent_skeletons"))
-    voice = brain.voice_exemplars(paths.uid)
+    register = state.get("register") or None     # genre/register profile (plan §22)
+    voice = brain.style_exemplars(paths.uid, register)
     crit: S.Critique | None = None
     draft = ""
     best: tuple[str, S.Critique] | None = None
@@ -517,14 +529,15 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             cfg, outline, section, fix_notes=notes, context=full_context,
             skills=skill_bodies if skills is None else skills, images=images, base_draft=base,
             requirements=requirements, thesis=thesis_md, voice=voice,
-            length_note=ln, temperature=temperature, tools=_tools, tool_runner=_tool_runner)
+            length_note=ln, temperature=temperature, register=register,
+            tools=_tools, tool_runner=_tool_runner)
 
     def _critique(d):
         return nodes.critique_article_section(
             cfg, outline, section, d, context=full_context, watch_list=watch,
             requirements=requirements, thesis=thesis_brief_md, research_on=research_on,
             watch_blocking=bool(state.get("watch_blocking", True)),
-            length_note=_length_note(len(d.split()), target))
+            length_note=_length_note(len(d.split()), target), register=register)
 
     n_div = max(1, int(state.get("divergent_drafts", 1) or 1))
     _unit_tag = f"section_{n:02d}"
@@ -585,7 +598,8 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
                     cfg, outline, section, _d, context=_ctx, watch_list=_wl,
                     length_note=_length_note(len(_d.split()), _tgt), requirements=_req,
                     thesis=_th, research_on=_ro,
-                    watch_blocking=bool(state.get("watch_blocking", True)), lens=lens)
+                    watch_blocking=bool(state.get("watch_blocking", True)), lens=lens,
+                    register=register)
             passed, _blocks = agentic.panels.critique_panel(_critique_lens, log=log)
             if not passed:
                 crit.blocking.append(S.BlockingIssue(
@@ -647,8 +661,11 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
         draft, crit, first_pass = _finalize_unit(
             state, approved_attempt=approved_attempt, best=best, draft=draft,
             crit=crit, instruction=instruction, log=log)
+        if state.get("craft_passes", True):   # surgical show-don't-tell / de-passive (plan §22)
+            from .. import surgery
+            draft = surgery.apply(cfg, draft, register)
         _commit_section(cfg, paths, section, n, draft, skill_names, sources, first_pass,
-                        log, humanize=bool(state.get("humanize")))
+                        log, humanize=bool(state.get("humanize")), register=register)
         paths.section_draft(n).unlink(missing_ok=True)
         if agentic_on:   # label the controller's gather decisions with this unit's outcome (§21.11)
             from .. import agentic
@@ -660,7 +677,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
 
 
 def _commit_section(cfg, paths: ArticlePaths, section, n, draft, skill_names, sources,
-                    first_pass, log, *, humanize: bool = False) -> None:
+                    first_pass, log, *, humanize: bool = False, register: str | None = None) -> None:
     # 1. Renumber in-text [N] citations from this section's local source numbering to
     #    the article-wide registry numbering, so they match the final References list.
     registry = brain.read_json(paths.sources_json) or []
@@ -675,7 +692,7 @@ def _commit_section(cfg, paths: ArticlePaths, section, n, draft, skill_names, so
     tasks = {"summary": lambda: nodes.summarize_section(cfg, section, draft)}
     if humanize:
         log("   humanizing...")
-        tasks["humanized"] = lambda: humanizer.humanize(cfg, draft)
+        tasks["humanized"] = lambda: humanizer.humanize(cfg, draft, register)
     out = concurrency.gather(tasks, strict=True)
 
     final = out.get("humanized") or draft
@@ -740,7 +757,7 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
     if sections_md and state.get("article_cohesion"):
         log("   cohesion pass over the assembled article...")
         try:
-            edited = nodes.cohesion_edit(cfg, outline, body)
+            edited = nodes.cohesion_edit(cfg, outline, body, register=state.get("register") or None)
         except Exception:  # noqa: BLE001 - cohesion is best-effort polish
             edited = ""
         if (edited
@@ -757,9 +774,13 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
     keywords = (brain.read_text(paths.root / "thesis.md") or "") + "\n" + \
         "\n".join(re.findall(r"(?m)^#+ (.+)$", body))
     refs_md = ""
+    # Citation style from the register (academic→APA, journalism→AP, ...) unless pinned.
+    cite_style = state.get("citation_style") or registers.get(state.get("register")).citation_style
+    if cite_style == "none":
+        unique = []                                 # this register doesn't carry a reference list
     if unique and state.get("rank_references", True):
         scored = polish.score_sources(unique, body, keywords)
-        refs_md = polish.build_references(scored)
+        refs_md = polish.build_references(scored, style=cite_style)
     elif unique:                                    # ranking off: keep a plain dated list
         lines = ["## References", ""]
         for i, s in enumerate(unique, 1):
@@ -862,7 +883,8 @@ def _rewrite_section_draft(cfg, paths: ArticlePaths, outline, state, section, n:
     (the reader loop runs silent mid-pipeline); `length_target` puts a per-section word
     target on the writer calls (the reader-loop path does; `revise` historically did not)."""
     thesis_md = brain.read_text(paths.root / "thesis.md")
-    voice = brain.voice_exemplars(paths.uid)
+    register = state.get("register") or None
+    voice = brain.style_exemplars(paths.uid, register)
     watch = brain.read_text(brain.watch_list(paths.uid))
     requirements = (state.get("intake") or "").strip() or None
     target = section.target_words or (
@@ -874,25 +896,26 @@ def _rewrite_section_draft(cfg, paths: ArticlePaths, outline, state, section, n:
         log("   rewriting to your instruction...")
     draft = nodes.write_article_section(
         cfg, outline, section, fix_notes=instruction, base_draft=base,
-        thesis=thesis_md, voice=voice, requirements=requirements, length_note=write_ln)
+        thesis=thesis_md, voice=voice, requirements=requirements, length_note=write_ln,
+        register=register)
     if verbose:
         log("   critiquing...")
     crit = nodes.critique_article_section(
         cfg, outline, section, draft, thesis=thesis_md,
         context=_assemble_article_context(paths, n) or None, watch_list=watch,
         requirements=requirements, research_on=bool(state.get("use_researcher")),
-        length_note=_length_note(len(draft.split()), target))
+        length_note=_length_note(len(draft.split()), target), register=register)
     if crit.blocking and crit.verdict != "approve":
         if verbose:
             log(f"   {len(crit.blocking)} blocking issue(s) - one fix pass...")
         draft = nodes.write_article_section(
             cfg, outline, section, fix_notes=_merge_fix_notes(instruction, crit),
             base_draft=draft, thesis=thesis_md, voice=voice, requirements=requirements,
-            length_note=write_ln)
+            length_note=write_ln, register=register)
     if state.get("humanize"):
         if verbose:
             log("   humanizing...")
-        draft = humanizer.humanize(cfg, draft)
+        draft = humanizer.humanize(cfg, draft, register)
     return _strip_section_prefix(draft).strip()
 
 

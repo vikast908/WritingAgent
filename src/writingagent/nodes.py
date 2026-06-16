@@ -68,10 +68,13 @@ def planner_expand(cfg: ModelConfig, abstract: str, chosen: S.Direction) -> S.Bo
 
 
 # ── TOC ───────────────────────────────────────────────────────────────────────
-def build_toc(cfg: ModelConfig, plan: S.BookPlan, num_chapters: int) -> S.TOC:
+def build_toc(cfg: ModelConfig, plan: S.BookPlan, num_chapters: int,
+              structure: str | None = None) -> S.TOC:
     model = cfg.model_for("toc")
     user = (f"Book plan:\n{_ctx(plan)}\n\n"
             f"Design a table of contents with exactly {num_chapters} chapters.")
+    if structure:
+        user += f"\n\n{structure}"
     return complete_structured(model, P.TOC_SYS, user, S.TOC,
                                max_tokens=16000, temperature=cfg.temperature_for("toc"))
 
@@ -91,6 +94,7 @@ def write_chapter(
     requirements: str | None = None,
     voice: str | None = None,
     temperature: float | None = None,
+    register: str | None = None,
     tools: list[dict] | None = None,
     tool_runner=None,
 ) -> str:
@@ -120,11 +124,12 @@ def write_chapter(
     parts.append(f'Write chapter {blueprint.number}: "{blueprint.title}".')
     temp = temperature if temperature is not None else cfg.temperature_for("writer")
     fp, pp = cfg.frequency_penalty_for("writer"), cfg.presence_penalty_for("writer")
+    sys = P.writer_sys(register)
     if tools and tool_runner is not None:   # in-generation tool use (plan §21 Phase 3)
-        return complete_text_with_tools(model, P.WRITER_SYS, "\n\n".join(parts),
+        return complete_text_with_tools(model, sys, "\n\n".join(parts),
                                         tools=tools, tool_runner=tool_runner, max_tokens=16000,
                                         temperature=temp, frequency_penalty=fp, presence_penalty=pp)
-    return complete_text(model, P.WRITER_SYS, "\n\n".join(parts), max_tokens=16000,
+    return complete_text(model, sys, "\n\n".join(parts), max_tokens=16000,
                          temperature=temp, frequency_penalty=fp, presence_penalty=pp)
 
 
@@ -153,6 +158,7 @@ def critique_chapter(
     length_note: str | None = None,
     requirements: str | None = None,
     watch_blocking: bool = True,
+    register: str | None = None,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
@@ -170,9 +176,9 @@ def critique_chapter(
         parts.append(length_note)
     from .humanizer import structural_report
     parts.append("DETERMINISTIC STYLE METRICS (computed from the draft, not opinions):\n"
-                 + structural_report(prose))
+                 + structural_report(prose, register))
     parts.append(f"Chapter draft:\n{prose}")
-    return complete_structured(model, P.CRITIC_SYS, "\n\n".join(parts), S.Critique,
+    return complete_structured(model, P.critic_sys(register), "\n\n".join(parts), S.Critique,
                                max_tokens=cfg.max_tokens_for("critic", 8000),
                                temperature=cfg.temperature_for("critic"))
 
@@ -365,11 +371,14 @@ def plan_article_angles(cfg: ModelConfig, abstract: str, n: int = 3) -> S.Articl
 
 
 def build_article_outline(
-    cfg: ModelConfig, abstract: str, chosen: S.ArticleAngle, num_sections: int
+    cfg: ModelConfig, abstract: str, chosen: S.ArticleAngle, num_sections: int,
+    structure: str | None = None
 ) -> S.ArticleOutline:
     model = cfg.model_for("planner")
     user = (f"Topic / abstract:\n{abstract}\n\nChosen angle:\n{_ctx(chosen)}\n\n"
             f"Design an article outline with exactly {num_sections} sections.")
+    if structure:
+        user += f"\n\n{structure}"
     return complete_structured(model, P.ARTICLE_OUTLINE_SYS, user, S.ArticleOutline,
                                max_tokens=8000, temperature=cfg.temperature_for("planner"))
 
@@ -440,6 +449,7 @@ def write_article_section(
     thesis: str | None = None,
     voice: str | None = None,
     temperature: float | None = None,
+    register: str | None = None,
     tools: list[dict] | None = None,
     tool_runner=None,
 ) -> str:
@@ -473,11 +483,12 @@ def write_article_section(
     mt = cfg.max_tokens_for("writer", 8000)
     temp = temperature if temperature is not None else cfg.temperature_for("writer")
     fp, pp = cfg.frequency_penalty_for("writer"), cfg.presence_penalty_for("writer")
+    sys = P.article_writer_sys(register)
     if tools and tool_runner is not None:   # in-generation tool use (plan §21 Phase 3)
-        return complete_text_with_tools(model, P.ARTICLE_WRITER_SYS, "\n\n".join(parts),
+        return complete_text_with_tools(model, sys, "\n\n".join(parts),
                                         tools=tools, tool_runner=tool_runner, max_tokens=mt,
                                         temperature=temp, frequency_penalty=fp, presence_penalty=pp)
-    return complete_text(model, P.ARTICLE_WRITER_SYS, "\n\n".join(parts), max_tokens=mt,
+    return complete_text(model, sys, "\n\n".join(parts), max_tokens=mt,
                          temperature=temp, frequency_penalty=fp, presence_penalty=pp)
 
 
@@ -495,6 +506,7 @@ def critique_article_section(
     research_on: bool = True,
     watch_blocking: bool = True,
     lens: str | None = None,
+    register: str | None = None,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     parts = [f"Article outline:\n{_ctx(outline)}", f"Section blueprint:\n{_ctx(section)}"]
@@ -518,9 +530,9 @@ def critique_article_section(
         parts.append(length_note)
     from .humanizer import structural_report
     parts.append("DETERMINISTIC STYLE METRICS (computed from the draft, not opinions):\n"
-                 + structural_report(prose))
+                 + structural_report(prose, register))
     parts.append(f"Section draft:\n{prose}")
-    return complete_structured(model, P.ARTICLE_CRITIC_SYS, "\n\n".join(parts), S.Critique,
+    return complete_structured(model, P.article_critic_sys(register), "\n\n".join(parts), S.Critique,
                                max_tokens=cfg.max_tokens_for("critic", 4000),
                                temperature=cfg.temperature_for("critic"))
 
@@ -596,7 +608,8 @@ def change_summary(cfg: ModelConfig, old: str, new: str) -> str:
                          max_tokens=600, temperature=0.0)
 
 
-def cohesion_edit(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str) -> str:
+def cohesion_edit(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str,
+                  register: str | None = None) -> str:
     """Whole-article smoothing pass over the assembled section bodies (plan: article mode).
 
     Smooths transitions, removes cross-section repetition, unifies terminology. The
@@ -607,7 +620,7 @@ def cohesion_edit(cfg: ModelConfig, outline: S.ArticleOutline, body_md: str) -> 
     user = (f"Article outline (for the intended arc):\n{_ctx(outline)}\n\n"
             f"Assembled article body:\n{body_md}\n\n"
             "Return the cohesion-edited article body.")
-    return complete_text(model, P.COHESION_SYS, user,
+    return complete_text(model, P.cohesion_sys(register), user,
                          max_tokens=16000, temperature=cfg.temperature_for("writer"))
 
 

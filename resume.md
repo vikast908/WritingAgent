@@ -5,6 +5,39 @@
 
 ## Current status
 
+- **New (2026-06-16 - craft engine: register-parameterized writing, all tiers - DONE, branch
+  `feat/craft-engine-all-tiers`):** acted on a craft-POV review that found the agent excellent at the
+  *floor* (anti-slop) and the argument *ceiling* (thesis) but **monovocal** (one researcher voice forced
+  on every genre) and **model-dependent** for everything else (zero-shot prompts a basic model can't
+  execute). Built the fix bottom-up, suite green at every step (now 198 passed, 1 skipped; ruff clean):
+  - **Registers (`registers.py`)** - the craft contract as data, 11 profiles (nonfiction default,
+    technical, literary/genre fiction, academic, journalism, copywriting, business, poetry, screenplay,
+    children). `slop.render_constraints(register)`/`tell_pattern(register)` filter/invert the bans per
+    genre (fiction keeps em-dash; academic keeps `moreover` + requires hedging; copy keeps the
+    exclamation). **Invariant held + tested: `register=None`/`nonfiction` is byte-for-byte the old
+    output.** Inferred from genre/angle unless pinned.
+  - **Basic-model levers:** few-shot `exemplars.py` (humanizer before/after + critic 5-vs-2 score
+    anchors), a shipped genre-tagged **gold corpus** (`gold/*.md`, package-data) injected by default via
+    `brain.style_exemplars`, and a genre-aware **craft-metrics suite** (`craft.py`: sentence-rhythm
+    variance, passive ratio, adverbs, FK grade, clichés, opening/closing, and for fiction filter-verbs /
+    dialogue / said-bookisms / POV-tense / sensory density) fed to the critic as computed evidence.
+  - **Tier 2 (`surgery.py`):** generalized the humanizer's detect→rewrite-only→guard pattern to
+    show-don't-tell + passive→active (guards: citations/numbers preserved, defect strictly reduced, no
+    new slop); opening/closing detector; deterministic **voice-drift** (`polish.voice_drift`, function-
+    word stylometry) folded into the book cohesion report.
+  - **Tier 3:** field structural templates (`fields.py`: inverted-pyramid/IMRaD/AIDA/BLUF/how-to/
+    three-act/screenplay) injected into the outline architect; citation styles in
+    `polish.build_references(style=...)` (influence default · numeric · apa · mla · chicago · ap · none).
+  - **Wiring:** `register`/`field`/`citation_style`/`craft_passes` settings (clamped) → run-state →
+    threaded through `nodes.write_*/critique_*/cohesion_edit` + `humanizer.humanize` (default `None` ⇒
+    unchanged). Spec in **plan.md §22**.
+  - **NEXT STEP:** the user approved "finish tiers, then compositor." Next session: build the
+    **compositor** (precedence cascade register⊃field⊃persona⊃emotion⊃skills, single-select upper
+    layers) + **personas** (archetypes + public-domain, in the voice slot - NO living authors) +
+    **emotions** as anti-cliché deny-lists (NOT a symptom dictionary). Full design +
+    honest critique in `docs/proposal-personas-emotions-composition.md`. Branch not yet
+    committed/merged - review the diff, then commit on `feat/craft-engine-all-tiers`.
+
 - **New (2026-06-16 - all docs refreshed for the agentic controller, parallel agents - DONE):** brought
   the documentation set current with the now-built, live-validated agentic controller, via 5 parallel
   doc agents (each grounded in plan §21 + CHANGELOG + the file's own voice). **README.md:** repositioned

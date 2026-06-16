@@ -147,6 +147,14 @@ class Settings:
     export_dir: str = ""         # default save folder for exports ("" = each project's own folder; /path)
     strip_inline_citations: bool = True   # remove [N] markers from prose; sourcing lives only in end References
     rank_references: bool = True          # final References scored by influence (0-100), dated, sorted high->low
+    # ── Register / genre craft layer (plan §22) ──
+    register: str = ""           # "" = infer from genre/angle; else pin one (registers.names(): nonfiction,
+    #                              technical, literary-fiction, genre-fiction, academic, journalism,
+    #                              copywriting, business, poetry, screenplay, children)
+    field: str = ""              # "" = the register's default structure; else pin a field template
+    #                              (fields.names(): inverted-pyramid, imrad, aida, bluf, how-to, three-act, ...)
+    citation_style: str = ""     # "" = register default; else influence|numeric|apa|mla|chicago|ap|none
+    craft_passes: bool = True    # run surgical show-don't-tell / de-passive on each committed unit (plan §22)
     # ── Agentic controller (plan §21) - opt-in self-directing loop over the fixed pipeline ──
     agentic: bool = False                 # drive units through the controller (choose research/canon then draft)
     #                                       instead of the fixed pipeline. Default OFF => today's behavior, no risk.
@@ -213,6 +221,21 @@ def _clamp_settings(s: Settings) -> Settings:
         s.mode = "article"
     if s.agentic_policy not in ("default", "llm", "trace"):
         s.agentic_policy = "default"
+    # Register / field / citation-style: validate against the known sets; an unknown value
+    # falls back to "" (= infer / register default) so a typo degrades, never crashes a run.
+    # Lazy import keeps config free of an import cycle (registers/fields don't import config).
+    from . import fields as _fields
+    from . import registers as _registers
+    if s.register:
+        norm = s.register.strip().lower().replace("_", "-")
+        s.register = norm if norm in _registers.names() else ""
+    if s.field:
+        norm = s.field.strip().lower()
+        s.field = norm if norm in _fields.names() else ""
+    if s.citation_style:
+        norm = s.citation_style.strip().lower()
+        s.citation_style = norm if norm in (
+            "influence", "numeric", "apa", "mla", "chicago", "ap", "none") else ""
     return s
 
 
