@@ -29,6 +29,23 @@ Headroom is optional - the app runs fine without it.
   pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"
   ```
 
+### Dependency lock (optional)
+
+`pyproject.toml` is the canonical dependency declaration; there is no checked-in lock
+file. To pin an exact, reproducible set for a deploy, generate one in a **clean venv
+installed from public PyPI**:
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev,headroom]"             # add deep,web to lock those extras too
+python scripts/gen_lock.py > requirements.lock.txt
+```
+
+`scripts/gen_lock.py` resolves the closure of the project's declared dependencies against
+the installed environment (so an unrelated package in the venv can't pollute the lock).
+Don't commit a lock generated in a non-clean environment - the pins are only as resolvable
+as the environment they're read from.
+
 ### API key
 
 ```bash

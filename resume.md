@@ -5,34 +5,73 @@
 
 ## Current status
 
-> **PENDING - review next session (as of 2026-06-16).** Deferred review findings, roughly by value.
-> All are NON-blocking (suite is green, 390/1); pick up here tomorrow.
-> - **A-021 (High):** process-global LLM state (`_client`, `_usage`, `_run_id`, `_fallback_model`) is
->   module-global with manual `reset_usage()` - fine for one-shot CLI, a latent hazard in the long-lived
->   TUI (consecutive runs share one namespace) and under any concurrency. Consider a per-run context obj
->   or document the "serialize runs" invariant. (conftest now resets `_fallback_model` per test.)
-> - **A-022 (Med):** structured/analytical nodes (`extract_canon`, `consolidate`, `learn`) run at the
->   model-default temperature - should be low/0 for determinism. Set explicit temps in `models.yaml`.
-> - **A-024 (Med):** no `frequency_penalty`/`presence_penalty` despite repetition being the core enemy;
->   a mild positive freq penalty on the writer node directly attacks the slop the humanizer cleans up.
-> - **B-005 / A-017 (Med):** embedding cache key has no model id (stale-vector contamination if the
->   model changes) and is written non-atomically/unlocked. Namespace the key by model + use atomic write.
-> - **B-013 (Med):** no `context_length_exceeded` handling - a too-large prompt hard-fails instead of
->   trimming/summarizing/retrying with headroom on. (The new `max_context_chars` budget mitigates.)
-> - **B-012 (Med):** `stream_text` (TUI chat) has no retry/budget/telemetry - chat calls bypass the
->   kill-switch and usage accounting. Capture usage from the final stream chunk.
-> - **D-008 (Med):** book pipeline has no cross-chapter repetition/cohesion pass (articles do).
-> - **D-013 (Med):** LLM inputs/outputs are never logged at any verbosity - debugging "why did it
->   produce/escalate this" needs a re-run. Add an opt-in prompt/completion debug sink.
-> - **C-011 (Med):** `cli.py` is a 1001-line god-module - split into a `cli/` package like shell/.
-> - **D-014 (Low):** `agent_trace.jsonl` isn't joinable to the telemetry JSONL (no shared `run_id`/`ts`).
-> - **C-010 (Low):** `requirements.lock.txt` pins future/unresolvable versions - regenerate from a real freeze.
-> - **A-008 follow-up:** the humanizer still keeps its own tuned regex (now cross-checked against
->   `slop.py`); fully *generating* the regex from `slop.py` is the remaining single-source step.
+> **PENDING - remaining items (as of 2026-06-16).** The 9-item deferred-review batch plus C-011, C-010,
+> and the A-008 follow-up are all **DONE** (see the top session entries). Suite green (406/2). What's left:
 > - **Two deferred showstoppers (older):** independent blind A/B (third-party judge, n≥5) and a real
->   10+ chapter book validation. The full review reports (A-/B-/C-/D-### with file:line + fix code) are
->   in the conversation transcript if more detail is needed.
+>   10+ chapter book validation. Both need real API spend (and a human/third-model judge for the A/B) -
+>   they cannot be completed in this sandbox. These are the only open review items.
 
+- **New (2026-06-16 - C-010 + A-008 follow-up: low-priority items closed - DONE):** **A-008:** the
+  anti-slop lexicon is now FULLY single-sourced. The humanizer's tell-detector `_TELL_RE` is generated
+  from `slop.tell_pattern()` (new) instead of a parallel hand-maintained regex - the morphology rules
+  (verb inflections via silent-e stem + `\w*`, apostrophe tolerance, the `in today's [anything]`
+  wildcard, caveat/template skipping) live in `slop.py` now, so adding a banned word updates both the
+  writer prompt AND the stripper. `test_lexicon_single_source_consistency` strengthened (inflections +
+  phrase coverage + caveat-skip) - the cross-check is now a guarantee by construction. Added `boast→have`
+  to the lexicon (preserves the old "boasts" detection + bans it in the prompt). **C-010 (user chose
+  "delete"):** removed the checked-in `requirements.lock.txt` - it pinned unresolvable versions + a stale
+  `-e git+...` self-reference and nothing consumed it (CI installs via pyproject extras = canonical).
+  Replaced with **`scripts/gen_lock.py`** - parses pyproject's deps + optional groups, resolves the
+  closure against the *installed* env (so a shared/dev venv can't pollute the lock; excludes the project's
+  own editable install), prints exact pins; reports uninstalled optional deps on stderr. CONTRIBUTING
+  documents regenerating in a clean public-PyPI venv. (Root finding: this sandbox's own PyPI mirror pins
+  "future" versions that don't resolve on real PyPI, so no correct lock could be generated *here* - hence
+  delete + tool, not regenerate.) **406 passed / 2 skipped, ruff clean.** Docs: CHANGELOG, CONTRIBUTING.
+  That closes every actionable review item; only the two API-spend showstoppers remain.
+- **New (2026-06-16 - C-011: cli.py split into a cli/ package - DONE):** the last god-module
+  (`cli.py`, 1003 lines) is now `cli/` - a 25-line facade `__init__` (`from .seam import *`) + six seams:
+  **_common** (110: `_console`/`_project_word_count`/`_paths_for`/`_resolve_book`/`_spin`/`_print_diff`),
+  **create** (112: `cmd_new`/`_cmd_new_book`/`_cmd_new_article`/`_outline_gate`/`_autonomous_value`),
+  **interview** (171: the autonomous `write` flow - `cmd_write`/`_conduct_interview`/`_ask_batch`/
+  `_pick_approach`/`_quick_research`/`_render_intake`), **commands** (301: the 17 core project commands),
+  **export** (222: `cmd_export`/`cmd_polish`/`cmd_evidence` + `_resolve_formats`/`_EXPORT_FORMATS`/
+  `_EXPORT_FNS`/`_run_exports`/`_report_export`/`_export_failed`), **app** (194: `_COMMANDS`/`build_parser`/
+  `_apply_provider`/`main`). DAG acyclic (`_common` ← all; export ← {interview,app}; {create,interview,
+  commands} ← app). Facade re-exports every public + test-reached private name, so `cli.X` and
+  `from writingagent.cli import X` are unchanged for the `writing-agent` entry point, the shell
+  (`from ..cli import _EXPORT_FORMATS`), and the suite. **Same monkeypatch-on-facade gotcha as the shell
+  split**: 3 test patch sites that set a now-relocated global (`_console`, `_EXPORT_FNS`) were repointed
+  to the seam home (`cli.export`/`cli.interview`) - a function resolves its globals in its defining
+  module, not the facade. Per-file-ignore F401/F403/F405 added for the facade. Verified the real launcher
+  (`python writingagent.py list`) + facade re-export identity. **406 passed / 2 skipped, ruff clean.**
+  Docs: CHANGELOG, plan §20.1. That closes the last god-file. **Next:** C-010 (lockfile regen - needs a
+  clean reference env), A-008 followup, the two older showstoppers.
+- **New (2026-06-16 - deferred-review batch: 9 findings closed in one pass - DONE):** cleared the whole
+  PENDING review list (the user asked to "build all at once"). **A-021 (High):** `llm.run_session()` -
+  a process lock + reset/tag/clear context manager - now wraps the entire `orchestrator.run` body
+  (split into a thin `run()` + `_run()`), so two overlapping runs in the long-lived TUI/web host
+  serialize instead of corrupting each other's token tally / run-id / telemetry attribution; the
+  module-global invariant is documented. **A-022:** `extract_canon`/`consolidate`/`learn` now pass
+  explicit low/0 temps (added `consolidation: 0.0`, `learner: 0.2` to `models.yaml`; extract_canon picks
+  up `summarizer: 0.0`) - they were silently running at the model default. **A-024:** new per-node
+  `frequency_penalty`/`presence_penalty` maps in `models.yaml` (+ `ModelConfig` getters that clamp to
+  [-2,2], + to_dict/save_config round-trip); the writer ships `0.3`/`0.1` to attack token repetition at
+  the source. **B-005/A-017:** `embeddings._key` is namespaced by `_MODEL_NAME` (no stale-vector
+  contamination) and `embed_texts` reads-computes-writes under a lock with an atomic `brain.write_text`.
+  **B-012:** `stream_text` now `_check_budget()`s, requests `stream_options.include_usage` + cost, and
+  records usage + telemetry + debug from the terminal chunk (no auto-retry - a stream can't be replayed;
+  documented). **B-013:** `_is_context_overflow` + `_shrink_for_context` recover a `context_length_exceeded`
+  rejection by shrinking (headroom else truncate) and retrying once in both `complete_text` and
+  `complete_structured`. **D-008:** new `polish.cross_chapter_repetition`/`cohesion_report` (deterministic,
+  no LLM) write `cohesion_report.md` after book assembly, gated by the new `book_cohesion` setting -
+  a detector (reused phrasings + formulaic openers across chapters), not a rewriter (a 10-chapter rewrite
+  is impractical/lossy). **D-013:** opt-in `WRITINGAGENT_LLM_DEBUG=1` → `telemetry.log_debug` →
+  `.index/llm_debug-*.jsonl` (full prompt+completion, same run_id/unit keys). **D-014:** `trace.append`
+  stamps `run_id` (new `llm.run_id()`) + `ts`, so the agentic action trace joins to the telemetry JSONL.
+  **+17 tests (test_hardening/test_config/test_polish/test_retrieval/test_agentic); 406 passed / 2 skipped
+  (env: live-net opt-in + d2 not installed), ruff clean.** Docs: CHANGELOG, this file. **Next:** the
+  remaining PENDING items above (C-011 cli split as its own session; C-010 lockfile; A-008 followup; the
+  two older showstoppers).
 - **New (2026-06-16 - A-008 lexicon single-source + C-007 config validation + all md docs + git - DONE):**
   closed the "next batch". **A-008:** new `src/writingagent/slop.py` is the single source for the
   anti-slop lexicon (verbs/terms/transitions/intensifiers/phrases/openers + `TECHNICAL_EXCEPTIONS`);

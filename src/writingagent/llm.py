@@ -9,9 +9,18 @@ The active provider (OpenRouter by default) comes from `providers.py`; switch it
 with `/provider`, the `provider` setting, or WRITINGAGENT_PROVIDER. Each provider
 reads its own key env var (OPENROUTER_API_KEY, DEEPSEEK_API_KEY, ...). Models are
 configured per node in config/models.yaml.
+
+Process-global state invariant (A-021): the client, usage tally, run-id, and the
+per-thread `unit`/`project` tags are MODULE-GLOBAL - the design is one unattended
+pipeline run per process. In a long-lived host (the TUI, the web demo) two
+overlapping runs would corrupt each other's token accounting and telemetry
+attribution. `run_session()` makes the full run() body acquire a process lock so
+concurrent runs SERIALIZE instead of interleaving; callers that drive a whole run
+(orchestrator.run) wrap it in that context manager.
 """
 from __future__ import annotations
 
+import contextlib
 import datetime
 import functools
 import logging
@@ -149,6 +158,35 @@ def reset_usage() -> None:
         _usage.update(calls=0, prompt_tokens=0, completion_tokens=0, total_tokens=0,
                       cost=0.0, cached_tokens=0)
     _run_id = uuid.uuid4().hex[:12]
+
+
+def run_id() -> str:
+    """The current run's id - the join key shared by telemetry calls and the agentic
+    action trace (so a run's LLM calls and controller decisions line up; D-014)."""
+    return _run_id
+
+
+# Serializes a full pipeline run's use of the module-global accounting state (see the
+# module docstring's A-021 invariant). One unattended run per process is the design;
+# this lock degrades concurrent runs in a long-lived host to "one at a time" rather
+# than letting them corrupt each other's usage tally / run-id / telemetry tags.
+_run_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def run_session(project: str | None = None, *, budget: int = 0):
+    """Context manager wrapping one whole pipeline run: acquire the run lock, reset the
+    usage tally + run-id, set the project tag and token budget, and clear the per-run
+    tags on exit (so a finished run never mis-attributes a later stray call)."""
+    with _run_lock:
+        reset_usage()
+        set_project(project)
+        set_run_budget(budget)
+        try:
+            yield
+        finally:
+            set_project(None)
+            set_unit(None)
 
 
 def _u(o, name: str) -> int:
@@ -296,6 +334,73 @@ def _backoff_sleep(attempt: int, exc: Exception) -> None:
 
 class _EmptyResponse(RuntimeError):
     """Model returned no content (e.g. reasoning consumed the whole token budget)."""
+
+
+# ── Context-window overflow recovery (B-013) ──────────────────────────────────
+def _is_context_overflow(exc: Exception) -> bool:
+    """True when the provider rejected the request for exceeding the context window.
+    Conventions differ (OpenAI: code 'context_length_exceeded'; others put it in the
+    message), so we sniff both. Distinct from a generic 400 - this one is recoverable
+    by SHRINKING the prompt and retrying, rather than failing the whole node."""
+    if getattr(exc, "status_code", None) not in (400, 413, None):
+        return False
+    code = str(getattr(exc, "code", "") or "")
+    msg = str(getattr(exc, "message", "") or exc).lower()
+    return (
+        "context_length_exceeded" in code
+        or "context_length_exceeded" in msg
+        or "context length" in msg
+        or "maximum context" in msg
+        or "too many tokens" in msg
+        or "reduce the length" in msg
+        or "string too long" in msg
+    )
+
+
+def _shrink_for_context(messages: list[dict], model: str) -> list[dict]:
+    """Make an over-long message list fit the window. Prefer headroom compression
+    (preserves meaning); if it's absent or doesn't help, hard-truncate the single
+    longest message to 60%. Best-effort - returns the original on any failure."""
+    try:
+        from headroom import compress as hr_compress
+        result = hr_compress(messages, model=_HEADROOM_COUNT_MODEL)
+        if result.tokens_saved > 0:
+            return result.messages
+    except Exception:  # noqa: BLE001 - fall through to the deterministic truncation
+        pass
+    out = [dict(m) for m in messages]
+    if not out:
+        return out
+    i = max(range(len(out)), key=lambda k: len(str(out[k].get("content") or "")))
+    content = str(out[i].get("content") or "")
+    keep = int(len(content) * 0.6)
+    out[i]["content"] = content[:keep] + "\n\n[...truncated to fit the model context window...]"
+    return out
+
+
+# ── Opt-in prompt/completion debug sink (D-013) ───────────────────────────────
+# Set WRITINGAGENT_LLM_DEBUG=1 to record the full prompt + completion of every call
+# to .index/llm_debug-YYYYMMDD.jsonl (keyed by the same run_id/unit as telemetry, so
+# "why did it produce/escalate this" is answerable without a re-run). Off by default
+# (prompts/completions are large and may carry the user's text).
+def _llm_debug_enabled() -> bool:
+    return os.getenv("WRITINGAGENT_LLM_DEBUG", "").strip().lower() not in ("", "0", "false", "no")
+
+
+def _debug_dump(kind: str, model: str, messages: list[dict], output: str) -> None:
+    if not _llm_debug_enabled():
+        return
+    from . import telemetry
+    telemetry.log_debug({
+        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "run_id": _run_id,
+        "project": _run_project,
+        "unit": getattr(_tl_ctx, "unit", None),
+        "kind": kind,
+        "model": model,
+        "messages": messages,
+        "output": output,
+    })
 
 
 # headroom uses the model name only to select a tokenizer for tallying savings;
@@ -462,6 +567,8 @@ def complete_text(
     *,
     max_tokens: int = 16000,
     temperature: float | None = None,
+    frequency_penalty: float | None = None,
+    presence_penalty: float | None = None,
     _allow_fallback: bool = True,
 ) -> str:
     _check_budget()   # kill-switch: before fake mode too, so tests exercise it offline
@@ -473,32 +580,47 @@ def complete_text(
     )
     t0 = time.time()
     last_err: Exception | None = None
+    shrunk = False   # context-overflow recovery fires at most once per call
     for attempt in range(_MAX_ATTEMPTS):
         kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages,
                         **_cost_kwargs()}
         if temperature is not None:
             kwargs["temperature"] = temperature
+        if frequency_penalty is not None:
+            kwargs["frequency_penalty"] = frequency_penalty
+        if presence_penalty is not None:
+            kwargs["presence_penalty"] = presence_penalty
         try:
             resp = _get_client().chat.completions.create(**kwargs)
             _record_usage(resp)
             content = (resp.choices[0].message.content or "").strip()
             if content:
                 _log_call("text", model, t0, attempt + 1, resp)
+                _debug_dump("text", model, messages, content)
                 return content
             # Empty content (reasoning ate the budget) - retryable.
             raise _EmptyResponse(
                 f"empty response (finish_reason={resp.choices[0].finish_reason})")
         except Exception as e:  # noqa: BLE001
             last_err = e
-            if attempt < _MAX_ATTEMPTS - 1 and _is_retryable(e):
-                _backoff_sleep(attempt, e)
-                continue
+            if attempt < _MAX_ATTEMPTS - 1:
+                if _is_retryable(e):
+                    _backoff_sleep(attempt, e)
+                    continue
+                if not shrunk and _is_context_overflow(e):
+                    # Prompt too long for the window: shrink and retry instead of
+                    # failing the node (B-013).
+                    messages = _shrink_for_context(messages, model)
+                    shrunk = True
+                    _log.warning("text: context overflow - shrinking prompt and retrying")
+                    continue
             break  # non-retryable (e.g. 401/400) or out of attempts - fail fast
     _log_call("text", model, t0, attempt + 1, None, error=str(last_err))
     if _allow_fallback and _fallback_model and model != _fallback_model:
         _log.warning("text: %s failed (%s); falling back to %s", model, last_err, _fallback_model)
         return complete_text(_fallback_model, system, user, max_tokens=max_tokens,
-                             temperature=temperature, _allow_fallback=False)
+                             temperature=temperature, frequency_penalty=frequency_penalty,
+                             presence_penalty=presence_penalty, _allow_fallback=False)
     raise RuntimeError(f"Text completion failed for {model}: {last_err}")
 
 
@@ -518,7 +640,13 @@ def stream_text(
     Errors (including mid-stream) propagate to the caller, who already holds the
     partial chunks. Yielding the error as a text chunk would let it pass for
     assistant prose - saved to chat history and command-parsed.
+
+    Honors the run token budget and records usage + telemetry from the final stream
+    chunk (B-012), so chat calls no longer bypass the kill-switch and accounting.
+    (No automatic retry: a stream can't be replayed once chunks are emitted, so a
+    mid-stream failure is left to the caller, who holds the partial output.)
     """
+    _check_budget()   # kill-switch: chat must not blow past max_run_tokens either
     if _fake_mode():
         yield _FAKE_TEXT
         return
@@ -527,14 +655,30 @@ def stream_text(
         raw.extend(history)
     raw.append({"role": "user", "content": user})
     messages = _compress(raw, model)
-    kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages, "stream": True}
+    kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages,
+                    "stream": True, "stream_options": {"include_usage": True},
+                    **_cost_kwargs()}
     if temperature is not None:
         kwargs["temperature"] = temperature
+    t0 = time.time()
+    final_usage = None
+    parts: list[str] = []
     stream = _get_client().chat.completions.create(**kwargs)
     for chunk in stream:
+        u = getattr(chunk, "usage", None)
+        if u is not None:
+            final_usage = u   # arrives on the terminal chunk (stream_options.include_usage)
+        if not chunk.choices:
+            continue
         delta = chunk.choices[0].delta.content
         if delta:
+            parts.append(delta)
             yield delta
+    if final_usage is not None:
+        shim = types.SimpleNamespace(usage=final_usage)
+        _record_usage(shim)
+        _log_call("chat", model, t0, 1, shim)
+    _debug_dump("chat", model, messages, "".join(parts))
 
 
 def _strip_schema_noise(obj):
@@ -594,6 +738,7 @@ def complete_structured(
     t0 = time.time()
     last_err: Exception | None = None
     use_response_format = True   # dropped if a model rejects it (BadRequest)
+    shrunk = False               # context-overflow recovery fires at most once per call
     for attempt in range(_MAX_ATTEMPTS):
         kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages,
                         **_cost_kwargs()}
@@ -608,6 +753,14 @@ def complete_structured(
             if attempt < _MAX_ATTEMPTS - 1:
                 if _is_retryable(e):
                     _backoff_sleep(attempt, e)
+                    continue
+                if not shrunk and _is_context_overflow(e):
+                    # Prompt too long for the window: shrink and retry (B-013). Checked
+                    # before the response_format drop so a genuine overflow isn't
+                    # misread as a format rejection.
+                    messages = _shrink_for_context(messages, model)
+                    shrunk = True
+                    _log.warning("structured: context overflow - shrinking prompt and retrying")
                     continue
                 if use_response_format and getattr(e, "status_code", None) == 400:
                     # This model likely rejects json_object response_format - drop it.
@@ -625,6 +778,7 @@ def complete_structured(
                     f"empty model output (finish_reason={resp.choices[0].finish_reason})")
             out = schema.model_validate_json(text)
             _log_call("structured", model, t0, attempt + 1, resp)
+            _debug_dump("structured", model, messages, raw)
             return out
         except Exception as e:  # noqa: BLE001 - parse/validation/empty
             last_err = e

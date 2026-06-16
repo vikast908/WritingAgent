@@ -7,7 +7,7 @@ import time
 import pytest
 from pydantic import BaseModel
 
-from writingagent import cache, concurrency, llm
+from writingagent import brain, cache, concurrency, llm
 
 
 # ── concurrency.gather ─────────────────────────────────────────────────────────
@@ -221,6 +221,73 @@ def test_usage_is_recorded(no_sleep, monkeypatch):
     llm.complete_text("m", "sys", "user")
     summary = llm.usage_summary()
     assert summary is not None and "15 tokens" in summary  # 10 prompt + 5 completion
+
+
+# ── B-013: context-window overflow recovery ────────────────────────────────────
+def test_complete_text_recovers_from_context_overflow(no_sleep, monkeypatch):
+    # A context-length rejection is NOT a fatal 4xx: the prompt is shrunk and retried
+    # once instead of failing the whole node.
+    client = _install(
+        monkeypatch,
+        [ValueError("This model's maximum context length is 8192 tokens"), "trimmed prose"])
+    out = llm.complete_text("m", "sys", "x " * 4000)
+    assert out == "trimmed prose" and client.chat.completions.calls == 2
+
+
+def test_context_overflow_detection():
+    assert llm._is_context_overflow(ValueError("maximum context length exceeded"))
+    assert llm._is_context_overflow(ValueError("context_length_exceeded"))
+    assert not llm._is_context_overflow(ValueError("401 unauthorized"))
+
+
+def test_shrink_truncates_longest_message():
+    msgs = [{"role": "system", "content": "short"},
+            {"role": "user", "content": "y" * 1000}]
+    out = llm._shrink_for_context(msgs, "m")
+    assert len(out[1]["content"]) < 1000 and "truncated" in out[1]["content"]
+
+
+# ── B-012: stream_text honors the run budget ────────────────────────────────────
+def test_stream_text_honors_budget(monkeypatch):
+    monkeypatch.setattr(llm, "_fake_mode", lambda: False)
+    llm.reset_usage()
+    with llm._usage_lock:
+        llm._usage["total_tokens"] = 100
+    llm.set_run_budget(1)
+    try:
+        with pytest.raises(llm.BudgetExceeded):
+            next(llm.stream_text("m", "sys", "user"))
+    finally:
+        llm.set_run_budget(0)
+        llm.reset_usage()
+
+
+# ── A-021: run_session serializes + clears per-run tags ─────────────────────────
+def test_run_session_resets_and_clears_tags():
+    llm.set_project("stale")
+    llm.set_unit("stale-unit")
+    with llm.run_session("proj", budget=123):
+        assert llm._run_project == "proj"
+        assert llm.run_budget() == 123
+    assert llm._run_project is None
+    assert getattr(llm._tl_ctx, "unit", None) is None
+    llm.set_run_budget(0)
+
+
+# ── D-013: opt-in prompt/completion debug sink ──────────────────────────────────
+def test_llm_debug_sink_writes_when_enabled(tmp_brain, no_sleep, monkeypatch):
+    monkeypatch.setenv("WRITINGAGENT_LLM_DEBUG", "1")
+    _install(monkeypatch, ["debug prose"])
+    llm.complete_text("m", "sys", "the prompt")
+    files = list(brain.INDEX_DIR.glob("llm_debug-*.jsonl"))
+    assert files and "debug prose" in files[0].read_text(encoding="utf-8")
+
+
+def test_llm_debug_sink_silent_when_disabled(tmp_brain, no_sleep, monkeypatch):
+    monkeypatch.delenv("WRITINGAGENT_LLM_DEBUG", raising=False)
+    _install(monkeypatch, ["quiet prose"])
+    llm.complete_text("m", "sys", "the prompt")
+    assert not list(brain.INDEX_DIR.glob("llm_debug-*.jsonl"))
 
 
 def test_structured_repair_retry(no_sleep, monkeypatch):

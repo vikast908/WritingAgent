@@ -14,10 +14,15 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import threading
 from pathlib import Path
+
+from . import brain
 
 _MODEL_NAME = "all-MiniLM-L6-v2"   # 80 MB; fast; strong for short genre/tag phrases
 _model = None                        # lazy-loaded on first embed call
+_cache_lock = threading.Lock()       # serialize the read-modify-write of the shared cache file
+#                                      (book prefetch embeds chapters n and n+1 concurrently)
 
 
 def available() -> bool:
@@ -38,7 +43,10 @@ def _get_model():
 
 
 def _key(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()[:20]
+    # Namespaced by model (A-017): a cache built with one embedding model must never serve
+    # a vector to another - different models live in different vector spaces, so a bare
+    # text hash would silently return incompatible vectors if _MODEL_NAME ever changes.
+    return hashlib.sha256(f"{_MODEL_NAME}\x00{text}".encode()).hexdigest()[:20]
 
 
 def embed_texts(texts: list[str], cache_path: Path | None = None) -> list[list[float]]:
@@ -51,25 +59,28 @@ def embed_texts(texts: list[str], cache_path: Path | None = None) -> list[list[f
             "sentence-transformers is not installed. "
             "Enable embeddings with: pip install sentence-transformers"
         )
-    cache: dict = {}
-    if cache_path and cache_path.exists():
-        try:
-            cache = json.loads(cache_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            cache = {}
-
     keys = [_key(t) for t in texts]
-    miss = [i for i, k in enumerate(keys) if k not in cache]
-    if miss:
-        model = _get_model()
-        vecs = model.encode([texts[i] for i in miss])
-        for j, i in enumerate(miss):
-            cache[keys[i]] = vecs[j].tolist()
-        if cache_path:
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            cache_path.write_text(json.dumps(cache), encoding="utf-8")
+    # The read, compute, and write run under one lock so concurrent embed calls (the book
+    # prefetches adjacent chapters in parallel) can't lose each other's cache entries to a
+    # last-writer-wins overwrite; the disk write is atomic (B-005).
+    with _cache_lock:
+        cache: dict = {}
+        if cache_path and cache_path.exists():
+            try:
+                cache = json.loads(cache_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                cache = {}
 
-    return [cache[k] for k in keys]
+        miss = [i for i, k in enumerate(keys) if k not in cache]
+        if miss:
+            model = _get_model()
+            vecs = model.encode([texts[i] for i in miss])
+            for j, i in enumerate(miss):
+                cache[keys[i]] = vecs[j].tolist()
+            if cache_path:
+                brain.write_text(cache_path, json.dumps(cache))
+
+        return [cache[k] for k in keys]
 
 
 def cosine(a: list[float], b: list[float]) -> float:

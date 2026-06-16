@@ -23,6 +23,11 @@ class ModelConfig:
         self._nodes = data.get("nodes", {}) or {}
         self._temperature = data.get("temperature", {}) or {}
         self._max_tokens = data.get("max_tokens", {}) or {}   # per-node completion caps
+        # Per-node repetition penalties (A-024). A mild positive frequency_penalty on the
+        # writer directly attacks the token-level repetition the humanizer cleans up after
+        # the fact. Both are clamped to OpenAI's [-2, 2] in the getters. Empty = unset.
+        self._frequency_penalty = data.get("frequency_penalty", {}) or {}
+        self._presence_penalty = data.get("presence_penalty", {}) or {}
         # The cheapest reliable model to retry on after the primary exhausts its retries
         # (plan §12.1 fallback). Empty = no fallback. One global slug, not per-node.
         self._fallback = data.get("fallback", "")
@@ -33,6 +38,22 @@ class ModelConfig:
     def temperature_for(self, node: str):
         """May be None. The LLM wrapper drops it for models that reject sampling."""
         return self._temperature.get(node)
+
+    @staticmethod
+    def _clamp_penalty(v):
+        """Clamp a penalty to OpenAI's accepted [-2, 2]; None/garbage -> None (unset)."""
+        try:
+            return min(2.0, max(-2.0, float(v)))
+        except (TypeError, ValueError):
+            return None
+
+    def frequency_penalty_for(self, node: str):
+        """Per-node frequency_penalty (None when unset). The LLM wrapper omits it if None."""
+        return self._clamp_penalty(self._frequency_penalty.get(node))
+
+    def presence_penalty_for(self, node: str):
+        """Per-node presence_penalty (None when unset). The LLM wrapper omits it if None."""
+        return self._clamp_penalty(self._presence_penalty.get(node))
 
     def max_tokens_for(self, node: str, default: int) -> int:
         """Per-node completion cap from models.yaml `max_tokens:` (falls back to the
@@ -67,6 +88,8 @@ class ModelConfig:
     def to_dict(self) -> dict:
         return {"default": self._default, "nodes": dict(self._nodes),
                 "temperature": dict(self._temperature), "max_tokens": dict(self._max_tokens),
+                "frequency_penalty": dict(self._frequency_penalty),
+                "presence_penalty": dict(self._presence_penalty),
                 "fallback": self._fallback}
 
 
@@ -101,6 +124,9 @@ class Settings:
     autonomous: bool = True                  # no human-in-the-loop: never pause, commit best draft
     humanize: bool = True                    # rewrite each chapter to strip AI tells (em-dashes...)
     article_cohesion: bool = True            # whole-article smoothing pass before References
+    book_cohesion: bool = True               # book: deterministic cross-chapter repetition report
+    #                                          after assembly (detector, not a rewriter - a full
+    #                                          10-chapter rewrite is impractical/lossy; D-008)
     use_images: bool = True                  # fetch Wikimedia Commons images (non-fiction/illustrated)
     diagram_engine: str = "auto"             # SVG layout: auto (D2+ELK if d2 is installed, else builtin) | d2 | builtin
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
@@ -153,6 +179,12 @@ def save_config(cfg: ModelConfig) -> None:
     if data.get("max_tokens"):
         lines += ["", "max_tokens:"]
         lines += [f"  {k}: {v}" for k, v in data["max_tokens"].items()]
+    if data.get("frequency_penalty"):
+        lines += ["", "frequency_penalty:"]
+        lines += [f"  {k}: {v}" for k, v in data["frequency_penalty"].items()]
+    if data.get("presence_penalty"):
+        lines += ["", "presence_penalty:"]
+        lines += [f"  {k}: {v}" for k, v in data["presence_penalty"].items()]
     _MODELS.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

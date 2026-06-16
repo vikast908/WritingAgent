@@ -315,3 +315,79 @@ def build_evidence_report(manuscript_md: str, thesis_md: str = "", title: str = 
                           sec.group(0).strip(), count=1)
             out += ["", body]
     return "\n".join(out).rstrip() + "\n"
+
+
+# ── cross-chapter cohesion (book, D-008) ─────────────────────────────────────────
+def _prose_only(md: str) -> str:
+    """Strip fenced code and headings so repetition scanning sees only prose."""
+    text = _CODE_FENCE.sub(" ", md or "")
+    text = re.sub(r"(?m)^#{1,6}[ \t].*$", " ", text)   # headings repeat by design
+    return _IMG_LINE.sub(" ", text)
+
+
+def _ngrams(tokens: list[str], n: int) -> list[str]:
+    return [" ".join(tokens[i:i + n]) for i in range(len(tokens) - n + 1)]
+
+
+def cross_chapter_repetition(
+    chapters: list[tuple[str, str]], *, n: int = 6, min_chapters: int = 2, top: int = 20
+) -> dict:
+    """Detect prose that repeats VERBATIM across different chapters (D-008).
+
+    The book pipeline has no whole-manuscript smoothing pass (a 10-chapter rewrite is
+    impractical and risks losing narrative content), so this is a deterministic, free
+    DETECTOR rather than a rewriter: it finds the cross-chapter repetition a human editor
+    would flag - reused stock phrasings and near-identical chapter openers - and reports
+    them for a targeted `revise`. `chapters` is a list of (label, prose) in order.
+
+    Returns {"phrases": [(phrase, [labels...]), ...], "openers": [(label_a, label_b), ...]}.
+    Repetition WITHIN one chapter is ignored (that's the per-chapter critic's job)."""
+    prepped = [(label, _tokens(_prose_only(prose))) for label, prose in chapters]
+
+    # Repeated n-grams: an n-gram seen in min_chapters+ DISTINCT chapters (dedup within a
+    # chapter first, so a phrase a writer leans on inside one chapter doesn't count).
+    where: dict[str, set[str]] = {}
+    for label, toks in prepped:
+        for g in set(_ngrams(toks, n)):
+            where.setdefault(g, set()).add(label)
+    phrases = sorted(
+        ((g, sorted(labels)) for g, labels in where.items() if len(labels) >= min_chapters),
+        key=lambda x: (-len(x[1]), x[0]),
+    )[:top]
+
+    # Near-identical openers: the first ~12 prose tokens of two chapters overlapping heavily
+    # reads as formulaic ("In this chapter we...") even when no single n-gram matches.
+    openers = []
+    heads = [(label, set(toks[:12])) for label, toks in prepped if len(toks) >= 8]
+    for i in range(len(heads)):
+        for j in range(i + 1, len(heads)):
+            a, sa = heads[i]
+            b, sb = heads[j]
+            inter = len(sa & sb)
+            union = len(sa | sb) or 1
+            if inter / union >= 0.6:
+                openers.append((a, b))
+    return {"phrases": phrases, "openers": openers}
+
+
+def cohesion_report(chapters: list[tuple[str, str]]) -> str:
+    """Markdown report of cross-chapter repetition (see `cross_chapter_repetition`).
+    Always returns a report - a clean book gets an explicit all-clear line."""
+    found = cross_chapter_repetition(chapters)
+    out = ["# Cross-chapter cohesion report", "",
+           f"Scanned {len(chapters)} chapter(s) for verbatim repetition across chapters.", ""]
+    if not found["phrases"] and not found["openers"]:
+        out += ["No significant cross-chapter repetition detected. ✓"]
+        return "\n".join(out) + "\n"
+    if found["phrases"]:
+        out += ["## Repeated phrasings", "",
+                "Phrases that appear in multiple chapters - consider varying them:", ""]
+        out += [f'- "{phrase}" — {", ".join(labels)}' for phrase, labels in found["phrases"]]
+        out += [""]
+    if found["openers"]:
+        out += ["## Formulaic openers", "",
+                "Chapter pairs that begin almost identically:", ""]
+        out += [f"- {a} ↔ {b}" for a, b in found["openers"]]
+        out += [""]
+    out += ["_Report only - nothing was rewritten. Use `revise --chapter N` to address._"]
+    return "\n".join(out).rstrip() + "\n"

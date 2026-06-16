@@ -106,7 +106,7 @@ def test_conduct_interview_builds_intake_no_console(tmp_brain, fake_llm, monkeyp
 def test_cmd_write_end_to_end_exports_file(tmp_brain, fake_llm, monkeypatch):
     cfg, settings = load_config(), load_settings()
     settings.mode = "article"
-    monkeypatch.setattr(cli, "_console", lambda: None)   # plain path, no Rich dashboard
+    monkeypatch.setattr(cli.interview, "_console", lambda: None)   # plain path, no Rich dashboard
     # approach pick, question(s), author, then format = md (dependency-free export)
     answers = iter(["", "", "", "md"])
     monkeypatch.setattr("builtins.input", lambda *_a: next(answers, ""))

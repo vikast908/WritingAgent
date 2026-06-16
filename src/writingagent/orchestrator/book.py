@@ -99,9 +99,16 @@ def start_book(
 
 def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
         autonomous: bool | None = None, log=print, ask=None, control=None) -> dict:
-    llm.reset_usage()
-    llm.set_project(book_id)                                   # telemetry attribution
-    llm.set_run_budget(load_settings().max_run_tokens)         # cost kill-switch
+    # Serialize this whole run's use of the module-global usage/run-id/telemetry state and
+    # reset+tag it for this run (A-021). Every early return below stays inside the session,
+    # so a long-lived host (TUI/web) can't interleave two runs' token accounting.
+    with llm.run_session(book_id, budget=load_settings().max_run_tokens):
+        return _run(cfg, uid, book_id, force=force, autonomous=autonomous,
+                    log=log, ask=ask, control=control)
+
+
+def _run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
+         autonomous: bool | None = None, log=print, ask=None, control=None) -> dict:
     # An explicit autonomous/manual override (from `run --autonomous` or `/auto`)
     # rewrites the project's run_state before this run reads it, so switching to
     # autonomous over an escalated unit clears the pending review and resumes.
@@ -220,6 +227,8 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
                 brain.write_json(paths.run_state, state)
             elif phase == "production":
                 _production(cfg, paths, plan, store, log=log)
+                if state.get("book_cohesion", True):
+                    _write_cohesion_report(paths, log)
                 state["phase"] = "learn"
                 brain.write_json(paths.run_state, state)
             elif phase == "learn":
@@ -647,6 +656,26 @@ def _assemble_manuscript(paths, plan, pplan: S.ProductionPlan) -> None:
         if body:
             parts += [body, "", "---", ""]
     brain.write_text(paths.manuscript, "\n".join(parts))
+
+
+def _write_cohesion_report(paths, log) -> None:
+    """Deterministic cross-chapter repetition report (D-008). Free, report-only - the
+    book has no whole-manuscript rewrite pass (a 10-chapter rewrite is impractical and
+    risks losing narrative), so this flags reused phrasings / formulaic openers across
+    chapters for a targeted `revise`."""
+    from .. import polish
+    chapters = []
+    for p in sorted(paths.chapters.glob("ch*.md")):
+        if p.name.endswith((".draft.md", ".summary.md")):
+            continue
+        chapters.append((f"ch{p.stem[2:4]}", p.read_text(encoding="utf-8")))
+    if not chapters:
+        return
+    found = polish.cross_chapter_repetition(chapters)
+    brain.write_text(paths.root / "cohesion_report.md", polish.cohesion_report(chapters))
+    n = len(found["phrases"]) + len(found["openers"])
+    log(f"   [cohesion] {n} cross-chapter repetition signal(s) -> cohesion_report.md"
+        if n else "   [cohesion] no cross-chapter repetition detected")
 
 
 def _learn(cfg, paths, plan, *, log) -> None:

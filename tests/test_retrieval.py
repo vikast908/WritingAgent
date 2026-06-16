@@ -146,3 +146,13 @@ def test_parse_frontmatter_invalid_yaml_returns_empty():
     """A YAML parse error in frontmatter yields {} rather than propagating."""
     assert retrieval._parse_frontmatter("---\nname: [unclosed\n---\nbody") == {}
     assert retrieval._parse_frontmatter("no frontmatter at all") == {}
+
+
+# ── B-005/A-017: embedding cache is namespaced by model + atomic on disk ─────────
+def test_embed_cache_key_namespaced_by_model(monkeypatch):
+    """A cache key must change with the embedding model, so a vector built by one model
+    is never served to another (different models = different vector spaces)."""
+    k1 = embeddings._key("identical text")
+    monkeypatch.setattr(embeddings, "_MODEL_NAME", "some-other-model")
+    k2 = embeddings._key("identical text")
+    assert k1 != k2

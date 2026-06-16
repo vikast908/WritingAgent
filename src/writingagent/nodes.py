@@ -119,7 +119,9 @@ def write_chapter(
     return complete_text(model, P.WRITER_SYS, "\n\n".join(parts),
                          max_tokens=16000,
                          temperature=(temperature if temperature is not None
-                                      else cfg.temperature_for("writer")))
+                                      else cfg.temperature_for("writer")),
+                         frequency_penalty=cfg.frequency_penalty_for("writer"),
+                         presence_penalty=cfg.presence_penalty_for("writer"))
 
 
 # ── Critic ────────────────────────────────────────────────────────────────────
@@ -226,7 +228,8 @@ def extract_canon(
             f"Chapter {blueprint.number} text:\n{prose}\n\n"
             "Extract only what is new or changed.")
     return complete_structured(model, P.EXTRACTION_SYS, user, S.ExtractionResult,
-                               max_tokens=8000)
+                               max_tokens=8000,
+                               temperature=cfg.temperature_for("summarizer"))
 
 
 # ── Consolidation (plan §9) ───────────────────────────────────────────────────
@@ -237,7 +240,8 @@ def consolidate(
     user = (f"Book plan:\n{_ctx(plan)}\n\nCanonical state:\n{canon}\n\n"
             f"Chapter summaries:\n{summaries}\n\nAudit the whole book for problems.")
     return complete_structured(model, P.CONSOLIDATION_SYS, user, S.ConsolidationReport,
-                               max_tokens=8000)
+                               max_tokens=8000,
+                               temperature=cfg.temperature_for("consolidation"))
 
 
 # ── Production (plan §16) ─────────────────────────────────────────────────────
@@ -344,7 +348,8 @@ def learn(
             f"Recurring critic findings (secondary):\n{critic_findings or '(none)'}\n\n"
             f"Existing skills (do not duplicate):\n{existing_skills or '(none)'}\n\n"
             "Distill reusable skills + a watch-list.")
-    return complete_structured(model, P.LEARNER_SYS, user, S.LearnerOutput, max_tokens=6000)
+    return complete_structured(model, P.LEARNER_SYS, user, S.LearnerOutput, max_tokens=6000,
+                               temperature=cfg.temperature_for("learner"))
 
 
 # ── Article nodes ─────────────────────────────────────────────────────────────
@@ -462,7 +467,9 @@ def write_article_section(
     return complete_text(model, P.ARTICLE_WRITER_SYS, "\n\n".join(parts),
                          max_tokens=cfg.max_tokens_for("writer", 8000),
                          temperature=(temperature if temperature is not None
-                                      else cfg.temperature_for("writer")))
+                                      else cfg.temperature_for("writer")),
+                         frequency_penalty=cfg.frequency_penalty_for("writer"),
+                         presence_penalty=cfg.presence_penalty_for("writer"))
 
 
 def critique_article_section(

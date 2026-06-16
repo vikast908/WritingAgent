@@ -439,6 +439,7 @@ def _base_run_state(uid, abstract, *, intake, author, max_revisions, autonomous,
         "max_context_chars": settings.max_context_chars,
         "skill_duels": settings.skill_duels,
         "watch_blocking": settings.watch_blocking,
+        "book_cohesion": settings.book_cohesion,
         # Agentic controller (plan §21): baked at creation like every other toggle. The
         # default ("pipeline") drives the unchanged fixed loop; "agentic" routes each unit
         # through agentic.run_unit. The real bounds are the per-unit agentic_max_unit_steps

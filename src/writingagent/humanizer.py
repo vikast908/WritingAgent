@@ -15,6 +15,7 @@ import re
 
 from . import prompts as P
 from . import schemas as S
+from . import slop
 from .config import ModelConfig
 from .llm import _fake_mode, complete_structured
 
@@ -50,30 +51,13 @@ def mechanical_clean(text: str) -> str:
 
 
 # ── Tell detection (the NO_SLOP lexicon, as code instead of prompt hope) ──────
-# These morphologically-tuned alternations mirror slop.py (the single source the writer
-# prompt is generated from); test_quality cross-checks them so they can't drift. One
-# alternation per category keeps the scan cheap; matched case-insensitively on whole words.
-# slop.TECHNICAL_EXCEPTIONS ("optimize", "navigate") are deliberately absent: in technical
-# prose they are often the precise term (performance optimization) - the LLM judge decides.
-_TELL_WORDS = (
-    r"delve|delves|delving|leverage[ds]?|leveraging|utiliz\w+|facilitat\w+|foster\w*|"
-    r"bolster\w*|underscor\w+|unveil\w*|streamlin\w+|endeavou?r\w*|ascertain\w*|elucidat\w+|"
-    r"enhanc\w+|"
-    r"robust|comprehensive|pivotal|crucial|vital|transformative|cutting-edge|groundbreaking|"
-    r"innovative|seamless(?:ly)?|intricate|nuanced|multifaceted|holistic|tapestry|symphony|"
-    r"beacon|realm|testament|watershed|landscape|myriad|plethora|paramount|"
-    r"furthermore|moreover|notwithstanding"
-)
-_TELL_PHRASES = (
-    r"that being said|at its core|in essence|it is worth noting|it's worth noting|"
-    r"in the realm of|in today's \w+|it goes without saying|this begs the question|"
-    r"shed[s]? light on|pave[sd]? the way|in the ever-evolving|serves as a testament|"
-    r"indelible mark|deeply rooted|unwavering commitment|stark reminder|"
-    r"it'?s important to note|when it comes to|at the end of the day|"
-    r"imagine a world where|whether you'?re|in conclusion|to sum up|all things considered|"
-    r"a (?:myriad|plethora) of|let'?s (?:delve|dive) into|serves as a|boasts"
-)
-_TELL_RE = re.compile(rf"\b(?:{_TELL_WORDS})\b|(?:{_TELL_PHRASES})", re.IGNORECASE)
+# The pattern is GENERATED from slop.py (the single source the writer prompt is also
+# generated from), so adding a banned word there updates this stripper too - no parallel
+# hand-maintained regex to drift. The morphological rules (verb inflections, apostrophe
+# tolerance, the "in today's [anything]" wildcard) live in slop.tell_pattern().
+# slop.TECHNICAL_EXCEPTIONS ("optimize", "navigate") are absent by construction: in
+# technical prose they are often the precise term - the LLM judge decides.
+_TELL_RE = re.compile(slop.tell_pattern(), re.IGNORECASE)
 
 _SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
 _CITE_MARKS = re.compile(r"\[\d+\]")

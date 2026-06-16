@@ -1,11 +1,11 @@
 """Single source of truth for the anti-slop lexicon (plan: anti-slop).
 
-The writer's constraint block (`prompts.NO_SLOP`) is GENERATED from these lists, so the
-banned-word rules the writer sees and this canonical data can never silently drift. The
-deterministic humanizer (`humanizer._TELL_RE`) keeps its own morphologically-tuned regex
-(it must match inflections like delve/delves/delving precisely), but a test
-(`test_quality`) cross-checks it against this lexicon so a term added here that the
-humanizer misses - or a TECHNICAL_EXCEPTION it wrongly strips - fails CI.
+Both views of the lexicon are GENERATED from these lists, so nothing can silently drift:
+- the writer's constraint block (`prompts.NO_SLOP`) via `render_constraints()`, and
+- the deterministic humanizer's tell-detector (`humanizer._TELL_RE`) via `tell_pattern()` -
+  the morphological matching rules (verb inflections, apostrophe tolerance, the
+  "in today's [anything]" wildcard) now live here too, so adding a banned word here updates
+  the stripper automatically. `test_quality` still asserts the round-trip as a guard.
 
 TECHNICAL_EXCEPTIONS read as slop in marketing copy but are often the *precise* term in
 technical prose ("performance optimization", "navigate a tree"), so they are NEITHER
@@ -15,6 +15,8 @@ deliberately allowed it.
 """
 from __future__ import annotations
 
+import re
+
 # Verb -> plain replacement. The metaphorical-only verbs ("optimize", "navigate") are
 # deliberately NOT here - see TECHNICAL_EXCEPTIONS.
 BANNED_VERBS: dict[str, str] = {
@@ -22,6 +24,7 @@ BANNED_VERBS: dict[str, str] = {
     "foster": "encourage", "bolster": "strengthen", "underscore": "highlight",
     "unveil": "reveal", "streamline": "simplify", "endeavour": "try",
     "ascertain": "find out", "elucidate": "explain", "enhance": "improve",
+    "boast": "have",
 }
 
 # Adjectives / nouns that read as filler.
@@ -100,3 +103,50 @@ def render_constraints() -> str:
         "━━ END CONSTRAINTS ━━",
     ]
     return "\n".join(lines)
+
+
+# ── Deterministic-stripper view (humanizer._TELL_RE is compiled from this) ────────
+def _verb_fragment(verb: str) -> str:
+    """Regex fragment matching a banned verb and its inflections. A silent-e verb
+    (delve, leverage, utilize) drops the 'e' so the stem + ``\\w*`` covers es/ed/ing
+    (delve→delv\\w* matches delve/delves/delving/delved); others keep their stem."""
+    stem = verb[:-1] if verb.endswith("e") else verb
+    return re.escape(stem) + r"\w*"
+
+
+def _phrase_fragment(text: str) -> str | None:
+    """Normalize a banned phrase/transition/opener into a matchable regex fragment, or
+    None to skip it. Skips entries with a parenthetical caveat ("additionally (when merely
+    listing)" - the stripper can't judge the condition) or a single-letter template
+    placeholder ("it's not just X, it's Y"). Otherwise: drop surrounding quotes and the
+    opener ellipsis, lower-case, turn "[anything]" into a wildcard, and make apostrophes
+    optional (so "it's"/"its" and curly/straight forms both match)."""
+    raw = text.strip()
+    if "(" in raw:                       # conditional/caveated ban - not for blind stripping
+        return None
+    p = raw.replace('"', "").strip().lower().rstrip(".").strip()
+    if not p or re.search(r"\b[xy]\b", p):   # empty or a free-variable template -> skip
+        return None
+    frag = re.escape(p)
+    frag = frag.replace(r"\[anything\]", r"\w+")   # "in today's [anything]" -> in today's \w+
+    return frag.replace("'", "'?")                  # apostrophe-tolerant (it's / its)
+
+
+def tell_pattern() -> str:
+    """The full case-insensitive regex the humanizer compiles into ``_TELL_RE``.
+
+    Word group (``\\b``-anchored): banned verbs (inflected) + adjectives/nouns (exact) +
+    the single-word transitions. Phrase group (substring): the multi-word transitions,
+    banned phrases, and openers, normalized by ``_phrase_fragment``. TECHNICAL_EXCEPTIONS
+    are absent by construction (they're in no list)."""
+    words = [_verb_fragment(v) for v in BANNED_VERBS]
+    words += [re.escape(t) for t in BANNED_TERMS]
+    phrase_src: list[str] = list(BANNED_PHRASES) + list(BANNED_OPENERS)
+    for t in BANNED_TRANSITIONS:
+        cleaned = t.strip().replace('"', "").strip()
+        if "(" not in t and " " not in cleaned:     # furthermore / moreover / notwithstanding
+            words.append(re.escape(cleaned))
+        else:
+            phrase_src.append(t)
+    phrases = [f for f in (_phrase_fragment(t) for t in phrase_src) if f]
+    return rf"\b(?:{'|'.join(words)})\b|(?:{'|'.join(phrases)})"

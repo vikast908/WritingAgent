@@ -119,3 +119,36 @@ def test_strip_model_figures_removes_mermaid_and_headings():
     md = "## S\n\n#### Figure 2.1: X\n\n```mermaid\npie title T\n\"a\": 1\n```\n\nText."
     out = polish.strip_model_figures(md)
     assert "mermaid" not in out and "Figure 2.1" not in out and "Text." in out
+
+
+# ── D-008: cross-chapter cohesion (book) ────────────────────────────────────────
+def test_cross_chapter_repetition_flags_shared_phrase():
+    shared = "quantum tunneling dramatically reshapes electron transport across barriers"
+    chapters = [("ch01", "An intro paragraph. " + shared + ". And more prose follows here."),
+                ("ch02", "A wholly separate opening. " + shared + ". With other prose after.")]
+    found = polish.cross_chapter_repetition(chapters, n=6, min_chapters=2)
+    assert any("ch01" in labels and "ch02" in labels for _, labels in found["phrases"])
+
+
+def test_cross_chapter_repetition_ignores_within_chapter_only():
+    # A phrase repeated inside ONE chapter (but absent from the other) is not flagged.
+    repeated = "the recurring stock phrase appears twice over here now"
+    chapters = [("ch01", f"{repeated}. Filler. {repeated}."),
+                ("ch02", "Entirely distinct vocabulary with no overlapping content whatsoever.")]
+    found = polish.cross_chapter_repetition(chapters, n=6, min_chapters=2)
+    assert not found["phrases"]
+
+
+def test_cohesion_report_all_clear():
+    chapters = [("ch01", "Alpha beta gamma delta epsilon zeta eta theta."),
+                ("ch02", "Completely unrelated vocabulary spanning different territory entirely.")]
+    rpt = polish.cohesion_report(chapters)
+    assert "No significant cross-chapter repetition" in rpt
+
+
+def test_cohesion_report_lists_repeats():
+    shared = "memory bandwidth becomes the dominant bottleneck for large batch inference"
+    chapters = [("ch01", "Lead in. " + shared + ". Trailing."),
+                ("ch02", "Other lead. " + shared + ". Other trailing.")]
+    rpt = polish.cohesion_report(chapters)
+    assert "Repeated phrasings" in rpt and "ch01" in rpt and "ch02" in rpt

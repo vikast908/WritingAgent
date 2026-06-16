@@ -108,6 +108,7 @@ ignore = [
 # every caller and test. Star re-exports are intentional here.
 "src/writingagent/orchestrator/__init__.py" = ["F401", "F403", "F405"]
 "src/writingagent/shell/__init__.py" = ["F401", "F403", "F405"]
+"src/writingagent/cli/__init__.py" = ["F401", "F403", "F405"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]   # tests import writingagent from src without an install

@@ -144,15 +144,23 @@ def test_humanize_fake_mode_is_mechanical_only(fake_llm):
 
 
 def test_lexicon_single_source_consistency():
-    """The writer prompt (NO_SLOP) is generated from slop.py, and the deterministic
-    humanizer must catch every banned VERB/ADJECTIVE it lists - so the two can't drift -
-    while never stripping a TECHNICAL_EXCEPTION (the old 'optimize' contradiction)."""
+    """Both views are GENERATED from slop.py - the writer prompt (NO_SLOP) and the
+    humanizer's tell-detector (`_TELL_RE` = `slop.tell_pattern()`) - so neither can drift,
+    while a TECHNICAL_EXCEPTION is never hard-banned or stripped (the old 'optimize' bug)."""
     from writingagent import prompts, slop
     # The prompt is a derived view of the single source.
     assert "delve→explore" in prompts.NO_SLOP and "MANDATORY WRITING CONSTRAINTS" in prompts.NO_SLOP
-    # Every banned verb + adjective/noun is also caught by the deterministic stripper.
+    # Every banned verb (+ inflections) and adjective/noun is caught by the deterministic stripper.
     for word in list(slop.BANNED_VERBS) + slop.BANNED_TERMS:
         assert humanizer._TELL_RE.search(word), f"humanizer misses banned term {word!r}"
+    for verb in slop.BANNED_VERBS:                       # inflections, not just the base form
+        assert humanizer._TELL_RE.search(verb + ("s" if verb.endswith("e") else "ing"))
+    # Multi-word phrases / openers are caught too (the phrase group is generated as well).
+    for phrase in ["serves as a testament", "in conclusion", "at the end of the day"]:
+        assert humanizer._TELL_RE.search(phrase), f"humanizer misses banned phrase {phrase!r}"
+    # A caveated entry ("additionally (when merely listing)") is NOT blindly stripped - the
+    # stripper can't judge the condition, so it stays out of the regex.
+    assert not humanizer._TELL_RE.search("additionally we add a second point")
     # Exceptions are neither hard-banned in the prompt nor stripped by the humanizer.
     for ex in slop.TECHNICAL_EXCEPTIONS:
         assert not humanizer._TELL_RE.search(ex), f"humanizer wrongly strips exception {ex!r}"

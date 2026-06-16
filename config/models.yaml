@@ -32,10 +32,20 @@ nodes:
                                                # emits no SVG, flash reliably draws *something*
 
 temperature:
-  toc:        0.4
-  critic:     0.2
-  judge:      0.2   # ranking drafts is a judgment call - low temp for stable, repeatable picks
-  verifier:   0.2   # claim checking must be consistent, not creative
-  summarizer: 0.0
-  humanizer:  0.3   # surgical line edits - low temp; it must not get creative
-  writer:     0.9   # explicit base temp; divergent first drafts sample 0.7/1.0/1.2
+  toc:           0.4
+  critic:        0.2
+  judge:         0.2   # ranking drafts is a judgment call - low temp for stable, repeatable picks
+  verifier:      0.2   # claim checking must be consistent, not creative
+  summarizer:    0.0   # canon extraction + chapter summaries: deterministic, no invention
+  consolidation: 0.0   # whole-book continuity audit: analytical, must be reproducible (A-022)
+  learner:       0.2   # skill distillation: a little room to generalize, but kept low
+  humanizer:     0.3   # surgical line edits - low temp; it must not get creative
+  writer:        0.9   # explicit base temp; divergent first drafts sample 0.7/1.0/1.2
+
+# Per-node repetition penalties (A-024). A mild positive frequency_penalty on the writer
+# attacks token-level repetition - the core slop the humanizer cleans up - at the source.
+# Conservative defaults; range is [-2, 2]. Tunable; remove a node to leave it unset.
+frequency_penalty:
+  writer:     0.3
+presence_penalty:
+  writer:     0.1

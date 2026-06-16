@@ -29,6 +29,21 @@ def log_call(record: dict) -> None:
         pass
 
 
+def log_debug(record: dict) -> None:
+    """Append one full prompt+completion record to .index/llm_debug-YYYYMMDD.jsonl.
+
+    Opt-in (llm sets WRITINGAGENT_LLM_DEBUG); a separate file from the call telemetry
+    because the payloads are large. Carries the same run_id/unit join keys. Best-effort -
+    never raises."""
+    try:
+        brain.INDEX_DIR.mkdir(parents=True, exist_ok=True)
+        path = brain.INDEX_DIR / f"llm_debug-{datetime.date.today():%Y%m%d}.jsonl"
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+    except Exception:  # noqa: BLE001 - observability must not take down the pipeline
+        pass
+
+
 def load_records(project: str | None = None) -> list[dict]:
     """All call records (oldest file first), optionally filtered to one project.
     Corrupt lines are skipped - the files are append-only across crashes."""

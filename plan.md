@@ -684,6 +684,13 @@ Durable decisions from the hardening pass. All thresholds are tunable config.
 | **Crash-safe commit ordering (2026-06-16)** | `_commit` now writes canon to the store (`update_from_extraction` + `render_canon`) **before** the chapter `.md` - which is the resume guard's "committed" marker - then indexes. A crash mid-commit re-runs the chapter (extraction is idempotent: `INSERT OR IGNORE`) instead of the file existing while its facts are permanently missing from canon. `_commit_section` likewise writes the continuity summary before the section file. |
 | **Anti-slop single source (2026-06-16)** | The banned-word lexicon lives in one module (`slop.py`); the writer's `NO_SLOP` block is **generated** from it and the deterministic humanizer is cross-checked against it by a test, so the writer's rules and the post-hoc stripper can't drift. `TECHNICAL_EXCEPTIONS` (`optimize`, `navigate`) are neither hard-banned nor auto-stripped - precise in technical prose, the LLM judge decides (resolves the old "optimize" contradiction). |
 | **Config validation (2026-06-16)** | `load_settings` clamps out-of-range values (`min_insight∈[0,5]`, `escalate_below_confidence∈[0,1]`, `max_revisions≥0`, `divergent_drafts≥1`, positive `request_timeout`, valid `mode`/`agentic_policy`) so a typo in `settings.yaml` degrades gracefully instead of producing baffling runtime behavior. |
+| **Run-session serialization (A-021, 2026-06-16)** | The LLM wrapper's accounting state (`_client`, `_usage`, `_run_id`, the per-thread `unit`/`project` tags) is **module-global** - the design is one unattended run per process. `llm.run_session(project, budget=)` (a `threading.Lock` + reset-usage/set-project/set-budget on enter, clear tags on exit) wraps the whole `orchestrator.run` body (now a thin `run()` → `_run()`), so overlapping runs in a long-lived host (TUI/web) **serialize** instead of interleaving and corrupting each other's token tally / run-id / telemetry attribution. The web demo's own `_RUN_LOCK` is complementary. |
+| **Deterministic analytical nodes (A-022, 2026-06-16)** | `extract_canon`/`consolidate`/`learn` now pass explicit low/0 temperatures (`models.yaml`: `summarizer 0.0`, `consolidation 0.0`, `learner 0.2`) - they previously ran at the model default, making canon extraction and the continuity audit non-reproducible. |
+| **Writer repetition penalty (A-024, 2026-06-16)** | Per-node `frequency_penalty`/`presence_penalty` maps in `models.yaml` (clamped to OpenAI's [-2, 2] by `ModelConfig`); the writer ships `0.3`/`0.1` so token-level repetition is attacked at generation time rather than only cleaned up by the humanizer after the fact. Tunable; remove a node to leave it unset. |
+| **Context-overflow recovery (B-013, 2026-06-16)** | A `context_length_exceeded` rejection (sniffed from the error code/message, distinct from a generic 400) is recovered by `_shrink_for_context` (headroom compression, else truncate the longest message to 60%) and **one** retry, in both `complete_text` and `complete_structured` - so an over-long prompt shrinks instead of failing the node. |
+| **Chat stream accounting (B-012, 2026-06-16)** | `stream_text` now honors the run budget (`_check_budget` up front), requests `stream_options.include_usage` + cost, and records usage + telemetry + the debug sink from the terminal chunk - TUI chat no longer bypasses the kill-switch or token accounting. No auto-retry (a stream can't be replayed once chunks are emitted; the caller holds the partial output). |
+| **Cross-chapter cohesion report (D-008, 2026-06-16)** | Books get a deterministic, LLM-free `cohesion_report.md` after assembly (`polish.cross_chapter_repetition`/`cohesion_report`, gated by `book_cohesion`, default on): it flags verbatim phrasings reused across chapters and near-identical chapter openers. A **detector, not a rewriter** - a whole 10-chapter rewrite (the article-cohesion analog) is impractical and risks losing narrative content, so the report feeds a targeted `revise`. |
+| **Observability join keys (D-013/D-014, 2026-06-16)** | Opt-in `WRITINGAGENT_LLM_DEBUG=1` records full prompt+completion to `.index/llm_debug-YYYYMMDD.jsonl` (`telemetry.log_debug`, off by default - large + may carry user text) for "why did it produce/escalate this" without a re-run. The agentic action trace now stamps the run's `run_id` (`llm.run_id()`) + `ts`, so controller decisions join to the call telemetry. |
 | **Context compression** | `headroom-ai` is **optional** (lazy import, silent fallback). Pinned to **0.10.17** (the last pure-Python release; ≥0.21 is a Rust/pyo3 ext with no Windows wheel), installed `--no-deps`. `_compress` always tells headroom a **tiktoken** model for counting - compression is model-agnostic, so DeepSeek runs still compress. |
 | **LLM call resilience** | We own retries: classified **exponential backoff + jitter**, honor `Retry-After`, **fail fast on 4xx**, per-request `request_timeout` (default 60s). Structured calls do a **repair retry** (feed the invalid output + error back). The OpenAI SDK's own retries are disabled. |
 | **Concurrency** | The chapter/section *prose* chain is **sequential by design** (continuity: each unit reads the previous summary). Everything independent of prose overlaps via a small thread pool (`concurrency.gather`): (a) within a unit, research ∥ image/SVG ∥ skill retrieval; (b) **unit n+1's research/images/skills are prefetched while unit n is written/critiqued** (they depend only on the plan/TOC; prefetch results are disk-cached so escalations waste nothing); (c) at commit, **humanize ∥ summarize ∥ canon-extraction** run as one batch (`strict=True` - a failed summary/extraction still aborts the commit) since all three derive from the same approved draft; (d) production's front/back-matter components. The SQLite `Store` is only touched on the main thread. |
@@ -1153,11 +1160,11 @@ Prioritized, by risk:
 Each tier is its own PR: extract, run the suite, and a fake-mode end-to-end for BOTH modes before the
 next.
 
-## 20.1 File split - orchestrator (done), shell (next)
+## 20.1 File split - orchestrator, shell, cli (all done)
 
-Once dedup was paid down, the two god-files were split into packages behind a stable facade so
-`orchestrator.X` / `shell.X` resolve unchanged for every caller and test (incl. the private names tests
-reach for). Pure code movement, suite-gated per step.
+Once dedup was paid down, the god-files were split into packages behind a stable facade so
+`orchestrator.X` / `shell.X` / `cli.X` resolve unchanged for every caller and test (incl. the private
+names tests reach for). Pure code movement, suite-gated per step.
 
 - **`orchestrator/` - done.** 2274-line module → facade `__init__` (re-exports via `from .seam import *`)
   + six seams: `common` (shared leaf helpers), `book` (chapter pipeline + the public `run()` dispatcher),
@@ -1179,6 +1186,18 @@ reach for). Pure code movement, suite-gated per step.
     `_execute_cmd`), `slash` (`_handle_slash`), `session` (`_make_pt_session`), and `repl` (now just
     `_prompt_state` + `run_shell`). The chat→dispatcher lazy back-edge points at `dispatch`. No shell
     file now exceeds ~580 lines.
+- **`cli/` - done (C-011).** 1003-line module → facade `__init__` + six seams: `_common` (console /
+  project+path resolution / spinner / unified diff), `create` (`new` + the manual-mode outline gate +
+  `_autonomous_value`), `interview` (the autonomous `write` flow), `commands` (the core project commands -
+  run/status/review/revise/versions/brief/tableread/eval/read/memory/produce/consolidate/skills/delete/
+  list/config), `export` (export/polish/evidence - format parsing + isolated per-format failures), `app`
+  (`_COMMANDS` registry, `build_parser`, `_apply_provider`, `main`). Acyclic: `_common` ←
+  {create,interview,commands,export,app}; export ← {interview,app}; {create,interview,commands} ← app.
+  Largest seam is 301 lines. The facade re-exports the private names the suite patches/reads
+  (`_resolve_formats`, `_EXPORT_FORMATS`, `_EXPORT_FNS`, `_paths_for`, `_export_failed`, `_autonomous_value`,
+  `_conduct_interview`); **as with the shell split, tests that monkeypatch a now-relocated global
+  (`_console`, `_EXPORT_FNS`) patch it at its seam home** (`cli.export` / `cli.interview`), since a
+  function resolves its globals in its defining module, not the facade. Per-file-ignore F401/F403/F405.
 
 ---
 

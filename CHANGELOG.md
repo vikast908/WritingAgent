@@ -6,7 +6,46 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+- **The checked-in `requirements.lock.txt` (C-010).** It pinned unresolvable versions and a stale
+  editable git self-reference, and nothing consumed it (CI installs via `pyproject.toml` extras, which
+  stays canonical). Replaced by `scripts/gen_lock.py` — a generator that resolves the closure of the
+  project's declared deps against a clean installed environment (so a shared venv can't pollute the
+  lock) — plus a CONTRIBUTING note on regenerating in a clean venv from public PyPI.
+
+### Changed
+- **Anti-slop lexicon fully single-sourced (A-008 follow-up).** The humanizer's tell-detector regex
+  (`_TELL_RE`) is now GENERATED from `slop.py` (`slop.tell_pattern()`) instead of being a parallel
+  hand-maintained pattern — the morphological rules (verb inflections, apostrophe tolerance, the
+  "in today's [anything]" wildcard) live in `slop.py` too. Adding a banned word there now updates both
+  the writer prompt and the stripper, so they can't drift; the cross-check test became a guarantee by
+  construction. (Also added `boast→have` to the lexicon.)
+- **`cli.py` split into a `cli/` package (C-011).** The 1003-line CLI god-module is now a facade
+  `__init__` over six seams — `_common` (console / project+path resolution / spinner / diff), `create`
+  (the `new` command + outline gate), `interview` (the autonomous `write` flow), `commands` (the core
+  project commands), `export` (export/polish/evidence), and `app` (registry + argparse + `main()`).
+  `cli.X` and `from writingagent.cli import X` resolve unchanged for the entry point, the shell, and the
+  test suite; largest seam is 301 lines. Pure code movement, suite-gated.
+
 ### Added
+- **Deferred-review batch (A-021/A-022/A-024/B-005/B-012/B-013/D-008/D-013/D-014).** Closed the
+  pending review findings in one pass. **A-021:** process-global LLM accounting state is now serialized
+  by `llm.run_session()` (a process lock + reset/tag/clear) wrapping the whole `orchestrator.run`, so two
+  overlapping runs in a long-lived host (TUI/web) can't corrupt each other's token tally or telemetry
+  attribution; the invariant is documented. **A-022:** the analytical nodes (`extract_canon`,
+  `consolidate`, `learn`) now run at explicit low/0 temperatures (`models.yaml`) for reproducibility.
+  **A-024:** a configurable, mild **repetition penalty** on the writer (`frequency_penalty: 0.3`,
+  `presence_penalty: 0.1`) attacks token-level repetition — the core slop the humanizer cleans up — at the
+  source. **B-005/A-017:** the embedding cache key is namespaced by model (no stale-vector contamination)
+  and written atomically under a lock (no lost updates from concurrent prefetch). **B-012:** `stream_text`
+  (TUI chat) now honors the run token budget and records usage + telemetry from the final stream chunk, so
+  chat no longer bypasses the kill-switch and accounting. **B-013:** a `context_length_exceeded` rejection
+  is recovered by shrinking the prompt (headroom, else truncation) and retrying once, instead of failing
+  the node. **D-008:** the book pipeline gets a deterministic **cross-chapter cohesion report**
+  (`cohesion_report.md`) flagging reused phrasings and formulaic openers across chapters (a detector — a
+  full 10-chapter rewrite is impractical/lossy). **D-013:** an opt-in prompt/completion debug sink
+  (`WRITINGAGENT_LLM_DEBUG=1` → `.index/llm_debug-*.jsonl`). **D-014:** the agentic action trace now
+  carries the run's `run_id`/`ts`, so controller decisions join to the telemetry JSONL. +17 tests.
 - **Resilience + safety hardening (from an exhaustive review).** A global **fallback model**
   (`models.yaml` `fallback:`, default `deepseek/deepseek-v4-flash`): any node whose primary model
   exhausts its retries (outage / 5xx / content filter) retries **once** on the cheap tier, so one

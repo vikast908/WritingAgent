@@ -351,3 +351,21 @@ def test_make_policy_resolves_modes(tmp_brain):
     assert agentic.make_policy({"agentic_policy": "default"}, cfg, paths).name == "default"
     assert agentic.make_policy({"agentic_policy": "llm"}, cfg, paths).name == "llm"
     assert agentic.make_policy({"agentic_policy": "trace"}, cfg, paths).name == "trace"
+
+
+# ── D-014: trace records carry the join keys (run_id + ts) ──────────────────────
+def test_trace_append_stamps_run_id_and_ts(tmp_brain):
+    from writingagent import llm
+    paths = BookPaths("trace-join", "utj").ensure()
+    llm.reset_usage()
+    agentic.trace.append(paths, {"unit": "ch01", "action": "draft"})
+    recs = agentic.trace.read(paths)
+    assert recs and recs[0]["run_id"] == llm.run_id()
+    assert "ts" in recs[0] and recs[0]["action"] == "draft"
+
+
+def test_trace_append_keeps_caller_supplied_keys(tmp_brain):
+    paths = BookPaths("trace-keep", "utk").ensure()
+    agentic.trace.append(paths, {"action": "research", "run_id": "explicit"})
+    recs = agentic.trace.read(paths)
+    assert recs[-1]["run_id"] == "explicit"   # caller value wins over the auto-stamp

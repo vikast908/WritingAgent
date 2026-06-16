@@ -50,7 +50,7 @@ def _article(uid: str, pid: str):
 
 
 def test_export_multiple_formats_writes_each(tmp_brain, monkeypatch):
-    monkeypatch.setattr(cli, "_console", lambda: None)
+    monkeypatch.setattr(cli.export, "_console", lambda: None)
     root = _article("u", "demo")
     args = SimpleNamespace(book_id="demo", user="u", formats=["md", "txt"], format=None)
     cli.cmd_export(args, load_config(), load_settings(), "u")
@@ -61,10 +61,10 @@ def test_export_multiple_formats_writes_each(tmp_brain, monkeypatch):
 
 def test_export_all_resolves_every_format(tmp_brain, monkeypatch):
     """`export all` attempts every format; with stub exporters all are invoked."""
-    monkeypatch.setattr(cli, "_console", lambda: None)
+    monkeypatch.setattr(cli.export, "_console", lambda: None)
     _article("u", "demo")
     called = []
-    monkeypatch.setattr(cli, "_EXPORT_FNS",
+    monkeypatch.setattr(cli.export, "_EXPORT_FNS",
                         {f: (lambda uid, bid, _f=f: called.append(_f) or None)
                          for f in cli._EXPORT_FORMATS})
     cli.cmd_export(SimpleNamespace(book_id="demo", user="u", formats=["all"], format=None),
@@ -73,14 +73,14 @@ def test_export_all_resolves_every_format(tmp_brain, monkeypatch):
 
 
 def test_one_failing_format_does_not_abort_others(tmp_brain, monkeypatch, capsys):
-    monkeypatch.setattr(cli, "_console", lambda: None)
+    monkeypatch.setattr(cli.export, "_console", lambda: None)
     _article("u", "demo")
 
     def boom(uid, bid):
         raise RuntimeError("missing dependency")
     fns = dict(cli._EXPORT_FNS)
     fns["pdf"] = boom                              # pdf blows up; md/txt must still run
-    monkeypatch.setattr(cli, "_EXPORT_FNS", fns)
+    monkeypatch.setattr(cli.export, "_EXPORT_FNS", fns)
     cli.cmd_export(SimpleNamespace(book_id="demo", user="u",
                                    formats=["pdf", "md", "txt"], format=None),
                    load_config(), load_settings(), "u")
@@ -91,7 +91,7 @@ def test_one_failing_format_does_not_abort_others(tmp_brain, monkeypatch, capsys
 
 
 def test_unknown_format_in_cli_exits(tmp_brain, monkeypatch):
-    monkeypatch.setattr(cli, "_console", lambda: None)
+    monkeypatch.setattr(cli.export, "_console", lambda: None)
     _article("u", "demo")
     with pytest.raises(SystemExit):
         cli.cmd_export(SimpleNamespace(book_id="demo", user="u", formats=["nope"], format=None),

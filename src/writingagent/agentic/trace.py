@@ -7,9 +7,10 @@ must never break a run.
 """
 from __future__ import annotations
 
+import datetime
 import json
 
-from .. import brain
+from .. import brain, llm
 
 
 def trace_path(paths):
@@ -17,10 +18,19 @@ def trace_path(paths):
 
 
 def append(paths, record: dict) -> None:
-    """Append one controller action as a single JSON line (no internal newlines)."""
+    """Append one controller action as a single JSON line (no internal newlines).
+
+    Stamps the run's `run_id` and an ISO `ts` (D-014) so a controller decision can be
+    joined to the LLM calls it triggered in the telemetry JSONL (same run_id) and
+    ordered against them (ts). Caller-supplied keys win, so an explicit value is kept."""
     try:
+        stamped = {
+            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+            "run_id": llm.run_id(),
+            **record,
+        }
         brain.append_text(trace_path(paths),
-                          json.dumps(record, separators=(",", ":"), default=str))
+                          json.dumps(stamped, separators=(",", ":"), default=str))
     except Exception:  # noqa: BLE001 - a trace breadcrumb must never break a run
         pass
 
