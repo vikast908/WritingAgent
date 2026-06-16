@@ -631,7 +631,8 @@ def complete_text_with_tools(
     *,
     tools: list[dict],
     tool_runner,
-    max_tool_rounds: int = 3,
+    max_tool_rounds: int = 2,
+    max_tool_calls: int = 4,
     max_tokens: int = 16000,
     temperature: float | None = None,
     frequency_penalty: float | None = None,
@@ -639,14 +640,16 @@ def complete_text_with_tools(
 ) -> str:
     """A chat-completions TOOL-USE loop: the model may call tools mid-generation; each call
     is executed via ``tool_runner(name, args_dict) -> str`` and the result fed back, until the
-    model returns prose (or the round budget is spent, after which a final no-tools turn forces
-    the draft). This is true in-generation tool use - the writer gathers WHILE drafting, not via
-    a fixed pre/post step. The whole loop is still ONE episode (invariant §21.0): the returned
-    text flows through the unchanged critic/commit path.
+    model returns prose (or the budget is spent, after which a final no-tools turn forces the
+    draft). This is true in-generation tool use - the writer gathers WHILE drafting, not via a
+    fixed pre/post step. The whole loop is still ONE episode (invariant §21.0).
 
-    Robust by construction: fake mode returns the placeholder (no tool calls); any transport
-    error or a provider that rejects ``tools`` falls back to plain ``complete_text`` so a draft
-    is always produced. ``tools`` are OpenAI tool schemas."""
+    BOUNDED two ways so an eager model can't go on a research spree (a live run showed ~12
+    tool calls per draft - cost + latency): ``max_tool_rounds`` caps the request/response
+    round-trips, and ``max_tool_calls`` caps the TOTAL tools executed - once either is hit,
+    tools are dropped and the model must write. Robust: fake mode returns the placeholder;
+    any transport error or a provider that rejects ``tools`` falls back to plain
+    ``complete_text`` so a draft is always produced. ``tools`` are OpenAI tool schemas."""
     import json
     _check_budget()
     if _fake_mode():
@@ -661,10 +664,11 @@ def complete_text_with_tools(
         extra["frequency_penalty"] = frequency_penalty
     if presence_penalty is not None:
         extra["presence_penalty"] = presence_penalty
+    calls_used = 0
     try:
         for round_i in range(max_tool_rounds + 1):
-            # On the final round, drop the tools so the model must return prose.
-            offer_tools = round_i < max_tool_rounds
+            # Offer tools only while BOTH budgets allow it; otherwise the model must return prose.
+            offer_tools = round_i < max_tool_rounds and calls_used < max_tool_calls
             kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages,
                             **extra, **_cost_kwargs()}
             if offer_tools:
@@ -682,6 +686,8 @@ def complete_text_with_tools(
                     return content
                 break   # no content and no calls -> give up the loop, fall back below
             # Echo the assistant's tool-call turn, then run each tool and feed results back.
+            # Every echoed call MUST get a tool response (or the next request is malformed), so
+            # the whole round runs; the per-call budget then closes tools on the next round.
             messages.append({
                 "role": "assistant", "content": msg.content or "",
                 "tool_calls": [{"id": tc.id, "type": "function",
@@ -699,6 +705,7 @@ def complete_text_with_tools(
                     result = ""
                 messages.append({"role": "tool", "tool_call_id": tc.id,
                                  "content": str(result)[:8000] or "(no result)"})
+            calls_used += len(calls)
     except Exception as e:  # noqa: BLE001 - tool use is best-effort; never fail the draft
         _log.warning("tool-use loop failed (%s); falling back to a plain draft", type(e).__name__)
     # Fallback: a plain completion (no tools) always yields a draft.

@@ -236,6 +236,37 @@ def test_tool_loop_executes_tool_then_returns_prose(no_sleep, monkeypatch):
     assert client.completions.calls == 2     # tool-call turn + prose turn
 
 
+class _DynToolCompletions:
+    """Returns a tool_call whenever tools are offered, else prose - to exercise the caps."""
+    def __init__(self):
+        self.calls = 0
+
+    def create(self, **kw):
+        self.calls += 1
+        if "tools" in kw:
+            return _ToolResp(_ToolMsg(content=None,
+                                      tool_calls=[_ToolCall(f"c{self.calls}", "verify_fact",
+                                                            '{"claim":"x"}')]))
+        return _ToolResp(_ToolMsg(content="DONE", tool_calls=None))
+
+
+class _DynToolClient:
+    def __init__(self):
+        self.completions = _DynToolCompletions()
+        self.chat = self
+
+
+def test_tool_loop_caps_total_tool_calls(no_sleep, monkeypatch):
+    # An eager model that calls a tool every chance it gets must still be bounded: with a
+    # total-call cap of 2, exactly 2 tools run even though 5 rounds are allowed.
+    ran = {"n": 0}
+    monkeypatch.setattr(llm, "_get_client", lambda: _DynToolClient())
+    out = llm.complete_text_with_tools(
+        "m", "sys", "u", tools=[{"x": 1}], tool_runner=lambda *_a: ran.__setitem__("n", ran["n"] + 1),
+        max_tool_rounds=5, max_tool_calls=2)
+    assert out == "DONE" and ran["n"] == 2     # capped by max_tool_calls, not max_tool_rounds
+
+
 def test_tool_loop_fake_mode_skips_tools(monkeypatch):
     monkeypatch.setattr(llm, "_fake_mode", lambda: True)
 

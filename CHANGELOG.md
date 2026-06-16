@@ -23,9 +23,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   +12 tests.
 - **In-generation tool use + a trained controller policy (plan §21 Phases 3 & 5).** The writer can now
   call tools **mid-draft**: `llm.complete_text_with_tools` runs a real OpenAI tool-use loop, and the
-  writer nodes invoke `research`/`read_canon` while drafting (behind `agentic_inline_tools`, agentic runs
-  only; falls back to a plain draft on any provider/tool error, so it's always safe). The whole loop is
-  still one episode. And the controller policy is now **learned, not just heuristic**: `agentic/learn.py`
+  writer nodes invoke `research`/`read_canon`/`verify_fact` while drafting (behind `agentic_inline_tools`,
+  agentic runs only; falls back to a plain draft on any provider/tool error, so it's always safe). The
+  loop is **double-bounded** (`max_tool_rounds` + a total `max_tool_calls` cap) so an eager model can't go
+  on a research spree - a live OpenRouter run validated the loop end-to-end ($0.15, the writer really did
+  call tools mid-draft) and surfaced the over-calling the cap now prevents. The whole loop is still one
+  episode. And the controller policy is now **learned, not just heuristic**: `agentic/learn.py`
   `train_policy` distills a value model from the accumulated action-trace corpus (does gathering context
   before a draft lift the first-pass rate?), persisted per user and refreshed at every learn phase;
   `TracePolicy`/`TraceRunPolicy` consult it (a learned verdict overrides the online heuristic). Unit

@@ -5,6 +5,19 @@
 
 ## Current status
 
+- **New (2026-06-16 - LIVE agentic validation + tool-call cap - DONE):** ran the agentic pipeline LIVE
+  on OpenRouter (real spend, key from `.env`) to validate the two "scale" items. **Confirmed live:**
+  in-generation tool-calling fires (the writer called `research` AND `verify_fact` mid-draft), the
+  run-level LLM macro-controller decided (`draft,draft` - sensibly linear for 2 sections), the fallback
+  model engaged (pro length-limit → flash), claim-check + critique + revision loop ran, and unit outcomes
+  were labelled into the trace for the learned policy. **One full article: `done`, 1,547 words, 61 calls,
+  186k tokens (35% cached), $0.15, ~18 min.** **Finding → fixed:** the writer **over-called `verify_fact`**
+  (~12 tool calls/draft → the time overrun). Added a **total `max_tool_calls=4` cap** (+ lowered
+  `max_tool_rounds` default 3→2) to `llm.complete_text_with_tools` - once either bound is hit, tools are
+  dropped and the model must write. +1 test (`test_tool_loop_caps_total_tool_calls`). Throwaway run
+  artifacts (script, `livetest` project, debug logs) cleaned up + telemetry scrubbed. **433 passed / 2
+  skipped, ruff clean.** Docs: CHANGELOG. **Learned policy still needs corpus volume** (one run isn't
+  enough; `train_policy` correctly stays undecided) - that's the only remaining scale item.
 - **New (2026-06-16 - "make it completely agentic": all 8 review gaps built - DONE):** closed every gap
   from the agentic review. **#1 rich perception:** `build_run_view`/`build_state_view` now carry per-unit
   quality + weakest unit (`weakest_committed_unit`), open contradictions, and the token budget
