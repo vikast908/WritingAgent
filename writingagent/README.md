@@ -1,7 +1,7 @@
 # writingagent
 
 A tiny, zero-dependency **global CLI launcher** for the [Writing Agent](../README.md) — a
-self-correcting, autonomous writing system for books and articles. The heavy lifting is done by
+self-correcting (and optionally self-directing) autonomous writing system for books and articles. The heavy lifting is done by
 the Python engine; this package just gives you a `writingagent` command on your PATH that forwards
 to it (passing your terminal straight through, so the interactive TUI works).
 

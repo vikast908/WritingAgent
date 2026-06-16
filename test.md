@@ -4,6 +4,20 @@ Verification log for recent sessions (newest first). The living suite is `tests/
 (run `pytest -q` with `WRITINGAGENT_FAKE=1`); this file records what was executed,
 where, and what it proved.
 
+## 2026-06-16 (session 14): fully-agentic controller build-out + LIVE validation
+
+| Check | How | Result |
+|---|---|---|
+| Full offline suite | `pytest` (Windows, `WRITINGAGENT_FAKE=1`) | **433 passed, 2 skipped** (opt-in live-net test + d2 binary not installed); ruff clean |
+| Run-level agentic controller | `agentic/runner.py` macro loop; `tests/test_agentic.py` | macro actions (draft/reoutline/revise/consolidate/repair/table_read/produce/learn/escalate/done); `default` policy proven byte-identical to the fixed pipeline (equivalence guarantee); only `llm`/`trace` engage the run loop |
+| In-generation tool use | `llm.complete_text_with_tools`; `tests/test_hardening.py` | tool-loop runs a tool then returns prose; fake-mode skips tools; falls back to a plain draft on error; double-bounded by `max_tool_rounds` (2) + total `max_tool_calls` (4) |
+| Learned policy | `agentic/learn.py` `train_policy`; `tests/test_agentic.py` | context-conditioned model fit + persisted; consulted by `TracePolicy`; stays undecided on thin data |
+| The 8 "fully agentic" gaps | `tests/test_agentic.py` | rich perception, reoutline, revise, escalate, learned policy, `verify_fact` tool + critique panel, budget self-monitoring — caps enforced, escalate pauses, budget-pressure drops optional actions, critique-panel majority |
+| LIVE validation (real OpenRouter, key from `.env`) | one full agentic article, `agentic_policy=llm` + `agentic_inline_tools`, ran to `done` | **1,547 words, 61 LLM calls, 186k tokens (35% cached), $0.15, ~18 min.** Confirmed: writer called `research` + `verify_fact` mid-draft; run controller decided; fallback model engaged (pro length-limit → flash); claim-check + critique + revision loop ran; unit outcomes labelled into the trace |
+
+Finding from the live run: the writer over-called `verify_fact` (~12/draft) → fixed with the
+total-call cap (`max_tool_calls=4`). Throwaway run artifacts cleaned up + telemetry scrubbed.
+
 ## 2026-06-16 (session 13): agentic controller + resilience hardening
 
 | Check | How | Result |

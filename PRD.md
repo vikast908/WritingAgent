@@ -61,7 +61,8 @@ and self-corrects until it isn't slop"** — and you own the data and the spend.
 | Differentiator | What it is | Who else has it |
 |---|---|---|
 | **Anti-slop machinery** | Per-piece *thesis* the critic enforces, a side-by-side *judge*, an *insight gate*, a surgical *humanizer* | Rare — ChatGPT/Claude don't self-critique; Jasper/Sudowrite don't enforce a thesis; STORM is neutral/encyclopedic |
-| **Claim↔source verification** | Cited claims checked against the actual source; unsupported = blocking | Almost no one |
+| **Self-directing *and* self-improving** | Opt-in **agentic controller** (plan §21): instead of a fixed order, an agent *chooses its next move* — gather research / read canon / draft / re-outline / revise / consolidate / repair / table-read / produce / learn / escalate — and the writer can call tools (research, canon lookup, fact-verify) *mid-draft*. A **learned policy**, distilled from the agent's own action trace, improves the choices with use. The fixed pipeline remains the safety floor (default-off). | Few OSS writers are self-directing; fewer pair it with a self-improving loop *and* a deterministic fallback |
+| **Claim↔source verification** | Cited claims checked against the actual source; unsupported = blocking; opt-in **multi-agent panels** (majority-vote fact-check, diverse-lens critique) | Almost no one |
 | **Evidence report** | A shareable artifact: thesis + every source ranked by influence (0–100) | Unique |
 | **Autonomy → finished file** | One command → researched, written, self-edited, exported, resumable | Few do end-to-end-to-file |
 | **Local-first + BYO model** | Plain markdown on disk; your OpenRouter/DeepSeek key; cost guardrails | OSS-aligned; SaaS rivals can't match |
@@ -70,7 +71,9 @@ and self-corrects until it isn't slop"** — and you own the data and the spend.
 
 **In scope (now):** long-form articles + books; research (shallow + deep); the quality machinery;
 6 export formats; diagrams; TUI + CLI + npm launcher + Python API; the markdown brain + learning loop;
-an opt-in self-directing (agentic) controller atop the fixed pipeline.
+an opt-in self-directing (agentic) controller atop the fixed pipeline — a run-level macro-action
+controller, in-generation tool use, a learned (trace-distilled) policy, and multi-agent panels, all
+default-off and bounded by call-caps + a token budget.
 
 **Out of scope (deliberate):** short-form/marketing copy; real-time collaboration; a hosted SaaS;
 a full GUI (revisit only if demand is proven); non-text media.
@@ -87,19 +90,45 @@ Resolution: **lead with articles**; present everything else as secondary.
 - **Virality:** shares of generated artifacts + evidence reports; GitHub stars/forks trend.
 - **Contribution:** external PRs; good-first-issues closed.
 - **Quality proof:** blind-A/B win-rate vs ChatGPT long-form (target: clearly >50%).
+- **Agentic efficacy (when opt-in):** does the self-directing controller *beat its own fixed pipeline*?
+  Measure first-pass rate, insight-gate pass rate, and cost/latency for `agentic` runs vs `default`,
+  at equal token budget — the agentic mode has to *earn* its caps. Learned-policy uplift only becomes
+  measurable once the action-trace corpus is large enough to bite (see roadmap/Next).
 
 ## 8. Roadmap
 
 ### Now (shipped this session)
-- **Self-directing (agentic) mode — opt-in** (`agentic`, plan §21): an LLM *controller* decides per
-  unit whether to gather research / read canon *before* drafting, instead of always drafting first.
-  **Off by default**; the fixed pipeline is unchanged and is the fallback. Three policies — `default`
-  (== fixed pipeline), `llm` (a ReAct controller), `trace` (a learned-policy seam). The `draft` step
-  is the *same* episode the learner already trains on, so this does **not** alter or threaten the
-  learning loop. Every decision is logged to an append-only `agent_trace.jsonl`; new `/agentic` and
-  `/trace` shell commands plus `Agent(agentic=True, agentic_policy="llm")` opt in. *Live-validated on
-  OpenRouter (a real article, ~$0.10; the controller chose research→research→draft).* *(Advanced mode;
-  the fixed pipeline stays the recommended default.)*
+- **Self-directing (agentic) controller — opt-in** (`agentic`, plan §21): the system is now optionally
+  an *agent that chooses its next move*, not only a fixed pipeline with quality gates. **Off by default**
+  (`Settings.agentic`); when off, behavior is byte-identical to the fixed pipeline, which remains the
+  agent's fallback. What shipped:
+  - **Run-level macro controller** (`agentic/runner.py`, `run_loop`): replaces the hardcoded
+    `while phase != done` loop with a policy that picks the next *macro-action* over the whole piece —
+    `draft` / `reoutline` / `revise` / `consolidate` / `repair` / `table_read` / `produce` / `learn` /
+    `escalate` / `done` — so the agent can re-plan structure, fix the weakest committed unit, audit
+    continuity early, or defer to a human.
+  - **Three policies behind one seam:** `default` (== the fixed pipeline, the deterministic equivalence
+    floor), `llm` (a ReAct controller over a compact state view + tool schemas), `trace` (a learned,
+    trace-conditioned policy). Any illegal/parse-failed pick falls back to `default`.
+  - **In-generation tool use:** the writer can call `research` / `read_canon` / `verify_fact`
+    *mid-draft* (a real OpenAI tool-use loop), bounded by a per-round cap *and* a total-call cap, falling
+    back to a plain draft on any provider/tool error.
+  - **A learned policy** (`agentic/learn.py`): distilled from the agent's *own* action trace
+    (context-conditioned, book vs. article; reward = first-pass + insight). It is **never
+    auto-promoted** — the efficacy gate still owns promotion — and it needs run volume before it bites
+    (it correctly stays undecided on thin data).
+  - **Multi-agent panels:** majority-vote fact-check + diverse-lens critique (opt-in).
+  - **Safety by construction:** the `WRITE → CRITIQUE` episode stays atomic (the self-improving loop is
+    untouched — agency lives *between* episodes, never inside them); every decision is logged to an
+    append-only `agent_trace.jsonl`; the whole thing is bounded by call/action caps + a token budget.
+    New `/agentic on|off|llm|default` and `/trace` shell commands, a dashboard controller line, and
+    `Agent(agentic=True, agentic_policy="llm")` / `/set agentic true` opt in.
+
+  *Live-validated 2026-06-16: one real OpenRouter run produced a finished article (~$0.15); the writer
+  did call tools mid-draft, and the run surfaced tool over-calling — now fixed with a total-call cap.*
+  Suite: 433 passed / 2 skipped, ruff clean. *(Advanced mode; the fixed pipeline stays the recommended
+  default. Maturity caveat: live validation is a single run and the learned policy is corpus-hungry —
+  see Next.)*
 - **Resilience + safety hardening** (from an exhaustive code review): a global **`fallback` model**
   (any node whose primary exhausts its retries degrades once onto a cheaper tier rather than killing an
   unattended run); a **context budget** (`max_context_chars`, default 24000) that priority-bounds the
@@ -129,6 +158,11 @@ Resolution: **lead with articles**; present everything else as secondary.
 - **Activation instrumentation** — measure install → first-finished-piece.
 - **First-run cliff** reduction — *partly shipped* (no-key onboarding + fake-mode nudge); still want a
   60-sec asciinema/GIF.
+- **Agentic controller — prove it at scale** (the code is done; what's left is *volume*, not features):
+  (a) **live tool-call validation at volume** — many real runs on tool-capable providers, not one, to
+  confirm the in-generation loop + caps hold up and that agentic beats `default` at equal budget;
+  (b) **a learned-policy trace corpus large enough to bite** — accumulate enough labelled action traces
+  that `train_policy` produces a decided, net-positive policy (today it correctly abstains on thin data).
 
 ### Later (P2 — only if pull is proven)
 - A thin **web UI** or **VS Code extension** to break the terminal ceiling.
@@ -142,6 +176,9 @@ Resolution: **lead with articles**; present everything else as secondary.
 2. **Segment pull:** do 5 DevRel/technical writers call it must-have after one real run? → interviews.
 3. **Funnel:** what's install → first-finished-piece conversion, and where do people drop? → telemetry.
 4. **Book coherence** at 10+ chapters (the riskiest, least-proven claim). → one long live run, read end-to-end.
+5. **Agentic efficacy:** does the opt-in self-directing controller beat its own fixed pipeline at equal
+   token budget (first-pass / insight / cost-latency)? → many real `agentic` vs `default` runs at volume
+   (today: a single live run validated the loop end-to-end, not its uplift).
 
 ## 10. Risks & mitigations
 
@@ -151,7 +188,9 @@ Resolution: **lead with articles**; present everything else as secondary.
 | Differentiator is *told*, not *shown* | High | Evidence report (done) + ChatGPT side-by-side + examples gallery |
 | Setup/cost friction (key, Python+Node) | Med | Fake mode (done) + clear cost expectation + npm `setup` |
 | Book quality unproven | Med | Validate before promoting; lead with articles |
-| Scope dilutes the pitch | Med | One-line spearhead; articles first |
+| **Agentic mode adds cost/latency or loops** (extra controller + tool calls; an eager model over-researches) | Med | **Default-off** (opt-in only); per-round + total tool-call caps; a token budget that drops optional polish actions under pressure; the fixed pipeline is the always-legal fallback. *(A live run did surface tool over-calling — caught and capped.)* |
+| **Agentic mode unproven at scale** (single live run; learned policy needs corpus volume) | Med | Frame honestly as advanced/opt-in; the deterministic `default` pipeline stays recommended; learned policy never auto-promoted (efficacy gate owns promotion); validate at volume before promoting (roadmap/Next) |
+| Scope dilutes the pitch | Med | One-line spearhead; articles first; agentic mode is opt-in, not the headline |
 
 ## 11. Verdict (from the product review)
 
@@ -171,12 +210,14 @@ win a small loyal niche as-is; it spreads only once there's a zero-install try a
 
 - **ChatGPT / Claude (Projects/Canvas)** — the real default. *Their edge:* zero install, GUI,
   conversational control. *Our edge:* autonomy (one command vs much prompting), the
-  thesis/critic/claim-verify anti-slop loop, local-first, repeatable, cheap.
+  thesis/critic/claim-verify anti-slop loop, an opt-in self-directing controller that re-plans / revises /
+  audits *and* learns from its own trace (with a deterministic fallback floor), local-first, repeatable,
+  cheap.
 - **Sudowrite / NovelCrafter** — fiction, polished web UI, subscription. *Our edge:* autonomy, cost,
   local-first, verification, articles too. *Their edge:* UX, fiction tooling, community.
 - **Jasper / Copy.ai** — marketing/short-form SaaS. Different segment; not a real competitor.
 - **Stanford STORM (OSS)** — the closest analog for researched articles; very popular. *Their edge:*
   hosted demo, mindshare. *Our edge:* a *thesis/stance* (STORM is neutral/encyclopedic), the quality
-  machinery, books, export formats, the learning loop, local-first.
+  machinery, books, export formats, the learning loop, an opt-in self-directing controller, local-first.
 - **GPT-Researcher (OSS)** — research reports. *Our edge:* publication-ready prose with a take, not a
   report dump; export + production layer. *Their edge:* simpler pitch, demo, stars.

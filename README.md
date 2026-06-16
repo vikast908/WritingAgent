@@ -36,7 +36,7 @@ too (multi-chapter, with continuity audits + a production layer).
 - **Proof, not vibes** — every article ships an [**evidence report**](#evidence-report-proof-not-vibes): the argument it makes + every source ranked by influence (0–100)
 - **Figures that lay themselves out** — the model authors a diagram *spec*; a layout engine places it so labels never overflow
 - **Use it your way** — interactive TUI, one-shot CLI, an embeddable Python API, or a global `writingagent` npm launcher
-- **Self-directing mode (opt-in)** — an optional LLM *controller* decides per unit whether to gather research or read canon *before* drafting, instead of always drafting first; off by default, with the fixed pipeline as the fallback (see [Self-directing mode](#self-directing-mode-opt-in))
+- **Self-correcting *and* (optionally) self-directing** — the default pipeline self-corrects via fixed quality gates; flip on **agentic mode** and an LLM *controller* takes the wheel, choosing the next move both per unit (gather research / read canon before drafting) and over the whole piece (draft, reoutline, revise, consolidate, repair, produce, learn, escalate, done) — and the writer can call tools *mid-draft*. Off by default, with the fixed pipeline as a byte-identical fallback (see [Self-directing mode](#self-directing-mode-opt-in))
 - **Local-first** — everything is plain markdown + JSON on disk; your own OpenRouter/DeepSeek key; kill a run and it resumes exactly where it stopped; a global `fallback` model keeps an unattended run alive if a tier has an outage
 
 > 📂 See real output in [**`examples/`**](examples/) · 📚 full manual at [docs-writingagent.vercel.app](https://docs-writingagent.vercel.app/).
@@ -146,30 +146,58 @@ Deep dives: [Quality machinery ↗](https://docs-writingagent.vercel.app/referen
 
 ## Self-directing mode (opt-in)
 
-By default the pipeline is fixed: every unit drafts immediately. **Agentic mode** is an optional layer
-that puts an LLM *controller* in charge of each unit — before drafting, it can choose to **gather more
-research** or **read the canon** first, then draft. It's **off by default** and the fixed pipeline is
-always the fallback, so nothing changes unless you ask for it. Crucially, the `draft` step is the
-*same* episode the system already learns from, so turning this on doesn't touch the self-improving
-skill-learning loop.
+The default pipeline is **self-correcting**: a fixed order of nodes with quality gates that catch and
+fix their own mistakes. Flip on **agentic mode** and it becomes **self-directing** — an LLM *controller*
+decides what to do next instead of following a hardcoded phase loop. It's **off by default**
+(`agentic=False`), and when off behavior is *exactly* today's pipeline. Nothing changes unless you ask.
 
-Three policies: `default` (identical to the fixed pipeline), `llm` (a ReAct controller call per unit),
-and `trace` (a learned-policy seam for the future). Every controller decision is appended to an
-`agent_trace.jsonl` you can inspect.
+The controller works at **two scopes**:
+
+- **Per unit** — before drafting a chapter/section, it can choose to **gather more research** or **read
+  the canon** first, then draft (bounded by `agentic_max_unit_steps`, default 3, so every unit
+  terminates).
+- **Over the whole piece** — a run-level controller picks the next *macro*-action — `draft`,
+  `reoutline`, `revise`, `consolidate`, `repair`, `table_read`, `produce`, `learn`, `escalate`, `done` —
+  replacing the fixed `phase` loop entirely.
+
+It can also use **tools mid-draft** (`agentic_inline_tools`): the writer calls `research`, `read_canon`,
+or `verify_fact` *while* drafting via a real tool-use loop, double-bounded (per-round **and** total-call
+caps) so it can't go on a research spree. Optional **multi-agent panels** add a majority-vote
+fact-checker (`agentic_factcheck_panel`) and a diverse-lens critique panel (`agentic_critique_panel`).
+
+Three policies, set with `agentic_policy`:
+
+- **`default`** — identical to the fixed pipeline. This is the **safety floor**: agentic + `default`
+  produces *byte-identical* output to a non-agentic run (same text, same episode count, same duel
+  count). Only `llm`/`trace` engage the self-directing run controller.
+- **`llm`** — a ReAct-style controller call chooses each action.
+- **`trace`** — a *learned* policy distilled from the accumulated decision trace (`train_policy`). It's
+  opt-in, never auto-promoted, and needs real run volume before it has enough data to bite — on thin
+  data it correctly defers to the heuristic.
+
+Every controller decision is appended to an `agent_trace.jsonl` per project, which you can inspect.
+
+Two invariants make turning this on safe: the **WRITE→CRITIQUE episode stays atomic** (the controller
+decides *when* to draft, never *how* to bypass the critic, so the self-improving skill-learning loop is
+untouched), and the **efficacy gate still owns promotion** (controller choices are candidate signal
+only). Everything stays bounded by the action caps, the token budget, and live budget self-monitoring.
 
 ```bash
 /agentic on        # turn it on (uses the llm policy) and flip the active project live
 /agentic llm       # explicitly pick the llm controller
-/agentic default   # behave exactly like the fixed pipeline
+/agentic default   # behave exactly like the fixed pipeline (the equivalence floor)
 /agentic off       # back to the fixed pipeline
 /trace             # print the active project's agent_trace.jsonl (the controller's decisions)
 ```
 
 From the Python API: `Agent(agentic=True, agentic_policy="llm")` opts in; flip an existing project with
-`orchestrator.apply_controller`. Tunables live in `config/settings.yaml` (`agentic`,
-`agentic_policy`, `agentic_controller_model`, `agentic_max_unit_steps`, `agentic_factcheck_panel`) and
-can be set with `/set <field> <value>`. It's an advanced mode — the fixed pipeline remains the
-recommended default for most runs.
+`orchestrator.apply_controller`. Tunables (settable with `/set <field> <value>`): `agentic`,
+`agentic_policy`, `agentic_inline_tools`, `agentic_critique_panel`, `agentic_factcheck_panel`,
+`agentic_controller_model`, `agentic_max_unit_steps`.
+
+> **Live-validated (2026-06-16):** a real OpenRouter run produced a finished ~1,547-word article for
+> ~$0.15, with the writer calling tools mid-draft. It's an advanced mode and one validated run — the
+> fixed pipeline remains the recommended default for most work.
 
 ---
 

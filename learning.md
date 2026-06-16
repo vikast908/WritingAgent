@@ -366,17 +366,14 @@ enough context to appreciate each.
   on the units where it's still learning a skill's worth.
 
 - **Self-directing (agentic) mode — and why it leaves the learning loop alone.** Normally the pipeline
-  always drafts a unit immediately. There's an optional, *off-by-default* mode where a small AI
-  **controller** decides, per unit, whether to *gather more research* or *re-read the canon* **before**
-  drafting — closer to how a person works. The important thing for *this* chapter: when the controller
-  finally says "draft", that drafting step is the **exact same step the learner already trains on**.
-  Nothing about the skill duels, the efficacy gate, or how a skill earns or loses trust changes — the
-  controller only chooses *what to do before* drafting, never *how* drafting is judged. So you can turn
-  this mode on without any worry that it weakens or games the self-improvement story above. Every
-  decision the controller makes is written to a plain `agent_trace.jsonl` file. Today that's just an
-  audit trail you can read; in the future it becomes a *training corpus* — a record of good and bad
-  "what to do next" choices that a learned policy (the `trace` policy, a planned Phase-5) could learn
-  from, the same way the studio already learns craft skills from finished pieces.
+  always drafts a unit immediately, in a fixed order. There's an optional, *off-by-default* mode where
+  a small AI **controller** gets to *decide its own next move* instead — closer to how a person works.
+  This is a big enough idea that it has its own chapter below (§8); the one thing to carry forward
+  *here* is **why it doesn't disturb the self-improvement story above.** When the controller finally
+  says "draft this unit now", that drafting step is the **exact same step the learner already trains
+  on** — same divergent drafts, same critic, same skill duels, same efficacy gate. The controller only
+  chooses *what to do before and around* drafting, never *how* a draft is judged. So you can turn the
+  mode on without any worry that it weakens or games the learning. (See §8 for the full tour.)
 
 - **The evidence report.** The piece ships with its thesis and **every source ranked by influence**.
   *Why:* it makes the work *auditable* — you can see exactly what carried the argument. Most AI writing
@@ -391,7 +388,145 @@ enough context to appreciate each.
 
 ---
 
-## 8. How you actually run it
+## 8. Self-correcting vs. self-directing: the agentic mode (the new part)
+
+Everything up to now described a **self-correcting** writer: a fixed assembly line. The conductor
+always walks the same path — plan, then draft, then critique, then revise, then assemble, then learn —
+and the only cleverness is the *quality gates* along the way (the critic, the fact-checker, the insight
+bar). That assembly line is proven, predictable, and it is still exactly what you get by default.
+
+The new idea, added recently, is to *optionally* let the system become **self-directing** as well — an
+agent that, instead of blindly following the assembly line, looks at where things stand and **decides
+its own next move**. ("Agentic" is just the jargon for software that chooses its own actions toward a
+goal, rather than running a fixed script.)
+
+### 8.1 The single most important fact: it's off by default
+
+This new mode is **opt-in and switched off out of the box.** With it off, *nothing whatsoever changes*
+— you get the same fixed assembly line, byte for byte, that this guide has described all along.
+
+Why labour this point? **Safety and trust.** The fixed pipeline is the part that has been tested on
+hundreds of runs and that the whole quality story rests on. Rather than replace it with something newer
+and less proven, the project keeps it as both the **default** *and* the **fallback**: even when you
+*do* turn the agent loose, the moment it gets confused or hits a limit, it quietly drops back to "just
+do the next thing the assembly line would have done". You are never forced onto the experimental path,
+and the experimental path can never strand you. New capability, zero risk to the old behaviour.
+
+### 8.2 Two levels of decisions
+
+When the mode is on, the agent makes choices at two different scales. It helps to picture a writer at a
+desk.
+
+**Level one — before writing any single chapter or section.** A disciplined writer doesn't always just
+start typing. Sometimes they think, "I don't actually know enough here — let me look a few things up
+first," or "wait, what did I already establish about this character three chapters ago? — let me
+re-read my notes," and *then* they write. The agent can now do the same: before drafting one unit it
+may choose to **gather research**, or to **recall what's already been written** (pull the relevant
+facts out of its own memory/canon), and only then **draft**. The fixed pipeline, by contrast, always
+jumps straight to drafting.
+
+**Level two — over the whole piece.** Stepping back to the bird's-eye view of the entire book or
+article, the agent can also choose what to tackle *next* from a menu of moves, rather than marching the
+fixed order. Its options, in plain terms:
+
+- **write the next part** (draft the next chapter/section),
+- **re-plan the outline** — decide the structure itself is wrong and regenerate the plan for the parts
+  not yet written,
+- **rewrite a weak part it already wrote** — go back and improve the shakiest committed section,
+- **check the whole book for contradictions** (the consistency audit from §2's "Consolidator"),
+- **fix those contradictions** when it finds them,
+- **assemble** the finished manuscript,
+- **learn** the craft lessons from the run,
+- **finish**, or
+- **hand back to the human** — deliberately stop and ask you, if it judges that wiser than pressing on.
+
+So instead of "do step 1, then step 2, then step 3…", the agent repeatedly asks "given where I am, what
+is the smartest thing to do right now?" — and the menu above is everything it's allowed to pick from.
+(It can never invent a move that skips the critic; the menu is the whole of its power, by design.)
+
+### 8.3 The three "drivers" (who actually decides)
+
+Who makes those decisions? You choose one of three **drivers** — the project calls them *policies*, a
+policy being simply "the rule the agent uses to pick its next move." Think of them as three different
+people you could put in the driver's seat:
+
+1. **The default driver.** Doesn't really decide anything — it just follows the old assembly line, in
+   the old order. This exists precisely so that "agentic mode with the default driver" is *provably
+   identical* to the original pipeline. It's the safety floor everything else falls back to.
+
+2. **The LLM driver.** Asks the AI model itself, at each step, "here's the situation — what should I do
+   next?" The model reads a short summary of the current state (which part we're on, how the last draft
+   scored, whether there are open contradictions, how much budget is left) and picks a move from the
+   menu. If it ever picks something nonsensical or illegal, the choice is quietly swapped for what the
+   default driver would have done. So even the adventurous driver has the safe driver riding shotgun.
+
+3. **The learned driver.** Uses what the agent has figured out *from its own past runs* (explained in
+   §8.5). This is the most ambitious of the three, and the most honest caveat applies to it: it only
+   has anything useful to say once the agent has built up enough history. Until then it simply defers
+   to the safer drivers.
+
+### 8.4 Pausing mid-sentence to look something up (in-generation tools)
+
+There's a second, finer-grained kind of agency worth understanding, because it's the closest thing to
+watching a careful human write.
+
+The **writer** itself — the worker actually producing prose — can now *pause in the middle of writing*
+to use a tool, then carry on. Mid-paragraph it might think "I should double-check that figure," go
+**look something up** or **fact-check a specific claim** against a real source, get the answer, and
+keep writing the very same draft. (These mid-draft helpers are nicknamed *in-generation tools* —
+"in-generation" meaning "while the text is still being generated.")
+
+This is powerful but has an obvious failure mode: a writer who keeps stopping to check *one more thing*
+never finishes the paragraph. That isn't hypothetical — a real test run showed the model doing exactly
+that, going down a research rabbit-hole and over-checking. So a **strict limit** was added: there's a
+hard cap on how many times the writer may pause to use a tool within one draft. Once it hits the cap,
+no more detours — finish the sentence. (Like every part of this mode, the mid-draft tools are off
+unless you opt in, and if the tool machinery ever errors, the writer simply falls back to writing a
+plain draft with no detours — never a crash.)
+
+### 8.5 The learned controller policy (the agent learning to direct itself)
+
+This is the deepest new idea, so here's the plain-English version.
+
+Recall from §7 that the studio already keeps a *library of craft skills* — lessons about good writing,
+distilled from finished pieces. The **learned controller policy** is the same spirit applied one level
+up: instead of learning *how to write well*, the agent learns *how to direct itself well* — which of
+those "next moves" tend to pay off.
+
+How? Every decision the controller makes is written to a plain diary file (`agent_trace.jsonl` — a
+simple line-by-line log). Crucially, each entry is later stamped with *how it turned out* — for
+instance, "before this section I chose to gather research first" gets paired with "…and the draft then
+passed on the first try" (or didn't). Over many runs this diary becomes a record of choices and their
+consequences.
+
+The learned driver studies that diary and distils a rule of thumb — for example, "for articles,
+gathering facts *before* drafting tends to lift the chance the first draft passes," or "when a past run
+hit a contradiction, it pays to run the consistency audit early." Then, on future runs, the learned
+driver leans on those rules.
+
+Three honesty notes, in keeping with the rest of this guide:
+
+- **It needs many runs before it helps.** With only a handful of entries the diary is too thin to draw
+  conclusions from, and the learned driver correctly *stays undecided* — falling back to the safer
+  drivers rather than guessing. It earns its influence only once the evidence is real.
+- **A human is never forced onto it.** Like the whole mode, the learned driver is opt-in. And what it
+  learns is kept walled off from the writing-quality learning loop of §7 — it informs *what to do next*,
+  never *how a draft is graded*. The two learning systems don't contaminate each other.
+- **This is new.** The plumbing is built and tested, but the learned driver only becomes genuinely
+  smart once a large history has accumulated. Today, in practice, the **LLM driver** is the one doing
+  the interesting on-the-fly deciding, with the **default driver** always underneath as the floor.
+
+### 8.6 The one-line takeaway for this chapter
+
+> The writer used to be **self-correcting** (a fixed assembly line with quality gates). It can now
+> *optionally* be **self-directing** too — an agent that picks its own next move and can even pause
+> mid-sentence to look things up. It's **off by default**, the proven pipeline stays the default and
+> the fallback, and over many runs it can *learn* which of its own choices tend to work. New power,
+> bolted on without putting the trustworthy old behaviour at risk.
+
+---
+
+## 9. How you actually run it
 
 There are three ways in, all backed by the same engine:
 
@@ -429,7 +564,7 @@ fix — and your progress is always saved, so you just run again.
 
 ---
 
-## 9. Mini-glossary (every jargon word, in plain English)
+## 10. Mini-glossary (every jargon word, in plain English)
 
 - **AI model / LLM (Large Language Model):** the text-generating AI, like the engine behind ChatGPT.
 - **Node:** in this project, one specialised AI "worker" (planner, writer, critic, …).
@@ -439,6 +574,15 @@ fix — and your progress is always saved, so you just run again.
 - **Schema:** a strict template for an answer's shape, so the program can rely on the structure.
 - **Hallucination:** when an AI states something false but sounds confident. The verifier fights this.
 - **Autonomous vs manual mode:** run start-to-finish without stopping, vs. pause for your review at each unit.
+- **Self-correcting vs self-directing:** the fixed assembly line with quality gates (the default), vs.
+  the opt-in *agentic* mode where the system chooses its own next move.
+- **Agentic / agent:** software that decides its own next action toward a goal, rather than running a
+  fixed script. The agentic mode here is off by default.
+- **Policy / driver:** the rule the agent uses to pick its next move. Three exist: **default** (follow
+  the old assembly line), **LLM** (ask the model), and **learned** (use lessons from past runs).
+- **Controller:** the small decision-maker that, in agentic mode, picks the next move from a fixed menu.
+- **In-generation tools:** helpers the writer can use *mid-draft* (look something up, fact-check a
+  claim) before carrying on — capped so it can't go down a research rabbit-hole.
 - **Escalation:** when a draft can't pass the quality bar, the run pauses and asks you (in manual mode).
 - **Canon (books):** the tracked facts of a story — characters, timeline, world rules — kept consistent.
 - **Brain:** the `brain/` folder where all state and output is stored as plain files.
@@ -454,7 +598,7 @@ fix — and your progress is always saved, so you just run again.
 
 ---
 
-## 10. The shortest possible summary
+## 11. The shortest possible summary
 
 > You type a topic. A **conductor** (the orchestrator) walks it through a **studio of AI specialists**
 > — plan, research, write several drafts, judge the best, critique, fact-check, revise, humanise — and

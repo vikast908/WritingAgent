@@ -26,6 +26,9 @@ in `PRD.md`: "you must be comfortable with a CLI and your own key."
   it produces a genuine article/book — and the **evidence report** (sources ranked by
   influence *and* credibility) actually populates.
 
+The underlying engine also supports an optional self-directing (agentic) mode — off by
+default and not exposed in this demo.
+
 ## Run it locally
 
 ```bash
