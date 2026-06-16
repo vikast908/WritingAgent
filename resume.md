@@ -5,6 +5,20 @@
 
 ## Current status
 
+- **New (2026-06-16 - all docs refreshed for the agentic controller, parallel agents - DONE):** brought
+  the documentation set current with the now-built, live-validated agentic controller, via 5 parallel
+  doc agents (each grounded in plan §21 + CHANGELOG + the file's own voice). **README.md:** repositioned
+  as "self-correcting AND optionally self-directing" + a real Self-directing-mode section (two scopes,
+  three policies, mid-draft tools, panels, safety invariants, `/agentic`+`/trace`, the new settings, the
+  live-validation note). **PRD.md:** agentic as a shipped differentiator; roadmap Now/Next; metrics +
+  risks. **learning.md:** new plain-English chapter (self-correcting vs self-directing + the learned
+  policy) + glossary + section renumber. **test.md:** new session-14 verification entry (433 passed;
+  live OpenRouter run). **writingagent/README.md + web/README.md:** one-line agentic mentions. Left
+  `plan.md`/`resume.md`/`CHANGELOG.md` (already current this session) and seeds/boilerplate/templates
+  (not agentic-related) untouched. Spot-checked README + test.md for accuracy. Committed + pushed
+  (`7917e75`). **Nothing left on the agentic front but scale** (live tool-call validation at volume + a
+  learned-policy trace corpus large enough to bite); the older showstoppers (independent blind A/B,
+  10+ chapter book validation) remain.
 - **New (2026-06-16 - LIVE agentic validation + tool-call cap - DONE):** ran the agentic pipeline LIVE
   on OpenRouter (real spend, key from `.env`) to validate the two "scale" items. **Confirmed live:**
   in-generation tool-calling fires (the writer called `research` AND `verify_fact` mid-draft), the
