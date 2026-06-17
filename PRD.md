@@ -18,7 +18,7 @@ nonfiction** — and on a *basic* model, not only a frontier one. A register-par
 engine** (plan §22) + a **compositor** (plan §23) move craft from zero-shot instructions the model
 must be clever enough to obey to *demonstrations it imitates and deterministic checks it can't escape*,
 selectable by genre: eleven registers (technical, literary/genre fiction, academic, journalism, copy,
-business, poetry, screenplay, children, …), ten personas (manner), and emotion as anti-cliché craft.
+business, poetry, screenplay, children, …), fourteen personas (manner), and emotion as anti-cliché craft.
 The historical "researcher voice" nonfiction default is preserved **byte-for-byte**.
 
 ## 2. The problem
@@ -70,7 +70,7 @@ and self-corrects until it isn't slop"** — and you own the data and the spend.
 |---|---|---|
 | **Anti-slop machinery** | Per-piece *thesis* the critic enforces, a side-by-side *judge*, an *insight gate*, a surgical *humanizer* | Rare — ChatGPT/Claude don't self-critique; Jasper/Sudowrite don't enforce a thesis; STORM is neutral/encyclopedic |
 | **A great writer across many fields — on a basic model** | A register-parameterized **craft engine** (plan §22): the anti-slop/craft contract as *data*, with **11 genre profiles** (nonfiction default, technical, literary-fiction, genre-fiction, academic, journalism, copywriting, business, poetry, screenplay, children) that invert the rules per register (fiction keeps the em-dash; academic *requires* hedging; copy keeps the exclamation). It runs well on a *weak* model because craft moves out of zero-shot prompts and into **few-shot exemplars**, a shipped **genre gold corpus** as a default style anchor, and **genre-aware deterministic craft metrics** the model can't argue with. Plus surgical show-don't-tell / passive→active passes, voice-drift stylometry, and per-field structural templates + 7 citation styles. | No OSS long-form writer parameterizes its anti-slop contract by genre or compensates for a basic model with exemplars + a gold corpus + deterministic metrics; ChatGPT/Claude are monovocal per prompt |
-| **Composable voice — persona, emotion, register, all selected (not stacked)** | A **compositor** (plan §23): one precedence cascade `register ⊃ field ⊃ persona ⊃ emotion ⊃ skills` that *selects + resolves conflicts and logs why*, never accumulates (more layers is worse on a weak model). **10 personas** (6 archetypes + 4 public-domain *manners* — Shakespearean, Nietzschean, Austen-ironic, Twain-vernacular; **no living authors**, original-pastiche exemplars, register-gated and dropped-with-a-log on mismatch). **Emotion as anti-cliché** — deny-lists wired into the cliché detector + show-don't-name cues, *not* a symptom dictionary (which only generates clichés). | Sudowrite has style tools but no register-gated conflict resolution; nobody else treats emotion as a deterministic anti-cliché deny-list |
+| **Composable voice — persona, emotion, register, all selected (not stacked)** | A **compositor** (plan §23): one precedence cascade `register ⊃ field ⊃ persona ⊃ emotion ⊃ skills` that *selects + resolves conflicts and logs why*, never accumulates (more layers is worse on a weak model). **14 personas** (6 archetypes + 8 public-domain *manners* — Shakespearean, Nietzschean, Austen-ironic, Twain-vernacular, Wildean, Poe-gothic, Dickensian, Whitmanesque; **no living authors**, original-pastiche exemplars, register-gated and dropped-with-a-log on mismatch). **Emotion as anti-cliché** — deny-lists wired into the cliché detector + show-don't-name cues, *not* a symptom dictionary (which only generates clichés). | Sudowrite has style tools but no register-gated conflict resolution; nobody else treats emotion as a deterministic anti-cliché deny-list |
 | **Self-directing *and* self-improving** | Opt-in **agentic controller** (plan §21): instead of a fixed order, an agent *chooses its next move* — gather research / read canon / draft / re-outline / revise / consolidate / repair / table-read / produce / learn / escalate — and the writer can call tools (research, canon lookup, fact-verify) *mid-draft*. A **learned policy**, distilled from the agent's own action trace, improves the choices with use. The fixed pipeline remains the safety floor (default-off). | Few OSS writers are self-directing; fewer pair it with a self-improving loop *and* a deterministic fallback |
 | **Claim↔source verification** | Cited claims checked against the actual source; unsupported = blocking; opt-in **multi-agent panels** (majority-vote fact-check, diverse-lens critique) | Almost no one |
 | **Evidence report** | A shareable artifact: thesis + every source ranked by influence (0–100) | Unique |
@@ -158,9 +158,10 @@ audience — and keep the nonfiction default byte-for-byte so the wedge persona 
     win; upper layers are **single-select** (only skills are multi, already capped + efficacy-gated).
     One place decides what's selected, what's dropped, and **logs why** — it never silently concatenates.
   - **Personas** (`personas.py` + `personas/*.md`): a **manner** layer (diction, rhythm, device-density)
-    *within* the register's rules. **10 ship** — 6 archetypes (`wry-skeptic`, `warm-mentor`,
-    `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`, `firebrand-essayist`) + 4
-    public-domain *manners* (`shakespearean`, `nietzschean`, `austen-ironic`, `twain-vernacular`).
+    *within* the register's rules. **14 ship** — 6 archetypes (`wry-skeptic`, `warm-mentor`,
+    `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`, `firebrand-essayist`) + 8
+    public-domain *manners* (`shakespearean`, `nietzschean`, `austen-ironic`, `twain-vernacular`,
+    `wildean`, `poe-gothic`, `dickensian`, `whitmanesque`).
     **Hard boundaries:** manner only, **no living/in-copyright authors**, exemplars are **original
     pastiche** (zero copyright surface). A persona incompatible with the register is **dropped and
     logged** — the register wins.
@@ -173,7 +174,7 @@ audience — and keep the nonfiction default byte-for-byte so the wedge persona 
     emotion cue, replacing the bare style-exemplar call at every writer site. One slot, no new node
     params.
   - **Settings:** `persona`, `emotion` (both ""=none, clamped against the known sets).
-  - **Suite:** 250 passed / 1 skipped, ruff clean, cross-platform Python 3.10–3.13.
+  - **Suite (current):** 477 passed / 2 skipped, ruff clean, cross-platform Python 3.10–3.13.
 - **Self-directing (agentic) controller — opt-in** (`agentic`, plan §21): the system is now optionally
   an *agent that chooses its next move*, not only a fixed pipeline with quality gates. **Off by default**
   (`Settings.agentic`); when off, behavior is byte-identical to the fixed pipeline, which remains the
@@ -200,11 +201,14 @@ audience — and keep the nonfiction default byte-for-byte so the wedge persona 
     New `/agentic on|off|llm|default` and `/trace` shell commands, a dashboard controller line, and
     `Agent(agentic=True, agentic_policy="llm")` / `/set agentic true` opt in.
 
-  *Live-validated 2026-06-16: one real OpenRouter run produced a finished article (~$0.15); the writer
-  did call tools mid-draft, and the run surfaced tool over-calling — now fixed with a total-call cap.*
-  Suite: 433 passed / 2 skipped, ruff clean. *(Advanced mode; the fixed pipeline stays the recommended
-  default. Maturity caveat: live validation is a single run and the learned policy is corpus-hungry —
-  see Next.)*
+  *Live-validated across two real OpenRouter runs: 2026-06-16 (~$0.15) surfaced tool over-calling — now
+  capped; 2026-06-17 a full **agentic** article (~$0.52, 606k tokens, 108 calls) finished clean, the
+  controller chose `research` on an evidence gap, the writer called tools mid-draft, the DeepSeek
+  prefix-cache pin was confirmed engaging (**36% of prompt tokens cached**), and the run surfaced a
+  structured-output truncation on the reasoning tier — now fixed (raise `max_tokens`, stay on-tier).*
+  Suite: 477 passed / 2 skipped, ruff clean. *(Advanced mode; the fixed pipeline stays the recommended
+  default. Maturity caveat: the learned `trace` policy is still corpus-hungry — it needs ≥3 labelled
+  units per arm and runs so far yield too few "gather" units, so it abstains — see Next.)*
 - **Resilience + safety hardening** (from an exhaustive code review): a global **`fallback` model**
   (any node whose primary exhausts its retries degrades once onto a cheaper tier rather than killing an
   unattended run); a **context budget** (`max_context_chars`, default 24000) that priority-bounds the

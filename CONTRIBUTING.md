@@ -85,7 +85,9 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
 
 - **`plan.md`** is the architecture/spec source of truth; **`resume.md`** is the running
   dev journal (newest entry on top). Durable decisions go in `plan.md`, not `resume.md`.
-- Keep nodes deterministic LLM calls - see `plan.md` §4. Don't add agentic behavior.
+- Keep nodes as deterministic, single-purpose LLM calls - see `plan.md` §4. (Self-directing
+  behavior is the **opt-in** agentic controller in `agentic/` (`plan.md` §21), a separate layer -
+  don't bake it into a node.)
 - Network/IO is best-effort: degrade gracefully, never crash the pipeline on a fetch error.
 - All numeric thresholds are tunable config (`config/settings.yaml`), not hard-coded.
 - Cross-platform: use `pathlib`, avoid shelling out, and don't assume a POSIX or Windows path
@@ -102,7 +104,9 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
 
 A 60-second map (full detail in `plan.md` and the README's Architecture section):
 
-- `src/writingagent/orchestrator.py` - durable on-disk state machine (the brain *is* the checkpoint).
+- `src/writingagent/orchestrator/` - durable on-disk state machine (the brain *is* the checkpoint);
+  a package (`common`/`book`/`article`/`review`/`export`/`manage`). `agentic/` is the opt-in
+  self-directing controller layered over it (`plan.md` §21).
 - `nodes.py` / `prompts.py` / `schemas.py` - the LLM nodes, their prompts (incl. the
   `wrap_untrusted` injection fence), and structured outputs.
 - `llm.py` - OpenRouter wrapper (retry/backoff, timeout, repair, headroom compression,
@@ -118,6 +122,6 @@ A 60-second map (full detail in `plan.md` and the README's Architecture section)
   (manner) and anti-cliché emotion deny-lists (`plan.md` §23).
 - `gold/*.md` - the per-register genre style corpus (the default "match this" voice exemplar).
   The gold/persona corpora and the register profiles are **tunable data**, not hard-code.
-- `shell.py` / `cli.py` / `ui.py` - Rich TUI, one-shot CLI, and the theme registry
-  (10 themes: palette + wordmark figlet per theme).
+- `shell/` / `cli/` / `ui.py` - Rich TUI, one-shot CLI (both packages), and the theme registry
+  (11 themes: palette + wordmark figlet per theme).
 - `export.py` - pdf · epub · html · docx · txt · md renderers.

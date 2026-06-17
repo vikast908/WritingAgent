@@ -5,6 +5,60 @@
 
 ## Current status
 
+- **New (2026-06-17 - FIRST REAL RUN completed end-to-end + truncation fix shipped):** picked up the
+  handoff below. The named in-flight run had never persisted to disk (it died before first save), so per
+  the handoff's own instruction we started a **fresh real OpenRouter run** with the intended config
+  (`agentic=True` + `autonomous` + `divergent_skeletons`, cache-pinned `DeepSeek` provider). It finished
+  clean.
+  - **Real-run findings (item #1 - VALIDATED).** Article
+    `the-architecture-of-efficiency-how-slms-beat-llms-at-their-own-game` (user `default`, gitignored brain):
+    3070 words, 29 sources, `done=True`, all artifacts written (manuscript + evidence_report +
+    agent_trace + table_read). Quality is genuinely publication-grade (concrete benchmarks, clear thesis).
+    - **Cost/usage:** ~**$0.52**, 606k tokens (367k prompt + 239k completion), 108 LLM calls, ~59 min
+      wallclock (pro is a slow reasoner, ~42s/call avg; 73 pro calls + 20 flash).
+    - **Cache-hit % = 36% of prompt tokens served from cache** -> the DeepSeek prefix-cache pin engaged.
+      This **confirms the prompt-reorder token-efficiency win** that was still unverified at handoff.
+    - **agent_trace.jsonl:** controller chose `research` on sec04 (`evidence gap`) and `draft` elsewhere;
+      unit-outcome labels (`first_pass`/`insight`) written for all 6 sections. The trace loop works.
+  - **Structured-output truncation (item #2 - FIXED + verified live).** The bug reproduced exactly once
+    this run (sec05, `deepseek-v4-pro` -> `empty model output (finish_reason=length)` -> flash fallback).
+    Root cause: a reasoning model spends tokens *thinking* before emitting JSON; if that fills `max_tokens`
+    the reply is empty/cut-off and the old retry just re-sent the same too-small budget (futile repair
+    turns) before degrading to flash. **Fix (both halves the handoff proposed):**
+    - **Structural (`llm.py` `complete_structured`):** on `finish_reason=="length"`, *raise* `max_tokens`
+      (double, capped at 16k) and retry the SAME model/prompt - no repair turn. Keeps the call on its
+      routed (stronger) tier instead of falling back. Generic: fixes any reasoning model / any structured
+      node.
+    - **Config floor (`models.yaml`):** added a `max_tokens:` section giving `critic`/`judge`/`verifier`
+      8000 first-call headroom (mirrors the existing `diagram` 16k precedent), so the common path doesn't
+      truncate at all.
+    - **Verified:** new unit test `test_structured_raises_max_tokens_on_length_truncation`
+      (`test_hardening.py`) + a real-API check (max_tokens=40 -> truncates -> auto-raises to 80 -> recovers,
+      **stayed on pro, no flash fallback**, $0.0003). Suite green: **477 passed, 1 skipped; ruff clean.**
+  - **PENDING / decisions for next session:**
+    1. **Policy-training volume (item #3 - NOT yet met).** `train_policy` needs >=3 labelled units in BOTH
+       arms (gathered vs. direct); this run gave **1 gathered + 5 direct**, so it still abstains
+       (`train_policy('default')` -> None). The bottleneck is the controller's gather rate (~1/6 units), so
+       brute-forcing it is ~6+ more hour-long ~$0.52 runs. This is the usage milestone, not a code task -
+       **left for the user to decide** whether to batch more runs (or tune topics/policy to gather more).
+    2. **Optional capability checks (item #4) - still deferred.** No footgun surfaced (the run generated
+       SVG diagrams fine), so per the standing rationale (only embeddings has a clean cross-platform
+       missing-dep) this stays skipped.
+  - **Minor:** an early fake-mode dry-run of the driver briefly ran a learn phase on placeholder text in
+    the real `default` brain (reconciled `watch_list` to a placeholder); the learn phase rewrites that file
+    every real run, so the real run repopulated it - no lasting effect. The fake `untitled-chapter` project
+    was deleted.
+  - **Docs consistency sweep (this session).** Updated `README.md`/`PRD.md`/`CHANGELOG.md`/`plan.md`/
+    `learning.md` for the truncation fix + real-run findings, then audited every system doc for staleness
+    (code-verified counts). Fixed: test count 476/433/250 -> **477**; PRD persona count 10 -> **14** (+ the
+    4 new manners) in 3 places; PRD agentic block now reflects the 2nd (agentic) live run + cache
+    validation; `CONTRIBUTING.md`/`learning.md`/`plan.md` references to `orchestrator.py`/`shell.py`/
+    `cli.py` -> their `*/` packages; stale `book <subcmd>` CLI examples -> `writing-agent <subcmd>`;
+    `learning.md` theme count 10 -> 11 and "~330 tests" -> "~480"; CONTRIBUTING "don't add agentic
+    behavior" rescoped (agentic is a shipped opt-in layer). Left historical journal/changelog snapshots
+    (test.md session log, "Added earlier this cycle", the personas proposal doc) untouched - they're dated
+    records.
+
 - **HANDOFF (2026-06-17, end of session - FIRST REAL RUN in flight; pick up from home):** kicked off the
   first *real* OpenRouter run to validate the agentic path at volume (the last "fully agentic" caveat).
   - **State at handoff:** article `the-efficiency-edge-why-specialized-slms-outperform-giants-in-production`

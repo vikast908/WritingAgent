@@ -316,6 +316,48 @@ def test_structured_falls_back_after_primary_fails(no_sleep, monkeypatch):
     assert out.queries == ["q1", "q2"]
 
 
+def test_structured_raises_max_tokens_on_length_truncation(no_sleep, monkeypatch):
+    # A reasoning model can spend its whole budget THINKING and come back empty with
+    # finish_reason=length. complete_structured must give the SAME model more room and
+    # retry - not waste its repair turns on the same budget, and not degrade to the
+    # (weaker) fallback model. Regression for the live SLM-article run truncation.
+    from writingagent.schemas import SearchQueries
+
+    class _LenChoice:
+        def __init__(self, content, finish):
+            self.message = _Msg(content)
+            self.finish_reason = finish
+
+    class _LenResp:
+        def __init__(self, content, finish):
+            self.choices = [_LenChoice(content, finish)]
+            self.usage = _Usage(10, 5)
+
+    class _LenCompletions:
+        def __init__(self):
+            self.calls = 0
+            self.seen = []   # (model, max_tokens) per call
+
+        def create(self, **kw):
+            self.seen.append((kw.get("model"), kw.get("max_tokens")))
+            self.calls += 1
+            if self.calls == 1:
+                return _LenResp("", "length")            # reasoning ate the whole budget
+            return _LenResp('{"queries": ["q1", "q2"]}', "stop")
+
+    client = type("C", (), {})()
+    client.chat = type("Ch", (), {"completions": _LenCompletions()})()
+    monkeypatch.setattr(llm, "_get_client", lambda: client)
+    monkeypatch.setattr(llm, "_fallback_model", "flash")   # must NOT be reached
+
+    out = llm.complete_structured("m", "sys", "user", SearchQueries, max_tokens=2000)
+    seen = client.chat.completions.seen
+    assert out.queries == ["q1", "q2"]
+    assert len(seen) == 2                             # recovered in one extra try
+    assert all(model == "m" for model, _ in seen)    # stayed on the primary tier
+    assert seen[1][1] > seen[0][1]                    # max_tokens was raised on the retry
+
+
 def test_fallback_not_retried_on_itself(no_sleep, monkeypatch):
     # The fallback call sets _allow_fallback=False, so a model that IS the fallback fails
     # straight through (no infinite recursion).

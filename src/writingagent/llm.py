@@ -828,8 +828,16 @@ def complete_structured(
     last_err: Exception | None = None
     use_response_format = True   # dropped if a model rejects it (BadRequest)
     shrunk = False               # context-overflow recovery fires at most once per call
+    # Reasoning models spend tokens THINKING before they emit the JSON; if that thinking
+    # fills max_tokens the reply comes back empty (or cut off mid-object) with
+    # finish_reason=length. Re-sending the same too-small budget just truncates again, so the
+    # node burns its retries and falls back to a weaker model for nothing. Instead, on a
+    # length-truncation we RAISE the cap and retry the same prompt (no repair turn - the
+    # prompt was fine). Mirrors the diagram node's 16k headroom for the same reason.
+    cur_max = max_tokens
+    cap = max(16000, max_tokens)
     for attempt in range(_MAX_ATTEMPTS):
-        kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages,
+        kwargs: dict = {"model": model, "max_tokens": cur_max, "messages": messages,
                         **_cost_kwargs()}
         if temperature is not None:
             kwargs["temperature"] = temperature
@@ -859,12 +867,12 @@ def complete_structured(
             break  # non-retryable, out of attempts
 
         _record_usage(resp)
+        finish = getattr(resp.choices[0], "finish_reason", None)
         raw = resp.choices[0].message.content or ""
         text = _extract_json(raw)
         try:
             if not text.strip():
-                raise _EmptyResponse(
-                    f"empty model output (finish_reason={resp.choices[0].finish_reason})")
+                raise _EmptyResponse(f"empty model output (finish_reason={finish})")
             out = schema.model_validate_json(text)
             _log_call("structured", model, t0, attempt + 1, resp)
             _debug_dump("structured", model, messages, raw)
@@ -872,6 +880,15 @@ def complete_structured(
         except Exception as e:  # noqa: BLE001 - parse/validation/empty
             last_err = e
             if attempt < _MAX_ATTEMPTS - 1:
+                if finish == "length" and cur_max < cap:
+                    # Output ran out of room (reasoning ate the budget, or the JSON was cut
+                    # off mid-object): the prompt was fine, so skip the repair turn and just
+                    # give the SAME model more room. Keeps the call on its routed (stronger)
+                    # tier instead of degrading to the fallback model.
+                    cur_max = min(cap, cur_max * 2)
+                    _log.warning("structured: output truncated (finish_reason=length) - "
+                                 "raising max_tokens to %d and retrying", cur_max)
+                    continue
                 # Repair turn: show the model its own bad output + the error and ask
                 # for a correction (far more reliable than re-sending the same prompt).
                 messages = messages + [
