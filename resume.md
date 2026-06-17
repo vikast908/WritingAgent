@@ -5,6 +5,42 @@
 
 ## Current status
 
+- **New (2026-06-17 - token-efficiency + UX hardening + craft-layer expansion - DONE):** a working
+  session on top of the merged compositor branch. Suite green throughout (471 passed, 2 skipped; ruff
+  clean). Three threads:
+  - **Token efficiency (no quality cost).** (1) **Cache-friendly prompt ordering** - reordered the
+    writer + critic prompts (book & article, `nodes.py`) so the stable, cross-unit blocks (plan/outline →
+    requirements → thesis → voice) lead and the per-unit blueprint + volatile revision state follow, so
+    the provider's prompt-prefix cache spans the shared head across every unit. (2) **Run-scoped research
+    memo** (`agentic/tools.py`) - the inline-tool/controller writer re-issuing the same query within a
+    run no longer repeats the web search + LLM synthesis; keyed by `(unit, query)`, auto-cleared per
+    `run_id`. (3) Personal defaults in (gitignored) `config/settings.yaml`: `divergent_skeletons=true`
+    (article skeleton→expand, ~60% fewer discarded-draft tokens), `openrouter_providers=DeepSeek` (pins a
+    cache-capable upstream so DeepSeek's auto prefix-cache actually engages - this is what makes the
+    reorder pay off). NOTE: the reorder changes prompt *text* (not meaning), so new output is not
+    byte-identical to old - quality/consistency unaffected.
+  - **UX.** Fixed a **Rich-markup bug class**: a literal `[x]` whose contents look like a style name
+    (letters/spaces) gets parsed as a tag and silently dropped. Hit the review/escalation menu
+    (`dashboard.py`, hotkeys `[f]/[i]/[a]/[g]/[r]/[s]` vanished) and the `/path` + `/use` pickers
+    (`commands.py`, the `[enter to cancel]` hint and the `[article]`/`[book]` type tag vanished). Fixed
+    by escaping the opening bracket (`\[…]`, raw f-strings). `Text(...)` paths (the run event log) are
+    NOT markup-parsed and were safe. Also: the welcome **footer now shows `agentic on/off`** (replacing
+    the redundant `flash` model slot) and surfaces `/agentic on|off` in the hint line (`branding.py`).
+  - **Test hermeticity.** Added an autouse `_isolated_settings` fixture (`tests/conftest.py`) pointing
+    `config._SETTINGS` at a tmp path, so the suite always runs against shipped dataclass defaults and a
+    developer's personal `settings.yaml` (e.g. `agentic=true`) can't turn the local run red. CI already
+    ran on defaults (the file is gitignored); this makes local match CI.
+  - **Craft-layer expansion.** Personas **10→14** (`personas.py` + 4 new original-pastiche exemplars):
+    `wildean`, `poe-gothic`, `dickensian`, `whitmanesque` (public-domain manners; no living authors).
+    Emotions **8→12** (`emotions.py`): `disgust`, `surprise`, `jealousy`, `pride` - completes Ekman's six
+    + the two top dramatic drivers; each adds an anti-cliché deny-list + show-don't-name cue + aliases.
+    Counts refreshed in README, plan.md §23, and learning.md.
+  - **NEXT STEP:** the bigger UX gap from the audit is **failure feedback in full-auto (autonomous)
+    runs** - context-overflow/budget errors aren't mapped in `ui.explain_error()`, and a non-escalation
+    pause may show no recovery card. Verify the control flow in `dashboard.run_with_dashboard` and
+    `explain_error`, then make those failures actionable. (Audit also flagged discoverability wins:
+    `/agentic` policy explainer, `/praise`/`/path` help, missing-dep hints.)
+
 - **New (2026-06-17 - the compositor: personas, emotions, layer composition - DONE, branch
   `feat/compositor-personas-emotions`, stacked on the craft-engine branch):** built the §22.6 deferral
   (the next chapter after the craft engine). Insight: register/persona/emotion/skills are all *voice

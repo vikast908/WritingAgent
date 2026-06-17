@@ -190,17 +190,19 @@ register or pinned with `field`. References render in your chosen convention via
 **Personas — a *manner* layer.** A persona flavors diction, rhythm, and stance *within* the register's
 rules (it can't break them). Each ships a signature card, an **original-pastiche** exemplar, and the
 registers it's compatible with; a persona that doesn't fit the chosen register is **dropped and
-logged** (a Nietzschean API reference is not a thing). **Ten ship** — six archetypes
+logged** (a Nietzschean API reference is not a thing). **Fourteen ship** — six archetypes
 (`wry-skeptic`, `warm-mentor`, `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`,
-`firebrand-essayist`) and four public-domain *manners* (`shakespearean`, `nietzschean`, `austen-ironic`,
-`twain-vernacular`). **No living or in-copyright authors** — exemplars are original pastiche, so there's
-zero copyright surface; for a specific modern voice, train your own with `voice/` + `/praise`.
+`firebrand-essayist`) and eight public-domain *manners* (`shakespearean`, `nietzschean`, `austen-ironic`,
+`twain-vernacular`, `wildean`, `poe-gothic`, `dickensian`, `whitmanesque`). **No living or in-copyright
+authors** — exemplars are original pastiche, so there's zero copyright surface; for a specific modern
+voice, train your own with `voice/` + `/praise`.
 
 **Emotions — anti-cliché, not a glossary.** A symptom dictionary ("fear = racing heart, sweaty palms")
 is a *cliché generator*, so the inverse ships: per-emotion **deny-lists** wired into the cliché detector
 (so "her heart raced" gets flagged wherever it appears) plus a one-line *show-don't-name* cue. Believable
-emotion is carried by the deny-list and the show-don't-tell pass, not a lookup table. Eight emotions,
-alias-tolerant (`dread` resolves to fear).
+emotion is carried by the deny-list and the show-don't-tell pass, not a lookup table. Twelve emotions
+(the basic-emotion canon — incl. `disgust`, `surprise`, `jealousy`, `pride`), alias-tolerant (`dread`
+resolves to fear, `envy` to jealousy, `awe` to surprise).
 
 **One composition model, not five.** Register, field, persona, emotion, and skills are all
 voice/constraint layers over a single draft, so they compose in a strict precedence **cascade** —

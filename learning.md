@@ -672,13 +672,15 @@ A **persona** is a *manner* — a way of speaking — that flavours the writing 
 already allows. It changes the diction, the rhythm, how often it reaches for a rhetorical flourish, and
 its stance — but it can never overrule the genre's rules (that's the cascade from §9.4).
 
-**Ten personas ship**, in two families:
+**Fourteen personas ship**, in two families:
 
 - **Six archetypes** — invented voices you can name: the **wry skeptic**, the **warm mentor**, the
   **hard-boiled minimalist** (short, flat, unsentimental), the **lyrical maximalist** (rich, musical,
   long-lined), the **deadpan technical**, and the **firebrand essayist**.
-- **Four public-domain *manners*** — written in the *spirit* of long-dead, out-of-copyright authors:
-  **Shakespearean**, **Nietzschean**, **Austen-ironic**, and **Twain-vernacular**.
+- **Eight public-domain *manners*** — written in the *spirit* of long-dead, out-of-copyright authors:
+  **Shakespearean**, **Nietzschean**, **Austen-ironic**, **Twain-vernacular**, **Wildean** (epigram and
+  paradox), **Poe-gothic** (slow-tightening dread), **Dickensian** (comic, teeming with character), and
+  **Whitmanesque** (expansive free-verse cataloguing).
 
 Two boundaries are drawn firmly and on purpose. First, these are the *manner* only — the writing stays
 in plain modern language; a "Shakespearean" piece doesn't invent fake-archaic words or pretend to be
@@ -707,9 +709,11 @@ So emotions are built **inside-out**. For each emotion, the system ships:
   stops mattering"). That one tip is handed to the writer; the believable emotion is then carried by
   the deny-list plus the show-don't-tell surgical pass from §9.3 — not by a glossary of symptoms.
 
-**Eight emotions ship:** fear, anger, grief, joy, love, shame, tension, and hope. And because you might
-type the *feeling* rather than the exact label, there's gentle synonym-matching — ask for "dread",
-"fury", or "yearning" and it resolves to fear, anger, and hope respectively.
+**Twelve emotions ship:** fear, anger, grief, joy, love, shame, tension, hope, disgust, surprise,
+jealousy, and pride (the basic-emotion canon — disgust and surprise complete the classic set of six,
+and jealousy and pride are the two most common dramatic drivers that don't reduce to the others). And
+because you might type the *feeling* rather than the exact label, there's gentle synonym-matching — ask
+for "dread", "fury", "envy", or "awe" and it resolves to fear, anger, jealousy, and surprise respectively.
 
 ### 9.7 The one-line takeaway for this chapter
 
@@ -798,12 +802,13 @@ fix — and your progress is always saved, so you just run again.
   whatever clashes, and logs why. Its job is *selection*, not accumulation — because piling instructions
   on a weak model produces mush.
 - **Persona:** a chosen *voice/manner* (e.g. the wry skeptic, the lyrical maximalist, a Shakespearean
-  cadence) that flavours the writing within the register's rules. Ten ship — six archetypes + four
+  cadence) that flavours the writing within the register's rules. Fourteen ship — six archetypes + eight
   public-domain manners; never living/in-copyright authors, and examples are original homage, not the
   real authors' text.
 - **Emotion (craft):** writing a passage with a target feeling, done *inside-out* — a deny-list of the
-  emotion's clichés (banned via the cliché detector) plus one "show it, don't name it" cue. Eight ship
-  (fear, anger, grief, joy, love, shame, tension, hope), with synonym-matching for free-text feelings.
+  emotion's clichés (banned via the cliché detector) plus one "show it, don't name it" cue. Twelve ship
+  (fear, anger, grief, joy, love, shame, tension, hope, disgust, surprise, jealousy, pride), with
+  synonym-matching for free-text feelings.
 - **Escalation:** when a draft can't pass the quality bar, the run pauses and asks you (in manual mode).
 - **Canon (books):** the tracked facts of a story — characters, timeline, world rules — kept consistent.
 - **Brain:** the `brain/` folder where all state and output is stored as plain files.

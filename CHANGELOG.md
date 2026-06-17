@@ -7,6 +7,42 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Craft-layer expansion — 4 personas + 4 emotions (plan §23, 2026-06-17).** Personas **10→14**: four
+  public-domain *manners* with original-pastiche exemplars — `wildean` (epigram/paradox), `poe-gothic`
+  (slow-tightening dread), `dickensian` (comic, character-teeming), `whitmanesque` (free-verse
+  cataloguing); still no living/in-copyright authors and zero copyright surface. Emotions **8→12**:
+  `disgust`, `surprise`, `jealousy`, `pride` — completing the basic-emotion canon (disgust + surprise)
+  plus the two most common dramatic drivers, each with an anti-cliché deny-list wired into the `craft.py`
+  detector, a show-don't-name cue, and aliases (`envy`→jealousy, `awe`→surprise, `revulsion`→disgust, …).
+  New files: `personas/{wildean,poe-gothic,dickensian,whitmanesque}.md`.
+- **Welcome footer shows agentic state.** The status footer now reads `agentic on|off` (replacing the
+  redundant `flash` model slot, which duplicated `pro`), and the hint line surfaces `/agentic on|off`.
+
+### Changed
+- **Cache-friendly prompt ordering (token efficiency, no quality cost).** The writer + critic prompts
+  (book & article, `nodes.py`) now lead with the stable, cross-unit blocks (plan/outline → author
+  requirements → thesis → voice exemplars) and place the per-unit blueprint + volatile revision state
+  last, so a provider's prompt-prefix cache spans the shared head across every unit. Pairs with the
+  `openrouter_providers` setting (pin a cache-capable upstream so DeepSeek's auto prefix-cache engages).
+  This changes prompt *text*, not meaning — output is no longer byte-identical to prior runs, but
+  quality/consistency are unaffected.
+- **Run-scoped research memo (`agentic/tools.py`).** The inline-tool / controller writer re-issuing the
+  same research query within a run no longer repeats the web search + LLM synthesis — the synthesized
+  brief is cached by `(unit, query)` and auto-cleared when the `run_id` changes.
+
+### Fixed
+- **Rich-markup hotkey/hint bug class (TUI).** A literal `[x]` whose contents read as a style name
+  (letters/spaces) was parsed as a markup tag and silently dropped, eating the leading character. Fixed
+  in the review/escalation menu (`dashboard.py` — the `[f]/[i]/[a]/[g]/[r]/[s]` hotkeys) and the `/path`
+  + `/use` pickers (`commands.py` — the `[enter to cancel]` hint and the `[article]`/`[book]` type tag)
+  by escaping the opening bracket (`\[…]`). `Text(...)`-rendered output (the run event log) is not
+  markup-parsed and was unaffected.
+- **Test suite no longer reads the developer's personal config (`tests/conftest.py`).** A new autouse
+  `_isolated_settings` fixture points `config._SETTINGS` at a tmp path, so the suite always runs against
+  shipped dataclass defaults; a local `config/settings.yaml` (e.g. `agentic=true`) can no longer turn a
+  local run red while CI (which has no such file, it's gitignored) stays green.
+
+### Added (earlier this cycle)
 - **The compositor — personas, emotions, and layer composition (plan §23, 2026-06-17).** Built the
   §22.6 deferral as **one composition model**, not three feature silos: register (rules+voice), field
   (structure), persona (manner), emotion (affect), and skills (technique) are all voice/constraint

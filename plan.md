@@ -1603,10 +1603,11 @@ that decides what is selected, what is dropped, and **logs why** - it never sile
 
 A persona is a **manner** layer: it flavors diction, rhythm, device-density, and stance *within* the
 register's rules. Each ships a **signature card** (the manner nudge) + an **exemplar** (original
-pastiche prose) and declares its **compatible registers**. Ten ship: six archetypes (`wry-skeptic`,
+pastiche prose) and declares its **compatible registers**. Fourteen ship: six archetypes (`wry-skeptic`,
 `warm-mentor`, `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`,
-`firebrand-essayist`) and four public-domain *manners* (`shakespearean`, `nietzschean`,
-`austen-ironic`, `twain-vernacular`). **Hard boundaries:** manner only (obey the register, stay in the
+`firebrand-essayist`) and eight public-domain *manners* (`shakespearean`, `nietzschean`,
+`austen-ironic`, `twain-vernacular`, `wildean`, `poe-gothic`, `dickensian`, `whitmanesque`).
+**Hard boundaries:** manner only (obey the register, stay in the
 present, invent no archaic words); **no living/in-copyright authors** (for a specific modern voice the
 user's own `voice/` + `/praise` path already exists); exemplars are **original pastiche**, not the
 authors' text, so there is zero copyright surface. A persona incompatible with the register is
@@ -1618,8 +1619,10 @@ A symptom dictionary ("fear = racing heart, sweaty palms") is a **cliché genera
 The inverse ships: per-emotion **anti-cliché deny-lists** (wired into the `craft.py` cliché detector, so
 "her heart raced" is flagged wherever it appears - deterministic, model-independent) + a one-line craft
 **cue** (the show-don't-name technique) injected by the compositor. Believable emotion is then carried
-by the deny-list + the show-don't-tell surgical pass (§22.3), not a glossary. Eight emotions with alias
-tolerance (`dread`→fear) so a free-text role resolves.
+by the deny-list + the show-don't-tell surgical pass (§22.3), not a glossary. Twelve emotions - the
+basic-emotion canon (`fear`, `anger`, `grief`, `joy`, `love`, `shame`, `tension`, `hope`, `disgust`,
+`surprise`, `jealousy`, `pride`) - with alias tolerance (`dread`→fear, `envy`→jealousy, `awe`→surprise)
+so a free-text role resolves.
 
 ### 23.4 The voice layer (what's wired now)
 
