@@ -220,18 +220,50 @@ def _brief_md(facts, style_cues, *, header: str) -> str:
     return "\n".join(lines)
 
 
+# Run-scoped memo for on-demand research briefs. The controller / inline-tool writer can
+# re-issue the SAME query within a run - across draft revisions or panel rounds - which
+# otherwise repeats the web search AND the LLM synthesis. Caching the synthesized brief by
+# (unit, query) removes that duplicate; the same query genuinely yields the same brief, so
+# this is quality-neutral. Keyed to the current run_id so it self-clears when a new run
+# begins (no cross-run leakage, no unbounded growth in a long-lived TUI).
+_brief_memo: dict[tuple[str, str], str] = {}
+_brief_memo_run: str | None = None
+
+
+def _research_memo(unit_key: str, query: str, produce) -> str:
+    """Return a cached brief for (unit_key, query) within the current run, else compute it
+    via `produce()` and cache it. `produce` returns (brief_markdown, log_query)."""
+    global _brief_memo_run
+    from .. import llm
+    rid = llm.run_id()
+    if rid != _brief_memo_run:        # a new run started -> drop the prior run's briefs
+        _brief_memo.clear()
+        _brief_memo_run = rid
+    key = (unit_key, query)
+    if key in _brief_memo:
+        return _brief_memo[key]
+    out = produce()
+    _brief_memo[key] = out
+    return out
+
+
 def unit_research(cfg, plan, blueprint, query: str, log) -> str:
     """On-demand book research for the current chapter (the `research` unit tool)."""
     from .. import search as search_mod
     base_query = (query or "").strip() or search_mod.build_query(plan, blueprint)
-    try:
-        results = search_mod.web_search(base_query, max_results=5)
-        web = search_mod.format_results(results)
-    except Exception:  # noqa: BLE001 - research is best-effort enrichment, never fatal
-        web = ""
-    brief = nodes.research(cfg, plan, blueprint, web_results=web or None)
-    log(f"   [agentic] research: {base_query[:60]}")
-    return _brief_md(brief.facts, brief.style_cues, header="Controller research brief")
+    unit_key = f"ch{getattr(blueprint, 'number', '?')}"
+
+    def _produce() -> str:
+        try:
+            results = search_mod.web_search(base_query, max_results=5)
+            web = search_mod.format_results(results)
+        except Exception:  # noqa: BLE001 - research is best-effort enrichment, never fatal
+            web = ""
+        brief = nodes.research(cfg, plan, blueprint, web_results=web or None)
+        log(f"   [agentic] research: {base_query[:60]}")
+        return _brief_md(brief.facts, brief.style_cues, header="Controller research brief")
+
+    return _research_memo(unit_key, base_query, _produce)
 
 
 def unit_research_article(cfg, outline, section, query: str, log) -> str:
@@ -239,11 +271,16 @@ def unit_research_article(cfg, outline, section, query: str, log) -> str:
     from .. import search as search_mod
     base_query = (query or "").strip() or (section.search_query
                                            or f"{outline.title} {section.heading}")
-    try:
-        results = search_mod.web_search(base_query, max_results=5)
-        web = search_mod.format_results(results)
-    except Exception:  # noqa: BLE001 - research is best-effort enrichment, never fatal
-        web = ""
-    brief = nodes.research_article(cfg, outline, section, web_results=web or None)
-    log(f"   [agentic] research: {base_query[:60]}")
-    return _brief_md(brief.facts, brief.style_cues, header="Controller research brief")
+    unit_key = f"sec{getattr(section, 'number', '?')}"
+
+    def _produce() -> str:
+        try:
+            results = search_mod.web_search(base_query, max_results=5)
+            web = search_mod.format_results(results)
+        except Exception:  # noqa: BLE001 - research is best-effort enrichment, never fatal
+            web = ""
+        brief = nodes.research_article(cfg, outline, section, web_results=web or None)
+        log(f"   [agentic] research: {base_query[:60]}")
+        return _brief_md(brief.facts, brief.style_cues, header="Controller research brief")
+
+    return _research_memo(unit_key, base_query, _produce)

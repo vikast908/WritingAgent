@@ -99,13 +99,18 @@ def write_chapter(
     tool_runner=None,
 ) -> str:
     model = cfg.model_for("writer")
-    parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
+    # Cache-friendly ordering: the stable, cross-chapter blocks (book plan, author
+    # requirements, voice exemplars) lead so the provider's prompt-prefix cache spans
+    # them across every chapter; the per-chapter blueprint and volatile revision state
+    # follow, where they sit closest to the write instruction.
+    parts = [f"Book plan:\n{_ctx(plan)}"]
     if requirements:
         parts.append("AUTHOR REQUIREMENTS (gathered upfront - the highest priority; honor "
                      f"every point exactly):\n{requirements}")
     if voice:
         parts.append("VOICE EXEMPLARS - passages in the register to MATCH. Imitate their "
                      "rhythm, diction, and stance; do NOT copy their content:\n\n" + voice)
+    parts.append(f"Chapter blueprint:\n{_ctx(blueprint)}")
     if context:
         parts.append(f"Canonical context:\n{context}")
     if skills:
@@ -161,10 +166,13 @@ def critique_chapter(
     register: str | None = None,
 ) -> S.Critique:
     model = cfg.model_for("critic")
-    parts = [f"Book plan:\n{_ctx(plan)}", f"Chapter blueprint:\n{_ctx(blueprint)}"]
+    # Cache-friendly ordering (mirrors write_chapter): stable cross-chapter blocks lead
+    # so the prompt-prefix cache spans them; the per-chapter blueprint and the draft follow.
+    parts = [f"Book plan:\n{_ctx(plan)}"]
     if requirements:
         parts.append("AUTHOR REQUIREMENTS (gathered upfront; treat a clear violation - wrong "
                      f"audience, length, tone, or a missing must-include - as BLOCKING):\n{requirements}")
+    parts.append(f"Chapter blueprint:\n{_ctx(blueprint)}")
     if context:
         parts.append(f"Canonical context:\n{context}")
     wb = _watch_block(watch_list, watch_blocking)
@@ -454,7 +462,11 @@ def write_article_section(
     tool_runner=None,
 ) -> str:
     model = cfg.model_for("writer")
-    parts = [f"Article outline:\n{_ctx(outline)}", f"Section to write:\n{_ctx(section)}"]
+    # Cache-friendly ordering: the stable, cross-section blocks (outline, author
+    # requirements, thesis, voice exemplars) lead so the provider's prompt-prefix cache
+    # spans them across every section; the per-section blueprint and volatile revision
+    # state follow, where they sit closest to the write instruction.
+    parts = [f"Article outline:\n{_ctx(outline)}"]
     if requirements:
         parts.append("AUTHOR REQUIREMENTS (gathered upfront - the highest priority; honor "
                      f"every point exactly):\n{requirements}")
@@ -467,6 +479,7 @@ def write_article_section(
     if voice:
         parts.append("VOICE EXEMPLARS - passages in the register to MATCH. Imitate their "
                      "rhythm, diction, and stance; do NOT copy their content:\n\n" + voice)
+    parts.append(f"Section to write:\n{_ctx(section)}")
     if context:
         parts.append(f"Prior section summaries (for continuity):\n{context}")
     if skills:
@@ -509,15 +522,19 @@ def critique_article_section(
     register: str | None = None,
 ) -> S.Critique:
     model = cfg.model_for("critic")
-    parts = [f"Article outline:\n{_ctx(outline)}", f"Section blueprint:\n{_ctx(section)}"]
-    if lens:   # diverse-perspective panel (plan §21.10): review through one specific lens
-        parts.append(f"ADOPT THIS REVIEWER LENS for your critique: {lens}")
+    # Cache-friendly ordering (mirrors write_article_section): stable cross-section blocks
+    # lead so the prompt-prefix cache spans them; the per-section blueprint, the (panel)
+    # lens, and the draft follow.
+    parts = [f"Article outline:\n{_ctx(outline)}"]
     if requirements:
         parts.append("AUTHOR REQUIREMENTS (gathered upfront; treat a clear violation - wrong "
                      f"audience, length, tone, or a missing must-include - as BLOCKING):\n{requirements}")
     if thesis:
         parts.append("ARTICLE THESIS (the section must advance or set up this argument):\n"
                      + thesis)
+    parts.append(f"Section blueprint:\n{_ctx(section)}")
+    if lens:   # diverse-perspective panel (plan §21.10): review through one specific lens
+        parts.append(f"ADOPT THIS REVIEWER LENS for your critique: {lens}")
     if not research_on:
         parts.append("NO WEB RESEARCH was available for this draft - every specific statistic, "
                      "study citation, or named-source attribution is a fabrication risk.")
