@@ -31,6 +31,13 @@
     config requests run from plain English ("turn on researcher", "set chapters to 12", "use the
     poe-gothic persona"). Only `/user` + `delete` stay manual. Fixed a latent bug where the prompt told
     the model to emit `/set` while the extractor dropped it. Test updated (`test_hardening.py`).
+  - **TUI lovability pass.** Audited the shell for delight and found the base is already strong
+    (`_summary_card`, `_paused_card` exist + are wired). Implemented the genuine gaps: the completion
+    card now leads with the **argument made** + **source tally** + **reading time** (new
+    `polish.source_stats()`, shared with the evidence report); the welcome shows a rotating, date-stable
+    **writing epigraph** + a **"Welcome back."** lead for returning writers (one line; compactness guard
+    bumped 14→15); `ui.explain_error()` maps **context-overflow** and **budget** failures to actionable
+    fixes. Skipped a redundant `/why` (eval/tableread/summary already show the work).
   - **Test hermeticity.** Added an autouse `_isolated_settings` fixture (`tests/conftest.py`) pointing
     `config._SETTINGS` at a tmp path, so the suite always runs against shipped dataclass defaults and a
     developer's personal `settings.yaml` (e.g. `agentic=true`) can't turn the local run red. CI already

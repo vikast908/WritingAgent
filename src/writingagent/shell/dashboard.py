@@ -340,13 +340,15 @@ def _summary_card(console, dash, state: dict, uid: str, book_id: str) -> None:
     from rich.panel import Panel
     from rich.text import Text
 
-    from .. import llm
+    from .. import llm, polish
     from ..brain import ArticlePaths, BookPaths
     console.print()   # settle: the Live's last frame has no trailing newline, so the
     #                   summary Panel border would otherwise glue onto the last log line
     is_article = state.get("mode") == "article"
     paths = ArticlePaths(book_id, uid) if is_article else BookPaths(book_id, uid)
-    words = len((brain.read_text(paths.manuscript) or "").split())
+    manuscript = brain.read_text(paths.manuscript) or ""
+    words = len(manuscript.split())
+    read_min = polish.read_time_min(manuscript)
     insights = [i for i in (state.get("insights") or []) if isinstance(i, int)]
     units = state.get("num_sections" if is_article else "num_chapters", "?")
     toks, cost = llm.current_tokens(), llm.current_cost()
@@ -354,7 +356,22 @@ def _summary_card(console, dash, state: dict, uid: str, book_id: str) -> None:
     body = Text()
     body.append(f"{units} {'sections' if is_article else 'chapters'}", style=PARCH)
     body.append(f"   ·   {words:,} words", style=PARCH)
+    if read_min:
+        body.append(f"   ·   {read_min} min read", style=DIM)
     body.append(f"   ·   {dash._elapsed()} elapsed\n", style=DIM)
+    # Proof, not vibes: the argument it made + how grounded it is, right at the top.
+    if dash.brief:
+        body.append("argued:  ", style=DIM)
+        claim = dash.brief if len(dash.brief) <= 150 else dash.brief[:149].rstrip() + "…"
+        body.append(f"{claim}\n", style=f"italic {PARCH}")
+    stats = polish.source_stats(manuscript)
+    if stats["count"]:
+        body.append(f"sourced: {stats['count']} sources", style=DIM)
+        if stats["high_influence"]:
+            body.append(f" · {stats['high_influence']} high-influence", style=DIM)
+        if stats["credible"]:
+            body.append(f" · {stats['credible']} high-authority", style=DIM)
+        body.append("\n", style=DIM)
     body.append(f"{toks:,} tokens", style=DIM)
     if cost > 0:
         body.append(f"   ·   ${cost:.4f}", style=f"bold {GOLD}")

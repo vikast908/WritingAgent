@@ -127,7 +127,7 @@ def test_welcome_is_compact(tmp_brain, monkeypatch):
     from writingagent.config import load_config, load_settings
     console = _record_console()
     shell._welcome(console, load_config(), load_settings(), "u")
-    assert len(console.file.getvalue().splitlines()) <= 14
+    assert len(console.file.getvalue().splitlines()) <= 15   # +1 for the one-line epigraph
 
 
 def test_welcome_warns_on_fake_mode(tmp_brain, monkeypatch):

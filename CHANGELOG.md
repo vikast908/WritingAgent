@@ -17,6 +17,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   New files: `personas/{wildean,poe-gothic,dickensian,whitmanesque}.md`.
 - **Welcome footer shows agentic state.** The status footer now reads `agentic on|off` (replacing the
   redundant `flash` model slot, which duplicated `pro`), and the hint line surfaces `/agentic on|off`.
+- **Lovability pass on the TUI.** The completion card now leads with **the argument the piece made**
+  (its thesis claim) plus a **source tally** (N sources · high-influence · high-authority) and
+  **reading time** — "proof, not vibes" the moment a run finishes (new `polish.source_stats()`, shared
+  with the evidence report so they never disagree). The welcome shows a rotating, date-stable **writing
+  epigraph** (public-domain voices only), prefixed with **"Welcome back."** for a returning writer, on a
+  single line. And `ui.explain_error()` now maps **context-window overflow** and **token-budget**
+  failures to actionable next steps (`/set max_context_chars …` / `/set max_run_tokens 0`) instead of a
+  raw traceback.
 
 ### Changed
 - **Cache-friendly prompt ordering (token efficiency, no quality cost).** The writer + critic prompts

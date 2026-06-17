@@ -398,6 +398,25 @@ def _book_status_rows(uid: str, projects: list[tuple[str, str]]) -> list[tuple[s
     return rows
 
 
+# A rotating writing epigraph for the welcome - public-domain voices only (consistent with the
+# personas' no-living-author rule). Kept short so it never wraps; chosen by the date so it's
+# stable within a day, varied across days.
+_EPIGRAPHS = [
+    ("Easy reading is damn hard writing.", "Nathaniel Hawthorne"),
+    ("Omit needless words.", "William Strunk Jr."),
+    ("Vigorous writing is concise.", "William Strunk Jr."),
+    ("The pen is the tongue of the mind.", "Cervantes"),
+    ("The secret of being a bore is to tell everything.", "Voltaire"),
+    ("What is written without effort is read without pleasure.", "Samuel Johnson"),
+    ("Substitute 'damn' for every 'very'; your editor will delete it.", "Mark Twain"),
+]
+
+
+def _epigraph() -> tuple[str, str]:
+    import datetime
+    return _EPIGRAPHS[datetime.date.today().toordinal() % len(_EPIGRAPHS)]
+
+
 def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     sdir = brain.skills_dir(uid)
     skl = sorted(p.stem for p in sdir.glob("*.md")) if sdir.exists() else []
@@ -432,6 +451,12 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     # standard 30-row terminal). Full lists live behind /help and /features.
     if fake:
         console.print(Text(f"  {fake_msg}", style=f"bold {ERR}"))
+
+    # A single warm line: a rotating writing epigraph, prefixed with a greeting for a
+    # returning writer. One line by design (see the compactness note above).
+    quote, who = _epigraph()
+    lead = "Welcome back.  " if projects else ""
+    console.print(Text(f"  {lead}“{quote}”  — {who}", style=f"italic {DIM}"))
 
     # ── No API key yet: point at the one command that fixes it (the wizard ran first). ─
     if _provider_needs_key(settings):

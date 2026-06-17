@@ -278,6 +278,13 @@ def explain_error(exc) -> str | None:
         return "Network/provider hiccup — check your connection, then run again (saved & resumable)."
     if any(k in s for k in ("permission", "another process", "being used", "in use", "locked")):
         return "A file is locked (open in another program?) — close it, then try again."
+    if any(k in s for k in ("context length", "context_length", "maximum context", "context window",
+                            "too many tokens", "reduce the length", "string too long")):
+        return ("Prompt outgrew the model's context window — try a smaller context "
+                "(`/set max_context_chars 16000`) or split into more, shorter units; progress is saved.")
+    if any(k in s for k in ("budget", "max_run_tokens", "token budget")):
+        return ("Run token budget reached — lift it with `/set max_run_tokens 0` (0 = unlimited), "
+                "then run again (everything committed is saved).")
     return None
 
 

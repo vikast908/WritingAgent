@@ -351,6 +351,27 @@ def build_evidence_report(manuscript_md: str, thesis_md: str = "", title: str = 
     return "\n".join(out).rstrip() + "\n"
 
 
+def source_stats(manuscript_md: str) -> dict:
+    """A quick, deterministic tally of the finished piece's References (no model call):
+    ``{count, high_influence, credible, avg_auth}``. Shares the row parsing + authority
+    scoring with ``build_evidence_report`` so the completion card and the evidence report
+    can never disagree. ``count == 0`` when there is no ranked References block yet."""
+    rows = _REF_ROW.findall(manuscript_md or "")
+    if not rows:
+        return {"count": 0, "high_influence": 0, "credible": 0, "avg_auth": 0}
+    scores = [int(s) for s, _d, _t in rows]
+    auths = []
+    for _s, _d, tail in rows:
+        um = _ROW_URL.search(tail)
+        auths.append(source_authority(um.group(1) if um else ""))
+    return {
+        "count": len(rows),
+        "high_influence": sum(1 for s in scores if s >= 50),
+        "credible": sum(1 for a in auths if a >= AUTH_REPUTABLE),
+        "avg_auth": round(sum(auths) / len(auths)) if auths else AUTH_NEUTRAL,
+    }
+
+
 # ── cross-chapter cohesion (book, D-008) ─────────────────────────────────────────
 def _prose_only(md: str) -> str:
     """Strip fenced code and headings so repetition scanning sees only prose."""
