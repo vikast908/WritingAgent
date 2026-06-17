@@ -636,6 +636,7 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             log(f"   insight {crit.insight}/5 below bar {min_insight} -> sharpening")
             fix_notes = (fix_notes + "\n\n" if fix_notes else "") + _insight_note(crit, min_insight)
         if crit.blocking:
+            log(f"   · critic flagged: {crit.blocking[0].detail.strip()[:90]}")
             _record_preference(paths, f"## Revision ({_unit_desc}, attempt {attempt}->{attempt + 1})\n"
                                "Fixed: " + "; ".join(f"{b.type}: {b.detail}"
                                                      for b in crit.blocking[:3]))

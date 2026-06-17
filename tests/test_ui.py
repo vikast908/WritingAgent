@@ -92,6 +92,32 @@ def test_run_dashboard_log_parsing():
     d.render()                                  # builds a renderable without raising
 
 
+def test_run_dashboard_narrates_the_craft_story():
+    """The per-unit narration weaves the already-logged craft signal into a watchable
+    story: variants drafted, the judge's pick, WHY it revised, and a commit line that
+    carries the final verdict chip - so a hands-off run shows its self-correction."""
+    from writingagent.shell import _RunDashboard
+    d = _RunDashboard("art", total=1, done=0)
+    for msg in [
+        "== Section 1: Intro ==",
+        "   drafting 2 variants (temps 0.7, 1.0)",
+        "   judge picked variant 2/2 (best opening)",
+        "   verdict=revise confidence=0.60 blocking=1 insight=4",
+        "   · critic flagged: the opening buries the claim under setup",
+        "   writing (revision 1)...",
+        "   verdict=approve confidence=0.80 blocking=0 insight=5",
+        "   [OK] committed section 1",
+    ]:
+        d.log(msg)
+    text = "\n".join(e.plain for e in d.events)
+    assert "drafting 2 variants" in text
+    assert "judge picked variant 2/2" in text
+    assert "critic flagged: the opening buries the claim under setup" in text
+    assert d.n_revised == 1                      # the revision pass was counted
+    commit = next(e.plain for e in d.events if "committed section 1" in e.plain)
+    assert "approved" in commit and "5/5" in commit   # commit line carries the verdict chip
+
+
 def test_run_dashboard_stage_animates(monkeypatch):
     """Active stages (…) must visibly move between log events: Live re-renders the
     dash object, and the label changes frame-to-frame. Terminal stages stay static."""

@@ -38,6 +38,11 @@
     **writing epigraph** + a **"Welcome back."** lead for returning writers (one line; compactness guard
     bumped 14→15); `ui.explain_error()` maps **context-overflow** and **budget** failures to actionable
     fixes. Skipped a redundant `/why` (eval/tableread/summary already show the work).
+  - **Live per-unit craft narration.** Went further on the deferred narration: curated the dashboard's
+    `log()` parser (`dashboard.py`) to weave already-logged signal (variants → judge pick → opening
+    glimpse → claim-check/duel) into clean glyphed events, and made the commit line carry the verdict
+    chip. Added one `critic flagged: <top blocking issue>` log to both episode loops (`book.py`,
+    `article.py`) for the *why-it-revised* signal. New test `test_run_dashboard_narrates_the_craft_story`.
   - **Test hermeticity.** Added an autouse `_isolated_settings` fixture (`tests/conftest.py`) pointing
     `config._SETTINGS` at a tmp path, so the suite always runs against shipped dataclass defaults and a
     developer's personal `settings.yaml` (e.g. `agentic=true`) can't turn the local run red. CI already

@@ -25,6 +25,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   single line. And `ui.explain_error()` now maps **context-window overflow** and **token-budget**
   failures to actionable next steps (`/set max_context_chars …` / `/set max_run_tokens 0`) instead of a
   raw traceback.
+- **Live per-unit craft narration in the run dashboard.** A hands-off run now shows the *story* of its
+  self-correction instead of generic log lines: the divergent variants drafted, the judge's pick, the
+  draft's opening glimpse, **why** the critic sent it back (a new `critic flagged: <issue>` log in both
+  episode loops), and a commit line that carries the final verdict chip
+  (`✓ committed §3 · approved · insight 5/5`). Presentation-only curation of already-emitted signal,
+  plus the one new log line per loop; the fixed pipeline's behavior is unchanged.
 
 ### Changed
 - **Cache-friendly prompt ordering (token efficiency, no quality cost).** The writer + critic prompts

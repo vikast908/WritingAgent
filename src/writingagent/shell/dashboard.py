@@ -300,6 +300,12 @@ class _RunDashboard:
             self.unit = c.strip("= ")
             self._enter_stage("drafting…")
             self.verdict = ""
+        elif c.startswith("drafting") and "variant" in c:
+            # best-of-N divergence: "drafting 2 variants (temps 0.7, 1.0)"
+            parts = c.split()
+            n = parts[1] if len(parts) > 1 and parts[1].isdigit() else "several"
+            self._enter_stage(f"drafting {n} variants…")
+            self.events.append(Text(f"  ✎ drafting {n} variants", style=DIM))
         elif c.startswith("writing"):
             if "revision" in c:
                 self._enter_stage("revising…")
@@ -308,12 +314,27 @@ class _RunDashboard:
                 self._enter_stage("drafting…")
         elif c.startswith("critiquing"):
             self._enter_stage("critiquing…")
+        elif c.startswith("judge picked") or c.startswith("picked variant"):
+            # the tournament chose the strongest draft - surface which one won
+            self._enter_stage("judged")
+            self.events.append(Text(f"  ⚖ {c}", style=INK))
+        elif c.startswith("expanding"):
+            self._enter_stage("expanding winner…")
+        elif c.startswith("· opens:") or c.startswith("opens:"):
+            # the draft's first line - a glimpse of the prose taking shape
+            self.events.append(Text(f"  {c}", style=f"italic {DIM}"))
+        elif "critic flagged:" in c[:18]:
+            # why it's revising - the story of the self-correction (logged as "· critic flagged: …")
+            issue = c.split("critic flagged:", 1)[1].strip()
+            self.events.append(Text(f"  ⚑ critic flagged: {issue}", style=PARCH))
         elif c.startswith("verdict="):
             self._enter_stage("reviewed")
             self.verdict = ui.trust_chip(c)   # normalized chip, never a contradiction
         elif c.startswith("humanizing"):
             self._enter_stage("humanising…")
             self.n_humanized += 1
+        elif c.startswith("claim check") or c.startswith("[duel]"):
+            self.events.append(Text(f"  ⚖ {c}", style=DIM))
         elif c.startswith("fetched") or c.startswith("generated SVG"):
             self._enter_stage("researching…")
             self.n_research += 1
@@ -321,7 +342,12 @@ class _RunDashboard:
         elif "[OK] committed" in c:
             self.done += 1
             self._enter_stage("committed")
-            self.events.append(Text(f"  ✓ {c[5:]}", style=ON_CLR))
+            # carry the verdict chip onto the commit line so the scrollback tells the
+            # whole story of the unit at a glance ("✓ §3 committed   ✓ approved · 4/5").
+            line = f"  ✓ {c[5:]}"
+            if self.verdict:
+                line += f"   {self.verdict}"
+            self.events.append(Text(line, style=ON_CLR))
         elif c.startswith("[!]"):
             self.events.append(Text(f"  {c}", style=f"bold {ERR}"))
         elif c.startswith("[OK]"):
