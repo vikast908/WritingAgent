@@ -5,6 +5,33 @@
 
 ## Current status
 
+- **HANDOFF (2026-06-17, end of session - FIRST REAL RUN in flight; pick up from home):** kicked off the
+  first *real* OpenRouter run to validate the agentic path at volume (the last "fully agentic" caveat).
+  - **State at handoff:** article `the-efficiency-edge-why-specialized-slms-outperform-giants-in-production`
+    (user `default`), agentic + autonomous + skeletons, was **mid-run** when the session ended. It lives
+    in the **local brain (gitignored) - NOT synced to GitHub**. From home: if on this machine, check it
+    with `status` and finish with `run --book-id the-efficiency-edge-...`; on another machine the project
+    won't be there, so start a fresh real run (`write --abstract "..."`). The findings below transfer; the
+    project artifacts don't.
+  - **Live finding (actionable, real money/latency):** `deepseek-v4-pro` truncates some **structured-output**
+    calls - `finish_reason=length` (the reasoning eats the whole `max_tokens` and it emits nothing) - and
+    falls back to `deepseek-v4-flash`. The fallback WORKS (resilience validated live), but each occurrence
+    wastes a `pro` call + a retry. **FIX OPTIONS:** (a) raise `max_tokens` for structured calls on the pro
+    tier in `config/models.yaml` / `complete_structured`, or (b) route the structured nodes
+    (critic/judge/verifier/research-planner) to a non-reasoning model. Decide + implement.
+  - **PENDING - pick up from home, in order:**
+    1. **Finish/inspect the real run.** Let it complete (or resume it), then read: total **cost + tokens**,
+       the **cache-hit %** (did the DeepSeek prefix-cache pin actually engage? - the still-unverified
+       token-efficiency win from the prompt reorder), the `agent_trace.jsonl` (what the controller chose),
+       and the `evidence_report.md`. Confirm the agentic path produces a clean real piece end-to-end.
+    2. **Fix the structured-output truncation** (options above).
+    3. **Accumulate more real runs** so `train_policy` gets >=3 labelled units per arm and the `trace`
+       policy becomes trustworthy - the ONLY remaining "fully agentic" caveat. Then `/agentic` surfaces
+       what it learned (the observability is already wired this session).
+    4. *(Optional polish)* capability checks for images/deep/d2 to mirror the `use_embeddings` missing-dep
+       hint (skipped this session as over-engineering - revisit only if a real footgun shows up).
+  - Everything else from this session is committed to `master` and green (476 tests, 2 skipped; ruff clean).
+
 - **New (2026-06-17 - token-efficiency + UX hardening + craft-layer expansion - DONE):** a working
   session on top of the merged compositor branch. Suite green throughout (471 passed, 2 skipped; ruff
   clean). Three threads:
