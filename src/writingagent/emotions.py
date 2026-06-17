@@ -67,6 +67,36 @@ _EMOTIONS: dict[str, dict] = {
         "cue": ("Hope: ground it in one small, plausible piece of evidence the character lets "
                 "themselves believe - tentative, easily lost. Earn it; don't announce it."),
     },
+    "disgust": {
+        "avoid": ["stomach turned", "stomach churned", "bile rose", "wave of nausea",
+                  "skin crawled", "curled her lip", "wrinkled her nose", "turned her stomach",
+                  "made her sick to her stomach"],
+        "cue": ("Disgust: locate it in one precise sensory particular the body recoils from, and in "
+                "the small thing the character does to put distance between themselves and it. "
+                "Specific revulsion, not adjectives."),
+    },
+    "surprise": {
+        "avoid": ["eyes went wide", "eyes widened", "jaw dropped", "mouth fell open",
+                  "couldn't believe her eyes", "caught off guard", "stopped dead in her tracks",
+                  "did a double take", "frozen in shock", "out of nowhere"],
+        "cue": ("Surprise: render the half-second the mind spends catching up - the wrong assumption "
+                "still running, the small task that stalls - before the new fact lands. Show the "
+                "recalibration, not the gasp. (Covers awe/wonder: hold on the thing, not the awe.)"),
+    },
+    "jealousy": {
+        "avoid": ["green with envy", "pang of jealousy", "green-eyed monster", "burned with jealousy",
+                  "consumed by envy", "eaten up with jealousy", "pang of envy"],
+        "cue": ("Jealousy: show it as distorted attention - the comparison the character can't stop "
+                "making, the generosity they perform while keeping score. It poses as something "
+                "nobler; let it pose, and let the reader catch it."),
+    },
+    "pride": {
+        "avoid": ["swelled with pride", "puffed up with pride", "beamed with pride", "chest swelled",
+                  "glowed with pride", "stood a little taller", "burst with pride"],
+        "cue": ("Pride: catch it in the small tell the character would deny - the rehearsed modesty, "
+                "the detail they steer the talk toward, the keepsake kept in view. Understate; let "
+                "the reader award it."),
+    },
 }
 
 # A small synonym map so a free-text emotional_role ('dread', 'fury') resolves to a key.
@@ -79,6 +109,12 @@ _ALIASES = {
     "embarrassment": "shame", "guilt": "shame", "humiliation": "shame",
     "suspense": "tension", "unease": "tension", "menace": "tension",
     "optimism": "hope", "yearning": "hope",
+    "revulsion": "disgust", "repulsion": "disgust", "nausea": "disgust", "loathing": "disgust",
+    "distaste": "disgust", "contempt": "disgust", "disgusted": "disgust",
+    "shock": "surprise", "shocked": "surprise", "astonishment": "surprise", "amazement": "surprise",
+    "awe": "surprise", "wonder": "surprise", "startled": "surprise", "astonished": "surprise",
+    "envy": "jealousy", "jealous": "jealousy", "envious": "jealousy", "covetous": "jealousy",
+    "proud": "pride", "triumph": "pride", "vanity": "pride", "satisfaction": "pride",
 }
 
 

@@ -122,6 +122,41 @@ _PERSONAS: dict[str, Persona] = {
                    "deflating last clause, vernacular that's smarter than it looks. Stance: folksy, "
                    "shrewd. AVOID: minstrel dialect, forced folksiness."),
         registers=("literary-fiction", "nonfiction")),
+    "wildean": Persona(
+        name="wildean", kind="author",
+        description="Epigrammatic, paradoxical, drawing-room wit - the polished inversion (manner only).",
+        signature=("Diction elegant and exact; the balanced sentence that turns on a paradox. Rhythm: "
+                   "setup, poised comma, the inversion that lands. Devices: the aphorism, the reversed "
+                   "cliché, wit that carries a real idea under the polish. Stance: amused, worldly. "
+                   "AVOID: empty quips, cruelty for its own sake, period-costume diction."),
+        registers=("literary-fiction", "nonfiction")),
+    "poe-gothic": Persona(
+        name="poe-gothic", kind="author",
+        description="Atmospheric dread, the slow tightening, the unreliable nerve (manner only).",
+        signature=("Diction precise and shadowed; the ordinary detail that curdles. Rhythm: a measured "
+                   "build, clauses accumulating unease, then the short sentence that closes like a "
+                   "latch. Devices: foreboding through the mundane, the narrator who reasons himself "
+                   "deeper in, dread withheld and withheld. Stance: tense, interior. AVOID: gore for "
+                   "shock, 'dark and stormy night', archaic spelling."),
+        registers=("genre-fiction", "literary-fiction", "poetry")),
+    "dickensian": Persona(
+        name="dickensian", kind="author",
+        description="Expansive, comic, teeming with named character and social texture (manner only).",
+        signature=("Diction rich and particular; the vivid tag that fixes a character in one stroke. "
+                   "Rhythm: long accumulating sentences with a comic or tender landing. Devices: the "
+                   "telling physical detail, gentle caricature, the social irony under the warmth. "
+                   "Stance: humane, observant, faintly satirical. AVOID: sentimentality, caricature "
+                   "without heart, list-padding."),
+        registers=("literary-fiction", "genre-fiction")),
+    "whitmanesque": Persona(
+        name="whitmanesque", kind="author",
+        description="Expansive free-verse cataloguing, democratic, anaphoric (manner only).",
+        signature=("Diction plain and exalted at once; the concrete particular set in a long line. "
+                   "Rhythm: the catalogue, the repeated opening, the long breath that gathers many and "
+                   "ranks none. Devices: anaphora, the inclusive list, the turn from the many to the "
+                   "one. Stance: open, embracing. AVOID: vague uplift, abstraction, the list that sees "
+                   "nothing."),
+        registers=("poetry", "literary-fiction")),
 }
 
 _KINDS = ("archetype", "author")
