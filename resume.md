@@ -52,11 +52,20 @@
     Emotions **8→12** (`emotions.py`): `disgust`, `surprise`, `jealousy`, `pride` - completes Ekman's six
     + the two top dramatic drivers; each adds an anti-cliché deny-list + show-don't-name cue + aliases.
     Counts refreshed in README, plan.md §23, and learning.md.
-  - **NEXT STEP:** the bigger UX gap from the audit is **failure feedback in full-auto (autonomous)
-    runs** - context-overflow/budget errors aren't mapped in `ui.explain_error()`, and a non-escalation
-    pause may show no recovery card. Verify the control flow in `dashboard.run_with_dashboard` and
-    `explain_error`, then make those failures actionable. (Audit also flagged discoverability wins:
-    `/agentic` policy explainer, `/praise`/`/path` help, missing-dep hints.)
+  - **Failure feedback in full-auto - VERIFIED + closed.** Traced the real control flow (not the audit's
+    guess): in **autonomous mode the path was already covered** - contradictions auto-repair
+    (`escalate_on_contradiction=False`), budget is caught -> `_paused_card`, Ctrl-C prints a saved line,
+    raised errors now hit the actionable `explain_error` (context-overflow + budget cases added). The one
+    real gap was a **book + manual-mode consolidation stall** (`review_kind="consolidation"`): it fell
+    through the post-run router (which only handled `chapter`/`section`) and returned **silently**. Fixed
+    with `_consolidation_card` (`run --force` resume) + a catch-all so no not-done state is ever silent.
+    Tests: consolidation card + `explain_error` overflow/budget coverage.
+  - **NEXT STEP (toward "fully agentic"):** the remaining caveats are (1) the **`trace` (learned) policy
+    is under-trained** - turn accumulated `agent_trace.jsonl` into the first real training set; (2) the
+    **agentic branch is lightly validated** - add agentic-branch test coverage to match the fixed
+    pipeline + log a few real agentic runs; (3) minor discoverability wins (`/agentic` policy explainer,
+    `/praise`/`/path` help, missing-dep hints). See the "fully agentic?" assessment - these three are
+    what keep it from a no-caveats claim.
 
 - **New (2026-06-17 - the compositor: personas, emotions, layer composition - DONE, branch
   `feat/compositor-personas-emotions`, stacked on the craft-engine branch):** built the §22.6 deferral

@@ -106,4 +106,9 @@ def test_explain_error_maps_known_failures():
     assert "key" in ui.explain_error(RuntimeError("401 Unauthorized")).lower()
     assert "rate" in ui.explain_error(RuntimeError("429 Too Many Requests")).lower()
     assert ui.explain_error(RuntimeError("Connection timed out")) is not None
+    # context-window overflow + token-budget map to an actionable next step (not a traceback)
+    assert "context" in ui.explain_error(
+        RuntimeError("This model's maximum context length is 8192 tokens")).lower()
+    assert "max_run_tokens" in ui.explain_error(
+        RuntimeError("run token budget reached (500000 >= 500000 tokens)"))
     assert ui.explain_error(ValueError("totally unknown thing")) is None

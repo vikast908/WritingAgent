@@ -64,6 +64,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `_isolated_settings` fixture points `config._SETTINGS` at a tmp path, so the suite always runs against
   shipped dataclass defaults; a local `config/settings.yaml` (e.g. `agentic=true`) can no longer turn a
   local run red while CI (which has no such file, it's gitignored) stays green.
+- **Consolidation review no longer returns silently (`dashboard.py`).** A book run in manual mode that
+  stalled on a continuity-check contradiction (`pending_review` with `review_kind="consolidation"`) fell
+  through the post-run router — which only handled `chapter`/`section` escalations — and dropped back to
+  the prompt with no card (only a `[!]` line buried in the event log). It now shows a `_consolidation_card`
+  with the resume command (`run --force`), and a catch-all final branch guarantees no not-done terminal
+  state ever returns silently. (Autonomous runs auto-repair contradictions, so they were unaffected.)
+  Also added `explain_error` coverage for **context-window overflow** and **token-budget** failures.
 
 ### Added (earlier this cycle)
 - **The compositor — personas, emotions, and layer composition (plan §23, 2026-06-17).** Built the

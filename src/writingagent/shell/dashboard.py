@@ -462,6 +462,26 @@ def _paused_card(console, book_id: str) -> None:
     console.print(Panel(body, title=title, title_align="left", border_style=border, padding=(1, 2)))
 
 
+def _consolidation_card(console) -> None:
+    """The continuity check (consolidation) found possible contradictions and paused for a
+    look - a book, manual-mode review. Without this the run returned SILENTLY (the only hint
+    was a `[!]` line buried in the event log). Say what happened, where to see it, and the one
+    command to proceed."""
+    from rich.panel import Panel
+    from rich.text import Text
+    console.print()
+    body = Text()
+    body.append("The continuity check flagged possible contradictions across chapters.\n",
+                style=f"bold {GOLD}")
+    body.append("Everything committed so far is saved.\n\n", style=DIM)
+    body.append("see them:  status", style=f"bold {GOLD}")
+    body.append("            then either —\n", style=DIM)
+    body.append("accept & finish:  run --force", style=f"bold {GOLD}")
+    body.append("     or fix one:  revise --chapter N --instruction \"…\"", style=DIM)
+    console.print(Panel(body, title=f"[{GOLD}]⏸ consolidation review[/]", title_align="left",
+                        border_style=GOLD, padding=(1, 2)))
+
+
 def _escalation_picker(console, cfg, uid: str, book_id: str, state: dict) -> str:
     """Interactive resolution of a stalled chapter/section - one keypress instead of
     a two-flag command. Returns 'rerun' (resume the pipeline) or 'stop'."""
@@ -632,14 +652,19 @@ def run_with_dashboard(cfg, uid: str, book_id: str, console, *, force: bool = Fa
                 _ring()
                 _summary_card(console, dash, state, uid, book_id)
             return
-        if (interactive and state.get("pending_review")
-                and state.get("review_kind") in ("chapter", "section")):
+        pending = state.get("pending_review")
+        kind = state.get("review_kind")
+        if interactive and pending and kind in ("chapter", "section"):
             _ring()
             if _escalation_picker(console, cfg, uid, book_id, state) == "rerun":
                 continue
-        elif console and not state.get("pending_review"):
-            # Not done, not a unit escalation → paused (budget cap / interrupt). Make it
-            # a clear recovery moment rather than a silent return to the prompt.
+        elif console and pending and kind == "consolidation":
+            # Continuity-check stall (book, manual mode): used to return silently.
+            _ring()
+            _consolidation_card(console)
+        elif console:
+            # Anything else not-done (budget cap / interrupt / a pending review we don't
+            # drive interactively here): never return silently — leave a recovery card.
             _paused_card(console, book_id)
         return
 

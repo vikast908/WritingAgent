@@ -256,6 +256,17 @@ def test_paused_card_renders(tmp_brain):
     assert "paused" in console.file.getvalue().lower()
 
 
+def test_consolidation_card_renders_recovery(tmp_brain):
+    """A continuity-check stall must show a recovery card (it used to return silently):
+    say what happened and give the one resume command."""
+    from writingagent.shell.dashboard import _consolidation_card
+    console = _record_console()
+    _consolidation_card(console)
+    out = console.file.getvalue()
+    assert "contradiction" in out.lower()
+    assert "run --force" in out                    # the documented resume command
+
+
 def test_narrow_banner_drops_figlet():
     import io
 
