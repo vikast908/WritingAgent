@@ -34,6 +34,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   expanded `/path` (notes the no-args interactive menu) and `/praise` (mentions `/versions` for N) help,
   and `/set use_embeddings true` now warns with the `pip install sentence-transformers` hint when the
   optional package is missing.
+- **Polish pass (discoverability + honesty).** `/help <topic>` now offers a fuzzy "did you mean"
+  (`exprt → export`, `agentik → agentic`) instead of a dead end; `/provider` warns that a resumed or
+  half-finished project will use the newly-selected host (the silent model-swap footgun); and the README
+  test count is corrected (250 → 476, 2 skipped). Verified by a full fake-mode end-to-end run on the
+  agentic + autonomous + skeleton config (`new → run → export`): completed cleanly, wrote every artifact
+  incl. `agent_trace.jsonl`, and correctly abstained from a learned policy on thin data.
 - **Live per-unit craft narration in the run dashboard.** A hands-off run now shows the *story* of its
   self-correction instead of generic log lines: the divergent variants drafted, the judge's pick, the
   draft's opening glimpse, **why** the critic sent it back (a new `critic flagged: <issue>` log in both

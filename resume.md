@@ -69,6 +69,13 @@
     made the learned policy **observable** in `/agentic` status (surfaces the trained verdict per
     context), fixed the misleading `trace = record only` wording, expanded `/path`+`/praise` help, and
     added a missing-dep hint for `use_embeddings`. New test `test_cmd_agentic_surfaces_learned_policy`.
+  - **End-to-end smoke test + Tier-2 polish.** Ran the full pipeline in fake mode on the live agentic +
+    autonomous + skeleton config (`new → run → export`): completed cleanly, all artifacts incl.
+    `agent_trace.jsonl` written, learned policy correctly abstained on thin data - **nothing stuck**.
+    Then a polish pass: `/help <topic>` fuzzy did-you-mean (`help.py`), `/provider` resume/host caution
+    (`commands.py`), README test count 250→476. Deliberately skipped a capability registry (only
+    `embeddings` has a real cross-platform missing-dep; others degrade via stdlib / are platform-fraught)
+    and the "best save" card (redundant with the live `⚑ critic flagged` narration).
   - **NEXT STEP:** the only remaining caveat on "fully agentic" is **validation at real-run volume** -
     accumulate real OpenRouter runs so `train_policy` has data and the `trace` policy can be trusted.
     That's a usage milestone, not a code task. (Optional polish: capability checks for the other

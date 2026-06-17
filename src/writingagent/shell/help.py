@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ..config import Settings, save_settings
-from ..ui import DIM, GOLD, GOLD_HI, OFF_CLR, ON_CLR, PARCH
+from ..ui import DIM, GOLD, GOLD_HI, OFF_CLR, ON_CLR, PARCH, did_you_mean
 from ._const import _MARKUP, _NIB, _NODES, _SLASH_HELP
 from .branding import _cmd_table, _feat_row, _out, _section
 
@@ -236,7 +236,15 @@ def _slash_help_topic(console, settings: Settings | None, topic: str) -> None:
     matches = [(n, d) for (n, d) in (cmd_rows + slash_rows)
                if topic in _MARKUP.sub("", n).lower() or topic in _MARKUP.sub("", d).lower()]
     if not matches:
-        _out(console, f"[dim]no help entry matches “{topic}”.  /help lists everything.[/]")
+        # Fuzzy "did you mean" against the command/slash names so a near-miss isn't a dead end.
+        names = []
+        for (n, _d) in (cmd_rows + slash_rows):
+            parts = _MARKUP.sub("", n).strip().lstrip("/").split()
+            if parts:
+                names.append(parts[0])
+        sug = did_you_mean(topic, names)
+        hint = f" Did you mean [{GOLD}]{sug}[/]?" if sug else ""
+        _out(console, f"[dim]no help entry matches “{topic}”.{hint}  /help lists everything.[/]")
         return
     if console:
         _section(console, f"HELP · {topic}")

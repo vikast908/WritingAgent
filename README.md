@@ -224,8 +224,8 @@ appended.
 `craft_passes`, `persona`, `emotion`. All clamped to their known sets; leave them empty and the agent
 infers sensible defaults and behaves exactly as before.
 
-> Spec: `plan.md` §22 (the craft engine) and §23 (the compositor). Validated across **250 tests**
-> (1 skipped), ruff-clean, on Linux · macOS · Windows × Python 3.10–3.13.
+> Spec: `plan.md` §22 (the craft engine) and §23 (the compositor). Validated across **476 tests**
+> (2 skipped), ruff-clean, on Linux · macOS · Windows × Python 3.10–3.13.
 
 ---
 

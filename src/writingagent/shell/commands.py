@@ -119,7 +119,8 @@ def _cmd_provider(console, settings: Settings, rest: list[str]) -> None:
         envs = " or ".join(p.key_env) or "(none)"
         note = f" · [{ERR}]no key yet[/][dim] - set {envs}[/]"
     elif p.id != "openrouter":
-        note = " · [dim]models use this host's slugs - set them with /model[/]"
+        note = (" · [dim]models use this host's slugs (set them with /model); a resumed or "
+                "half-finished project will use this host too[/]")
     _out(console, f"provider -> [{GOLD}]{p.id}[/] [dim]({p.name}, saved)[/]{note}")
 
 

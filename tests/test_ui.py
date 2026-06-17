@@ -256,6 +256,20 @@ def test_paused_card_renders(tmp_brain):
     assert "paused" in console.file.getvalue().lower()
 
 
+def test_help_topic_fuzzy_suggestion(tmp_brain):
+    """A near-miss /help <topic> suggests the closest command instead of a dead end."""
+    import io
+
+    from rich.console import Console
+
+    from writingagent.config import load_settings
+    from writingagent.shell.help import _slash_help_topic
+    c = Console(file=io.StringIO(), force_terminal=False, width=100)
+    _slash_help_topic(c, load_settings(), "exprt")
+    out = c.file.getvalue()
+    assert "did you mean" in out.lower() and "export" in out
+
+
 def test_consolidation_card_renders_recovery(tmp_brain):
     """A continuity-check stall must show a recovery card (it used to return silently):
     say what happened and give the one resume command."""
