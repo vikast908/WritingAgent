@@ -62,7 +62,7 @@ _SLASH_HELP = [
     ("session", [
         ("/use <book> · /books", "set active book · list books"),
         ("/mode [book|article]", "show or set the project mode (default: book)"),
-        ("/path [...]", "where exports are saved - default or per-project, with move"),
+        ("/path [...]", "where exports are saved - default or per-project (no args = interactive menu)"),
         ("/auto [on|off]", "autonomous (never pause) vs manual (review each unit)"),
         ("/agentic [on|off|llm]", "agentic controller (units self-direct) vs fixed pipeline · policy"),
         ("/trace", "the active project's controller action trace (agentic runs)"),
@@ -80,7 +80,7 @@ _SLASH_HELP = [
     ("craft & skills", [
         ("/skills · /skill <name>", "list skills · show one skill"),
         ("/seed-skills", "install the built-in craft skills"),
-        ("/praise [N]", "mark a committed chapter/section as great - feeds voice + learner"),
+        ("/praise [N]", "mark committed chapter/section N as excellent - feeds the voice + learner (N from /versions)"),
     ]),
     ("project & telemetry", [
         ("/user <id> · /config", "switch user · show config"),

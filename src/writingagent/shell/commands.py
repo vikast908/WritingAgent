@@ -481,6 +481,13 @@ def _cmd_set(console, settings: Settings, rest: list[str]) -> None:
         setattr(settings, key, val)
         save_settings(settings)
         _out(console, f"[{GOLD}]{key}[/] -> [{GOLD}]{val}[/] [dim](saved)[/]")
+        # Actionable hint when enabling a feature whose optional dependency is missing, so
+        # it doesn't quietly no-op (it degrades gracefully, but the user should know why).
+        if key == "use_embeddings" and val:
+            from .. import embeddings
+            if not embeddings.available():
+                _out(console, "  [dim]⚠ semantic retrieval needs an extra package — "
+                              "install it with:  pip install sentence-transformers[/]")
     except (ValueError, TypeError) as e:
         _out(console, f"[{ERR}]invalid value for '{key}': {e}[/]")
 
@@ -558,7 +565,9 @@ def _cmd_agentic(console, settings: Settings, state: dict, rest: list[str]) -> N
         settings.agentic_policy = arg
         save_settings(settings)
         _out(console, f"agentic policy -> [{GOLD}]{arg}[/] [dim](saved · default = always draft "
-                      f"(== pipeline) · llm = controller chooses · trace = record only)[/]")
+                      f"(== fixed pipeline) · llm = an LLM controller chooses each move · "
+                      f"trace = a policy learned from your own run traces, falling back to the "
+                      f"heuristic until it has data)[/]")
         return
     if arg in _AUTO_ON:
         want = True
@@ -572,6 +581,21 @@ def _cmd_agentic(console, settings: Settings, state: dict, rest: list[str]) -> N
         _out(console, f"agentic: [{GOLD}]{onoff}[/] [dim](policy {settings.agentic_policy} · "
                       f"max_unit_steps {settings.agentic_max_unit_steps} · switch with "
                       f"/agentic on|off · policy: /agentic llm|default|trace)[/]")
+        # Make the self-improving loop OBSERVABLE: surface what the learned policy has
+        # concluded from this user's accumulated run traces (empty until there's real volume).
+        learned = agentic.load_policy(state["uid"])
+        if learned:
+            _out(console, "  [dim]learned from your runs:[/]")
+            entries = [(c, e) for c in ("book", "article")
+                       if (e := (learned.get("by_context", {}) or {}).get(c))]
+            if not entries and learned.get("global"):
+                entries = [("all", learned["global"])]
+            for ctx, e in entries:
+                verdict = ("gather context first" if e.get("research_helps")
+                           else "draft directly")
+                _out(console, f"  [dim]· {ctx}: {verdict} "
+                              f"(reward {e['reward_gathered']} vs {e['reward_direct']}, "
+                              f"n={e['n_gathered']}/{e['n_direct']})[/]")
         active = state.get("book")
         if active:
             recent = agentic.trace.read(_trace_paths(state["uid"], active))[-2:]

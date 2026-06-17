@@ -25,6 +25,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   single line. And `ui.explain_error()` now maps **context-window overflow** and **token-budget**
   failures to actionable next steps (`/set max_context_chars …` / `/set max_run_tokens 0`) instead of a
   raw traceback.
+- **The learned policy is now observable (`/agentic`).** The trace-policy training loop was already
+  complete and wired (it auto-runs in the learn phase and writes `unit-outcome` labels at commit) — but
+  invisible. `/agentic` with no args now surfaces what the learned policy concluded from this user's run
+  traces ("learned from your runs · book: gather context first — reward 0.82 vs 0.61, n=5/4"), so the
+  self-improving loop can be inspected. Corrected the policy help (it said `trace = record only`; trace
+  actually *consults* a learned model, falling back to the heuristic until it has data). Discoverability:
+  expanded `/path` (notes the no-args interactive menu) and `/praise` (mentions `/versions` for N) help,
+  and `/set use_embeddings true` now warns with the `pip install sentence-transformers` hint when the
+  optional package is missing.
 - **Live per-unit craft narration in the run dashboard.** A hands-off run now shows the *story* of its
   self-correction instead of generic log lines: the divergent variants drafted, the judge's pick, the
   draft's opening glimpse, **why** the critic sent it back (a new `critic flagged: <issue>` log in both

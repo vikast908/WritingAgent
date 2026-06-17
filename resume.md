@@ -60,12 +60,19 @@
     through the post-run router (which only handled `chapter`/`section`) and returned **silently**. Fixed
     with `_consolidation_card` (`run --force` resume) + a catch-all so no not-done state is ever silent.
     Tests: consolidation card + `explain_error` overflow/budget coverage.
-  - **NEXT STEP (toward "fully agentic"):** the remaining caveats are (1) the **`trace` (learned) policy
-    is under-trained** - turn accumulated `agent_trace.jsonl` into the first real training set; (2) the
-    **agentic branch is lightly validated** - add agentic-branch test coverage to match the fixed
-    pipeline + log a few real agentic runs; (3) minor discoverability wins (`/agentic` policy explainer,
-    `/praise`/`/path` help, missing-dep hints). See the "fully agentic?" assessment - these three are
-    what keep it from a no-caveats claim.
+  - **Toward "fully agentic" - verified DONE in code; only real-run volume remains.** Discovered the
+    trace-policy loop is already complete + tested: the orchestrator writes `unit-outcome` labels
+    (`first_pass`/`insight`) at commit (`article.py`/`book.py`), `train_policy` **auto-runs in the learn
+    phase** (`common.py:635`), and Phase-5 tests cover fit/persist + thin-data abstention + consult. The
+    agentic branch already has comprehensive Phase 0-5 coverage. So #1/#2 weren't code gaps - they need
+    real paid-run volume to train/validate (can't be fabricated). Implemented the genuine remainder:
+    made the learned policy **observable** in `/agentic` status (surfaces the trained verdict per
+    context), fixed the misleading `trace = record only` wording, expanded `/path`+`/praise` help, and
+    added a missing-dep hint for `use_embeddings`. New test `test_cmd_agentic_surfaces_learned_policy`.
+  - **NEXT STEP:** the only remaining caveat on "fully agentic" is **validation at real-run volume** -
+    accumulate real OpenRouter runs so `train_policy` has data and the `trace` policy can be trusted.
+    That's a usage milestone, not a code task. (Optional polish: capability checks for the other
+    optional features - images/deep/d2 - to mirror the embeddings missing-dep hint.)
 
 - **New (2026-06-17 - the compositor: personas, emotions, layer composition - DONE, branch
   `feat/compositor-personas-emotions`, stacked on the craft-engine branch):** built the §22.6 deferral

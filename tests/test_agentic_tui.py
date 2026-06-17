@@ -110,6 +110,22 @@ def test_cmd_agentic_no_project_still_saves_setting(tmp_brain, fake_llm):
     assert settings.agentic is True   # saved even with no active project
 
 
+def test_cmd_agentic_surfaces_learned_policy(tmp_brain, fake_llm):
+    """The self-improving loop must be observable: when a learned policy exists, /agentic
+    status surfaces what it concluded from the user's run traces."""
+    from writingagent.agentic import learn
+    model = {"by_context": {"book": {"n_gathered": 5, "n_direct": 4, "reward_gathered": 0.82,
+                                     "reward_direct": 0.61, "research_helps": True}}}
+    p = learn._policy_path("u")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    brain.write_json(p, model)
+    console = _console()
+    _cmd_agentic(console, load_settings(), {"uid": "u", "book": None}, [])
+    out = console.file.getvalue()
+    assert "learned from your runs" in out
+    assert "gather context first" in out          # research_helps=True -> the readable verdict
+
+
 # ── /trace ────────────────────────────────────────────────────────────────────
 def test_cmd_trace_prints_recorded_decisions(tmp_brain, fake_llm):
     aid = _make_article("traceart")
