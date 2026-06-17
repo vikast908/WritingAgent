@@ -31,6 +31,16 @@ nodes:
   diagram_fallback: deepseek/deepseek-v4-flash # when pro reasons itself out of budget and
                                                # emits no SVG, flash reliably draws *something*
 
+# Per-node completion caps (tokens). Reasoning models (deepseek-v4-pro) spend tokens
+# THINKING before they emit the JSON, so the structured judgment nodes need headroom or the
+# reply truncates (finish_reason=length) and wastes a pro call before falling back to flash -
+# same failure the diagram node's 16k budget already guards against. complete_structured also
+# auto-raises the cap on a live truncation, so these are first-call floors, not hard limits.
+max_tokens:
+  critic:        8000   # insight scoring + thesis/evidence checks: reasons, then a rich verdict
+  judge:         8000   # ranks N drafts side by side - lots of reasoning before the ranking JSON
+  verifier:      8000   # checks every cited claim against its source before the audit JSON
+
 temperature:
   toc:           0.4
   critic:        0.2
