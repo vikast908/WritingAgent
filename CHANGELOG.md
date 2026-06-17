@@ -37,7 +37,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Polish pass (discoverability + honesty).** `/help <topic>` now offers a fuzzy "did you mean"
   (`exprt → export`, `agentik → agentic`) instead of a dead end; `/provider` warns that a resumed or
   half-finished project will use the newly-selected host (the silent model-swap footgun); and the README
-  test count is corrected (250 → 476, 2 skipped). Verified by a full fake-mode end-to-end run on the
+  test count is corrected (250 → 477, 2 skipped). Verified by a full fake-mode end-to-end run on the
   agentic + autonomous + skeleton config (`new → run → export`): completed cleanly, wrote every artifact
   incl. `agent_trace.jsonl`, and correctly abstained from a learned policy on thin data.
 - **Live per-unit craft narration in the run dashboard.** A hands-off run now shows the *story* of its
@@ -69,6 +69,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   enabled search).
 
 ### Fixed
+- **Structured-output truncation on the reasoning tier (`llm.py`, `models.yaml`).** A reasoning model
+  (`deepseek-v4-pro`) spends tokens *thinking* before it emits JSON; when that filled `max_tokens` the
+  reply came back empty / cut off with `finish_reason=length`, and the old retry re-sent the same
+  too-small budget (futile repair turns) before degrading to the flash fallback — wasting a pro call each
+  time (observed live once on the first real OpenRouter run). `complete_structured` now detects a
+  length-truncation and **raises `max_tokens`** (double, capped at 16k) then retries the **same**
+  model/prompt with no repair turn, so the call stays on its stronger routed tier. Complemented by a new
+  `models.yaml` `max_tokens:` floor for the judgment nodes (`critic`/`judge`/`verifier` = 8000) so the
+  common path has reasoning headroom up front — the same guard the `diagram` node's 16k budget relies on.
+  Verified by a unit test and a real-API check (forced truncation recovers on-tier, no flash fallback).
 - **Rich-markup hotkey/hint bug class (TUI).** A literal `[x]` whose contents read as a style name
   (letters/spaces) was parsed as a markup tag and silently dropped, eating the leading character. Fixed
   in the review/escalation menu (`dashboard.py` — the `[f]/[i]/[a]/[g]/[r]/[s]` hotkeys) and the `/path`

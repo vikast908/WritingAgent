@@ -300,7 +300,7 @@ Escalation contract:
 
 **Notification channel (v1):** on escalation the Orchestrator writes a markdown entry to
 `books/<id>/reviews/` (the review queue) and, in interactive mode, prints it to the terminal.
-`book status` lists open entries; `book review` opens, answers, and resumes them. No
+`writing-agent status` lists open entries; `writing-agent review` opens, answers, and resumes them. No
 email/desktop/push in v1 - the file queue is the single source, so any later channel just
 tails it.
 
@@ -405,13 +405,13 @@ milestones / before book end) does what the inline Critic can't:
 - Flags unresolved threads with no planned payoff.
 
 **Cadence (v1):** fixed - every `N=5` committed chapters (configurable) - **plus** a mandatory
-pass before `BOOK_DONE`, **plus** manual `book consolidate`. Salience-adaptive cadence is
+pass before `BOOK_DONE`, **plus** manual `writing-agent consolidate`. Salience-adaptive cadence is
 deferred: salience is an *output* of this pass, so it can't gate the first run; once available
 it may only *tighten* the interval, never replace it.
 
 Output feeds the Orchestrator and the canon (reconciled facts). When `escalate_on_contradiction`
 is on (default), contradictions pause the run with a `reviews/consolidation-*.md` entry; the human
-reviews and resumes with `book run --force`.
+reviews and resumes with `writing-agent run --force`.
 
 ---
 
@@ -536,7 +536,7 @@ Two surfaces over one engine (plus the markdown brain repo, which is half the UI
 and canon in any editor):
 
 - **Interactive shell - the WRITING AGENT TUI.** Run `writing-agent` / `python writingagent.py`
-  with no command (see `shell.py`). Themed masthead (gradient-filled ANSI Shadow wordmark; theme
+  with no command (see the `shell/` package). Themed masthead (gradient-filled ANSI Shadow wordmark; theme
   also sets palette/figlet/glyphs - `ui.THEMES`), a **compact welcome** (START + your projects +
   a status footer - sized so the wordmark is still on screen at the first prompt on a 30-row
   terminal; the full command list lives under `/help`, the feature board under `/features`; a
@@ -668,8 +668,8 @@ The open items are now settled. All numeric thresholds are **tunable config**, n
 
 | Question | v1 decision |
 |---|---|
-| **Notification channel** | Markdown review queue in `books/<id>/reviews/` + terminal print (interactive); surfaced by `book status` / `book review`. Any later channel tails the file queue. (§7) |
-| **Consolidation cadence** | Fixed: every `N=5` committed chapters + mandatory before `BOOK_DONE` + manual `book consolidate`. (§9) |
+| **Notification channel** | Markdown review queue in `books/<id>/reviews/` + terminal print (interactive); surfaced by `writing-agent status` / `writing-agent review`. Any later channel tails the file queue. (§7) |
+| **Consolidation cadence** | Fixed: every `N=5` committed chapters + mandatory before `BOOK_DONE` + manual `writing-agent consolidate`. (§9) |
 | **Skill efficacy metric** | Lift over baseline: promote at `applied≥5`, `p_skill≥p_base`, `target_failures=0`; retire on sustained under-performance. (§8) |
 | **Researcher depth** | Two tiers, both optional. **Shallow** (`use_researcher`): one DuckDuckGo query -> snippets -> a short brief (facts + style cues). **Deep** (`deep_research`, layers on `use_researcher`): LLM query-expansion -> several queries fanned out concurrently -> dedup + per-domain cap -> fetch and extract the actual page text of the top sources -> a synthesis node reads across full pages and cites sources by number. See §15.2. |
 
@@ -688,6 +688,7 @@ Durable decisions from the hardening pass. All thresholds are tunable config.
 | **Deterministic analytical nodes (A-022, 2026-06-16)** | `extract_canon`/`consolidate`/`learn` now pass explicit low/0 temperatures (`models.yaml`: `summarizer 0.0`, `consolidation 0.0`, `learner 0.2`) - they previously ran at the model default, making canon extraction and the continuity audit non-reproducible. |
 | **Writer repetition penalty (A-024, 2026-06-16)** | Per-node `frequency_penalty`/`presence_penalty` maps in `models.yaml` (clamped to OpenAI's [-2, 2] by `ModelConfig`); the writer ships `0.3`/`0.1` so token-level repetition is attacked at generation time rather than only cleaned up by the humanizer after the fact. Tunable; remove a node to leave it unset. |
 | **Context-overflow recovery (B-013, 2026-06-16)** | A `context_length_exceeded` rejection (sniffed from the error code/message, distinct from a generic 400) is recovered by `_shrink_for_context` (headroom compression, else truncate the longest message to 60%) and **one** retry, in both `complete_text` and `complete_structured` - so an over-long prompt shrinks instead of failing the node. |
+| **Structured-output truncation recovery (2026-06-17)** | A reasoning model (e.g. `deepseek-v4-pro`) spends tokens *thinking* before it emits the JSON; if that fills `max_tokens` the reply is empty / cut off mid-object with `finish_reason=length`. `complete_structured` now detects this and **raises `max_tokens`** (double, capped at 16k) then retries the **same** model/prompt - no repair turn (the prompt was fine) - so the call stays on its routed (stronger) tier instead of burning its retries on the same budget and degrading to the flash fallback. Complemented by a `models.yaml` `max_tokens:` floor for the reasoning judgment nodes (`critic`/`judge`/`verifier` = 8000), the same headroom the `diagram` node's 16k budget already relies on. Confirmed live: the first real OpenRouter run hit this exactly once (sec05) and the fix recovers on-tier in one extra try. |
 | **Chat stream accounting (B-012, 2026-06-16)** | `stream_text` now honors the run budget (`_check_budget` up front), requests `stream_options.include_usage` + cost, and records usage + telemetry + the debug sink from the terminal chunk - TUI chat no longer bypasses the kill-switch or token accounting. No auto-retry (a stream can't be replayed once chunks are emitted; the caller holds the partial output). |
 | **Cross-chapter cohesion report (D-008, 2026-06-16)** | Books get a deterministic, LLM-free `cohesion_report.md` after assembly (`polish.cross_chapter_repetition`/`cohesion_report`, gated by `book_cohesion`, default on): it flags verbatim phrasings reused across chapters and near-identical chapter openers. A **detector, not a rewriter** - a whole 10-chapter rewrite (the article-cohesion analog) is impractical and risks losing narrative content, so the report feeds a targeted `revise`. |
 | **Observability join keys (D-013/D-014, 2026-06-16)** | Opt-in `WRITINGAGENT_LLM_DEBUG=1` records full prompt+completion to `.index/llm_debug-YYYYMMDD.jsonl` (`telemetry.log_debug`, off by default - large + may carry user text) for "why did it produce/escalate this" without a re-run. The agentic action trace now stamps the run's `run_id` (`llm.run_id()`) + `ts`, so controller decisions join to the call telemetry. |
@@ -1117,9 +1118,9 @@ prompt-cache discount, not prompt rewriting. Durable decisions:
 
 ## 20. Refactor backlog - book↔article de-duplication
 
-The book (chapter) and article (section) pipelines run near-parallel code in `orchestrator.py`
-(115 KB) and `shell.py` (144 KB) - the repo's #1 redundancy (~hundreds of lines). It must be paid
-down **incrementally and test-gated**: these paths have a history of *silent drift* (the revise-parity
+The book (chapter) and article (section) pipelines run near-parallel code in the `orchestrator/`
+package (`book.py` / `article.py`, shared tail in `common.py`) and the `shell/` package - the repo's
+#1 redundancy (~hundreds of lines). It must be paid down **incrementally and test-gated**: these paths have a history of *silent drift* (the revise-parity
 bug), so behavior-preserving extraction + the full suite (and ideally a live run) between steps is
 mandatory. Already shared (do not re-extract): `_pick_variant`, `_save_version`, `_record_preference`,
 `_length_note`, `_merge_fix_notes`, `_escalate`. **Done:** `_run_learner` (shared learner tail);

@@ -129,7 +129,7 @@ WritingAgent/
 ├── config/                ← settings you can tweak (which AI model, defaults)
 ├── brain/                 ← the program's MEMORY — everything it produces (see §5)
 ├── seeds/                 ← starter "craft skills" shipped with the project
-├── tests/                 ← ~330 automated checks that prove the code works
+├── tests/                 ← ~480 automated checks that prove the code works
 ├── examples/              ← real finished pieces, so you can judge output before installing
 ├── benchmarks/            ← a blind A/B kit to compare quality vs other tools
 ├── SampleRun/             ← a complete sample book (manuscript + its working files)
@@ -167,7 +167,7 @@ Files are grouped here by their job. (Line counts are rough, to show relative si
 | File / folder | Plain-English job | Why it's separate |
 |---|---|---|
 | `shell/` (a folder) | The **interactive console** (TUI = Text User Interface): the pretty themed prompt, banner, live progress dashboard, the built-in chat assistant, slash-commands like `/help`. | The console is big and visual; it lives in its own folder split into small parts (see §4.3). |
-| `cli.py` | The **one-shot command line**: `book new ...`, `book run`, `book export ...`. Type one command, it does one thing, it ends. | Good for scripts, automation, and power users who don't want a live session. |
+| `cli/` (a folder) | The **one-shot command line**: `writing-agent new ...`, `writing-agent run`, `writing-agent export ...`. Type one command, it does one thing, it ends. | Good for scripts, automation, and power users who don't want a live session. |
 | `api.py` | The **Python interface** for other programs: `Project(...).run()`, `.export()`. | So developers can embed the writing engine in *their* software. |
 
 #### Group B — The conductor (the orchestrator)
@@ -739,9 +739,9 @@ There are three ways in, all backed by the same engine:
 
 2. **One-shot commands (good for automation):**
    ```
-   book new --abstract "How vector databases work" --pick 1
-   book run
-   book export pdf
+   writing-agent new --abstract "How vector databases work" --pick 1
+   writing-agent run
+   writing-agent export pdf
    ```
 
 3. **Fake mode (free, no AI key, to see the whole flow):**
@@ -749,7 +749,7 @@ There are three ways in, all backed by the same engine:
    WRITINGAGENT_FAKE=1 writing-agent
    ```
    This runs the *entire* process with placeholder text instead of real AI calls — perfect for
-   understanding the machinery without spending anything. (It's also how the ~330 automated tests run.)
+   understanding the machinery without spending anything. (It's also how the ~480 automated tests run.)
 
 To do real runs you need a free **API key** from an AI host (e.g. OpenRouter), placed in a file named
 `.env`. An API key is just a password that lets the program use the AI service on your account. If you
