@@ -42,7 +42,10 @@ _NEEDS_PROJECT = {"run", "status", "read", "export", "review", "revise", "memory
 # `/set` can disable human-in-the-loop (autonomous) and reroute models;
 # `write` runs an interactive interview + a long autonomous run - the human starts it.
 _CHAT_BLOCKED_CMDS = {"delete", "write"}
-_CHAT_BLOCKED_SLASH = {"user", "set"}
+# /set is intentionally NOT blocked: natural language drives config changes ("turn on researcher",
+# "set chapters to 12", "use the poe-gothic persona"). Config is reversible and the shell echoes each
+# line it runs. /user (identity) stays fenced - the human must switch users themselves.
+_CHAT_BLOCKED_SLASH = {"user"}
 
 # A chat-emitted `new` only executes on a turn where the user's own message was an
 # explicit go-ahead. The model is *instructed* to propose first and wait (NEW TOPIC

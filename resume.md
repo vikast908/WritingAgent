@@ -26,6 +26,11 @@
     by escaping the opening bracket (`\[…]`, raw f-strings). `Text(...)` paths (the run event log) are
     NOT markup-parsed and were safe. Also: the welcome **footer now shows `agentic on/off`** (replacing
     the redundant `flash` model slot) and surfaces `/agentic on|off` in the hint line (`branding.py`).
+  - **NL → any slash command.** Expanded the chat system prompt (`_const.py`) to document the full slash
+    surface with natural-language triggers, and removed `/set` from the chat denylist (`dispatch.py`) so
+    config requests run from plain English ("turn on researcher", "set chapters to 12", "use the
+    poe-gothic persona"). Only `/user` + `delete` stay manual. Fixed a latent bug where the prompt told
+    the model to emit `/set` while the extractor dropped it. Test updated (`test_hardening.py`).
   - **Test hermeticity.** Added an autouse `_isolated_settings` fixture (`tests/conftest.py`) pointing
     `config._SETTINGS` at a tmp path, so the suite always runs against shipped dataclass defaults and a
     developer's personal `settings.yaml` (e.g. `agentic=true`) can't turn the local run red. CI already

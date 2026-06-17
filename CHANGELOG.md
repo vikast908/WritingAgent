@@ -29,6 +29,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Run-scoped research memo (`agentic/tools.py`).** The inline-tool / controller writer re-issuing the
   same research query within a run no longer repeats the web search + LLM synthesis — the synthesized
   brief is cached by `(unit, query)` and auto-cleared when the `run_id` changes.
+- **Natural language now runs *any* slash command, including `/set`.** The chat assistant's system
+  prompt (`_const.py`) was expanded to document the full slash surface with NL triggers (`/agentic`,
+  `/auto`, `/mode`, `/model`, `/provider`, `/path`, `/praise`, `/theme`, `/features`, `/dashboard`,
+  `/trace`, …), and `/set` was removed from the chat denylist (`dispatch.py`) so config requests
+  ("turn on researcher", "set chapters to 12", "use the poe-gothic persona", "write with a grief tone")
+  execute from plain English. Reversible config + each executed line is echoed; only `/user` (identity)
+  and `delete` (destructive) stay manual. Also fixed a latent inconsistency where the prompt told the
+  model to emit `/set` while the extractor silently dropped it (so "turn on web search and write" never
+  enabled search).
 
 ### Fixed
 - **Rich-markup hotkey/hint bug class (TUI).** A literal `[x]` whose contents read as a style name

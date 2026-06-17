@@ -557,9 +557,9 @@ def test_chat_command_filter_blocks_destructive():
     cmds = shell._commands_in_response(text, known)
     assert "run" in cmds
     assert "/use mybook" in cmds
-    assert all(not c.startswith("delete") for c in cmds)   # delete never auto-runs
-    assert all("/set" not in c for c in cmds)              # /set blocked
-    assert all("/user" not in c for c in cmds)             # /user blocked
+    assert "/set autonomous true" in cmds                  # /set now runs from NL (reversible config)
+    assert all(not c.startswith("delete") for c in cmds)   # delete never auto-runs (destructive)
+    assert all("/user" not in c for c in cmds)             # /user stays blocked (identity)
 
 
 def test_chat_command_extractor_single_line_blocks():
