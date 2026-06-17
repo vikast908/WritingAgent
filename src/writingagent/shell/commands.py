@@ -307,8 +307,8 @@ def _cmd_path(console, settings: Settings, state: dict, rest: list[str]) -> None
         for i, (pid, ptype) in enumerate(projects, 1):
             ov = brain.get_project_export_dir(uid, pid)
             tag = f"  [dim]-> {ov}[/]" if ov else ""
-            console.print(f"  [{GOLD}][{i}][/] {pid} [dim][{ptype}][/]{tag}")
-        sel = console.input(f"  [{INK}]project number[/] [dim][enter to cancel][/] ").strip()
+            console.print(rf"  [{GOLD}][{i}][/] {pid} [dim]\[{ptype}][/]{tag}")
+        sel = console.input(rf"  [{INK}]project number[/] [dim]\[enter to cancel][/] ").strip()
         if not sel.isdigit() or not (1 <= int(sel) <= len(projects)):
             _out(console, "[dim]cancelled[/]")
             return
@@ -333,7 +333,7 @@ def _use_project(console, uid: str, query: str, state: dict) -> None:
             _out(console, f"[dim]{len(cands)} projects match '{query}':[/]")
             for i, c in enumerate(cands, 1):
                 console.print(f"  [{GOLD}][{i}][/] {c}")
-            sel = console.input(f"  [{INK}]pick a number[/] [dim][enter to cancel][/] ").strip()
+            sel = console.input(rf"  [{INK}]pick a number[/] [dim]\[enter to cancel][/] ").strip()
             if sel.isdigit() and 1 <= int(sel) <= len(cands):
                 state["book"] = cands[int(sel) - 1]
                 _out(console, f"active book -> [{GOLD}]{state['book']}[/]")

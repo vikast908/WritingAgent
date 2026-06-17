@@ -437,10 +437,13 @@ def _escalation_picker(console, cfg, uid: str, book_id: str, state: dict) -> str
     console.print(Markdown(review_md))
     while True:
         console.print()
+        # The hotkey brackets must be ESCAPED (\[f]) or Rich parses "[f]" as a markup tag
+        # and drops it - the leading letter vanishes ("ix automatically"). Raw f-strings so
+        # the backslash reaches Rich intact (and no invalid-escape warning).
         ans = console.input(
-            f"  [{GOLD}][f][/]ix automatically · [{GOLD}][i][/]nstruct in your words · "
-            f"[{GOLD}][a][/]pprove as-is · [{GOLD}][g][/]o autonomous & finish · "
-            f"[{GOLD}][r][/]ead draft · [{GOLD}][s][/]top  > ").strip().lower()
+            rf"  [{GOLD}]\[f][/]ix automatically · [{GOLD}]\[i][/]nstruct in your words · "
+            rf"[{GOLD}]\[a][/]pprove as-is · [{GOLD}]\[g][/]o autonomous & finish · "
+            rf"[{GOLD}]\[r][/]ead draft · [{GOLD}]\[s][/]top  > ").strip().lower()
         if ans == "f":
             orchestrator.record_instruction(
                 uid, book_id, n,

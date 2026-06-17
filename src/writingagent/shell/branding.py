@@ -416,7 +416,8 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
             print(fake_msg)
         print("commands: new run status review read export memory consolidate produce list")
         print("slash:    /help /model /set /skills /use /auto /config /clear /exit")
-        print(f"mode:     {mode}   run: {'autonomous' if settings.autonomous else 'manual'}")
+        print(f"mode:     {mode}   run: {'autonomous' if settings.autonomous else 'manual'}"
+              f"   agentic: {'on' if settings.agentic else 'off'}")
         print(f"models:   pro={cfg.model_for('writer')}  flash={cfg.model_for('critic')}")
         proj_str = ", ".join(f"{p[0]}[{p[1]}]" for p in projects) or "(none)"
         print(f"skills: {len(skl)}   projects: {proj_str}   user: {uid}")
@@ -473,8 +474,10 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
                 style=f"bold {GOLD}" if settings.autonomous else INK)
     foot.append("   pro ", style=DIM)
     foot.append(cfg.model_for("writer").split("/")[-1], style=INK)
-    foot.append("   flash ", style=DIM)
-    foot.append(cfg.model_for("critic").split("/")[-1], style=INK)
+    foot.append("   agentic ", style=DIM)
+    agentic_on = bool(settings.agentic)
+    foot.append("on" if agentic_on else "off",
+                style=f"bold {GOLD}" if agentic_on else INK)
     foot.append("   theme ", style=DIM)
     foot.append(ui.current_theme, style=INK)
     n_proj = len(projects)
@@ -488,6 +491,6 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     off = " · ".join(k for k, v in feats if not v) or "none"
     console.print(Text(f"  features on: {on}   off: {off}", style=DIM))
     console.print(Text(
-        "  /help all commands · /features toggles · /theme looks · or just chat in plain English",
+        "  /help all commands · /features toggles · /agentic on|off · /theme looks · or just chat in plain English",
         style=DIM,
     ))
