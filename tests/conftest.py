@@ -1,6 +1,16 @@
 import pytest
 
-from writingagent import brain, llm
+from writingagent import brain, config, llm
+
+
+@pytest.fixture(autouse=True)
+def _isolated_settings(tmp_path, monkeypatch):
+    """EVERY test runs against the shipped dataclass defaults, never the developer's
+    personal config/settings.yaml (which is gitignored, so CI already runs on defaults -
+    this makes a local run match CI). Pointing _SETTINGS at a non-existent tmp file makes
+    load_settings() fall back to Settings(), so a local file with e.g. agentic=true can't
+    change what the suite exercises; save_settings() in a test writes to the tmp file too."""
+    monkeypatch.setattr(config, "_SETTINGS", tmp_path / "settings.yaml")
 
 
 @pytest.fixture(autouse=True)
