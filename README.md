@@ -190,12 +190,19 @@ register or pinned with `field`. References render in your chosen convention via
 **Personas — a *manner* layer.** A persona flavors diction, rhythm, and stance *within* the register's
 rules (it can't break them). Each ships a signature card, an **original-pastiche** exemplar, and the
 registers it's compatible with; a persona that doesn't fit the chosen register is **dropped and
-logged** (a Nietzschean API reference is not a thing). **Fourteen ship** — six archetypes
-(`wry-skeptic`, `warm-mentor`, `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`,
-`firebrand-essayist`) and eight public-domain *manners* (`shakespearean`, `nietzschean`, `austen-ironic`,
-`twain-vernacular`, `wildean`, `poe-gothic`, `dickensian`, `whitmanesque`). **No living or in-copyright
-authors** — exemplars are original pastiche, so there's zero copyright surface; for a specific modern
-voice, train your own with `voice/` + `/praise`.
+logged** (a Nietzschean API reference is not a thing). **Forty-six ship**, covering every register —
+eighteen archetypes (`wry-skeptic`, `warm-mentor`, `hard-boiled-minimalist`, `lyrical-maximalist`,
+`deadpan-technical`, `firebrand-essayist`, `confessional-essayist`, `lucid-explainer`, `cultural-critic`,
+`contrarian-optimist`, `newsletter-confidant`, `scholarly-lucid`, `punchy-copywriter`,
+`bedtime-storyteller`, `investigative-longform`, `plainspoken-pragmatist`, `epic-fantasy`,
+`snappy-screenwriter`) and twenty-eight public-domain *manners* (`shakespearean`, `nietzschean`,
+`austen-ironic`, `twain-vernacular`, `wildean`, `poe-gothic`, `dickensian`, `whitmanesque`,
+`chekhovian`, `kafkaesque`, `montaigne-essayist`, `swiftian`, `dostoevskian`, `tolstoyan`, `melvillean`,
+`jamesian`, `conradian`, `gogolian`, `bronte-romantic`, `dickinsonian`, `byronic`, `miltonic`, `homeric`,
+`emersonian`, `thoreauvian`, `gibbonian`, `aesopian`, `carrollian`). **No living or in-copyright
+authors** — the modern-essay voices (confessional, explainer, cultural-critic, newsletter…) ship as
+original *archetypes*, not named Substack/Medium writers, so there's zero copyright surface; for a
+specific modern voice, train your own with `voice/` + `/praise`.
 
 **Emotions — anti-cliché, not a glossary.** A symptom dictionary ("fear = racing heart, sweaty palms")
 is a *cliché generator*, so the inverse ships: per-emotion **deny-lists** wired into the cliché detector

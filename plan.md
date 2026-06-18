@@ -1604,10 +1604,19 @@ that decides what is selected, what is dropped, and **logs why** - it never sile
 
 A persona is a **manner** layer: it flavors diction, rhythm, device-density, and stance *within* the
 register's rules. Each ships a **signature card** (the manner nudge) + an **exemplar** (original
-pastiche prose) and declares its **compatible registers**. Fourteen ship: six archetypes (`wry-skeptic`,
-`warm-mentor`, `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`,
-`firebrand-essayist`) and eight public-domain *manners* (`shakespearean`, `nietzschean`,
-`austen-ironic`, `twain-vernacular`, `wildean`, `poe-gothic`, `dickensian`, `whitmanesque`).
+pastiche prose) and declares its **compatible registers**. Forty-six ship: eighteen archetypes
+(`wry-skeptic`, `warm-mentor`, `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`,
+`firebrand-essayist`, `confessional-essayist`, `lucid-explainer`, `cultural-critic`,
+`contrarian-optimist`, `newsletter-confidant`, `scholarly-lucid`, `punchy-copywriter`,
+`bedtime-storyteller`, `investigative-longform`, `plainspoken-pragmatist`, `epic-fantasy`,
+`snappy-screenwriter`) and twenty-eight public-domain *manners* (`shakespearean`, `nietzschean`,
+`austen-ironic`, `twain-vernacular`, `wildean`, `poe-gothic`, `dickensian`, `whitmanesque`,
+`chekhovian`, `kafkaesque`, `montaigne-essayist`, `swiftian`, `dostoevskian`, `tolstoyan`,
+`melvillean`, `jamesian`, `conradian`, `gogolian`, `bronte-romantic`, `dickinsonian`, `byronic`,
+`miltonic`, `homeric`, `emersonian`, `thoreauvian`, `gibbonian`, `aesopian`, `carrollian`). The set
+covers every register, including the modern-essay archetypes that answer "famous Substack/Medium
+voices" the legal way (manner, not the named living writer) and the formerly-uncovered `academic`
+(`scholarly-lucid`, `gibbonian`) and `copywriting` (`punchy-copywriter`) registers.
 **Hard boundaries:** manner only (obey the register, stay in the
 present, invent no archaic words); **no living/in-copyright authors** (for a specific modern voice the
 user's own `voice/` + `/praise` path already exists); exemplars are **original pastiche**, not the

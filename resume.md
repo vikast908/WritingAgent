@@ -5,6 +5,32 @@
 
 ## Current status
 
+- **New (2026-06-18 - persona library expanded 14 -> 46):** added **32 new personas** (manner layer,
+  plan §23.2) on request to broaden voice coverage "in all genres" / "more famous writers". Held the
+  hard rule (`tests/test_compositor.py::test_no_living_author_personas` + the `personas.py` docstring):
+  **no living/in-copyright authors.** So the "famous Substack/Medium writers" ask is delivered as
+  **original archetypes** of those internet-essay genres (not named living people).
+  - **+12 first batch:** 8 archetypes (`confessional-essayist`, `lucid-explainer`, `cultural-critic`,
+    `contrarian-optimist`, `newsletter-confidant`, `scholarly-lucid`, `punchy-copywriter`,
+    `bedtime-storyteller`) + 4 PD manners (`chekhovian`, `kafkaesque`, `montaigne-essayist`, `swiftian`).
+  - **+20 second batch:** 4 archetypes (`investigative-longform`, `plainspoken-pragmatist`,
+    `epic-fantasy`, `snappy-screenwriter`) + 16 PD author manners (`dostoevskian`, `tolstoyan`,
+    `melvillean`, `jamesian`, `conradian`, `gogolian`, `bronte-romantic`, `dickinsonian`, `byronic`,
+    `miltonic`, `homeric`, `emersonian`, `thoreauvian`, `gibbonian`, `aesopian`, `carrollian`).
+  - Each ships a signature card (`personas.py`) + an **original-pastiche** exemplar (`personas/*.md`,
+    auto-shipped via the `personas/*.md` package-data glob). Now **18 archetypes + 28 author manners**.
+    Newly-covered registers: `academic` (`scholarly-lucid`, `gibbonian`) and `copywriting`
+    (`punchy-copywriter`); `children`/`poetry`/`screenplay`/`genre-fiction` all deepened.
+  - **Verified:** full suite green (1 pre-existing skip); every persona yields a loadable exemplar; all
+    register names valid; living-author guard still passes. Docs synced (`plan.md` §23.2, `README.md`).
+  - **Packaged as a Claude skill (`writing-personas`).** New `.claude/skills/writing-personas/` with a
+    `SKILL.md` (how-to + manner-only guardrails + full catalog + by-register index) and one
+    `voices/<name>.md` per persona (manner card + exemplar). **Generated** from the source of truth by
+    `scripts/build_personas_skill.py` (re-run after any persona edit to resync). Lets the voices be used
+    standalone - "write X in the <persona> voice" - without running the Python pipeline.
+  - **Next step:** nothing pending - drop-in content + skill, no API/wiring change. (If a future ask
+    wants a *specific* living writer's voice, that's the `voice/` + `/praise` path, not a persona.)
+
 - **New (2026-06-17 - FIRST REAL RUN completed end-to-end + truncation fix shipped):** picked up the
   handoff below. The named in-flight run had never persisted to disk (it died before first save), so per
   the handoff's own instruction we started a **fresh real OpenRouter run** with the intended config
