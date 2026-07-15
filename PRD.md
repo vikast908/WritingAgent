@@ -80,15 +80,19 @@ and self-corrects until it isn't slop"** — and you own the data and the spend.
 ## 6. Scope
 
 **In scope (now):** long-form articles + books; research (shallow + deep); the quality machinery;
-6 export formats; diagrams; TUI + CLI + npm launcher + Python API; the markdown brain + learning loop;
-a register-parameterized **craft engine** (11 genre profiles + persona/emotion **compositor**) that
-makes the writer good across many fields on a basic model, with the nonfiction default unchanged
-byte-for-byte; an opt-in self-directing (agentic) controller atop the fixed pipeline — a run-level
-macro-action controller, in-generation tool use, a learned (trace-distilled) policy, and multi-agent
-panels, all default-off and bounded by call-caps + a token budget.
+6 export formats; diagrams; TUI + CLI + npm launcher + Python API + a **local web dashboard**; the
+markdown brain + learning loop; a register-parameterized **craft engine** (11 genre profiles +
+persona/emotion **compositor**) that makes the writer good across many fields on a basic model, with
+the nonfiction default unchanged byte-for-byte; an opt-in self-directing (agentic) controller atop
+the fixed pipeline — a run-level macro-action controller, in-generation tool use, a learned
+(trace-distilled) policy, and multi-agent panels, all default-off and bounded by call-caps + a token
+budget; a **local distribution layer** — a deterministic on-page **SEO** audit + keyword pack, and
+**promote/repurpose/restyle** (platform variants, headline variants, voice restyle). The SEO and
+promote layers write **local artifacts only** — they never post or schedule to any platform.
 
-**Out of scope (deliberate):** short-form/marketing copy; real-time collaboration; a hosted SaaS;
-a full GUI (revisit only if demand is proven); non-text media.
+**Out of scope (deliberate):** short-form/marketing copy as the *product*; real-time collaboration;
+a hosted/multi-user SaaS (the shipped web dashboard is **local-only**, `127.0.0.1`, single-user);
+auto-posting or scheduling to social/CMS platforms; non-text media.
 
 **Watch (scope risk):** "books + articles + diagrams + themes + API + 11 genres + personas" dilutes the
 one-line pitch. Resolution: **lead with articles** (technical long-form is still the bullseye); present
@@ -116,6 +120,30 @@ audience — and keep the nonfiction default byte-for-byte so the wedge persona 
 ## 8. Roadmap
 
 ### Now (shipped this session)
+- **Local web dashboard** (`writing-agent web`, plan §25): a browser UI over the same engine the
+  TUI drives — pure-stdlib `ThreadingHTTPServer` + SSE + a single-page app (`src/writingagent/webui/`),
+  binding `127.0.0.1` only with no auth and running one job at a time. Studio / Live run / Projects /
+  Project (Overview · Activity · Evals · Artifacts · Rejected · Export · Cost) / Telemetry / Skills /
+  Settings; export in all six formats + a restyle "Rewrite". **This is the local-GUI answer to the
+  terminal-only ceiling — it is not a hosted SaaS** (still local-first, single-user).
+- **Distribution layer — SEO + promote/repurpose/restyle** (plan §24): the pipeline no longer stops
+  at "manuscript on disk". `seo.py` runs a **deterministic on-page audit** (title/meta lengths,
+  keyword placement + density, heading hierarchy, word-count floor, reading grade, link/image-alt
+  hygiene) plus a one-call flash **keyword pack**; the keyword is threaded into the writer up front
+  (`seo_keyword`) and the title optimized after validation (`seo_report.md`). `promote.py` produces
+  platform-native variants (`x-thread`, `linkedin`, `newsletter-teaser`, `tldr`), 5 headline
+  variants, and a voice **restyle** (register / persona / emotion). Runs automatically after a
+  finished `write` (`auto_promote`, default on) or on demand (`writing-agent seo` / `promote`).
+  **Local artifacts only — it edits the piece and names keywords/hashtags, but never posts or
+  schedules anywhere.**
+- **Cost — budget mode** (plan §19): `cost_mode: budget` (the shipped default) pins the spend-heavy
+  knobs lean, routes the judgment nodes (critic/judge/verifier/consolidation/diagram) to the flash
+  tier, and auto-scales the run token budget by unit count (`budget_tokens_per_unit`, ~20k/unit +
+  overhead) so a full piece *finishes* rather than pausing — targeting **≤100k tokens/article**.
+  `max_run_tokens` is a hard ceiling that always wins. Per-node / per-unit telemetry attribution
+  feeds the dashboard Telemetry / Cost views. **Context-compression "headroom" was removed** (it
+  saved ~nothing single-turn and hurt the DeepSeek prompt-cache hit rate); prompt-cache pinning
+  (`openrouter_providers`) + budget mode are the cost story now.
 - **Craft engine — a great writer across many fields, on a basic model** (plan §22, branch
   `feat/craft-engine-all-tiers`): the pipeline guaranteed a *floor* (no slop) and an argument *ceiling*
   (thesis, counterargument) but its craft contract was **monovocal** — one "researcher voice" baked
@@ -250,7 +278,8 @@ audience — and keep the nonfiction default byte-for-byte so the wedge persona 
   emotion / register / field are settable but not yet a first-class dashboard control).
 
 ### Later (P2 — only if pull is proven)
-- A thin **web UI** or **VS Code extension** to break the terminal ceiling.
+- A **VS Code extension** to break the terminal ceiling further. *(A local **web dashboard** now
+  ships — see Now; a hosted/zero-install demo is the remaining acquisition lever, above.)*
 - Community: examples-of-the-week, Discord, good-first-issues.
 - Book-length coherence hardening (10+ chapters) + public proof.
 

@@ -5,6 +5,34 @@
 
 ## Current status
 
+- **New (2026-07-15 - ENV RECOVERY + EDITORIAL REBRAND + design.md v2 + AA/UI conformance):** the
+  working tree was wiped mid-session by a OneDrive Files-On-Demand eviction. Recovered by adopting the
+  parallel **non-synced** copy at `C:\Users\vikas\Documents\MY PROJECTS GITHUB\WritingAgent` (all
+  current source + `.env` keys intact) and grafting `.git` back from a safety bundle.
+  **This is now the canonical working copy - the OneDrive path is dead; do not use it.**
+  - **Editorial rebrand.** UI identity moved off Hermes blue to editorial **ink-on-paper +
+    manuscript-red (`#a3341f`)**: Fraunces serif (one vendored variable woff2, served at
+    `/static/fonts/`) for display+reading, pilcrow `¶` mark, the Caret `▍` loader, flat/borderless
+    **square** surfaces, `--shadow-page`. Applied to the web SPA (`webui/static/index.html`) and the
+    TUI default skin (`ui.py` "ink & brass": gold primary + brass + manuscript-red status, red→gold
+    wordmark gradient - gold GOLD clears the theme accent-distinctness test).
+  - **design.md -> v2.** Rewritten from Hermes's doc into a portable, cross-domain **Editorial Design
+    System** (WA = reference implementation, Appendix A): adds Accessibility (verified WCAG-AA
+    contract), Print & long-form/book typography, token architecture, responsive + z-index, states,
+    error states, edges, overlays, highlights, notifications, motion tokens, data-viz, iconography,
+    brand usage, i18n/RTL, governance/versioning, adoption checklist.
+  - **WCAG-AA - computed & fixed.** warning `#c07a2b`->`#a85f1e`, text-tertiary 52%->60%, dark accent
+    `#d05a41`->`#d8664c`, brass restricted to large/rules; applied to design.md AND the SPA. All
+    brand-critical pairs pass AA (manuscript-red link = 6.45:1).
+  - **SPA system-level conformance.** Semantic token layer (`--info`, `--on-accent`, `--border(-strong)`,
+    `--focus-ring`, motion + z-index scales), banner notifications (info/success/warning/error),
+    field-error states, themed tooltips (replaced native `title=`), modal focus trap. `test_webui`
+    green; live Playwright load = 0 console errors.
+  - **Commits (local master):** `ee42042` (recover uncommitted dashboard/SEO/promote + rebrand),
+    `c3f19c3` (design.md v2 + AA + UI conformance).
+  - **Next:** finish the docs-site (`Writing Agents docs/`) sweep for the design system; then the
+    documented UI gaps - full responsive, markdown tables in the artifact renderer, popover
+    collision-flip, SSE reconnect backoff.
 - **New (2026-07-15 - review-driven fix sweep + COST MODE + the PROMOTION LAYER):** a three-lens
   code review (product / AI-engineering / quality) drove one large session: every confirmed defect
   fixed (no features removed), cost brought under control, and the missing distribution layer built.

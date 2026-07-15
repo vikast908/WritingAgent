@@ -432,8 +432,10 @@ ruff check .        # lint
 pytest              # the suite runs fully offline (no API key)
 ```
 
-Issues and PRs welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**. The design spec is in
-[`plan.md`](plan.md); also [`SECURITY.md`](SECURITY.md) and [`CHANGELOG.md`](CHANGELOG.md).
+Issues and PRs welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**. The engine spec is in
+[`plan.md`](plan.md) and the UI/design system (the editorial ink-on-paper identity shared by the web
+dashboard and TUI) in [`design.md`](design.md); also [`SECURITY.md`](SECURITY.md) and
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## Author
 

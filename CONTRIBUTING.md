@@ -17,17 +17,18 @@ source .venv/bin/activate          # macOS / Linux
 pip install -e ".[dev]"            # editable install + pytest + ruff
 ```
 
-### Optional: context compression (headroom)
+### Optional: research & distribution extras
 
-Headroom is optional - the app runs fine without it.
+Optional - the app runs fine without them (imported lazily, degrade gracefully).
 
-- **Linux / macOS:** `pip install -e ".[headroom]"` (prebuilt Rust wheels).
-- **Windows:** there is no Windows wheel for current versions; install the last
-  pure-Python release without its deps:
-  ```powershell
-  pip install -e ".[headroom]"
-  pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"
-  ```
+- **Deep-research fetch backend:** `pip install -e ".[deep]"` (Scrapo + Playwright, Python 3.11+),
+  then `python -m playwright install chromium`.
+- **Firecrawl search:** set `FIRECRAWL_API_KEY` in `.env` and `search_provider: firecrawl` to swap
+  the default DuckDuckGo backend (a missing key falls back to DuckDuckGo).
+
+> The old `[headroom]` context-compression extra has been **removed** - it saved ~nothing on
+> single-turn payloads and perturbed the DeepSeek prompt cache. Cost is handled by prompt-cache
+> pinning (`openrouter_providers`) and `cost_mode: budget`.
 
 ### Dependency lock (optional)
 
@@ -37,7 +38,7 @@ installed from public PyPI**:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,headroom]"             # add deep,web to lock those extras too
+pip install -e ".[dev]"                      # add deep,web to lock those extras too
 python scripts/gen_lock.py > requirements.lock.txt
 ```
 
@@ -90,6 +91,11 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
   don't bake it into a node.)
 - Network/IO is best-effort: degrade gracefully, never crash the pipeline on a fetch error.
 - All numeric thresholds are tunable config (`config/settings.yaml`), not hard-coded.
+- **Editorial design system:** the web dashboard and the TUI both follow `design.md` (repo root) -
+  ink on warm paper, one accent (manuscript red `#a3341f`), the Fraunces display serif, WCAG-AA
+  verified. Every value is a token: port to CSS vars for the web app or to a `ui.THEMES` palette for
+  the TUI (default `editorial`, "ink & brass"). Named themes recolor, never restructure - match
+  `design.md` rather than hand-picking colors.
 - Cross-platform: use `pathlib`, avoid shelling out, and don't assume a POSIX or Windows path
   layout. CI runs the suite on all three OSes - keep it green.
 
@@ -109,11 +115,19 @@ A 60-second map (full detail in `plan.md` and the README's Architecture section)
   self-directing controller layered over it (`plan.md` §21).
 - `nodes.py` / `prompts.py` / `schemas.py` - the LLM nodes, their prompts (incl. the
   `wrap_untrusted` injection fence), and structured outputs.
-- `llm.py` - OpenRouter wrapper (retry/backoff, timeout, repair, headroom compression,
-  run token budget, usage/cost tallies).
-- `telemetry.py` - per-call JSONL records + the `/dashboard` aggregation.
+- `llm.py` - OpenRouter wrapper (retry/backoff, timeout, repair, run token budget, usage/cost
+  tallies; `cost_mode: budget` routes the judgment nodes to the flash tier).
+- `telemetry.py` - per-call JSONL records + the `/dashboard` aggregation (per-node / per-unit cost
+  attribution behind the web Telemetry / Cost views).
 - `brain.py` / `store.py` - markdown filesystem layout + SQLite/FTS canon & graph.
-- `search.py` / `deep_research.py` / `images.py` / `cache.py` - the optional research stack.
+- `search.py` / `deep_research.py` / `images.py` / `cache.py` - the optional research stack
+  (`search_provider`: DuckDuckGo default, Firecrawl opt-in via `FIRECRAWL_API_KEY`).
+- `seo.py` / `promote.py` - the local distribution layer: a deterministic on-page SEO audit +
+  keyword pack, and platform variants / headline variants / restyle. **Local artifacts only** -
+  neither posts or schedules anything.
+- `webui/` - the local web dashboard (`server.py`: stdlib `ThreadingHTTPServer` + SSE, `static/`:
+  the single-page app). `writing-agent web` serves it on `127.0.0.1` only, no auth, one job at a
+  time; no build step and no npm dependency. It calls the same engine facade as the TUI/CLI.
 - `registers.py` / `craft.py` / `exemplars.py` / `surgery.py` / `fields.py` - the craft engine:
   genre/register profiles, deterministic craft metrics, few-shot exemplars, surgical
   show-don't-tell / passive passes, and structural templates (`plan.md` §22).

@@ -7,6 +7,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Local web dashboard (`writing-agent web`).** A pure-stdlib `ThreadingHTTPServer` + Server-Sent-Events
+  + single-page app (`src/writingagent/webui/`) runs the whole pipeline from the browser: Studio, live
+  run (SSE), Projects, per-project Overview / Activity / Evals / Artifacts / **Rejected** / Export /
+  Cost, Telemetry, Skills, Settings. Binds `127.0.0.1` only, no auth, one job at a time; reads and writes
+  the same on-disk brain as the TUI. Export offers all six formats + a **Rewrite** (restyle) option.
+  `--port` (default 8787) / `--no-browser`.
+- **Editorial Design System (`design.md` v2) + rebrand.** A portable, cross-domain design system — ink on
+  warm paper, one accent (**manuscript red `#a3341f`**), **Fraunces** serif for display + reading, the
+  pilcrow `¶` brand mark, the **Caret `▍`** loader, flat/borderless **square** surfaces, **WCAG-AA
+  verified** (all brand-critical pairs pass; warning/tertiary/dark-accent nudged to clear AA, brass
+  restricted to large/rules). Applied to the web dashboard (vendored Fraunces woff2 served at
+  `/static/fonts/`, semantic token layer, banner notifications, field-error states, themed tooltips,
+  modal focus trap) and the TUI default skin (**"ink & brass"**: gold primary + brass + manuscript-red
+  status). Named themes recolor the layout, never restructure it.
 - **Craft-layer expansion — 4 personas + 4 emotions (plan §23, 2026-06-17).** Personas **10→14**: four
   public-domain *manners* with original-pastiche exemplars — `wildean` (epigram/paradox), `poe-gothic`
   (slow-tightening dread), `dickensian` (comic, character-teeming), `whitmanesque` (free-verse
