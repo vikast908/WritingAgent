@@ -21,6 +21,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `/static/fonts/`, semantic token layer, banner notifications, field-error states, themed tooltips,
   modal focus trap) and the TUI default skin (**"ink & brass"**: gold primary + brass + manuscript-red
   status). Named themes recolor the layout, never restructure it.
+- **Persona library 14→46 + a `writing-personas` skill.** The voice catalog grew to **46** — **18
+  archetypes** (added lucid-explainer, cultural-critic, contrarian-optimist, newsletter-confidant,
+  scholarly-lucid, punchy-copywriter, bedtime-storyteller, investigative-longform, epic-fantasy,
+  snappy-screenwriter, and more) and **28 public-domain manners** (added chekhovian, kafkaesque,
+  montaigne-essayist, swiftian, dostoevskian, tolstoyan, melvillean, jamesian, conradian, gogolian,
+  bronte-romantic, dickinsonian, byronic, miltonic, homeric, emersonian, thoreauvian, gibbonian,
+  aesopian, carrollian). Still no living/in-copyright authors; each ships an original-pastiche
+  exemplar + compatible-register list.
 - **Craft-layer expansion — 4 personas + 4 emotions (plan §23, 2026-06-17).** Personas **10→14**: four
   public-domain *manners* with original-pastiche exemplars — `wildean` (epigram/paradox), `poe-gothic`
   (slow-tightening dread), `dickensian` (comic, character-teeming), `whitmanesque` (free-verse
