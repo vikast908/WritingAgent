@@ -527,7 +527,10 @@ scrollbar, full keyboard + ARIA). **Error state** below (Error states).
 - **ListRow** — flat, flush-left: label / description / action. Prefer spacing to
   dividers.
 - **Code / CodeBlock** — JetBrains Mono; inline code 5% ink fill; blocks ride the
-  editor surface.
+  editor surface. A code frame may carry three **window-control dots** — editorial
+  traffic lights (manuscript-red · brass · sage), **visible in both light and dark**
+  (never a low-contrast gray). **Wide code** (e.g. ASCII diagrams) **scrolls
+  horizontally within its own frame — never clipped**, with a themed scrollbar.
 - **ReadingView** — the hero prose surface: measure + reading spec + drop cap.
 
 ### Brand mark & Loader
@@ -609,6 +612,9 @@ compact; 1.5px stroke; inherit `currentColor`. Editorial glyphs (pilcrow ¶,
 caret ▍, em-dash —, section §) are typographic, set in the font — not drawn.
 Icons that carry meaning get an accessible label; icons beside text are
 `aria-hidden`. Terminal: Rich box-drawing + the caret motif (no emoji spinners).
+**Heading anchor links** (the copy-link affordance) use a **muted** icon that
+reveals on heading hover and turns **accent on hover** — never a loud, always-on
+colored mark.
 
 ## Data visualization
 
@@ -698,6 +704,11 @@ skins live in `~/.<app>/skins/` as YAML.
   only); never text-quaternary for information.
 - **Don't** let a named theme change layout, shape, type, or shadows — colors
   only.
+- **Don't** style chrome with a bare class selector (`.header`, `.card`) that can
+  also match a component's own sub-parts (e.g. a code-frame's `.header`) — scope to
+  the element (`header.header`), or you get doubled borders and stray fills.
+- **Don't** size an icon in `em` next to large display type — it inherits the
+  heading's font size and balloons. Use a fixed `rem` for anchor/inline icons.
 
 ## Governance & versioning
 
@@ -748,6 +759,17 @@ an **interactive TUI** (Rich + prompt_toolkit), and a **one-shot CLI**.
 - **TUI default skin "ink & brass":** gold primary (`#c9a227`, legible on dark +
   distinct in the theme catalog), brass secondary, manuscript-red status, an
   oxblood→terracotta→gold wordmark gradient.
+- **Documentation site (Astro + Starlight, repo `writingagentdocs`):** the public
+  docs implement the same identity via Starlight CSS-variable overrides — ink on
+  warm paper, manuscript-red accent + links + hero CTA, **Fraunces** serif for
+  headings and reading body (loaded from Google Fonts alongside **JetBrains Mono**),
+  system sans for UI chrome, square hairline surfaces, accent-tinted selection.
+  Code frames carry the three editorial **window-dots** and horizontally **scroll**
+  wide content; **heading anchor links** are muted (accent on hover, fixed 1rem
+  icon); the landing faux-terminal previews the TUI **"ink & brass"** skin. The
+  existing pen-nib **logo, favicon, and "WRITING AGENT" wordmark are retained**.
+  Header chrome is scoped to `header.header` — a bare `.header` collides with the
+  inner nav wrapper and Expressive-Code frame headers (doubled hairlines).
 
 ## Appendix B — Reference impl UI/UX audit & known gaps (2026-07-15)
 
