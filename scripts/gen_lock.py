@@ -11,7 +11,7 @@ Run it in a CLEAN virtualenv that installed the project from *public PyPI* - the
 only as resolvable as the environment they're read from:
 
     python -m venv .venv && . .venv/bin/activate     # or .venv\\Scripts\\activate on Windows
-    pip install -e ".[dev,headroom]"                 # add deep,web to lock those extras too
+    pip install -e ".[dev]"                          # add deep,web to lock those extras too
     python scripts/gen_lock.py > requirements.lock.txt
 
 Optional deps that aren't installed are reported on stderr and simply omitted (e.g. the
@@ -94,9 +94,9 @@ def closure(seeds: list[str], self_name: str) -> tuple[list[str], list[str]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Regenerate the dependency lock from the installed env.")
-    ap.add_argument("--extras", default="dev,headroom",
+    ap.add_argument("--extras", default="dev",
                     help="Comma-separated optional-dependency groups to include "
-                         "(default: dev,headroom; add deep,web to lock those too).")
+                         "(default: dev; add deep,web to lock those too).")
     args = ap.parse_args()
 
     data = _load_pyproject()

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 # ── Planner ────────────────────────────────────────────────────────────────
@@ -79,14 +79,27 @@ class BlockingIssue(BaseModel):
     fix: str
 
 
+def _require_scores(schema: dict, _model=None) -> None:
+    """Mark the 1-5 quality scores REQUIRED in the wire JSON Schema. The Python-side
+    defaults stay (old eval JSON files load fine), but the model must emit real
+    scores - a silently-omitted insight would otherwise read as a passing 3 and
+    make the min_insight gate inert."""
+    req = set(schema.get("required", []))
+    req.update({"insight", "clarity", "structure", "evidence"})
+    schema["required"] = sorted(req)
+
+
 class Critique(BaseModel):
+    model_config = ConfigDict(json_schema_extra=_require_scores)
+
     verdict: Literal["approve", "revise", "escalate"]
     confidence: float
     blocking: list[BlockingIssue]
     nits: list[str]
     # Quality (not correctness): 5 = specific, contestable argument a generic piece
     # wouldn't contain; 3 = competent but predictable; 1 = could appear on any site.
-    # Defaults keep old eval JSON files loadable (the fields didn't exist before).
+    # Defaults keep old eval JSON files loadable (the fields didn't exist before);
+    # the wire schema still REQUIRES them (see _require_scores).
     insight: int = 3
     clarity: int = 3     # readable, jargon grounded, no re-read sentences
     structure: int = 3   # paragraphs earn their order; transitions carry weight
@@ -306,3 +319,20 @@ class DiagramSpec(BaseModel):
     nodes: list[DiagramNode]
     edges: list[DiagramEdge]
     focus: str = ""        # id of the one node to emphasize (optional)
+
+
+# ── SEO / distribution signals (the promotion layer, plan §24) ────────────────
+class KeywordPack(BaseModel):
+    """The piece's search + social signals: what it should rank for and how it
+    should be tagged. One flash call names them; everything downstream (the SEO
+    validator, HTML meta tags, repurposed posts) reuses this pack."""
+    primary: str                        # the one search phrase the piece targets
+    secondary: list[str] = []           # 3-5 supporting phrases
+    meta_description: str = ""          # 120-160 chars, keyword-bearing, click-worthy
+    hashtags_x: list[str] = []          # 2-3 for X (leading # optional)
+    hashtags_linkedin: list[str] = []   # 3-5 for LinkedIn
+
+
+class HeadlineVariants(BaseModel):
+    """Alternative titles/hooks for A/B posting - same piece, different doors in."""
+    headlines: list[str]                # 5 variants: curiosity, how-to, contrarian, data-led, direct

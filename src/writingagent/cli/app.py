@@ -27,10 +27,17 @@ from .commands import (
     cmd_versions,
 )
 from .create import cmd_new
-from .export import cmd_evidence, cmd_export, cmd_polish
+from .export import cmd_evidence, cmd_export, cmd_polish, cmd_promote, cmd_seo
 from .interview import cmd_write
 
 __all__ = ["_COMMANDS", "build_parser", "_apply_provider", "main"]
+
+
+def cmd_web(args, cfg, settings, uid):
+    """Serve the local web dashboard (run the pipeline + evals/traces/cost in a browser)."""
+    from ..webui import serve
+    serve(port=getattr(args, "port", 8787),
+          open_browser=not getattr(args, "no_browser", False))
 
 
 _COMMANDS = {
@@ -41,6 +48,7 @@ _COMMANDS = {
     "consolidate": cmd_consolidate, "skills": cmd_skills, "config": cmd_config,
     "list": cmd_list, "export": cmd_export, "seed-skills": cmd_seed_skills,
     "delete": cmd_delete, "polish": cmd_polish, "evidence": cmd_evidence,
+    "seo": cmd_seo, "promote": cmd_promote, "web": cmd_web,
 }
 
 
@@ -134,6 +142,18 @@ def build_parser(settings):
                           help="Formats to re-export (default: those already present, or 'all')")
     sub.add_parser("evidence", parents=[common],
                    help="Write evidence_report.md - thesis + influence-ranked sources (no LLM)")
+    p_seo = sub.add_parser("seo", parents=[common],
+                           help="Write seo_report.md - on-page audit + keyword/hashtag pack")
+    p_seo.add_argument("--keyword", help="Pin the primary keyword (else inferred)")
+    p_promote = sub.add_parser("promote", parents=[common],
+                               help="Write promo/ - X thread, LinkedIn post, teaser, TL;DR + headlines")
+    p_promote.add_argument("--to", help="Format(s), comma-separated: x-thread, linkedin, "
+                                        "newsletter-teaser, tldr (default: all)")
+    p_promote.add_argument("--keyword", help="Pin the primary keyword (else keywords.json / inferred)")
+    p_web = sub.add_parser("web", parents=[common],
+                           help="Local web dashboard: run pieces + evals/traces/cost in a browser")
+    p_web.add_argument("--port", type=int, default=8787)
+    p_web.add_argument("--no-browser", action="store_true", help="Don't auto-open the browser")
     sub.add_parser("seed-skills", parents=[common], help="Install built-in craft skills")
     p_del = sub.add_parser("delete", parents=[common], help="Permanently delete a book")
     p_del.add_argument("name", nargs="?", help="Book ID to delete (positional shorthand)")
@@ -178,7 +198,6 @@ def main() -> None:
     cfg = load_config()
     ui.apply_theme(settings.theme)   # before the shell import - it copies the palette
     from .. import llm as _llm
-    _llm.configure_headroom(settings.use_headroom)
     _llm.configure_timeout(settings.request_timeout)
     _llm.configure_openrouter_providers(settings.openrouter_providers)
     _llm.configure_fallback(cfg.fallback)
@@ -191,4 +210,14 @@ def main() -> None:
     ui.set_plain(getattr(args, "plain", False))
     if not brain.is_safe_id(args.user):
         sys.exit(f"Invalid --user '{args.user}' (use letters, digits, - . _).")
-    _COMMANDS[args.command](args, cfg, settings, args.user)
+    try:
+        _COMMANDS[args.command](args, cfg, settings, args.user)
+    except KeyboardInterrupt:
+        sys.exit("\nInterrupted - progress is saved; run again to resume.")
+    except Exception as e:  # noqa: BLE001 - map known failures to a next step
+        # The shell already routes errors through explain_error (dispatch.py); the
+        # one-shot CLI used to dump a raw traceback for the exact same bad-key case.
+        hint = ui.explain_error(e)
+        if hint:
+            sys.exit(f"✗ {hint}")
+        raise

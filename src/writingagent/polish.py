@@ -15,9 +15,10 @@ import re
 from urllib.parse import urlparse
 
 # ── citations ─────────────────────────────────────────────────────────────────
-# An inline marker: [12], [N1], and chains like [38][39]. A bracketed bare number is
-# always a citation here (markdown links are [text](url), never [digits]).
-_INLINE_CITE = re.compile(r"[ \t]?\[N?\d+\]")
+# An inline marker: [12], [N1], and chains like [38][39]. The (?!\() guard keeps a
+# numeric markdown link label - [1](https://...) - intact (mirrors common._CITE);
+# without it strip_inline_citations turned that link into a bare "(url)".
+_INLINE_CITE = re.compile(r"[ \t]?\[N?\d+\](?!\()")
 # A bare reference line the writer dumped mid-article: "[28] Nielsen, J. (1993)...".
 _REF_LINE = re.compile(r"^\s*\[N?\d+\]\s+\S")
 # A writer-emitted References/Bibliography/Sources block, heading to next rule or end.

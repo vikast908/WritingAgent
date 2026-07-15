@@ -58,3 +58,56 @@ def test_shipped_writer_penalty_and_deterministic_temps():
     assert c.temperature_for("summarizer") == 0.0
     lt = c.temperature_for("learner")
     assert lt is not None and lt <= 0.5
+
+
+# ── Cost modes (budget profile, plan §19) ─────────────────────────────────────
+def test_cost_mode_budget_pins_lean_and_routes_flash():
+    from writingagent.config import apply_cost_mode
+    cfg = ModelConfig({"default": "pro-model", "fallback": "flash-model",
+                       "nodes": {"critic": "pro-model", "writer": "pro-model"}})
+    s = Settings(cost_mode="budget", divergent_drafts=2, max_revisions=2,
+                 table_read=True, max_run_tokens=0, max_context_chars=24000)
+    cfg2, s2, notes = apply_cost_mode(cfg, s)
+    assert s2.divergent_drafts == 1 and s2.max_revisions == 1
+    assert s2.table_read is False and s2.table_read_revise is False
+    assert s2.max_context_chars == 12_000
+    for node in ("critic", "judge", "verifier", "consolidation", "diagram"):
+        assert cfg2.model_for(node) == "flash-model"
+    assert cfg2.model_for("writer") == "pro-model"      # prose quality stays on pro
+    # the caller's objects are never mutated
+    assert cfg.model_for("critic") == "pro-model" and s.divergent_drafts == 2
+    assert notes
+
+
+def test_cost_mode_standard_is_noop():
+    from writingagent.config import apply_cost_mode
+    cfg, s = ModelConfig({}), Settings()
+    cfg2, s2, notes = apply_cost_mode(cfg, s)
+    assert cfg2 is cfg and s2 is s and notes == []
+
+
+def test_cost_mode_budget_never_loosens_a_leaner_user_value():
+    from writingagent.config import apply_cost_mode
+    s = Settings(cost_mode="budget", divergent_drafts=1, max_revisions=0,
+                 table_read=False, max_context_chars=8000)
+    _, s2, _ = apply_cost_mode(ModelConfig({}), s)
+    assert s2.max_context_chars == 8000
+    assert s2.divergent_drafts == 1 and s2.max_revisions == 0
+
+
+def test_budget_scales_with_units_and_respects_explicit_cap():
+    from writingagent.config import BUDGET_OVERHEAD_TOKENS, budget_for_units
+    # budget mode with no explicit cap: scales by unit count so a full piece finishes
+    s = Settings(cost_mode="budget", max_run_tokens=0, budget_tokens_per_unit=20_000)
+    assert budget_for_units(s, 3) == BUDGET_OVERHEAD_TOKENS + 3 * 20_000
+    assert budget_for_units(s, 6) == BUDGET_OVERHEAD_TOKENS + 6 * 20_000
+    # an explicit max_run_tokens is a hard ceiling that always wins
+    s2 = Settings(cost_mode="budget", max_run_tokens=90_000)
+    assert budget_for_units(s2, 6) == 90_000
+    # standard mode, no cap -> unlimited (historical behavior)
+    assert budget_for_units(Settings(cost_mode="standard", max_run_tokens=0), 6) == 0
+
+
+def test_cost_mode_clamped_to_known_values():
+    assert _clamp_settings(Settings(cost_mode="bogus")).cost_mode == "standard"
+    assert _clamp_settings(Settings(cost_mode="budget")).cost_mode == "budget"

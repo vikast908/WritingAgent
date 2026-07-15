@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#faf8f4">
+<title>Writing Agent — Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%2317171a'/%3E%3Ctext x='8' y='12.5' font-size='13' text-anchor='middle' fill='%23faf8f4' font-family='Georgia,serif' font-weight='700'%3E%C2%B6%3C/text%3E%3C/svg%3E">
+<style>
+/* ── Writing Agent design tokens (design.md): editorial — ink on warm paper, one accent
+   (manuscript red), a real serif (Fraunces) for display + reading. Flat, borderless, type-led.
+   The var names --blue/--blue-2/--coral are kept as the accent-strong/accent/brass slots so the
+   whole sheet stays token-driven; strokes & fills derive from the accent via color-mix. */
+@font-face{font-family:'Fraunces';font-style:normal;font-weight:300 700;font-display:swap;
+  src:url('/static/fonts/fraunces.woff2') format('woff2');font-optical-sizing:auto}
+:root{
+  /* accent slots (names retained, values editorial): blue-2 = manuscript red (the accent),
+     blue = accent-strong (hover/pressed), coral = brass (warm counterpoint, used sparingly) */
+  --blue:#872a19; --blue-2:#a3341f; --coral:#b0812f;
+  --bg:#faf8f4; --surface:#ffffff; --sidebar:#f2ede4;
+  --fg:#17171a; --red:#c23b2b; --green:#2f7d5a; --orange:#c07a2b;
+  --accent:var(--blue-2);
+  --r-sm:3px;   /* controls: buttons, inputs, chips */
+  --r-md:0px;   /* content surfaces / cards: square, page-like */
+  --r-lg:6px;   /* overlays: dialogs, popovers, toast */
+  --serif:"Fraunces","Iowan Old Style",Charter,Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,system-ui,sans-serif;
+  --mono:"JetBrains Mono","Cascadia Code","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  --shadow-page:
+    0 .125rem .25rem -.125rem color-mix(in srgb,#000 8%,transparent),
+    0 .5rem .75rem -.375rem color-mix(in srgb,#000 7%,transparent),
+    0 1.25rem 1.75rem -.875rem color-mix(in srgb,#000 6%,transparent);
+  --shadow-card:0 1px 2px color-mix(in srgb,#000 5%,transparent),
+    0 0 0 1px color-mix(in srgb,var(--fg) 6%,transparent);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme]){
+  --bg:#121211; --surface:#1c1b19; --sidebar:#0e0e0d; --fg:#f3efe6;
+  --blue:#b8462f; --blue-2:#d05a41; --coral:#cda24e;
+  --red:#e0604e; --green:#5aa07f; --orange:#d08a3a;
+  --shadow-card:0 1px 2px color-mix(in srgb,#000 40%,transparent),
+    0 0 0 1px color-mix(in srgb,var(--fg) 9%,transparent);
+}}
+:root[data-theme="dark"]{
+  --bg:#121211; --surface:#1c1b19; --sidebar:#0e0e0d; --fg:#f3efe6;
+  --blue:#b8462f; --blue-2:#d05a41; --coral:#cda24e;
+  --red:#e0604e; --green:#5aa07f; --orange:#d08a3a;
+  --shadow-card:0 1px 2px color-mix(in srgb,#000 40%,transparent),
+    0 0 0 1px color-mix(in srgb,var(--fg) 9%,transparent);
+}
+:root{
+  --stroke:color-mix(in srgb, var(--accent) 16%, color-mix(in srgb, var(--fg) 7%, transparent));
+  --stroke-soft:color-mix(in srgb, var(--fg) 8%, transparent);
+  --hair:color-mix(in srgb, var(--fg) 10%, transparent);
+  --fill:color-mix(in srgb, var(--accent) 8%, transparent);
+  --fill-2:color-mix(in srgb, var(--accent) 5%, transparent);
+  --fg-2:color-mix(in srgb, var(--fg) 72%, transparent);
+  --fg-3:color-mix(in srgb, var(--fg) 52%, transparent);
+  --fg-4:color-mix(in srgb, var(--fg) 34%, transparent);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:13.5px;line-height:1.55;
+  display:flex;overflow:hidden;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+::selection{background:color-mix(in srgb,var(--accent) 22%,transparent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:2px}
+
+/* controls */
+button{font:inherit;font-size:12.5px;color:var(--fg);background:transparent;border:none;
+  border-radius:var(--r-sm);padding:7px 13px;cursor:pointer;transition:background .12s,color .12s}
+button:hover{background:var(--fill)}
+button.primary{background:var(--blue-2);color:#fff}
+button.primary:hover{background:var(--blue)}
+button.secondary{background:var(--fill);color:var(--accent)}
+button.text{padding:4px 6px;color:var(--accent)}
+button.text:hover{background:transparent;text-decoration:underline}
+button.danger{color:var(--red)}
+button.danger:hover{background:color-mix(in srgb,var(--red) 12%,transparent)}
+button:disabled{opacity:.4;cursor:default}
+input,select,textarea{font:inherit;font-size:13px;color:var(--fg);background:var(--surface);
+  border:1px solid var(--stroke-soft);border-radius:var(--r-sm);padding:7px 10px;
+  box-shadow:inset 0 1px 1px color-mix(in srgb,#000 6%,transparent)}
+input:hover,select:hover,textarea:hover{border-color:var(--stroke)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+textarea{width:100%;resize:vertical;min-height:64px}
+select{cursor:pointer}
+/* segmented control */
+.seg{display:inline-flex;background:var(--fill-2);border-radius:var(--r-sm);padding:2px;gap:2px}
+.seg button{padding:5px 12px;font-size:12px;color:var(--fg-3);border-radius:calc(var(--r-sm) - 1px)}
+.seg button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px color-mix(in srgb,#000 8%,transparent)}
+.seg button:hover{background:color-mix(in srgb,var(--surface) 60%,transparent)}
+
+.kicker{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-3);font-weight:500}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{text-align:right}
+.muted{color:var(--fg-3)} .small{font-size:12px}
+h1,h2,h3{font-family:var(--serif);font-weight:540;letter-spacing:-.01em}
+
+/* themed scrollbars everywhere (native ones broke the look) */
+*{scrollbar-width:thin;scrollbar-color:var(--stroke-soft) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--stroke-soft);border-radius:9999px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:var(--stroke)}
+::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}
+
+/* custom select — native <select> option popups can't be themed, so we render our own */
+.csel{position:relative;display:inline-block;vertical-align:middle}
+.csel-btn{display:inline-flex;align-items:center;gap:9px;justify-content:space-between;width:100%;
+  background:var(--surface);border:1px solid var(--stroke-soft);border-radius:var(--r-sm);
+  padding:7px 10px;min-width:130px;color:var(--fg);font:inherit;font-size:13px;cursor:pointer;
+  box-shadow:inset 0 1px 1px color-mix(in srgb,#000 6%,transparent);transition:border-color .12s}
+.csel-btn:hover{border-color:var(--stroke)}
+.csel.open .csel-btn{border-color:var(--accent)}
+.csel-btn .csel-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.csel-btn .chev{color:var(--fg-3);font-size:9px;transition:transform .15s}
+.csel.open .csel-btn .chev{transform:rotate(180deg)}
+.csel-menu{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;z-index:60;
+  background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-page),0 0 0 1px var(--hair);
+  padding:4px;max-height:280px;overflow:auto;display:none}
+.csel.open .csel-menu{display:block;animation:pop .12s ease-out}
+.csel-opt{padding:6px 10px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;white-space:nowrap;color:var(--fg-2);
+  display:flex;align-items:center;gap:8px}
+.csel-opt:hover{background:var(--fill)}
+.csel-opt.on{color:var(--accent);font-weight:500}
+.csel-opt.on::before{content:'✓';font-size:10px}
+.csel-opt:not(.on)::before{content:'';width:10px}
+
+/* layout */
+#side{width:216px;min-width:216px;background:var(--sidebar);display:flex;flex-direction:column;
+  border-right:1px solid var(--hair)}
+.brand{padding:20px 20px 16px}
+.brand .mark{display:inline-flex;align-items:center;gap:9px}
+.brand .sq{width:24px;height:24px;border-radius:var(--r-sm);background:#17171a;color:#faf8f4;
+  display:grid;place-items:center;font-family:var(--serif);font-weight:500;font-size:16px;line-height:1}
+.brand .wm{font-family:var(--serif);font-weight:520;font-size:17px;letter-spacing:0}
+.brand .sub{margin-top:6px;font-size:11px}
+#nav{flex:1;padding:6px 10px}
+#nav .item{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:var(--r-sm);
+  cursor:pointer;color:var(--fg-2);font-size:13px;margin-bottom:1px}
+#nav .item:hover{background:var(--fill-2)}
+#nav .item.on{background:var(--fill);color:var(--accent);font-weight:500}
+#nav .item .ic{width:15px;text-align:center;opacity:.8;font-family:var(--mono);font-size:12px}
+.foot{padding:12px 20px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:11px;color:var(--fg-3);line-height:1.7}
+
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#topbar{height:50px;display:flex;align-items:center;gap:12px;padding:0 22px;border-bottom:1px solid var(--hair)}
+#crumb{font-size:12px;color:var(--fg-3)}
+#topbar .spacer{flex:1}
+#view{flex:1;overflow:auto;padding:24px 26px 60px}
+#view>*{max-width:1200px;margin:0 auto}
+#view::-webkit-scrollbar,#log::-webkit-scrollbar{width:9px}
+#view::-webkit-scrollbar-thumb,#log::-webkit-scrollbar-thumb{background:var(--stroke-soft);border-radius:5px}
+
+/* page head: flat, hairline under (no boxes) */
+.head{margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--hair)}
+.head .kicker{margin-bottom:6px}
+.head h2{font-size:23px;font-weight:600}
+.head .desc{color:var(--fg-3);margin-top:5px;font-size:13px}
+
+/* section: grouped by whitespace + a single hairline label, not a card */
+.section{margin-bottom:26px}
+.section>.lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-3);
+  font-weight:600;padding-bottom:8px;margin-bottom:12px;border-bottom:1px solid var(--hair)}
+/* elevated surface only where a real card is warranted (composer, log, overlays) */
+.card{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-card);padding:16px 18px}
+
+/* metric strip: flat cells, hairline dividers */
+.metrics{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--hair);border-radius:var(--r-md);overflow:hidden}
+.metrics .cell{flex:1;min-width:135px;padding:13px 16px;border-right:1px solid var(--hair)}
+.metrics .cell:last-child{border-right:none}
+.metrics .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3)}
+.metrics .v{font-family:var(--mono);font-size:22px;font-variant-numeric:tabular-nums;margin-top:4px}
+.metrics .v.blue{color:var(--accent)}
+.metrics .sub{font-family:var(--mono);font-size:11px;color:var(--fg-3);margin-top:1px}
+
+/* tables: borderless, hairline rows */
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);
+  font-weight:500;padding:7px 11px;border-bottom:1px solid var(--hair)}
+td{padding:7px 11px;border-bottom:1px solid var(--hair);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td,table tr:hover td{background:var(--fill-2)}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.click{cursor:pointer}
+
+/* chips / pills */
+.chip{display:inline-block;padding:1px 8px;border-radius:var(--r-sm);font-family:var(--mono);
+  font-size:10.5px;letter-spacing:.03em;color:var(--fg-3);background:var(--fill-2);margin-right:5px;white-space:nowrap}
+.chip.blue{color:var(--accent);background:var(--fill)}
+.chip.ok{color:var(--green);background:color-mix(in srgb,var(--green) 12%,transparent)}
+.chip.err{color:var(--red);background:color-mix(in srgb,var(--red) 12%,transparent)}
+.chip.warn{color:var(--orange);background:color-mix(in srgb,var(--orange) 12%,transparent)}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+
+/* studio approach picker */
+.approach{cursor:pointer;padding:13px 15px;border-radius:var(--r-md);border:1px solid var(--hair);margin-bottom:9px;transition:border-color .12s,background .12s}
+.approach:hover{border-color:var(--stroke)}
+.approach.sel{border-color:var(--accent);background:var(--fill-2)}
+.approach .t{font-weight:600;font-size:14.5px;margin-bottom:3px}
+.approach .t .n{color:var(--accent);margin-right:6px}
+.approach .s{color:var(--fg-2);font-size:13px}.approach .s.muted{color:var(--fg-3);font-size:12.5px;margin-top:2px}
+
+/* live log */
+#log{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-card);
+  padding:13px 15px;font-family:var(--mono);font-size:12px;line-height:1.6;height:360px;overflow:auto;white-space:pre-wrap;color:var(--fg-2)}
+.bar{height:5px;background:var(--fill-2);border-radius:9999px;overflow:hidden;margin:12px 0 6px}
+.bar i{display:block;height:100%;background:var(--blue-2);transition:width .5s}
+
+/* activity timeline */
+.tl{border-left:1.5px solid var(--stroke);margin-left:5px;padding-left:20px}
+.tl .ev{position:relative;margin-bottom:15px}
+.tl .ev::before{content:'';position:absolute;left:-25px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--bg);border:1.5px solid var(--fg-4)}
+.tl .ev.act::before{border-color:var(--blue-2);background:var(--blue-2)}
+.tl .ev.res::before{border-color:var(--coral);background:var(--coral)}
+.tl .ev.good::before{border-color:var(--green);background:var(--green)}
+.tl .ev.bad::before{border-color:var(--red);background:var(--red)}
+.tl .when{font-family:var(--mono);font-size:10.5px;color:var(--fg-4)}
+.tl .body{font-size:13.5px;margin-top:2px}
+
+/* charts */
+svg.spark{display:block}.axt{font-family:var(--mono);font-size:8px;fill:var(--fg-3)}
+.hbars{display:flex;flex-direction:column;gap:7px}
+.hbar{display:grid;grid-template-columns:130px 1fr 90px;align-items:center;gap:11px;font-size:12.5px}
+.hbar .hbar-l{font-family:var(--mono);font-size:11px;color:var(--fg-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hbar .hbar-track{height:8px;background:var(--fill-2);border-radius:9999px;overflow:hidden}
+.hbar .hbar-track i{display:block;height:100%;background:var(--blue-2);border-radius:9999px}
+.hbar .hbar-v{font-family:var(--mono);font-size:11px;text-align:right;color:var(--fg-3)}
+.legend{display:flex;gap:15px;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-3);margin-top:8px}
+.legend span::before{content:'';display:inline-block;width:9px;height:2px;margin-right:6px;vertical-align:middle;background:currentColor}
+
+/* rendered markdown */
+.md{font-family:var(--serif);font-size:16px;line-height:1.62;max-width:66ch}
+.md.read>p:first-of-type::first-letter{float:left;font-family:var(--serif);font-size:3.1em;line-height:.82;font-weight:560;padding:.04em .1em 0 0;color:var(--accent)}
+.md h1{font-size:22px;margin:16px 0 8px}.md h2{font-size:18px;margin:16px 0 8px;color:var(--fg)}.md h3{font-size:15px;margin:12px 0 6px}
+.md p{margin:8px 0}.md li{margin:3px 0 3px 20px}
+.md code{font-family:var(--mono);font-size:12px;background:color-mix(in srgb,var(--fg) 6%,transparent);padding:1px 5px;border-radius:var(--r-sm)}
+.md pre{background:var(--surface);box-shadow:var(--shadow-card);border-radius:var(--r-md);padding:13px;overflow:auto;margin:11px 0}
+.md pre code{background:none;padding:0}
+.md blockquote{border-left:2px solid var(--accent);padding-left:12px;color:var(--fg-2);margin:9px 0}
+.md hr{border:none;border-top:1px solid var(--hair);margin:16px 0}
+.md img,.svgwrap svg{max-width:100%;height:auto}
+.svgwrap{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-card);padding:12px;margin:8px 0}
+
+.settingrow{display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--hair)}
+.settingrow label{width:210px;font-family:var(--mono);font-size:12px;color:var(--fg-2)}
+.settingrow input,.settingrow .csel{width:220px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media(max-width:880px){.grid2{grid-template-columns:1fr}}
+
+/* number inputs: drop the OS spinner (kept the field, lost the mismatched chrome) */
+input[type=number]{appearance:textfield;-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+/* wide content scrolls in its own container (design.md: never break the page) */
+.scroll-x{overflow-x:auto;max-width:100%}
+
+/* keyboard-highlighted option in a custom select */
+.csel-opt.hl{background:var(--fill)}
+
+/* loading indicator — the Caret (design.md: a writer's blinking cursor, never the word "Loading…") */
+.loading{display:inline-flex;gap:8px;align-items:baseline;color:var(--fg-3);font-size:13px;font-family:var(--serif)}
+.loading .caret{font-family:var(--mono);color:var(--accent);font-weight:700;animation:caret 1.05s step-end infinite}
+@keyframes caret{0%,49%{opacity:1}50%,100%{opacity:0}}
+
+/* modal overlay (design.md: shadow-nous + hairline, Esc + × to close) */
+.scrim{position:fixed;inset:0;z-index:400;background:color-mix(in srgb,#000 32%,transparent);
+  display:grid;place-items:center;animation:fade .12s ease-out}
+.modal{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-page),0 0 0 1px var(--hair);
+  padding:20px 22px;max-width:440px;width:calc(100% - 40px);animation:pop .14s ease-out}
+.modal h3{font-size:16px;margin-bottom:8px}
+.modal .m-body{color:var(--fg-2);font-size:13.5px;margin-bottom:14px}
+.modal .m-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.modal .x{position:absolute}
+/* copy affordance on artifact / promo views */
+.copybar{display:flex;justify-content:flex-end;margin-bottom:8px}
+
+.toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-page),0 0 0 1px var(--hair);padding:11px 16px;z-index:300;max-width:440px;font-size:13.5px;animation:pop .16s ease-out}
+.toast.err{color:var(--red)}
+#runbadge{display:none;align-items:center;gap:8px;padding:4px 12px;border-radius:9999px;background:var(--fill);
+  cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--accent)}
+#runbadge .dot{width:7px;height:7px;border-radius:50%;background:var(--blue-2);animation:pulse 1.3s infinite}
+#themeSelWrap .csel-btn{min-width:104px;font-size:12px;padding:5px 9px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes pop{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+#view>*{animation:fade .2s ease-out}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<aside id="side">
+  <div class="brand">
+    <div class="mark"><span class="sq">¶</span><span class="wm">Writing Agent</span></div>
+    <div class="kicker sub">Studio · local</div>
+  </div>
+  <nav id="nav"></nav>
+  <div class="foot"><span id="userTag"></span><br>127.0.0.1 · offline</div>
+</aside>
+<main id="main">
+  <div id="topbar">
+    <span id="crumb"></span><span class="spacer"></span>
+    <div id="runbadge" role="button" tabindex="0" aria-label="a run is live — open Live run" onclick="go('run')"><span class="dot"></span><span id="runbadgeTxt">running</span></div>
+    <span id="themeSelWrap" title="appearance"></span>
+  </div>
+  <div id="view"></div>
+</main>
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt$=c=>'$'+(+c||0).toFixed(4);
+const fmtK=t=>{t=+t||0;return t>=1e6?(t/1e6).toFixed(2)+'M':t>=1e3?(t/1e3).toFixed(1)+'k':''+Math.round(t)};
+async function api(path,body){
+  const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined);
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.error||r.statusText);
+  return d;
+}
+function toast(msg,err){const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),err?6000:3200);}
+const loadingHTML=()=>'<span class="loading"><span class="caret">▍</span></span>';
+async function copyText(t){try{await navigator.clipboard.writeText(t);toast('copied to clipboard');}
+  catch(_){toast('copy failed — select the text manually',1);}}
+/* styled confirm dialog (replaces the native prompt/confirm, which breaks the theme).
+   requireText: when set, the user must type it exactly (type-to-confirm for destructive acts). */
+function confirmModal({title,body='',confirmLabel='Confirm',danger=false,requireText=null}){
+  return new Promise(resolve=>{
+    const scrim=document.createElement('div');scrim.className='scrim';
+    scrim.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <h3>${esc(title)}</h3><div class="m-body">${body}</div>
+      ${requireText!=null?'<input id="m-inp" autocomplete="off" placeholder="type to confirm">':''}
+      <div class="m-actions"><button class="text" data-act="cancel">Cancel</button>
+        <button class="${danger?'danger':'primary'}" data-act="ok" ${requireText!=null?'disabled':''}>${esc(confirmLabel)}</button></div></div>`;
+    document.body.appendChild(scrim);
+    const ok=scrim.querySelector('[data-act=ok]'),inp=scrim.querySelector('#m-inp');
+    const close=v=>{scrim.remove();document.removeEventListener('keydown',onkey);resolve(v);};
+    const onkey=e=>{if(e.key==='Escape')close(false);else if(e.key==='Enter'&&!ok.disabled)close(true);};
+    if(inp){inp.focus();inp.addEventListener('input',()=>{ok.disabled=inp.value!==requireText;});}else ok.focus();
+    scrim.addEventListener('click',e=>{if(e.target===scrim)return close(false);
+      const a=e.target.closest('[data-act]');if(a)close(a.dataset.act==='ok');});
+    document.addEventListener('keydown',onkey);
+  });
+}
+function md(src){
+  const lines=String(src||'').split('\n');let out=[],inCode=false,inList=false;
+  const inline=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+    .replace(/(^|[^*])\*([^*]+)\*/g,'$1<i>$2</i>').replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  for(const ln of lines){
+    if(ln.trim().startsWith('```')){out.push(inCode?'</code></pre>':'<pre><code>');inCode=!inCode;continue;}
+    if(inCode){out.push(esc(ln)+'\n');continue;}
+    const cl=()=>{if(inList){out.push('</ul>');inList=false;}};
+    const h=ln.match(/^(#{1,4}) (.*)/);
+    if(h){cl();out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`);continue;}
+    if(/^\s*[-*] /.test(ln)||/^\s*\d+\. /.test(ln)){if(!inList){out.push('<ul>');inList=true;}out.push('<li>'+inline(ln.replace(/^\s*(?:[-*]|\d+\.) /,''))+'</li>');continue;}
+    cl();
+    if(/^\s*---+\s*$/.test(ln)){out.push('<hr>');continue;}
+    if(/^> /.test(ln)){out.push('<blockquote>'+inline(ln.slice(2))+'</blockquote>');continue;}
+    out.push(ln.trim()?'<p>'+inline(ln)+'</p>':'');
+  }
+  if(inCode)out.push('</code></pre>');if(inList)out.push('</ul>');
+  return out.join('');
+}
+/* charts */
+function spark(vals,{w=150,h=34,pad=3}={}){
+  vals=(vals||[]).filter(v=>typeof v==='number');if(vals.length<2)return '';
+  const mn=Math.min(...vals),mx=Math.max(...vals),rng=(mx-mn)||1;
+  const X=i=>pad+i*(w-2*pad)/(vals.length-1),Y=v=>h-pad-((v-mn)/rng)*(h-2*pad);
+  const line=vals.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none">
+    <polygon points="${pad},${h-pad} ${line} ${w-pad},${h-pad}" fill="var(--blue-2)" opacity=".13"/>
+    <polyline points="${line}" fill="none" stroke="var(--blue-2)" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function hbars(rows){
+  rows=(rows||[]).filter(r=>r.val>0);if(!rows.length)return '<div class="muted small">no data yet</div>';
+  const mx=Math.max(...rows.map(r=>r.val))||1;
+  return '<div class="hbars">'+rows.map(r=>`<div class="hbar"><div class="hbar-l" title="${esc(r.label)}">${esc(r.label)}</div>
+    <div class="hbar-track"><i style="width:${Math.max(2,100*r.val/mx).toFixed(1)}%"></i></div>
+    <div class="hbar-v">${esc(r.sub||'')}</div></div>`).join('')+'</div>';
+}
+function trend(series,{w=340,h=128,pad=18}={}){
+  series=(series||[]).filter(s=>s.points.length);
+  const n=Math.max(0,...series.map(s=>s.points.length));
+  if(!n)return '<div class="muted small">no scores yet</div>';
+  const X=i=>pad+(n>1?i*(w-2*pad)/(n-1):(w-2*pad)/2),Y=v=>h-pad-((v-1)/4)*(h-2*pad);
+  let grid='';for(let g=1;g<=5;g++){const y=Y(g).toFixed(1);
+    grid+=`<line x1="${pad}" y1="${y}" x2="${w-pad}" y2="${y}" stroke="var(--hair)" stroke-width="1"/><text x="3" y="${(+y+3)}" class="axt">${g}</text>`;}
+  const col={insight:'var(--blue-2)',clarity:'var(--coral)',structure:'var(--green)',evidence:'var(--orange)'};
+  const paths=series.map(s=>{const c=col[s.key]||'var(--fg-3)';
+    const pts=s.points.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+    return `<polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.7" vector-effect="non-scaling-stroke"/>`
+      +s.points.map((v,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="2.3" fill="${c}"/>`).join('');}).join('');
+  const leg='<div class="legend">'+series.map(s=>`<span style="color:${col[s.key]||'var(--fg-3)'}">${s.key}</span>`).join('')+'</div>';
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">${grid}${paths}</svg>${leg}`;
+}
+/* custom select — one styled dropdown everywhere (native option popups aren't themeable).
+   Delegation is attached once at boot, so it survives view re-renders. */
+const CSEL={};   // id -> onChange(value)
+function sel(id,options,current,{none=null,cb=null}={}){
+  if(cb)CSEL[id]=cb;
+  let opts=(options||[]).map(o=>typeof o==='string'?{value:o,label:o}:o);
+  if(none!==null)opts=[{value:'',label:none},...opts];
+  const cur=opts.find(o=>o.value===(current??''))||opts[0]||{value:'',label:''};
+  const menu=opts.map(o=>`<div class="csel-opt ${o.value===cur.value?'on':''}" role="option" aria-selected="${o.value===cur.value}" data-cselopt="${id}" data-val="${esc(o.value)}">${esc(o.label)}</div>`).join('');
+  return `<div class="csel" id="${id}" data-value="${esc(cur.value)}">
+    <button type="button" class="csel-btn" data-csel="${id}" aria-haspopup="listbox" aria-expanded="false"><span class="csel-lbl">${esc(cur.label)}</span><span class="chev">▼</span></button>
+    <div class="csel-menu" role="listbox">${menu}</div></div>`;
+}
+function selVal(id){const e=document.getElementById(id);return e?(e.dataset.value||''):'';}
+function ctrlVal(id){const e=document.getElementById(id);if(!e)return'';return e.classList.contains('csel')?(e.dataset.value||''):e.value;}
+function cselClose(){document.querySelectorAll('.csel.open').forEach(x=>{
+  x.classList.remove('open');x.querySelector('.csel-btn').setAttribute('aria-expanded','false');
+  x.querySelectorAll('.csel-opt.hl').forEach(o=>o.classList.remove('hl'));});}
+function cselPick(opt){const id=opt.dataset.cselopt,c=document.getElementById(id);
+  c.dataset.value=opt.dataset.val;c.querySelector('.csel-lbl').textContent=opt.textContent;
+  c.querySelectorAll('.csel-opt').forEach(x=>{x.classList.toggle('on',x===opt);x.setAttribute('aria-selected',x===opt);});
+  cselClose();c.querySelector('.csel-btn').focus();if(CSEL[id])CSEL[id](opt.dataset.val);}
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.csel-btn'),opt=e.target.closest('.csel-opt');
+  if(btn){const c=btn.parentElement,wasOpen=c.classList.contains('open');cselClose();
+    if(!wasOpen){c.classList.add('open');btn.setAttribute('aria-expanded','true');
+      const on=c.querySelector('.csel-opt.on')||c.querySelector('.csel-opt');if(on)on.classList.add('hl');}
+    return;}
+  if(opt){cselPick(opt);return;}
+  cselClose();
+});
+document.addEventListener('keydown',e=>{
+  const open=document.querySelector('.csel.open');
+  if(!open){return;}
+  const opts=[...open.querySelectorAll('.csel-opt')];let i=opts.findIndex(o=>o.classList.contains('hl'));
+  if(e.key==='Escape'){cselClose();open.querySelector('.csel-btn').focus();e.preventDefault();}
+  else if(e.key==='ArrowDown'){i=Math.min(opts.length-1,i+1);opts.forEach(o=>o.classList.remove('hl'));opts[i].classList.add('hl');opts[i].scrollIntoView({block:'nearest'});e.preventDefault();}
+  else if(e.key==='ArrowUp'){i=Math.max(0,i-1);opts.forEach(o=>o.classList.remove('hl'));opts[i].classList.add('hl');opts[i].scrollIntoView({block:'nearest'});e.preventDefault();}
+  else if(e.key==='Enter'&&i>=0){cselPick(opts[i]);e.preventDefault();}
+});
+
+/* themes: System (auto) / Light / Dark (ink + manuscript red) + the shared named palettes
+   (the same catalog the TUI uses, sent as S.themes). A named theme recolors the current
+   flat editorial layout — same structure, different hue — deriving the full token set from the
+   palette's 9 colors, with a per-theme dark background tinted from its structural RULE hue. */
+const TVARS=['--bg','--surface','--sidebar','--fg','--accent','--blue','--blue-2','--coral','--ok','--err','--orange','--red'];
+function applyWebTheme(id){
+  const h=document.documentElement,r=h.style;
+  TVARS.forEach(v=>r.removeProperty(v));
+  if(id==='light')h.setAttribute('data-theme','light');
+  else if(id==='dark')h.setAttribute('data-theme','dark');
+  else if(id&&id.startsWith('theme:')){
+    h.setAttribute('data-theme','dark');
+    const p=(S.themes||{})[id.slice(6)];
+    if(p){const set=(k,v)=>{if(v)r.setProperty(k,v);};
+      set('--fg',p.parch);
+      set('--accent',p.gold_hi||p.gold);set('--blue-2',p.gold_hi||p.gold);set('--blue',p.gold);
+      set('--coral',p.ink);set('--ok',p.on_clr);set('--err',p.err);set('--red',p.err);set('--orange',p.ink);
+      const rule=p.rule||'#333';
+      set('--bg',`color-mix(in srgb, ${rule} 15%, #07070a)`);
+      set('--surface',`color-mix(in srgb, ${rule} 24%, #101016)`);
+      set('--sidebar',`color-mix(in srgb, ${rule} 10%, #050507)`);
+    }
+  }else h.removeAttribute('data-theme');   // system (auto light/dark)
+  localStorage.setItem('wa-theme',id);
+}
+function buildThemeSelect(){
+  const cur=localStorage.getItem('wa-theme')||'system';
+  const base=[{value:'system',label:'System'},{value:'light',label:'Light'},{value:'dark',label:'Dark'}];
+  const named=Object.keys(S.themes||{}).map(n=>({value:'theme:'+n,label:n}));
+  $('#themeSelWrap').innerHTML=sel('themeSel',[...base,...named],cur,{cb:applyWebTheme});
+  applyWebTheme(cur);
+}
+
+let S={user:'default',options:{},settings:[],models:{},projects:[],active_job:null};
+let RUN={job:null,project:null,log:[],state:null,es:null,status:null};
+const NAV=[['studio','Studio','✎'],['projects','Projects','▤'],['run','Live run','▶'],
+           ['telemetry','Telemetry','◔'],['skills','Skills','◈'],['settings','Settings','⚙']];
+let view='studio',viewArg=null;
+
+async function refreshState(){
+  S=await api('/api/state');
+  $('#userTag').textContent=S.user;
+  buildThemeSelect();
+  if(S.active_job&&!RUN.es)attachJob(S.active_job.id,S.active_job.project);
+}
+function go(v,arg){view=v;viewArg=arg;render();const el=$('#view');if(el)el.scrollTop=0;}
+function nav(){
+  $('#nav').innerHTML=NAV.map(([id,label,ic])=>`<div class="item ${view===id?'on':''}" onclick="go('${id}')"><span class="ic">${ic}</span>${label}</div>`).join('');
+  $('#crumb').textContent={studio:'new piece',projects:'your work',run:'live run',telemetry:'cost · evals · traces',skills:'learned craft',settings:'setup'}[view]||'';
+}
+function head(kicker,title,desc){return `<div class="head"><div class="kicker">${kicker}</div><h2>${title}</h2>${desc?`<div class="desc">${desc}</div>`:''}</div>`;}
+function optSel(id,list,cur,noneLabel){return sel(id,list||[],cur,{none:noneLabel||'None'});}
+
+/* live run */
+function attachJob(jobId,project){
+  if(RUN.es)RUN.es.close();
+  RUN={job:jobId,project:project,log:[],state:null,es:null,status:'running'};
+  const es=new EventSource('/api/events?job='+jobId);RUN.es=es;
+  es.onmessage=e=>{const ev=JSON.parse(e.data);
+    if(ev.t==='log')RUN.log.push(ev.line);
+    else if(ev.t==='project')RUN.project=ev.project;
+    else if(ev.t==='state')RUN.state=ev.state;
+    else if(ev.t==='done'){RUN.status=ev.status;RUN.log.push(ev.status==='error'?('[x] '+ev.error):('— '+ev.status+' —'));es.close();RUN.es=null;refreshState();}
+    if(view==='run')renderRunInner();updateBadge();};
+  es.onerror=()=>{if(RUN.status==='running')RUN.log.push('· reconnecting…');};
+  updateBadge();
+}
+function updateBadge(){const b=$('#runbadge');
+  if(RUN.job&&RUN.status==='running'){b.style.display='flex';$('#runbadgeTxt').textContent=(RUN.project||'starting')+' · live';}else b.style.display='none';}
+async function pauseRun(){try{await api('/api/pause',{job:RUN.job});toast('pause requested — stops at the next unit boundary');}catch(e){toast(e.message,1)}}
+
+function render(){nav();({studio:renderStudio,projects:renderProjects,project:renderProject,
+  run:renderRun,telemetry:renderTelemetry,skills:renderSkills,settings:renderSettings}[view]||renderStudio)();}
+
+/* studio */
+let PLAN={topic:'',mode:null,approaches:[],sel:0,planning:false};
+function renderStudio(){
+  const g=n=>(S.settings.find(f=>f.name===n)||{}).value;
+  $('#view').innerHTML=head('Commission','New piece','The agent proposes editorial angles, then researches, drafts, self-critiques, and assembles — streamed live.')+`
+  <div class="card section">
+    <div class="row" style="margin-bottom:11px">
+      <input id="topic" style="flex:1;min-width:300px" placeholder="Topic or abstract" value="${esc(PLAN.topic)}">
+      ${sel('mode',['article','book'],g('mode')==='book'?'book':'article')}
+      <input id="units" type="number" min="1" style="width:78px" placeholder="units">
+      <button class="primary" onclick="doPlan()" ${PLAN.planning?'disabled':''}>${PLAN.planning?'proposing…':'Propose angles'}</button>
+    </div>
+    <textarea id="intake" placeholder="Optional requirements — audience, tone, must-includes, target length…"></textarea>
+    <div class="row small muted" style="margin-top:9px">
+      <span class="chip ${g('cost_mode')==='budget'?'blue':''}">cost: ${esc(g('cost_mode')||'standard')}</span>
+      <span class="chip ${g('agentic')?'blue':''}">${g('agentic')?'agentic':'fixed pipeline'}</span>
+      ${g('seo_keyword')?`<span class="chip blue">seo: ${esc(g('seo_keyword'))}</span>`:''}
+      <span>runs autonomously · nothing is posted anywhere</span>
+    </div>
+  </div>
+  <div id="approaches">${PLAN.approaches.length?renderApproaches():''}</div>`;
+}
+function renderApproaches(){
+  return `<div class="section"><div class="lbl">Choose an angle</div>
+  ${PLAN.approaches.map((a,i)=>`<div class="approach ${i===PLAN.sel?'sel':''}" onclick="PLAN.sel=${i};render()">
+    <div class="t"><span class="n">${a.index}</span>${esc(a.title)}</div><div class="s">${esc(a.summary)}</div>
+    ${a.hook?`<div class="s muted">hook — ${esc(a.hook)}</div>`:''}${a.audience?`<div class="s muted">for — ${esc(a.audience)}</div>`:''}</div>`).join('')}
+  <button class="primary" style="margin-top:6px" onclick="doStart()">Begin the run</button></div>`;
+}
+async function doPlan(){
+  PLAN.topic=$('#topic').value.trim();PLAN.mode=selVal('mode')||'article';
+  if(!PLAN.topic)return toast('give it a topic first',1);
+  PLAN.planning=true;render();
+  try{const d=await api('/api/plan',{topic:PLAN.topic,mode:PLAN.mode});PLAN.approaches=d.approaches;PLAN.sel=0;}catch(e){toast(e.message,1)}
+  PLAN.planning=false;render();
+}
+async function doStart(){
+  try{const a=PLAN.approaches[PLAN.sel];
+    const d=await api('/api/start',{topic:PLAN.topic,mode:PLAN.mode,units:$('#units')?.value||'',intake:$('#intake')?.value||'',approach:a.raw});
+    attachJob(d.job,null);go('run');}catch(e){toast(e.message,1)}
+}
+/* live run */
+function renderRun(){$('#view').innerHTML=head('Live','Run')+'<div id="runWrap"></div>';renderRunInner();}
+function renderRunInner(){
+  const w=$('#runWrap');if(!w)return;const st=RUN.state||{};
+  const total=st.num_sections||st.num_chapters||0,done=st.committed||0,pct=total?Math.round(100*done/total):(RUN.status==='done'?100:0);
+  w.innerHTML=`<div class="card">${RUN.job?`<div class="row">
+    <span class="chip ${RUN.status==='running'?'blue':RUN.status==='done'?'ok':RUN.status==='error'?'err':''}">${RUN.status}</span>
+    <span class="chip">${esc(RUN.project||'starting…')}</span><span class="chip">phase · ${esc(st.phase||'…')}</span>
+    <span class="chip">${done}/${total||'?'} committed</span>${st.pending_review?'<span class="chip err">review pending</span>':''}
+    <span class="spacer"></span>${RUN.status==='running'?'<button onclick="pauseRun()">Pause</button>':''}
+    ${RUN.project?`<button class="secondary" onclick="go('project','${RUN.project}')">Open project</button>`:''}</div>
+    <div class="bar"><i style="width:${pct}%"></i></div><div id="log">${esc(RUN.log.join('\n'))||'· awaiting first line…'}</div>`
+    :'<div class="muted">No live run. Start one in the Studio, or resume from Projects.</div>'}</div>`;
+  const lg=$('#log');if(lg)lg.scrollTop=lg.scrollHeight;
+}
+/* projects */
+function renderProjects(){
+  const rows=S.projects.map(p=>`<tr class="click" onclick="go('project','${p.id}')">
+    <td>${esc(p.id)}</td><td class="muted">${p.mode}</td>
+    <td><span class="chip ${p.phase==='done'?'ok':p.pending_review?'err':'blue'}">${esc(p.phase)}</span>${p.agentic?'<span class="chip blue">agentic</span>':''}</td>
+    <td class="num">${p.committed}/${p.total_units??'?'}</td><td class="num">${fmtK(p.words)}</td></tr>`).join('');
+  $('#view').innerHTML=head('Archive','Projects')+`<div class="section"><table><tr><th>project</th><th>mode</th><th>phase</th><th class="num">units</th><th class="num">words</th></tr>
+    ${rows||'<tr><td colspan="5" class="muted">nothing yet — start one in the Studio</td></tr>'}</table></div>`;
+  refreshState();
+}
+/* project detail */
+let PJ={id:null,data:null,tab:'overview',artifact:null,artText:'',trace:[],evals:null,tele:null,rejected:null};
+async function renderProject(){
+  const pid=viewArg||PJ.id;if(pid!==PJ.id)PJ={id:pid,tab:'overview',artifact:null,artText:'',trace:[],evals:null,tele:null,rejected:null};
+  $('#view').innerHTML=loadingHTML();
+  try{
+    PJ.data=await api('/api/project?project='+encodeURIComponent(pid));
+    const [tr,ev,te,rj]=await Promise.all([api('/api/trace?project='+encodeURIComponent(pid)),
+      api('/api/evals?project='+encodeURIComponent(pid)),api('/api/telemetry?project='+encodeURIComponent(pid)),
+      api('/api/rejected?project='+encodeURIComponent(pid))]);
+    PJ.trace=tr.records;PJ.evals=ev;PJ.tele=te;PJ.rejected=rj;
+  }catch(e){$('#view').innerHTML=`<div class="card">✗ ${esc(e.message)}</div>`;return;}
+  renderProjectInner();
+}
+function renderProjectInner(){
+  const st=PJ.data.status||{},tabs=['overview','activity','evals','artifacts','rejected','export','cost'];
+  $('#view').innerHTML=head((st.mode||'piece')+' · '+(st.phase==='done'?'finished':'in progress'),PJ.id)+`
+  <div class="row" style="margin:-6px 0 16px">
+    <span class="chip ${st.phase==='done'?'ok':'blue'}">${esc(st.phase||'?')}</span>
+    <span class="chip">${st.committed||0}/${st.num_sections||st.num_chapters||'?'} committed</span>
+    ${PJ.data.has_trace?'<span class="chip blue">agentic trace</span>':''}
+    <span class="spacer"></span>
+    <button class="primary" onclick="resumeProject()">${st.phase==='done'?'Re-run':'Run / resume'}</button>
+    <button class="secondary" onclick="projectAction('evaluate')">Eval</button>
+    <button class="secondary" onclick="projectAction('seo')">SEO</button>
+    <button class="secondary" onclick="projectAction('promote')">Promote</button>
+    <button class="danger" onclick="delProject()">Delete</button></div>
+  <div class="seg" style="margin-bottom:18px">${tabs.map(t=>`<button class="${PJ.tab===t?'on':''}" onclick="PJ.tab='${t}';renderProjectInner()">${t}</button>`).join('')}</div>
+  <div id="pjBody"></div>`;
+  ({overview:pjOverview,activity:pjActivity,evals:pjEvals,artifacts:pjArtifacts,rejected:pjRejected,export:pjExport,cost:pjCost}[PJ.tab])();
+}
+async function resumeProject(){try{const d=await api('/api/resume',{project:PJ.id});attachJob(d.job,PJ.id);go('run');}catch(e){toast(e.message,1)}}
+async function projectAction(action,extra){try{const d=await api('/api/action',{project:PJ.id,action,...(extra||{})});attachJob(d.job,PJ.id);toast(action+' started — see Live run');go('run');}catch(e){toast(e.message,1)}}
+async function delProject(){
+  const ok=await confirmModal({title:'Delete project?',danger:true,confirmLabel:'Delete permanently',
+    requireText:PJ.id,body:`This permanently deletes <b>${esc(PJ.id)}</b> and its index. Type the id to confirm.`});
+  if(!ok)return;
+  try{await api('/api/delete',{project:PJ.id,confirm:PJ.id});toast('deleted');await refreshState();go('projects');}catch(e){toast(e.message,1)}}
+function scoreSeries(){const sc=PJ.evals?.scores||[];return ['insight','clarity','structure','evidence'].map(k=>({key:k,points:sc.map(s=>s?.[k]).filter(v=>typeof v==='number')}));}
+function pjOverview(){
+  const s=PJ.data.state||{},sc=PJ.evals?.scores||[],unit=s.num_sections?'section':'chapter',t=PJ.tele?.summary?.totals||{};
+  const rows=sc.map((x,i)=>`<tr><td>${unit} ${i+1}</td>${['insight','clarity','structure','evidence'].map(k=>`<td class="num">${x?.[k]??'—'}</td>`).join('')}</tr>`).join('');
+  $('#pjBody').innerHTML=`
+  <div class="metrics" style="margin-bottom:22px">
+    <div class="cell"><div class="k">units scored</div><div class="v">${sc.length||0}</div></div>
+    <div class="cell"><div class="k">lifetime cost</div><div class="v blue">${fmt$(t.cost)}</div></div>
+    <div class="cell"><div class="k">tokens</div><div class="v">${fmtK(t.tokens)}</div><div class="sub">${fmtK(t.cached_tokens)} cached</div></div>
+    <div class="cell"><div class="k">llm calls</div><div class="v">${t.calls||0}</div></div>
+  </div>
+  <div class="grid2">
+    <div class="section"><div class="lbl">critic scores by ${unit}</div>
+      <table><tr><th>${unit}</th><th class="num">insight</th><th class="num">clarity</th><th class="num">structure</th><th class="num">evidence</th></tr>
+      ${rows||'<tr><td colspan="5" class="muted">no scores yet</td></tr>'}</table></div>
+    <div class="section"><div class="lbl">score trend</div>${trend(scoreSeries())}</div>
+  </div>
+  <div class="section"><div class="lbl">run recipe</div><div class="row">${[['controller',s.controller],['policy',s.agentic_policy],
+    ['drafts',s.divergent_drafts],['max revisions',s.max_revisions],['register',s.register||'inferred'],
+    ['persona',s.persona||'—'],['seo keyword',s.seo_keyword||'—'],['deep research',s.deep_research]].map(([k,v])=>`<span class="chip">${k}: ${esc(String(v))}</span>`).join('')}</div></div>`;
+}
+function pjActivity(){
+  if(!PJ.trace.length){$('#pjBody').innerHTML='<div class="muted">No agent trace — this piece ran the fixed pipeline (agentic off).</div>';return;}
+  const uc={};(PJ.tele?.summary?.by_unit||[]).forEach(([u,c,tk,co])=>uc[u]={c,tk,co});
+  const evs=PJ.trace.map(r=>{
+    const cls=r.scope==='unit-outcome'?(r.first_pass?'good':'bad'):r.scope==='run-result'?'res':'act';
+    let line;
+    if(r.scope==='unit-outcome')line=`<b>${esc(r.unit)}</b> — ${r.first_pass?'approved first pass':'revised'} · insight ${r.insight??'?'}/5`;
+    else if(r.scope==='run-result')line=`<b>run</b> chose <span class="chip blue">${esc(r.action)}</span> ${r.unit?'on '+esc(r.unit):''} ${r.dim?'· weakest: '+esc(r.dim):''} ${r.result?'· '+esc(r.result):''}`;
+    else line=`<b>${esc(r.unit||'run')}</b> → <span class="chip blue">${esc(r.action)}</span> ${r.reason?esc(String(r.reason).slice(0,150)):''} ${r.query?'<span class="muted">« '+esc(String(r.query).slice(0,80))+' »</span>':''} ${r.result?'<span class="muted">'+esc(String(r.result))+'</span>':''}`;
+    const cost=(r.scope==='unit-outcome'&&uc[r.unit])?` <span class="chip">${fmt$(uc[r.unit].co)} · ${fmtK(uc[r.unit].tk)} tok</span>`:'';
+    return `<div class="ev ${cls}"><div class="when">${esc((r.ts||'').replace('T',' ').slice(0,19))}</div><div class="body">${line}${cost}</div></div>`;}).join('');
+  $('#pjBody').innerHTML=`<div class="section"><div class="lbl">agent activity — every decision, joined with per-unit cost</div><div class="tl">${evs}</div></div>`;
+}
+function pjEvals(){
+  const ev=PJ.evals||{},att=(ev.attempts||[]).map(a=>`<tr><td>${esc(a.section??a.chapter_id??'?')}</td><td class="num">${a.attempt??'?'}</td>
+    <td><span class="chip ${a.verdict==='approve'?'ok':'err'}">${esc(a.verdict||'?')}</span></td>
+    <td class="num">${typeof a.confidence==='number'?a.confidence.toFixed(2):esc(a.confidence)}</td>
+    <td class="num">${(a.blocking||[]).length}</td><td class="num">${a.insight??'—'}</td></tr>`).join('');
+  $('#pjBody').innerHTML=`${ev.eval_report?`<div class="section"><div class="lbl">eval report</div><div class="md">${md(ev.eval_report)}</div></div>`:
+    '<div class="muted" style="margin-bottom:16px">No eval report yet — click <b>Eval</b> above.</div>'}
+  <div class="section"><div class="lbl">per-attempt critiques</div>
+  ${att?`<table><tr><th>unit</th><th class="num">attempt</th><th>verdict</th><th class="num">conf</th><th class="num">blocking</th><th class="num">insight</th></tr>${att}</table>`:'<div class="muted small">cleaned up after completion — scores live in Overview</div>'}</div>`;
+}
+function pjArtifacts(){
+  const arts=PJ.data.artifacts||[];
+  $('#pjBody').innerHTML=`<div class="row" style="margin-bottom:14px">${arts.map(a=>`<button class="${PJ.artifact===a?'primary':'secondary'}" onclick="loadArtifact('${a}')">${a}</button>`).join('')||'<span class="muted">no artifacts yet</span>'}</div>
+    ${PJ.artifact?`<div class="copybar"><button class="secondary" onclick="copyText(PJ.artText)">Copy ${esc(PJ.artifact)}</button></div>`:''}
+    <div class="card"><div class="md${PJ.artifact==='manuscript'?' read':''}" id="artBody">${PJ.artifact?md(PJ.artText):'<span class="muted">pick a document — manuscript, SEO report, evidence, promo drafts…</span>'}</div></div>`;
+}
+async function loadArtifact(name){try{const d=await api(`/api/artifact?project=${encodeURIComponent(PJ.id)}&name=${encodeURIComponent(name)}`);
+  PJ.artifact=name;PJ.artText=d.text;pjArtifacts();}catch(e){toast(e.message,1)}}
+function pjRejected(){
+  const r=PJ.rejected||{},recs=r.records||[],imgs=r.unused_images||[],vers=r.versions||[];
+  const recRows=recs.map(x=>`<tr><td>${esc(x.unit||'—')}</td><td>${esc(x.kind||'?')}</td><td class="small">${esc(x.ref||'')}</td><td class="muted small">${esc(x.reason||'')}</td></tr>`).join('');
+  $('#pjBody').innerHTML=`
+  <div class="section"><div class="lbl">dropped images — generated but not in the final piece (${imgs.length})</div>
+    <div class="row" style="margin-bottom:10px">${imgs.map(p=>`<button class="secondary" onclick="viewSvg('${esc(p)}')">${esc(p.split('/').pop())}</button>`).join('')||'<span class="muted small">none — every generated figure made it in</span>'}</div>
+    <div id="svgView"></div></div>
+  <div class="section"><div class="lbl">recorded rejects</div>
+    ${recRows?`<table><tr><th>unit</th><th>kind</th><th>ref</th><th>reason</th></tr>${recRows}</table>`:'<div class="muted small">nothing recorded</div>'}</div>
+  <div class="section"><div class="lbl">draft snapshots (variants + revisions, newest last) — ${vers.length}</div>
+    <div class="row">${vers.map(v=>`<button class="secondary" onclick="loadArtifact('versions/${esc(v)}')">${esc(v)}</button>`).join('')||'<span class="muted small">none</span>'}</div>
+    ${PJ.artifact&&PJ.artifact.startsWith('versions/')?`<div class="card" style="margin-top:12px"><div class="md">${md(PJ.artText)}</div></div>`:''}</div>`;
+}
+async function viewSvg(ref){try{const d=await api(`/api/artifact?project=${encodeURIComponent(PJ.id)}&name=${encodeURIComponent(ref)}`);
+  const el=$('#svgView');if(el)el.innerHTML=`<div class="svgwrap">${d.text}</div>`;}catch(e){toast(e.message,1)}}
+function pjExport(){
+  const fmts=S.options.export_formats||['pdf','epub','html','docx','txt','md'];
+  const regs=S.options.registers||[],pers=S.options.personas||[],emos=S.options.emotions||[];
+  $('#pjBody').innerHTML=`
+  <div class="section"><div class="lbl">export the manuscript</div>
+    <div class="row">${fmts.map(f=>`<button class="secondary" onclick="projectAction('export',{format:'${f}'})">${f}</button>`).join('')}</div>
+    <div class="muted small" style="margin-top:8px">Writes the file into the project folder (same as the TUI).</div></div>
+  <div class="section"><div class="lbl">rewrite in a different voice (deepseek-v4-flash · facts preserved)</div>
+    <div class="row" style="margin-bottom:10px">
+      ${optSel('rsReg',regs,'','Style: none')}${optSel('rsPer',pers,'','Persona: none')}${optSel('rsEmo',emos,'','Emotion: none')}
+      <button class="primary" onclick="doRestyle()">Rewrite</button></div>
+    <div class="muted small">Produces <code>restyled/&lt;combo&gt;.md</code> — the original is untouched. Open it under Artifacts.</div></div>
+  <div class="section"><div class="lbl">re-fix (deterministic, no LLM)</div>
+    <button class="secondary" onclick="projectAction('polish')">Polish references + figures</button>
+    <button class="secondary" onclick="projectAction('evidence')">Rebuild evidence report</button></div>`;
+}
+async function doRestyle(){
+  const register=selVal('rsReg'),persona=selVal('rsPer'),emotion=selVal('rsEmo');
+  if(!register&&!persona&&!emotion)return toast('pick a style, persona, or emotion first',1);
+  projectAction('restyle',{register,persona,emotion});
+}
+function pjCost(){$('#pjBody').innerHTML=teleTables(PJ.tele?.summary||{totals:{}},PJ.tele?.records||[]);}
+/* telemetry */
+async function renderTelemetry(){
+  $('#view').innerHTML=head('Observability','Telemetry')+loadingHTML();
+  let d;try{d=await api('/api/telemetry');}catch(e){$('#view').innerHTML=head('Observability','Telemetry')+`<div class="card">✗ ${esc(e.message)}</div>`;return;}
+  const t=d.summary.totals,runs=(d.summary.runs||[]).slice(-14).reverse();
+  let cum=0;const cumToks=(d.records||[]).map(r=>cum+=(r.total_tokens||0));
+  $('#view').innerHTML=head('Observability','Telemetry','Cost, tokens, latency and cache — per agent, per unit (loop), per model, per session run.')+`
+  <div class="metrics" style="margin-bottom:22px">
+    <div class="cell"><div class="k">total cost</div><div class="v blue">${fmt$(t.cost)}</div></div>
+    <div class="cell"><div class="k">tokens</div><div class="v">${fmtK(t.tokens)}</div><div class="sub">${fmtK(t.cached_tokens)} cached</div></div>
+    <div class="cell"><div class="k">llm calls</div><div class="v">${t.calls}</div></div>
+    <div class="cell"><div class="k">avg latency</div><div class="v">${t.avg_latency_ms}<span class="sub" style="display:inline"> ms</span></div></div>
+    <div class="cell"><div class="k">errors</div><div class="v">${t.errors}</div></div>
+    <div class="cell"><div class="k">tokens over time</div><div style="margin-top:6px">${spark(cumToks)||'<span class="muted small">—</span>'}</div></div>
+  </div>
+  <div class="section"><div class="lbl">per session run — newest first</div>
+    <table><tr><th>run id</th><th>project</th><th class="num">calls</th><th class="num">tokens</th><th class="num">cost</th></tr>
+    ${runs.map(([rid,proj,c,tk,co])=>`<tr><td class="num small">${esc(rid)}</td><td>${esc(proj)}</td><td class="num">${c}</td><td class="num">${fmtK(tk)}</td><td class="num">${fmt$(co)}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">no runs recorded</td></tr>'}</table></div>
+  ${teleTables(d.summary,d.records)}`;
+}
+function teleTables(sum,records){
+  const bars=rows=>hbars((rows||[]).slice(0,8).map(([k,c,tk,co])=>({label:k,val:co,sub:fmt$(co)})));
+  const tbl=(rows,hd)=>`<table><tr><th>${hd}</th><th class="num">calls</th><th class="num">tokens</th><th class="num">cost</th></tr>
+    ${(rows||[]).map(([k,c,tk,co])=>`<tr><td>${esc(k)}</td><td class="num">${c}</td><td class="num">${fmtK(tk)}</td><td class="num">${fmt$(co)}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">—</td></tr>'}</table>`;
+  const recent=(records||[]).slice(-45).reverse().map(r=>`<tr><td class="num small">${esc((r.ts||'').slice(11,19))}</td>
+    <td>${esc(r.node||r.kind||'?')}</td><td class="muted">${esc(r.unit||'—')}</td><td class="small">${esc((r.model||'').split('/').pop())}</td>
+    <td class="num">${fmtK(r.total_tokens)}</td><td class="num">${fmt$(r.cost)}</td><td class="num">${r.latency_ms}<span class="muted">ms</span></td>
+    <td>${r.error?`<span class="chip err" title="${esc(r.error)}">err</span>`:''}</td></tr>`).join('');
+  return `<div class="grid2">
+    <div class="section"><div class="lbl">cost per agent</div>${bars(sum.by_node)}</div>
+    <div class="section"><div class="lbl">cost per model</div>${bars(sum.by_model)}</div></div>
+    <div class="grid2">
+    <div class="section"><div class="lbl">per agent</div>${tbl(sum.by_node,'agent')}</div>
+    ${(sum.by_unit&&sum.by_unit.length>1)?`<div class="section"><div class="lbl">per unit (loop)</div>${tbl(sum.by_unit,'unit')}</div>`:`<div class="section"><div class="lbl">per model</div>${tbl(sum.by_model,'model')}</div>`}</div>
+    <div class="section"><div class="lbl">recent calls</div><div class="scroll-x"><table><tr><th>time</th><th>agent</th><th>unit</th><th>model</th><th class="num">tokens</th><th class="num">cost</th><th class="num">latency</th><th></th></tr>${recent}</table></div></div>`;
+}
+/* skills */
+async function renderSkills(){
+  $('#view').innerHTML=head('Craft','Skills & watch-list')+loadingHTML();
+  let d;try{d=await api('/api/skills');}catch(e){$('#view').innerHTML=head('Craft','Skills & watch-list')+`<div class="card">✗ ${esc(e.message)}</div>`;return;}
+  const idx=d.index?.skills||{};
+  const rows=Object.keys(d.skills).map(name=>{const m=idx[name]||{};
+    return `<tr class="click" onclick="var e=document.getElementById('sk-${name}');e.style.display=e.style.display==='none'?'':'none'">
+      <td>${esc(name)}</td><td><span class="chip ${m.status==='trusted'?'ok':m.status==='retired'?'err':'blue'}">${esc(m.status||'candidate')}</span></td>
+      <td class="num">${m.applied||0}</td><td class="num">${m.first_pass||0}</td></tr>
+      <tr id="sk-${name}" style="display:none"><td colspan="4"><div class="md small" style="max-width:none">${md(d.skills[name])}</div></td></tr>`;}).join('');
+  $('#view').innerHTML=head('Craft','Skills & watch-list')+`
+  <div class="section"><div class="lbl">learned skills — click to read</div>
+    <table><tr><th>skill</th><th>status</th><th class="num">applied</th><th class="num">first-pass</th></tr>
+    ${rows||'<tr><td colspan="4" class="muted">none yet</td></tr>'}</table></div>
+  <div class="section"><div class="lbl">watch-list — cross-run failure patterns</div><div class="md small" style="max-width:none">${md(d.watch_list||'_none yet_')}</div></div>`;
+}
+/* settings */
+async function renderSettings(){
+  await refreshState();
+  const opts=S.options||{};
+  const dropdowns={register:opts.registers,persona:opts.personas,emotion:opts.emotions,citation_style:opts.citation_styles};
+  const rows=S.settings.map(f=>{
+    let inp;const cid='st-'+f.name;
+    if(dropdowns[f.name])inp=sel(cid,dropdowns[f.name],String(f.value),{none:'None'});
+    else if(f.type==='bool')inp=sel(cid,[{value:'true',label:'true'},{value:'false',label:'false'}],String(!!f.value));
+    else inp=`<input id="${cid}" value="${esc(f.value)}">`;
+    return `<div class="settingrow"><label>${f.name}</label>${inp}<button class="text" onclick="saveSetting('${f.name}')">set</button></div>`;}).join('');
+  const nodes=Object.entries(S.models.nodes||{}).map(([n,m])=>`<div class="settingrow"><label>${n}</label><input data-n="${n}" value="${esc(m)}"><button class="text" onclick="saveModel('${n}',this)">set</button></div>`).join('');
+  $('#view').innerHTML=head('Setup','Settings')+`<div class="grid2">
+    <div class="section"><div class="lbl">engine settings</div>
+      <div class="muted small" style="margin-bottom:10px">writes config/settings.yaml (same file the TUI's /set edits); clamped server-side. Appearance is a separate browser preference (top-right).</div>${rows}</div>
+    <div class="section"><div class="lbl">model routing</div>
+      <div class="settingrow"><label>default</label><input data-n="default" value="${esc(S.models.default)}"><button class="text" onclick="saveModel('default',this)">set</button></div>${nodes}</div></div>`;
+}
+async function saveSetting(name){
+  try{await api('/api/settings',{field:name,value:ctrlVal('st-'+name)});toast(name+' saved');}catch(e){toast(e.message,1)}}
+async function saveModel(node,btn){const el=btn.parentElement.querySelector('[data-n]');
+  try{await api('/api/models',{node,slug:el.value});toast(node+' → '+el.value);}catch(e){toast(e.message,1)}}
+
+refreshState().then(render);   /* theme change is handled by the custom-select cb (applyWebTheme) */
+setInterval(()=>{if(view==='projects')refreshState().then(()=>{if(view==='projects')render();});},6000);
+</script>
+</body>
+</html>

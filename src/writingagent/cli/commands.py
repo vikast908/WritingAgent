@@ -17,7 +17,17 @@ __all__ = [
 
 
 def cmd_run(args, cfg, settings, uid):
-    orchestrator.run(cfg, uid, _resolve_book(uid, args.book_id),
+    book_id = _resolve_book(uid, args.book_id)
+    console = _console()
+    if console:
+        # Same live dashboard (elapsed/cost/ETA, esc/pause keys) the shell `run` and
+        # one-shot `write` already get - one-shot `run` used to be bare print lines.
+        from ..shell import run_with_dashboard
+        run_with_dashboard(cfg, uid, book_id, console,
+                           force=getattr(args, "force", False),
+                           autonomous=getattr(args, "autonomous", None))
+        return
+    orchestrator.run(cfg, uid, book_id,
                      force=getattr(args, "force", False),
                      autonomous=getattr(args, "autonomous", None))
 
@@ -76,8 +86,8 @@ def cmd_review(args, cfg, settings, uid):
         sys.exit("review needs --chapter and --instruction")
     book_id = _resolve_book(uid, args.book_id)
     orchestrator.record_instruction(uid, book_id, args.chapter, args.instruction)
-    print(f"[OK] Recorded instruction for chapter {args.chapter}. Now: python writingagent.py run "
-          f"--book-id {book_id}")
+    print(f"[OK] Recorded instruction for chapter {args.chapter}. "
+          f"Now: writing-agent run --book-id {book_id}")
 
 
 def cmd_revise(args, cfg, settings, uid):

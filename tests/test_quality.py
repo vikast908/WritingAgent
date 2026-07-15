@@ -92,6 +92,83 @@ def test_voice_reaches_writer(tmp_brain, fake_llm, monkeypatch):
     assert "distinct register" in (seen["voice"] or "")
 
 
+def test_critic_sees_pre_cleaned_draft(tmp_brain, fake_llm, monkeypatch):
+    """The de-tell pass runs BEFORE critique: the critic must receive ship-form prose
+    (no em-dashes / curly quotes), so it never burns a revision round on tells a
+    deterministic pass removes."""
+    seen = {}
+
+    def write_spy(cfg, outline, section, fix_notes=None, **_kw):
+        return "## Section\n\nA claim — with “curly quotes” and an em-dash."
+
+    def crit_spy(cfg, outline, section, prose, **_kw):
+        seen["prose"] = prose
+        return S.Critique(verdict="approve", confidence=0.9, blocking=[], nits=[], insight=5)
+
+    monkeypatch.setattr(nodes, "write_article_section", write_spy)
+    monkeypatch.setattr(nodes, "critique_article_section", crit_spy)
+    cfg, settings = load_config(), load_settings()
+    settings.divergent_drafts = 1
+    aid = orchestrator.start_article(cfg, settings, "u", "topic", _angle(),
+                                     "preclean", 1, 1, autonomous=True)
+    orchestrator.run(cfg, "u", aid, log=_silent)
+    assert "—" not in seen["prose"] and "“" not in seen["prose"]
+    assert "curly quotes" in seen["prose"]        # content survives, typography is cleaned
+
+
+def test_watch_list_merges_across_runs(tmp_brain, fake_llm, monkeypatch):
+    """The watch-list is cross-run memory: a new run's items must MERGE with (not
+    overwrite) the previous runs' - overwriting gave failure patterns a memory
+    lifetime of exactly one project."""
+    from types import SimpleNamespace
+
+    from writingagent.orchestrator import common
+    brain.ensure_user("uwm")
+    brain.write_text(brain.watch_list("uwm"),
+                     "# Avoid list (watch-list)\n\n- old pattern - from a prior book")
+
+    out = SimpleNamespace(skills=[], watch_items=[
+        SimpleNamespace(pattern="new pattern", why="from this run"),
+        SimpleNamespace(pattern="OLD PATTERN", why="dupe, different case")])
+    monkeypatch.setattr(nodes, "learn", lambda *a, **k: out)
+    paths = ArticlePaths("wm1", "uwm")
+    paths.ensure()
+    common._run_learner(load_config(), paths, object(), "", "", log=_silent)
+    text = brain.read_text(brain.watch_list("uwm"))
+    assert "new pattern" in text
+    assert "old pattern" in text.lower()                 # prior run's lesson survives
+    assert text.lower().count("old pattern") == 1        # deduped on the pattern half
+
+
+def test_critique_wire_schema_requires_scores():
+    """The wire JSON Schema must REQUIRE the 1-5 scores (an omitted insight would
+    silently read as a passing 3, making the min_insight gate inert) while the
+    Python defaults keep old eval JSON files loadable."""
+    req = set(S.Critique.model_json_schema().get("required", []))
+    assert {"insight", "clarity", "structure", "evidence"} <= req
+    c = S.Critique(verdict="approve", confidence=0.9, blocking=[], nits=[])
+    assert c.insight == 3                       # old files still load
+
+
+def test_judge_pick_maps_through_shuffled_order(monkeypatch):
+    """Variants are presented to the judge in a shuffled (position-bias-breaking)
+    order; the winner index must map back through that order, not the dict order."""
+    from writingagent.orchestrator import common
+    drafts = {f"v{i}": f"draft body {i}" for i in range(3)}
+    crits = {k: S.Critique(verdict="approve", confidence=0.9, blocking=[], nits=[])
+             for k in drafts}
+    seen = {}
+
+    def fake_rank(cfg, unit_desc, labelled, thesis=None):
+        seen["labelled"] = dict(labelled)
+        return S.VariantRanking(winner=2, ranking=[2, 1, 3], reason="r",
+                                winner_weakness="w")
+    monkeypatch.setattr(nodes, "rank_variants", fake_rank)
+    draft, _crit, _note, _pref = common._pick_variant(
+        None, "unit", None, drafts, crits, None, lambda *a, **k: None)
+    assert draft == seen["labelled"]["2"]       # winner = the draft shown in slot 2
+
+
 # ── Surgical humanizer ────────────────────────────────────────────────────────
 def test_find_tell_sentences_flags_and_skips_code():
     text = ("Plain sentence. We will delve into the details.\n\n"
@@ -228,9 +305,17 @@ def _approve(insight=5):
 # ── #1 Adversarial side-by-side judge (best-of-N tournament) ──────────────────
 def test_pick_variant_uses_side_by_side_judge(monkeypatch):
     """The judge reads the drafts together and can override the critic's scalar pick:
-    here the scalar pick is v0 (insight 5) but the judge chooses variant 2 (v1)."""
-    def fake_rank(cfg, unit_desc, drafts, thesis=None):
-        return S.VariantRanking(winner=2, ranking=[2, 1], reason="sharper, less hedged claim",
+    the scalar pick is v0 (insight 5) but the judge chooses the draft it saw as
+    variant 2. Presentation order is shuffled (position-bias fix), so the fake judge
+    picks BY CONTENT and the assertion maps back through the labels it was shown."""
+    seen = {}
+
+    def fake_rank(cfg, unit_desc, labelled, thesis=None):
+        seen["labelled"] = dict(labelled)
+        winner = next(i for i, body in labelled.items() if "Beta" in body)
+        return S.VariantRanking(winner=int(winner),
+                                ranking=[int(k) for k in labelled],
+                                reason="sharper, less hedged claim",
                                 winner_weakness="ending is thin")
     monkeypatch.setattr(nodes, "rank_variants", fake_rank)
     drafts = {"v0": "## A\n\nAlpha.", "v1": "## B\n\nBeta."}

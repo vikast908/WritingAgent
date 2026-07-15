@@ -42,17 +42,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Context compression. The library is optional (llm.py imports it lazily and
-# degrades gracefully). On Linux/macOS the latest headroom-ai ships prebuilt
-# Rust wheels, so it installs cleanly here. On Windows there is no wheel and the
-# transitive `litellm` has paths long enough to break installs without long-path
-# support - there, install the last pure-Python release without its deps:
-#   pip install --only-binary=:all: --no-deps "headroom-ai==0.10.17"
-# (tiktoken is the only piece we actually need for token counting.)
-headroom = [
-  "tiktoken>=0.5",
-  "headroom-ai>=0.21; sys_platform != 'win32'",
-]
 dev = [
   "pytest>=7.0",
   "ruff>=0.4",
@@ -91,8 +80,9 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 # Ship the gold-corpus (registers.gold_exemplars) and persona (personas.block) exemplars
-# inside the wheel; they are data, not modules, so packages.find alone would drop them.
-writingagent = ["gold/*.md", "personas/*.md"]
+# plus the web dashboard's SPA inside the wheel; they are data, not modules, so
+# packages.find alone would drop them.
+writingagent = ["gold/*.md", "personas/*.md", "webui/static/*.html"]
 
 [tool.ruff]
 line-length = 110

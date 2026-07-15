@@ -5,6 +5,149 @@
 
 ## Current status
 
+- **New (2026-07-15 - review-driven fix sweep + COST MODE + the PROMOTION LAYER):** a three-lens
+  code review (product / AI-engineering / quality) drove one large session: every confirmed defect
+  fixed (no features removed), cost brought under control, and the missing distribution layer built.
+  - **Cost (the user's #1 ask: ≤100k tokens/article, vs the 606k/$0.52 first real run).**
+    - `cost_mode: budget` (plan §19.1; set in settings.yaml, dataclass default `standard` so
+      CI/tests are byte-identical): pins `divergent_drafts=1`, `max_revisions=1`, `table_read=off`,
+      `max_context_chars=12000`, `max_run_tokens=100000` (hard, resumable ceiling) and routes
+      critic/judge/verifier/consolidation/diagram to the flash fallback tier. One seam:
+      `config.apply_cost_mode`, applied at `start_*` (bakes into run-state; also clamps the
+      `max_revisions` arg) and `run()` (routing + session budget; pins logged).
+    - **Structural savings (both modes):** drafts are de-telled BEFORE critique (surgical flash
+      pass when `humanize`, else free `mechanical_clean`) so the pro critic stops burning
+      WRITE→CRITIQUE rounds on regex-fixable tells - which were BLOCKING in the critic prompts and
+      are now demoted to nits (`prompts.py`); `complete_text` raises `max_tokens` on an empty
+      `finish_reason=length` reply instead of re-sending the same doomed budget.
+  - **Promotion layer (plan §24 - "everything to get the right signals" for X/LinkedIn/search).**
+    New `seo.py` + `promote.py`, commands `seo` / `promote` (CLI + shell + `Project.seo_report()` /
+    `Project.promote()`): keyword/hashtag/meta-description pack (`keywords.json`, one flash call,
+    `--keyword` pins the primary), deterministic 0-100 on-page audit -> `seo_report.md` (with
+    craft "feel" metrics appended), repurposing to `promo/` (x-thread · linkedin ·
+    newsletter-teaser · tldr + 5 A/B headlines), and SEO/OG/Twitter meta tags in the HTML export.
+    New flash `seo`/`repurpose` nodes in models.yaml; both in shell `/model` `_NODES`.
+  - **Search providers:** `search_provider: duckduckgo` (default, free) | `firecrawl`
+    (`FIRECRAWL_API_KEY`; also serves deep-research page scraping ahead of Scrapo/stdlib).
+    Graceful degrade everywhere; cache keyed by provider; `.env.example` updated.
+  - **Review-driven engine fixes:**
+    1. **Data-loss:** agentic `_revise` now checks `_process_*`'s return and ROLLS BACK the
+       committed unit when the re-process escalates (book+article; regression test asserts no
+       section is silently dropped from the manuscript).
+    2. **Verifier truncation:** claim verification now reads the FULL fetched page text
+       (`verify_excerpt_chars: 6000`, new tunable) instead of the 1500-char synthesis excerpt -
+       a true claim past the cut no longer blocks as "fabrication".
+    3. **Eval-loop biases:** judge presentation order is shuffled (deterministic seed from draft
+       texts; winner maps back through the order), `temperature.judge`/`verifier` are actually
+       wired (were dead keys reading critic's), and the Critique wire-schema now REQUIRES the 1-5
+       scores (Python defaults stay for old eval files).
+    4. **Learning layer:** watch-list MERGES across runs (was overwritten every run; capped at 40,
+       deduped), evidence-gap rescue research is excluded from the policy trainer's "gathered" arm
+       (it fires only after a failed critique - the confound taught "research hurts"),
+       `_MIN_PER_ARM` 3 -> 10.
+    5. **Nits:** `polish._INLINE_CITE` got the `(?!\()` guard (numeric markdown links survive);
+       table_read reads the [N]-cited body (stripped prose manufactured false distrust);
+       `RUN_CONTROLLER_SYS` defers to the per-step legal-action list instead of advertising
+       rarely-legal actions; `_repair_contradictions` follows the A-016 write ordering (canon
+       before ch(n)) + mechanical-cleans un-humanized repairs.
+  - **UX:** one-shot CLI `main()` maps known failures via `ui.explain_error` (bad key = one clear
+    line, not a traceback) and exits politely on Ctrl-C; one-shot `run` gets the same live
+    dashboard as `write`/shell; `write` SKIPS export when the run paused (no more export failures
+    under a "paused" card); `cmd_review` no longer tells users to run `python writingagent.py`.
+  - **Docs/hygiene:** plan.md status header refreshed (was 2026-06-12, "11 passing", "10 themes");
+    §19.1 + §24 added; README gained the "Promote it" section + cost/promotion bullets;
+    requirements.txt no longer references the nonexistent `requirements.lock.txt`; `reseed.py`
+    fixed (imported the removed `src.book_agent`).
+  - **Verified:** full suite green locally (was 478 collected; now ~500 with the new
+    regression/promotion tests), ruff clean.
+  - **Follow-up 4 (same day - big review-driven batch + Hermes redesign):**
+    - **Removed headroom entirely** (user ask): a real run showed it crushed the DeepSeek
+      prompt-cache (7% hit vs ~36%), *raising* cost on single-turn calls. Deleted the setting,
+      `configure_headroom`/`_compress`/`_HEADROOM_*`, the pyproject extra, requirements block,
+      and doc refs; `_shrink_for_context` keeps only deterministic truncation.
+    - **Budget cap "not working" - diagnosed + fixed.** The RL article (`reinforcement-
+      learning-101-...`) ran uncapped (its run_state had `max_run_tokens: None`; it predated
+      budget mode governing the run) - the mechanism works (the CTO run paused at 105k). Fix:
+      the run budget now SCALES with unit count via `config.budget_for_units` (BUDGET_OVERHEAD
+      + units*`budget_tokens_per_unit`(20k)) so a full article FINISHES instead of pausing
+      mid-way; an explicit `max_run_tokens` is still a hard ceiling that wins. Applied in
+      `book.run()` (reads unit count from state) - covers write/dashboard/resume.
+    - **Images dropped - diagnosed + fixed.** The RL article generated 4 section diagrams but
+      only sec03 landed: images are handed to the writer as *suggestions* ("embed where
+      relevant"), so placement is unreliable. New `common.reconcile_unit_images` (wired into
+      both pipelines pre-commit) deterministically EMBEDS a generated diagram the writer omitted
+      and logs any still-unused suggested image to `rejected.jsonl`. Plus a **Rejected** review
+      surface: dashboard tab shows dropped diagrams (rendered inline), reject records, and the
+      versions/ draft snapshots. Verified live on the RL article (shows its 3 dropped SVGs).
+    - **SEO now part of writing** (was after-the-fact): `seo_keyword` setting threads into the
+      writer/critic via intake up front; `apply_seo` (in the auto-promote tail) rewrites the H1
+      to carry the keyword + fit SERP length and rebuilds the report/keywords.json so the HTML
+      export gets fresh meta. `seo.optimize_manuscript` = one flash title call, guarded.
+    - **Restyle** (`promote.restyle` + `orchestrator.build_restyle`): re-voice a finished piece
+      into a chosen register(style)/persona/emotion on flash, facts/citations preserved (guarded
+      against over-trim), -> `restyled/<combo>.md`. Exposed in the dashboard Export tab.
+    - **Dashboard - Hermes redesign** (`design.md` replaced with the user's Hermes spec + a
+      web-application addendum): flat/borderless, blue-forward (#0000f2/#0053fd + coral), hairline
+      grouping, segmented tabs, System/Light/Dark. Sigurd/Collapse are proprietary/unavailable ->
+      substituted with the ui-sans stack (light caps) for display; no vendored fonts (dropped the
+      old Fraunces/Newsreader). New views/controls: all-6-format export (was HTML-only), style/
+      persona/emotion **None-default dropdowns** (Settings + restyle), Rejected tab, seo_keyword
+      field, option lists via `/api/state`, `/api/rejected`, restyle action. Verified live
+      (Playwright): Studio/Rejected/Export/Settings render, 0 console errors.
+    - Server telemetry gained per-node attribution earlier; all held. Tests added across
+      test_config/test_promotion/test_webui.
+    - **UI/UX audit (same day)** for native/OS-rendered elements the redesign missed: custom
+      themed dropdown (native `<select>` popups can't be styled), global themed scrollbars,
+      styled `confirmModal` replacing native `prompt()` (type-to-confirm delete), number-spinner
+      cleanup, themed loading indicator (no literal "Loading…"), keyboard nav + ARIA on the
+      custom select, a Copy button in the artifact viewer (promo drafts), overflow-x wrap on wide
+      tables, run-badge aria. Remaining limits documented in design.md (no mobile responsive,
+      markdown tables not rendered, native tooltips, no menu-flip/focus-trap, contrast not
+      formally audited). `design.md` now carries the full audit section.
+  - **Follow-up 3 (same day - DASHBOARD REDESIGN, `design.md`):** ran the frontend-design
+    skill over the web UI (it looked generic/inconsistent). Committed to an **"ink & brass
+    editorial"** design language: vendored **Fraunces** (display) + **Newsreader** (body)
+    woff2 under `webui/static/fonts/` (self-hosted, offline/CSP-safe; served via a new
+    guarded `/static/*` route in server.py with a traversal check), system mono for figures.
+    Theme model per user request: **System (auto light/dark) is the default**, plus explicit
+    Manuscript(light) / Ink&brass(dark), plus all 11 TUI palettes re-tuned to ride ONE
+    consistent layout (accents overridden via `color-mix`-derived hairlines; web theme is a
+    localStorage pref, independent of the TUI's `settings.theme`). Every view restyled
+    (masthead + numbered contents nav, kicker→serif-title→brass-rule section heads, ledger
+    metric strips, hairline ledger tables, galley-proof log, marginalia activity timeline)
+    and **inline-SVG charts** added (cumulative-token sparkline, cost-per-agent/-model bars,
+    per-unit score-trend lines) — zero JS deps. Paper-grain overlay, staggered load,
+    reduced-motion honored, brass focus rings. Verified live (Playwright): light + dark +
+    charts render on real data, 0 console errors. Wrote **`design.md`** (the system spec).
+    Tests: test_webui gained a static-font + traversal-guard test (12 total); the SPA
+    assertion updated ("Writing Agent"). package-data ships the woff2.
+  - **Follow-up 2 (same day - WEB DASHBOARD, plan §25):** `writing-agent web` serves a local
+    single-page studio (127.0.0.1, stdlib-only ThreadingHTTPServer + SSE, zero new deps) over the
+    SAME on-disk brain as the TUI: Studio (plan angles → pick → autonomous run with live SSE log +
+    pause), Projects (per-unit scores), **Activity** (agent_trace.jsonl decisions joined with
+    per-unit cost - the agent's internal working), Evals, Artifacts (whitelisted), **Telemetry**
+    (cost per agent-node / per unit / per model / per session run + recent calls), Skills,
+    Settings + model routing (same clamped save paths as /set), all 11 themes. Substrate: telemetry
+    records now carry a `node` field (tagged in ModelConfig.model_for - the one seam every call
+    resolves its model through) and `telemetry.summarize` grew `by_node` + `run_id` filter. One
+    job at a time (409 on a second); a finished web run gets the same auto-promote + export tail
+    as `write`. New: `webui/{server.py,static/index.html}`, `tests/test_webui.py` (11 tests, incl.
+    artifact-traversal guard + a models-file isolation fixture - a /api/models save was clobbering
+    the real models.yaml comments in-test until isolated). Verified live in a browser (Playwright):
+    views render real data, theme switch persists. Gradio `web/app.py` untouched (demo only).
+  - **Follow-up (same day, user-requested):** `auto_promote: true` shipped - `write` now runs
+    seo+promote automatically on a FINISHED run, before export (so the HTML export picks up the
+    fresh keywords.json), skipped when the run pauses; LOCAL artifacts only (report + keywords +
+    promo/ drafts; the manuscript is never modified, nothing is posted anywhere). User's
+    settings.yaml flipped per request: `use_headroom: true` (NOTE: may reduce the DeepSeek
+    prompt-cache hit rate - watch cache % on the next run) and `agentic: true` +
+    `agentic_policy: llm` (controller routes via the `judge` key -> flash under budget mode).
+    `.env` gained an empty `FIRECRAWL_API_KEY=` line for the user to fill.
+  - **Next step:** (1) live budget-mode run to confirm the ≤100k target holds end-to-end (expect
+    ~40 calls; watch the `[budget]` pin log + `usage_summary`, and the cache-hit % now that
+    headroom is on); (2) user republishes the npm launcher after testing (published 0.1.0 is
+    stale vs local 0.3.0 - repo must be public or the tarball URL swapped first).
+
 - **New (2026-06-18 - persona library expanded 14 -> 46):** added **32 new personas** (manner layer,
   plan §23.2) on request to broaden voice coverage "in all genres" / "more famous writers". Held the
   hard rule (`tests/test_compositor.py::test_no_living_author_personas` + the `personas.py` docstring):

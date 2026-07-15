@@ -21,6 +21,8 @@ __all__ = [
     "_DELIVERABLE",
     "cmd_polish",
     "cmd_evidence",
+    "cmd_seo",
+    "cmd_promote",
 ]
 
 _EXPORT_FORMATS = ["pdf", "epub", "html", "docx", "txt", "md"]
@@ -220,3 +222,35 @@ def cmd_evidence(args, cfg, settings, uid):
     out = orchestrator.build_evidence_report(uid, book_id, log=log)
     if out:
         _report_export(console, "evidence", out)
+
+
+def cmd_seo(args, cfg, settings, uid):
+    """Write seo_report.md + keywords.json - the on-page audit (deterministic) plus
+    the keyword/hashtag/meta-description signals pack (one flash call)."""
+    book_id = _resolve_book(uid, args.book_id)
+    console = _console()
+    log = (lambda m: console.print(m)) if console else print
+    out = orchestrator.build_seo_report(cfg, uid, book_id,
+                                        keyword=getattr(args, "keyword", "") or "", log=log)
+    _report_export(console, "seo", out)
+
+
+def cmd_promote(args, cfg, settings, uid):
+    """Write promo/<format>.md - X thread, LinkedIn post, newsletter teaser, TL;DR -
+    plus 5 headline variants, all reusing the SEO keyword pack."""
+    from .. import promote as promote_mod
+    book_id = _resolve_book(uid, args.book_id)
+    console = _console()
+    log = (lambda m: console.print(m)) if console else print
+    raw = (getattr(args, "to", "") or "").strip()
+    formats = [f.strip() for f in raw.split(",") if f.strip()] or None
+    bad = [f for f in (formats or []) if f not in promote_mod.FORMATS]
+    if bad:
+        sys.exit(f"Unknown format(s): {', '.join(bad)}. "
+                 f"Choose from: {', '.join(promote_mod.FORMATS)}")
+    out = orchestrator.build_promo_pack(cfg, uid, book_id, formats=formats,
+                                        keyword=getattr(args, "keyword", "") or "", log=log)
+    if console:
+        console.print(f"  [bold {ui.ON_CLR}]✓ promo pack[/]  [dim]{out}[/]")
+    else:
+        print(f"promo pack -> {out}")

@@ -124,3 +124,28 @@ def test_cmd_write_end_to_end_exports_file(tmp_brain, fake_llm, monkeypatch):
     assert (brain.read_json(paths.run_state) or {}).get("phase") == "done"
     # A finished file was exported.
     assert (paths.root / "manuscript_export.md").exists()
+    # auto_promote (default on): the SEO audit + promo pack ran - LOCAL artifacts only.
+    assert (paths.root / "seo_report.md").exists()
+    assert (paths.root / "keywords.json").exists()
+    assert (paths.root / "promo" / "x-thread.md").exists()
+    assert (paths.root / "promo" / "linkedin.md").exists()
+
+
+def test_cmd_write_skips_export_when_run_pauses(tmp_brain, fake_llm, monkeypatch):
+    """A paused/escalated run must NOT fall through to export: shipping a partial
+    manuscript under the paused card was the old behavior."""
+    cfg, settings = load_config(), load_settings()
+    settings.mode = "article"
+    monkeypatch.setattr(cli.interview, "_console", lambda: None)
+    answers = iter(["", "", "", "md"])
+    monkeypatch.setattr("builtins.input", lambda *_a: next(answers, ""))
+    monkeypatch.setattr(orchestrator, "status",
+                        lambda uid, pid: {"phase": "sections", "pending_review": True})
+    exported = []
+    monkeypatch.setattr(cli.interview, "_run_exports",
+                        lambda *a, **k: exported.append(a) or 0)
+
+    args = SimpleNamespace(abstract="how DNS resolution works", chapters=1,
+                           max_revisions=1, book_id=None, no_humanize=False, user="u")
+    cli.cmd_write(args, cfg, settings, "u")
+    assert not exported                      # paused -> no export attempt

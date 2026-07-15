@@ -20,8 +20,10 @@ from .. import brain
 from . import trace
 
 # Enough labelled units in EACH arm before we trust the comparison (small-sample guard,
-# same spirit as the skills efficacy gate's MIN_DUELS).
-_MIN_PER_ARM = 3
+# same spirit as the skills efficacy gate's MIN_DUELS). Two noisy means at n=3 flip on
+# noise; 10 per arm is the floor at which the comparison starts to mean anything.
+# Tunable; on thin data the policy correctly defers to the heuristic.
+_MIN_PER_ARM = 10
 
 
 def _policy_path(uid: str):
@@ -52,7 +54,13 @@ def _collect_units(uid: str) -> dict:
             d = units.setdefault((pid, unit),
                                  {"ctx": ctx, "gathered": False, "first_pass": None, "insight": None})
             if r.get("action") in ("research", "read_canon"):
-                d["gathered"] = True
+                # Confound guard: the mid-loop RESCUE research (reason "evidence gap")
+                # only fires AFTER a failed critique, when first_pass is already False
+                # by construction - counting it as "gathered" poisons that arm with
+                # guaranteed failures and the policy would "learn" that research hurts.
+                # Only pre-draft gathering (the controller's actual choice) counts.
+                if r.get("reason") != "evidence gap":
+                    d["gathered"] = True
             if r.get("scope") == "unit-outcome" and r.get("first_pass") is not None:
                 d["first_pass"] = bool(r.get("first_pass"))
                 d["insight"] = r.get("insight")

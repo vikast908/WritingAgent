@@ -43,6 +43,7 @@ from .common import (
     _svg_diagram_figure,
     _verify_claims_gate,
     _with_intake,
+    reconcile_unit_images,
 )
 from .export import _unique_sources, build_evidence_report
 
@@ -69,6 +70,19 @@ def start_article(
     autonomous: bool = False, humanize: bool | None = None,
     intake: str | None = None, author: str | None = None,
 ) -> str:
+    from ..config import apply_cost_mode
+    cfg, settings, _cost = apply_cost_mode(cfg, settings)   # budget mode pins lean knobs
+    if getattr(settings, "cost_mode", "standard") == "budget":
+        max_revisions = min(max_revisions, settings.max_revisions)  # the arg bakes into state
+    # SEO from the start (plan §24.1): thread a target keyword into the writer + critic via the
+    # intake, so the piece is written FOR it (title/opening/headings) instead of scored against
+    # it after the fact. Post-validation apply_seo then locks in the title/meta.
+    kw = (getattr(settings, "seo_keyword", "") or "").strip()
+    if kw:
+        seo_line = (f"SEO: the piece targets the primary search keyword \"{kw}\". Use it naturally "
+                    "in the title, the opening paragraph, and at least one subheading; weave close "
+                    "variants through the body. Do not keyword-stuff.")
+        intake = (intake.rstrip() + "\n\n" + seo_line) if intake else seo_line
     brain.ensure_user(uid)
     _record_author(uid, author)
     # Register/field (plan §22): inferred from the editorial angle unless pinned in settings.
@@ -298,11 +312,26 @@ def _article_run_ops(cfg, paths: ArticlePaths, outline, prefetch, pool, log, ask
         brain.write_text(paths.instruction_of(n),
                          f"Strengthen the {dim} of this section - it scored lowest there. "
                          "Keep everything that already works; change only what lifts it.")
-        brain.write_text(paths.section_draft(n), brain.read_text(paths.section(n)) or "")
+        committed_text = brain.read_text(paths.section(n)) or ""
+        brain.write_text(paths.section_draft(n), committed_text)
         paths.section(n).unlink(missing_ok=True)              # clear the resume guard -> re-draft
-        _process_article_section(cfg, paths, outline, state, n, log, ask=ask)
+        result = None
+        try:
+            result = _process_article_section(cfg, paths, outline, state, n, log, ask=ask)
+        finally:
+            # A revise must never LOSE a committed section: an escalate (or raise) wrote
+            # only section_draft(n) while state still counts n committed - restore.
+            if result != "commit" and not paths.section(n).exists():
+                brain.write_text(paths.section(n), committed_text)
         paths.section_draft(n).unlink(missing_ok=True)
         paths.instruction_of(n).unlink(missing_ok=True)
+        if result != "commit":
+            state["revisions_done"] = state.get("revisions_done", 0) + 1
+            brain.write_json(paths.run_state, state)
+            agentic.trace.append(paths, {"scope": "run-result", "action": "revise",
+                                         "unit": f"sec{n:02d}", "dim": dim, "result": "rolled_back"})
+            log(f"   [agentic] revise of section {n} did not approve - kept the committed version")
+            return "continue"
         for key in ("scores", "insights"):                    # keep per-unit arrays aligned
             arr = state.get(key) or []
             if len(arr) > state.get("committed", 0):
@@ -389,8 +418,15 @@ def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
             docs = _deep_docs(
                 cfg, f"{outline.title} ({outline.angle})",
                 f"{section.heading}. {section.purpose}", base_query, log=log)
-            source_text = dr.format_documents(docs) or ""
-            brief = nodes.deep_research_article(cfg, outline, section, source_text or None)
+            # Two strengths from the same fetch: a short excerpt for SYNTHESIS (token
+            # cost) and the full fetched text as the VERIFICATION ground truth - the
+            # claim gate BLOCKS on "unsupported", so it must read the whole page, not
+            # the synthesis cut (a true claim past char 1500 is not a fabrication).
+            synth_text = dr.format_documents(docs) or ""
+            vchars = int(state.get("verify_excerpt_chars") or 0)
+            source_text = dr.format_documents(
+                docs, excerpt_chars=vchars if vchars > 0 else 10**9) or ""
+            brief = nodes.deep_research_article(cfg, outline, section, synth_text or None)
             # Real fetched sources are more reliable than LLM-copied URLs; prefer them.
             sources = [S.Source(title=d.title, url=d.url) for d in docs] or list(brief.sources)
             prefix = _research_brief_prefix(brief.facts, brief.style_cues, sources=sources)
@@ -526,12 +562,18 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
             ln = _length_note(0, max(target // 3, 250)) if target else None
         else:
             ln = _length_note(0, target)
-        return nodes.write_article_section(
+        draft_ = nodes.write_article_section(
             cfg, outline, section, fix_notes=notes, context=full_context,
             skills=skill_bodies if skills is None else skills, images=images, base_draft=base,
             requirements=requirements, thesis=thesis_md, voice=voice,
             length_note=ln, temperature=temperature, register=register,
             tools=_tools, tool_runner=_tool_runner)
+        # De-tell BEFORE critique (see book.py:_write): kills the dominant class of
+        # pro-tier revision churn and lets the critic review ship-form prose. The
+        # commit-time humanize then finds nothing left to rewrite.
+        if state.get("humanize"):
+            return humanizer.humanize(cfg, draft_, register)
+        return humanizer.mechanical_clean(draft_, registers.get(register).allow_em_dash)
 
     def _critique(d):
         return nodes.critique_article_section(
@@ -666,6 +708,9 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
         if state.get("craft_passes", True):   # surgical show-don't-tell / de-passive (plan §22)
             from .. import surgery
             draft = surgery.apply(cfg, draft, register)
+        # Guarantee a generated diagram appears (the writer places images unreliably);
+        # log any suggested image it skipped to rejected.jsonl for review (plan §26).
+        draft = reconcile_unit_images(paths, n, f"sec{n:02d}", draft, images, log)
         _commit_section(cfg, paths, section, n, draft, skill_names, sources, first_pass,
                         log, humanize=bool(state.get("humanize")), register=register)
         paths.section_draft(n).unlink(missing_ok=True)
@@ -800,6 +845,10 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
             "(/set use_researcher true) for grounded citations.")
     # Strip the now-orphaned inline [N] markers from the prose (sourcing lives in the
     # end list). Done AFTER scoring, which needs the markers to weight influence.
+    # The [N]-cited form is kept for the table read below: the cold reader judges
+    # sourcing, and handing it the stripped prose manufactured a false "nothing is
+    # cited" distrust signal that table_read_revise then acted on.
+    body_cited = body
     if state.get("strip_inline_citations", True):
         body = polish.strip_inline_citations(body)
 
@@ -838,7 +887,7 @@ def _produce_article(cfg, paths: ArticlePaths, outline, state, *, log) -> None:
     if state.get("table_read") and body.strip():
         log("   table read (skeptical reader pass)...")
         try:
-            report = nodes.table_read(cfg, outline, body)
+            report = nodes.table_read(cfg, outline, body_cited)
             brain.write_text(paths.root / "table_read.md", report)
             log("   [table-read] report -> table_read.md "
                 "(act on it with: revise --chapter N --instruction \"...\")")

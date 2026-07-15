@@ -33,6 +33,14 @@ class ModelConfig:
         self._fallback = data.get("fallback", "")
 
     def model_for(self, node: str) -> str:
+        # Every call site resolves its model via model_for(<node>) immediately before
+        # the LLM call, so this is the one seam that knows which AGENT a call belongs
+        # to - tag the thread so telemetry can attribute cost per node (web dashboard).
+        try:
+            from . import llm
+            llm.set_node(node)
+        except Exception:  # noqa: BLE001 - attribution must never break routing
+            pass
         return self._nodes.get(node, self._default)
 
     def temperature_for(self, node: str):
@@ -100,6 +108,9 @@ class Settings:
     max_revisions: int = 2
     consolidate_every: int = 5
     use_researcher: bool = True              # web grounding per unit - off means citations are unverifiable
+    search_provider: str = "duckduckgo"      # web search backend: duckduckgo (free, default) | firecrawl
+    #                                          (needs FIRECRAWL_API_KEY; also switches deep-research page
+    #                                          scraping to Firecrawl). Missing key degrades to duckduckgo.
     deep_research: bool = False               # multi-source fetch+synthesize (needs use_researcher; plan §15)
     divergent_drafts: int = 2                # first-attempt drafts at varied temps; critic picks best (1 = off)
     divergent_skeletons: bool = False        # draft the N variants SHORT (skeleton), judge, expand only the winner
@@ -117,7 +128,18 @@ class Settings:
     watch_blocking: bool = True              # watch-list violations: True = block only CLEAR, CONCRETE ones
     #                                          (borderline/stylistic -> nit); False = fully advisory (nit only).
     verify_claims: bool = True               # check each [N]-cited claim against its source; unsupported = blocking
+    verify_excerpt_chars: int = 6000         # per-source chars the claim VERIFIER reads (the full deep-research
+    #                                          fetch). Must cover the whole fetched page: verifying against the
+    #                                          shorter synthesis excerpt flags true claims whose support sits
+    #                                          past the cut as fabrication - and that BLOCKS. 0 = no cap.
     table_read: bool = True                  # whole-article cold read by a skeptical reader (report only)
+    seo_keyword: str = ""                    # primary keyword to target FROM THE START: threaded into the
+    #                                          writer/critic so the piece is written for it (title, opening,
+    #                                          headings), and applied post-validation. "" = infer after.
+    auto_promote: bool = True                # after a finished `write`: apply SEO + run the audit + promo pack
+    #                                          automatically (plan §24). LOCAL artifacts only - a report,
+    #                                          keywords.json, and promo/*.md drafts; it never modifies the
+    #                                          manuscript and never posts anything anywhere.
     table_read_revise: bool = False          # autonomous: apply the reader's single top fix as one bounded revision
     escalate_below_confidence: float = 0.5   # critic confidence below this -> escalate (plan §7)
     escalate_on_contradiction: bool = True   # consolidation contradictions -> review (plan §9)
@@ -130,11 +152,17 @@ class Settings:
     use_images: bool = True                  # fetch Wikimedia Commons images (non-fiction/illustrated)
     diagram_engine: str = "auto"             # SVG layout: auto (D2+ELK if d2 is installed, else builtin) | d2 | builtin
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
-    use_headroom: bool = False              # context compression via headroom-ai. Default OFF: our calls are
-    #                                         single-turn (system+user), where headroom saves ~nothing, and it
-    #                                         can perturb the system prefix and defeat provider prompt-caching.
     request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
-    max_run_tokens: int = 0                 # pause a run once its total tokens exceed this (0 = unlimited)
+    max_run_tokens: int = 0                 # HARD ceiling: pause a run once total tokens exceed this (0 =
+    #                                         unlimited / let budget mode auto-scale). An explicit value wins.
+    budget_tokens_per_unit: int = 20000     # budget mode: session budget scales as ~this * unit_count + overhead
+    #                                         so a full article FINISHES rather than pausing mid-way (tunable)
+    cost_mode: str = "standard"             # "standard" = current behavior | "budget" = pin the spend-heavy
+    #                                         knobs lean (1 draft, 1 revision, no table read, 12k context,
+    #                                         100k hard token cap) and route the judgment nodes (critic/judge/
+    #                                         verifier/consolidation/diagram) to the flash tier - targets
+    #                                         <=100k tokens per article. Every pin is an existing tunable;
+    #                                         apply_cost_mode() is the single place the profile lives.
     max_context_chars: int = 24000          # budget for the assembled canon+summaries+excerpts block
     #                                         (drops lowest-priority parts first); guards against blowing
     #                                         the model window on long books. 0 = unbounded.
@@ -175,6 +203,70 @@ class Settings:
     #                                       provider and costs extra round-trips; agentic runs only.
     agentic_critique_panel: bool = False  # diverse-lens majority critique before approving a section
     #                                       (plan §21.10; articles; agentic runs only)
+
+
+# ── Cost modes (plan §19) ─────────────────────────────────────────────────────
+# The budget profile's pins. All tunable constants live here, not scattered in the
+# orchestrator; "standard" mode never touches any of them.
+BUDGET_FLASH_NODES = ("critic", "judge", "verifier", "consolidation", "diagram")
+BUDGET_MAX_CONTEXT_CHARS = 12_000
+# The run token budget scales with unit count (so a full article FINISHES instead of
+# pausing mid-way, the "cap not working" complaint), unless the user pins an explicit
+# max_run_tokens (a hard ceiling that always wins). ~20k/unit + fixed overhead for the
+# thesis/outline/produce/seo/promote/learn tail. Both tunable.
+BUDGET_OVERHEAD_TOKENS = 25_000
+
+
+def budget_for_units(settings: Settings, units: int) -> int:
+    """The session token budget for a run (0 = unlimited).
+
+    An explicit `max_run_tokens` (>0) is a HARD ceiling and always wins. Otherwise
+    budget mode auto-scales by unit count so the whole piece completes; standard mode
+    with no cap is unlimited (historical behavior)."""
+    if getattr(settings, "max_run_tokens", 0) and settings.max_run_tokens > 0:
+        return settings.max_run_tokens
+    if getattr(settings, "cost_mode", "standard") == "budget":
+        per = getattr(settings, "budget_tokens_per_unit", 20_000) or 20_000
+        return BUDGET_OVERHEAD_TOKENS + max(1, int(units or 1)) * per
+    return 0
+
+
+def apply_cost_mode(cfg: ModelConfig, settings: Settings):
+    """Apply the cost profile: returns (cfg, settings, notes).
+
+    `budget` returns ADJUSTED COPIES (the caller's objects are untouched) with the
+    spend-heavy knobs pinned lean and the judgment nodes routed to the global fallback
+    (flash) tier; `notes` lists what was pinned, for the run log. Any other mode
+    returns the inputs unchanged. The profile only ever *tightens* a knob - a user
+    value already leaner than the pin is kept."""
+    if getattr(settings, "cost_mode", "standard") != "budget":
+        return cfg, settings, []
+    notes: list[str] = []
+    s = dataclasses.replace(settings)
+    if s.divergent_drafts > 1:
+        s.divergent_drafts = 1
+        notes.append("divergent_drafts=1")
+    if s.max_revisions > 1:
+        s.max_revisions = 1
+        notes.append("max_revisions=1")
+    if s.table_read or s.table_read_revise:
+        s.table_read = False
+        s.table_read_revise = False
+        notes.append("table_read=off")
+    if s.max_context_chars == 0 or s.max_context_chars > BUDGET_MAX_CONTEXT_CHARS:
+        s.max_context_chars = BUDGET_MAX_CONTEXT_CHARS
+        notes.append(f"max_context_chars={BUDGET_MAX_CONTEXT_CHARS}")
+    # NOTE: the run token budget is no longer pinned here to a flat value - it is computed
+    # per-run by budget_for_units() (scales with unit count) so a full piece finishes.
+    flash = cfg.fallback
+    if flash:
+        cfg2 = ModelConfig(cfg.to_dict())
+        for node in BUDGET_FLASH_NODES:
+            if cfg.model_for(node) != flash:
+                cfg2.set_node(node, flash)
+                notes.append(f"{node}->{flash.rsplit('/', 1)[-1]}")
+        cfg = cfg2
+    return cfg, s, notes
 
 
 def load_config() -> ModelConfig:
@@ -222,10 +314,16 @@ def _clamp_settings(s: Settings) -> Settings:
     s.escalate_below_confidence = min(1.0, max(0.0, s.escalate_below_confidence))
     s.request_timeout = s.request_timeout if s.request_timeout > 0 else 60.0
     s.max_run_tokens = max(0, s.max_run_tokens)              # 0 = unlimited
+    s.budget_tokens_per_unit = max(1000, s.budget_tokens_per_unit)  # a sane per-unit floor
+    s.verify_excerpt_chars = max(0, s.verify_excerpt_chars)  # 0 = no cap
     s.max_context_chars = max(0, s.max_context_chars)        # 0 = unbounded
     s.agentic_max_unit_steps = max(0, s.agentic_max_unit_steps)
     if s.mode not in ("book", "article"):
         s.mode = "article"
+    if s.cost_mode not in ("standard", "budget"):
+        s.cost_mode = "standard"
+    if s.search_provider not in ("duckduckgo", "firecrawl"):
+        s.search_provider = "duckduckgo"
     if s.agentic_policy not in ("default", "llm", "trace"):
         s.agentic_policy = "default"
     # Register / field / citation-style: validate against the known sets; an unknown value

@@ -66,17 +66,24 @@ def load_records(project: str | None = None) -> list[dict]:
     return out
 
 
-def summarize(project: str | None = None) -> dict:
+def summarize(project: str | None = None, run_id: str | None = None) -> dict:
     """Aggregate the call log for the /dashboard view.
 
     Returns: {totals: {calls, tokens, cost, errors, avg_latency_ms},
               by_model: [(model, calls, tokens, cost)],
+              by_node:  [(node/agent, calls, tokens, cost)],
               by_unit:  [(unit, calls, tokens, cost)]   (only when project given),
               runs:     [(run_id, project, calls, tokens, cost)]  (most recent last)}
+
+    `run_id` filters to one session run (per-session view for the web dashboard).
     """
     recs = load_records(project)
-    totals = {"calls": 0, "tokens": 0, "cost": 0.0, "errors": 0, "avg_latency_ms": 0}
+    if run_id:
+        recs = [r for r in recs if r.get("run_id") == run_id]
+    totals = {"calls": 0, "tokens": 0, "cost": 0.0, "errors": 0, "avg_latency_ms": 0,
+              "cached_tokens": 0}
     by_model: dict[str, list] = {}
+    by_node: dict[str, list] = {}
     by_unit: dict[str, list] = {}
     runs: dict[str, list] = {}
     lat_sum = 0
@@ -87,11 +94,16 @@ def summarize(project: str | None = None) -> dict:
         totals["tokens"] += toks
         totals["cost"] += cost
         totals["errors"] += 1 if r.get("error") else 0
+        totals["cached_tokens"] += r.get("cached_tokens", 0) or 0
         lat_sum += r.get("latency_ms", 0) or 0
         m = by_model.setdefault(r.get("model") or "?", [0, 0, 0.0])
         m[0] += 1
         m[1] += toks
         m[2] += cost
+        n = by_node.setdefault(r.get("node") or r.get("kind") or "?", [0, 0, 0.0])
+        n[0] += 1
+        n[1] += toks
+        n[2] += cost
         u = by_unit.setdefault(r.get("unit") or "-", [0, 0, 0.0])
         u[0] += 1
         u[1] += toks
@@ -106,6 +118,7 @@ def summarize(project: str | None = None) -> dict:
         "totals": totals,
         "by_model": sorted(((k, *v) for k, v in by_model.items()),
                            key=lambda x: -x[2]),
+        "by_node": sorted(((k, *v) for k, v in by_node.items()), key=lambda x: -x[2]),
         "by_unit": sorted(((k, *v) for k, v in by_unit.items()), key=lambda x: x[0]),
         "runs": [(k, *v) for k, v in runs.items()],
     }

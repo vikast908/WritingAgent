@@ -385,8 +385,33 @@ li { margin-bottom: 0.4em; }
 """
 
 
-def markdown_to_html(md_text: str, out_path, title: str = "Article", base_dir=None) -> Path:
-    """Render Markdown to a self-contained HTML file with embedded CSS + inlined images."""
+def _head_meta(title: str, meta: dict | None) -> str:
+    """SEO/social head tags (description, keywords, Open Graph, Twitter card) from the
+    signals pack (plan §24). None/empty -> no extra tags, output identical to before."""
+    if not meta:
+        return ""
+    parts: list[str] = []
+    desc = _esc((meta.get("description") or "").strip()[:300])
+    if desc:
+        parts.append(f'<meta name="description" content="{desc}">')
+    kws = _esc(", ".join(k for k in (meta.get("keywords") or []) if k)[:255])
+    if kws:
+        parts.append(f'<meta name="keywords" content="{kws}">')
+    parts.append('<meta property="og:type" content="article">')
+    parts.append(f'<meta property="og:title" content="{_esc(title)}">')
+    if desc:
+        parts.append(f'<meta property="og:description" content="{desc}">')
+    parts.append('<meta name="twitter:card" content="summary">')
+    parts.append(f'<meta name="twitter:title" content="{_esc(title)}">')
+    if desc:
+        parts.append(f'<meta name="twitter:description" content="{desc}">')
+    return "".join(parts)
+
+
+def markdown_to_html(md_text: str, out_path, title: str = "Article", base_dir=None,
+                     meta: dict | None = None) -> Path:
+    """Render Markdown to a self-contained HTML file with embedded CSS + inlined images.
+    `meta` (optional): {"description": str, "keywords": [str]} -> SEO/OG/Twitter tags."""
     import markdown
 
     md_text = _preprocess(md_text, diagrams=True, base_dir=Path(base_dir) if base_dir else None)
@@ -403,6 +428,7 @@ def markdown_to_html(md_text: str, out_path, title: str = "Article", base_dir=No
         f'<html lang="en"><head><meta charset="utf-8">'
         f'<meta name="viewport" content="width=device-width,initial-scale=1">'
         f'<title>{_esc(title)}</title>'
+        f"{_head_meta(title, meta)}"
         f"<style>{_HTML_CSS}</style>"
         f"</head><body>{html_body}</body></html>"
     )

@@ -39,14 +39,13 @@ CONTROLLER_SYS = (
 RUN_CONTROLLER_SYS = (
     "You are the director of an autonomous writing agent producing a whole article or book. "
     "At each step you choose the single next MACRO-action over the whole piece - you do NOT "
-    "write prose. The actions: 'draft' writes the next un-written chapter/section (its own "
-    "write->critique->commit episode); 'consolidate' audits the book so far for continuity "
-    "contradictions; 'repair' rewrites chapters an open contradiction touches; 'table_read' "
-    "reads the assembled piece cold as a skeptical reader; 'produce' assembles the final "
-    "manuscript; 'learn' distills reusable craft skills; 'done' finishes. Drive toward a "
-    "finished, coherent, well-evidenced piece: draft the remaining units, audit continuity on "
-    "a long book before it drifts, and only produce once everything is written, then learn, "
-    "then finish. Choose only from the legal actions offered. Return one action + a short reason."
+    "write prose. The step's view lists the LEGAL actions for this exact moment, each with a "
+    "one-line description; you MUST pick from that list (any other pick is discarded and the "
+    "default runs, wasting this call). Drive toward a finished, coherent, well-evidenced "
+    "piece: draft the remaining units; take an optional structural move (reoutline, revise, "
+    "repair, consolidate) only when the view shows a concrete problem it would fix - "
+    "optional moves cost tokens; produce once everything is written, then learn, then "
+    "finish. Return one action + a short reason."
 )
 
 # ── Untrusted-content boundary (prompt-injection defense) ─────────────────────
@@ -120,10 +119,12 @@ CRITIC_SYS = (
     "confidence in this judgment. For non-fiction or technical books, also check formatting: "
     "heading hierarchy, fenced and language-tagged code blocks, and numbered "
     "figures/tables/listings with captions.\n\n"
-    "Also flag as BLOCKING: banned verbs (delve, leverage, utilize, foster, bolster, "
-    "underscore, streamline, endeavour), banned transitions (furthermore, moreover, "
-    "'that being said', 'it is worth noting'), em-dashes, fabricated statistics or "
-    "attributions, and sentences that are so generic they could appear on any site unchanged.\n\n"
+    "Also flag as BLOCKING: fabricated statistics or attributions, and sentences that are "
+    "so generic they could appear on any site unchanged. Surface tells - banned verbs "
+    "(delve, leverage, utilize, foster, bolster, underscore, streamline, endeavour), banned "
+    "transitions (furthermore, moreover, 'that being said', 'it is worth noting'), and "
+    "em-dashes - are removed by a deterministic pass before you see the draft; report any "
+    "stragglers as nits, never as blocking.\n\n"
     "CITATION QUALITY (where the chapter cites sources): a [N] should specifically support the "
     "sentence it sits on. Flag as BLOCKING only a decorative citation (the cited source does not "
     "back the sentence). Raise as a NIT citation padding (stacking sources where one would do), a "
@@ -393,9 +394,10 @@ ARTICLE_CRITIC_SYS = (
     "code quality (correct syntax, language-tagged fenced blocks, no placeholder pseudocode "
     "where real code is expected), heading hierarchy, and flow continuity from the prior "
     "section. Report every issue found. Classify as BLOCKING (factual error, missing required "
-    "citation, broken/fake code, critically unclear passage, plan violation, or flagrant AI "
-    "slop - banned verbs, em-dashes, fabricated stats, generic filler sentences) or nit "
-    "(minor polish). verdict='approve' only if zero blocking issues. "
+    "citation, broken/fake code, critically unclear passage, plan violation, fabricated "
+    "stats, or generic filler sentences) or nit (minor polish - including surface AI tells "
+    "like banned verbs or em-dashes, which a deterministic pass removes before you see the "
+    "draft; stragglers are nits, never blocking). verdict='approve' only if zero blocking issues. "
     "'confidence' is your 0.0–1.0 certainty.\n\n"
     "If a LEARNED WATCH-LIST is provided, treat any of its patterns appearing in the draft "
     "as BLOCKING. If a word-count line is provided and the draft misses the target by more "
@@ -585,3 +587,89 @@ def critic_sys(register=None) -> str:
 
 def article_critic_sys(register=None) -> str:
     return ARTICLE_CRITIC_SYS + _ex.critic_anchors() + _critic_register_note(register)
+
+
+# ── Promotion layer (plan §24): SEO signals + platform repurposing ─────────────
+SEO_KEYWORDS_SYS = (
+    "You are an SEO editor naming the search and social signals for a finished long-form "
+    "piece. From the title, thesis, and opening, produce: 'primary' - the ONE search phrase "
+    "(2-5 words) a person who needs this piece would actually type (specific beats broad; "
+    "never a single generic word); 'secondary' - 3-5 supporting phrases (variants, "
+    "subtopics, question forms); 'meta_description' - 120-160 characters, containing the "
+    "primary phrase once, stating the piece's concrete payoff (no hype words, no 'in this "
+    "article'); 'hashtags_x' - 2-3 tags for X, short and community-real (no spaces); "
+    "'hashtags_linkedin' - 3-5 tags for LinkedIn, professional and topical. "
+    "If a REQUIRED primary keyword is given, use it verbatim as 'primary'."
+)
+
+REPURPOSE_X_SYS = (
+    "You turn a finished article into an X (Twitter) thread. 6-10 tweets, EACH under 270 "
+    "characters. Tweet 1 is the hook: the most surprising specific claim or number from the "
+    "piece, stated plainly - no 'a thread on...', no throat-clearing, no emoji spam. Each "
+    "following tweet carries ONE idea with its concrete specific (a number, a name, an "
+    "example) pulled from the article - never invent facts that are not in it. Short "
+    "sentences. Line breaks inside a tweet are fine. The second-to-last tweet states the "
+    "thesis as the takeaway. The last tweet says where the full piece is - use the literal "
+    "placeholder {LINK} - and appends the provided X hashtags. Number tweets '1/', '2/', ... "
+    "Output ONLY the tweets, one per block, separated by a blank line."
+)
+
+REPURPOSE_LINKEDIN_SYS = (
+    "You turn a finished article into ONE LinkedIn post, 150-250 words. First line is the "
+    "hook (a sharp specific claim or number from the piece - it must survive the 'see "
+    "more' fold alone). Then short paragraphs of 1-2 sentences with generous line breaks; "
+    "carry 2-3 concrete specifics from the article - never invent facts. State the thesis "
+    "plainly near the end, then one line inviting a specific disagreement or experience in "
+    "the comments (not 'thoughts?'). Close with 'Full piece: {LINK}' and the provided "
+    "LinkedIn hashtags on the final line. No emoji walls, no 'I'm excited to share', no "
+    "engagement-bait cliches. Output ONLY the post."
+)
+
+REPURPOSE_NEWSLETTER_SYS = (
+    "You turn a finished article into a newsletter teaser. Output exactly two parts: "
+    "'Subject: <line>' - under 55 characters, specific and curiosity-carrying, no clickbait "
+    "cliches - then a blank line, then a 100-150 word teaser: open on the piece's sharpest "
+    "specific, state what the reader will be able to do or argue after reading, end with "
+    "'Read it here: {LINK}'. Facts must come from the article - never invent. Plain, warm, "
+    "first-person-plural tone. Output ONLY the subject and teaser."
+)
+
+REPURPOSE_TLDR_SYS = (
+    "You compress a finished article into a TL;DR. Exactly 5 bullets, each one sentence, "
+    "each carrying a concrete specific (number, name, example) from the piece - never "
+    "invent. Bullet 1 is the thesis stated as a claim. Order the rest by how much they'd "
+    "surprise a knowledgeable reader. No preamble, no closing line. Output ONLY the bullets."
+)
+
+RESTYLE_SYS = (
+    "You re-voice a FINISHED article into a target style/persona/emotion WITHOUT changing "
+    "its facts or structure. Rewrite the prose so its diction, rhythm, and stance match the "
+    "voice-to-match and any persona/emotion given. PRESERVE EXACTLY: every '# '/'## '/'### ' "
+    "heading, every '---' separator, every inline [N] citation marker, every ![...](...) image "
+    "embed, every number/statistic/quote/proper-noun, and the entire References section verbatim. "
+    "Do NOT add or remove claims, sources, or sections; do NOT invent facts. Keep roughly the "
+    "same length. Output ONLY the rewritten article in Markdown, starting at the '# ' title."
+)
+
+
+def restyle_sys(register=None) -> str:
+    return RESTYLE_SYS + _critic_register_note(register) if register else RESTYLE_SYS
+
+
+SEO_TITLE_SYS = (
+    "You rewrite an article's title for search. Produce 5 candidate titles that EACH contain "
+    "the given primary keyword (or a very close variant) and read as a real, compelling "
+    "article title - not keyword soup. Prefer 40-60 characters. Keep the piece's actual "
+    "subject and any concrete number the current title carries. No clickbait cliches, no ALL "
+    "CAPS, no trailing punctuation. Return them as the headlines list, best first."
+)
+
+HEADLINES_SYS = (
+    "You write alternative headlines for a finished article, for A/B posting. Produce "
+    "exactly 5, one each: (1) curiosity gap - specific enough to be credible; (2) how-to / "
+    "outcome - what the reader gets; (3) contrarian - the piece's thesis stated against the "
+    "default view; (4) data-led - lead with the piece's strongest number; (5) direct - the "
+    "plainest true statement of the piece. 45-65 characters each where possible. Use only "
+    "claims the thesis supports - never invent. No clickbait cliches ('you won't believe', "
+    "'this one trick'), no ALL CAPS."
+)

@@ -20,20 +20,20 @@ import re
 # A theme changes EVERYTHING: the full palette, the wordmark's figlet FACE
 # (FONT/WORDS/SHEAR), the gradient STOPS, the body-text tint, and the fleuron.
 # Each theme owns a DIFFERENT hue family so they're distinguishable at a glance:
-# editorial=blue-ink · kazama=flame · supabase=emerald · violet-bloom=purple ·
+# editorial=ink & brass · kazama=flame · supabase=emerald · violet-bloom=purple ·
 # t3-chat=pink · starry-night=indigo+gold · vercel=monochrome · fallout=CRT
 # amber · mimi=rose pastels · astrovista=mars rust.
-GOLD = "#6f9ed9"     # primary accent - commands, headings, prompt (blue ink)
-GOLD_HI = "#a8c8ec"  # lit accent - highlights
-INK = "#c9a86a"      # brass - tagline / secondary values
-PARCH = "#dcd7c9"    # soft parchment - body text
+GOLD = "#c9a227"     # primary accent - commands, headings, prompt (gold)
+GOLD_HI = "#e2c65a"  # lit accent - highlights (lit gold)
+INK = "#b0812f"      # brass - tagline / secondary values
+PARCH = "#e6ddc9"    # warm parchment - body text
 DIM = "grey42"       # secondary
-RULE = "#4a5568"     # slate - rules / borders
-ERR = "#e06c75"      # clear red - errors (semantic)
-ON_CLR = "#6aaa5c"   # green - feature on / done (semantic)
+RULE = "#5c4a2e"     # dark brass - rules / borders
+ERR = "#c23b2b"      # manuscript red - errors (semantic)
+ON_CLR = "#5aa07f"   # sage green - feature on / done (semantic)
 OFF_CLR = "grey50"   # feature off
 FLEURON = "❧"
-STOPS = ("#3a6ea5", "#6f9ed9", "#a8c8ec")   # wordmark gradient - deep → pale ink
+STOPS = ("#8f2a18", "#bf5a2e", "#d9b84a")   # wordmark gradient - oxblood → terracotta → gold
 FONT = "ansi_shadow"                        # wordmark figlet face
 WORDS = ("WRITING", "AGENT")                # wordmark words (case matters per face)
 SHEAR = False                               # italic lean (block faces only)
@@ -44,7 +44,7 @@ THEMES: dict[str, dict] = {
         DIM=DIM, RULE=RULE, ERR=ERR, ON_CLR=ON_CLR,
         OFF_CLR=OFF_CLR, FLEURON=FLEURON, STOPS=STOPS,
         FONT=FONT, WORDS=WORDS, SHEAR=SHEAR,
-        DESC="ink & brass - blue-ink default, semantic status colors",
+        DESC="ink & brass - manuscript red + gold on parchment, semantic status",
     ),
     "highcontrast": dict(
         # Okabe-Ito palette - distinguishable for all common types of colour-blindness.

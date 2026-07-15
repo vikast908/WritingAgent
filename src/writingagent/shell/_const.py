@@ -23,7 +23,7 @@ __all__ = [
 
 _NODES = ["planner", "toc", "writer", "critic", "judge", "verifier", "summarizer",
           "consolidation", "production", "learner", "researcher", "humanizer",
-          "diagram", "diagram_fallback", "chat"]
+          "diagram", "diagram_fallback", "chat", "seo", "repurpose"]
 _EXIT = {"exit", "quit", "q", ":q"}
 # Plain-English synonyms for the two project modes (used by /mode and /set mode).
 _MODE_ALIASES = {

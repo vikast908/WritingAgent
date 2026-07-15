@@ -36,9 +36,11 @@ too (multi-chapter, with continuity audits + a production layer).
 - **Writes in any field, even on a cheap model** — a **craft engine** parameterized by *register* (nonfiction, fiction, academic, journalism, copywriting, poetry, screenplay, and more) plus selectable **personas** and **emotions**, so it adapts its rules, voice, and structure to the field instead of forcing one "researcher voice" everywhere (see [Write in any field](#write-in-any-field--registers-personas--the-craft-engine))
 - **Proof, not vibes** — every article ships an [**evidence report**](#evidence-report-proof-not-vibes): the argument it makes + every source ranked by influence (0–100)
 - **Figures that lay themselves out** — the model authors a diagram *spec*; a layout engine places it so labels never overflow
-- **Use it your way** — interactive TUI, one-shot CLI, an embeddable Python API, or a global `writingagent` npm launcher
+- **Use it your way** — interactive TUI, one-shot CLI, a **local web dashboard** (`writing-agent web` — run pieces from the browser with live logs, per-agent cost, traces, and evals), an embeddable Python API, or a global `writingagent` npm launcher
 - **Self-correcting *and* (optionally) self-directing** — the default pipeline self-corrects via fixed quality gates; flip on **agentic mode** and an LLM *controller* takes the wheel, choosing the next move both per unit (gather research / read canon before drafting) and over the whole piece (draft, reoutline, revise, consolidate, repair, produce, learn, escalate, done) — and the writer can call tools *mid-draft*. Off by default, with the fixed pipeline as a byte-identical fallback (see [Self-directing mode](#self-directing-mode-opt-in))
 - **Local-first** — everything is plain markdown + JSON on disk; your own OpenRouter/DeepSeek key; kill a run and it resumes exactly where it stopped; a global `fallback` model keeps an unattended run alive if a tier has an outage
+- **Promotes, not just writes** — after the piece is done, `seo` audits it against on-page fundamentals (keyword placement, description, headings, readability) and names its keywords + hashtags, and `promote` repurposes it into an X thread, LinkedIn post, newsletter teaser, TL;DR, and 5 A/B headlines — the HTML export ships SEO/OG/Twitter meta tags (see [Promote it](#promote-it--seo-x-threads-linkedin))
+- **Cheap by default** — `cost_mode: budget` pins the spend-heavy knobs and routes the judgment nodes to the flash tier, targeting **≤100k tokens (~$0.10–0.15) per article** with a hard, resumable token ceiling
 
 > 📂 See real output in [**`examples/`**](examples/) · 📚 full manual at [docs-writingagent.vercel.app](https://docs-writingagent.vercel.app/).
 
@@ -111,8 +113,8 @@ Gradio UI — try it free in fake mode with no key, or paste your own key for a 
 [`web/README.md`](web/README.md)).
 
 With npm, `setup` is optional — the first run of `writingagent` offers to install the engine for
-you. Later, **`writingagent update`** pulls the latest engine. Optional extras (context compression,
-deep research, DOCX export, D2 diagrams, embeddings) each degrade gracefully — see the
+you. Later, **`writingagent update`** pulls the latest engine. Optional extras (deep research,
+DOCX export, D2 diagrams, embeddings) each degrade gracefully — see the
 [**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
 
 ---
@@ -323,6 +325,70 @@ Regenerate any time with **`writingagent evidence <id>`** (or `Project.evidence_
 
 ---
 
+## Promote it — SEO, X threads, LinkedIn
+
+A finished manuscript is where *your* job continues: getting it read. Two commands cover that last
+step — deterministic where possible, one cheap flash call where a model is needed. **`write` runs
+both automatically when a piece finishes** (`auto_promote: true`; set it `false` to opt out).
+Everything is **local artifacts only**: a report, `keywords.json`, and draft files under `promo/` —
+the manuscript itself is never modified, and nothing is ever posted or submitted anywhere.
+
+```bash
+writingagent seo <id> --keyword "voice ai latency"   # audit + signals pack → seo_report.md
+writingagent promote <id>                            # X thread · LinkedIn · teaser · TL;DR → promo/
+writingagent promote <id> --to x-thread,linkedin     # just the formats you want
+```
+
+- **`seo`** writes `seo_report.md`: a **0–100 on-page audit** (keyword in title/opening/headings,
+  description length, heading hierarchy, word-count floor, reading grade, links, image alts — each
+  miss with a fix line) plus the **signals pack** (primary/secondary keywords, meta description,
+  per-platform hashtags), saved to `keywords.json`. The craft "feel" metrics are appended, so SEO,
+  grammar-adjacent readability, and feel live in one artifact.
+- **`promote`** writes `promo/`: an **X thread** (hook-first, ≤270 chars/tweet), a **LinkedIn post**
+  (fold-surviving opener), a **newsletter teaser** (subject + 150 words), a **TL;DR** (5 bullets),
+  and **5 headline variants** (curiosity · how-to · contrarian · data-led · direct) for A/B posting —
+  all reusing the same keyword pack, all forbidden from inventing facts not in the piece.
+- The **HTML export** carries `<meta name="description">`, keywords, **Open Graph** and **Twitter
+  card** tags from the pack automatically.
+
+Search grounding runs on **DuckDuckGo** (free, keyless, default) or **Firecrawl**
+(`search_provider: firecrawl` + `FIRECRAWL_API_KEY` — also upgrades deep-research page scraping);
+a missing key degrades gracefully to the free path.
+
+**Cost:** `cost_mode: budget` (in `config/settings.yaml`) targets **≤100k tokens per article** —
+single draft, one revision, 12k context, judgment nodes on the flash tier, and a hard
+`max_run_tokens` ceiling at 100k (a run that hits it pauses resumably instead of overspending).
+`cost_mode: standard` restores the previous behavior; every pin is an ordinary tunable.
+
+---
+
+## The web dashboard
+
+```bash
+writing-agent web            # opens http://127.0.0.1:8787 — local only, no account, no cloud
+```
+
+Everything the TUI does, in a browser — plus the observability the terminal can't show:
+
+- **Studio** — topic → three proposed angles → pick one → a fully autonomous run, streamed live
+  (log, phase, progress, pause button; a page refresh reattaches to the running job)
+- **Agent activity** — the agent's internal working per run: every controller decision
+  (gather research / draft / reoutline / revise) with its reason, every unit's outcome
+  (first-pass or revised, insight score), joined with that unit's cost
+- **Telemetry** — cost, tokens, cache hits, and latency **per agent, per unit (loop), per model,
+  and per session run**, down to individual calls — every LLM call the engine ever made is on disk
+  as JSONL and rendered here
+- **Evals** — per-unit critic scores, per-attempt verdicts, and the judged 5-dimension eval report
+- **Artifacts** — manuscript, thesis, evidence/SEO reports, and the promo drafts, rendered in place
+- **Skills · Settings · Models · Themes** — the same learned-skill library, every tunable, per-agent
+  model routing, and all 11 TUI themes
+
+It reads and writes the same on-disk brain as the TUI, so the two surfaces never disagree. Pure
+stdlib — no extra dependencies. **Local-only by design**: it binds 127.0.0.1 and has no auth, so
+don't expose the port.
+
+---
+
 ## Architecture
 
 A **multi-agent pipeline on a durable state machine**, in layers from the surface down to the
@@ -379,5 +445,5 @@ Built and maintained by [**@vikast908**](https://github.com/vikast908). Question
 [MIT](LICENSE).
 
 <div align="center">
-  <sub>Built with DeepSeek V4 on OpenRouter · context compression by <a href="https://github.com/chopratejas/headroom">headroom-ai</a> · runs on Linux · macOS · Windows</sub>
+  <sub>Built with DeepSeek V4 on OpenRouter · runs on Linux · macOS · Windows</sub>
 </div>

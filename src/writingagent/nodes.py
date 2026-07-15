@@ -210,7 +210,7 @@ def rank_variants(
     parts.append("Rank the drafts best to worst and name the winner.")
     return complete_structured(model, P.VARIANT_JUDGE_SYS, "\n\n".join(parts),
                                S.VariantRanking, max_tokens=cfg.max_tokens_for("judge", 2000),
-                               temperature=cfg.temperature_for("critic"))
+                               temperature=cfg.temperature_for("judge"))
 
 
 # ── Claim verification (evidence as fact, plan §15.4) ─────────────────────────
@@ -227,7 +227,7 @@ def verify_claims(cfg: ModelConfig, draft: str, sources_block: str) -> S.ClaimAu
             + "\n\nCheck every specific cited claim against the source it cites.")
     return complete_structured(model, P.CLAIM_VERIFY_SYS, user, S.ClaimAudit,
                                max_tokens=cfg.max_tokens_for("verifier", 3000),
-                               temperature=cfg.temperature_for("critic"))
+                               temperature=cfg.temperature_for("verifier"))
 
 
 # ── Summary + extraction (commit) ─────────────────────────────────────────────

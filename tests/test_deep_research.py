@@ -116,6 +116,89 @@ def test_format_documents_numbered_and_truncated():
     assert dr.format_documents([]) == ""
 
 
+def test_verifier_source_text_is_full_fetch(tmp_brain, monkeypatch):
+    """The claim-verification ground truth must be the FULL fetched page text, not the
+    1500-char synthesis excerpt - the gate BLOCKS on 'unsupported', so a true claim
+    whose support sits past the synthesis cut must still be visible to the verifier."""
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
+    from writingagent import nodes
+    from writingagent.orchestrator import article as article_mod
+
+    marker = "UNIQUE-LATE-FACT-9317"
+    long_text = ("pad " * 800) + marker                    # marker sits past char 1500
+    docs = [dr.Document(title="One", url="http://a/1", snippet="s", domain="a",
+                        text=long_text)]
+    monkeypatch.setattr(article_mod, "_deep_docs", lambda *a, **k: docs)
+
+    cfg = load_config()
+    angle = S.ArticleAngle(title="T", angle="a", audience="eng", hook="h")
+    outline = nodes.build_article_outline(cfg, "abstract", angle, 1)
+    state = {"use_researcher": True, "deep_research": True,
+             "verify_excerpt_chars": 6000, "use_images": False}
+    out = article_mod._section_fetch(cfg, ArticlePaths("vfx", "u"), outline, state, 1,
+                                     lambda *a, **k: None)
+    _prefix, _sources, source_text = out["research"]
+    assert marker in source_text                           # verifier sees the late fact
+    # and the synthesis default alone would have cut it:
+    assert marker not in dr.format_documents(docs)
+
+
+# ── Search providers: duckduckgo (default) | firecrawl ──────────────────────────
+def test_search_provider_defaults_and_degrades(monkeypatch):
+    from writingagent import search as sm
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    assert sm.provider() == "duckduckgo"                  # shipped default
+    # firecrawl selected but no key -> degrade to the free provider, never block
+    from writingagent.config import Settings
+    monkeypatch.setattr("writingagent.config.load_settings",
+                        lambda: Settings(search_provider="firecrawl"))
+    assert sm.provider() == "duckduckgo"
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+    assert sm.provider() == "firecrawl"
+
+
+def test_firecrawl_search_parses_both_response_shapes(monkeypatch):
+    import io
+    import json
+
+    from writingagent import search as sm
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+
+    def _fake_urlopen(payload):
+        class _Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+        return lambda req, timeout=0: _Resp(json.dumps(payload).encode())
+
+    v1 = {"success": True, "data": [
+        {"title": "One", "url": "https://a/1", "description": "d1"}]}
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen(v1))
+    out = sm._firecrawl_search("q", 5)
+    assert out and out[0].url == "https://a/1" and out[0].snippet == "d1"
+
+    v2 = {"success": True, "data": {"web": [
+        {"title": "Two", "url": "https://b/2", "description": "d2"}]}}
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen(v2))
+    out = sm._firecrawl_search("q", 5)
+    assert out and out[0].url == "https://b/2"
+
+
+def test_fetch_text_prefers_firecrawl_when_selected(tmp_brain, monkeypatch):
+    monkeypatch.setattr(dr, "_fetch_permitted", lambda u: True)
+    monkeypatch.setattr(dr, "_throttle", lambda h, **k: None)
+    monkeypatch.setattr(dr, "_fetch_via_firecrawl",
+                        lambda url, max_chars, **k: "firecrawl markdown")
+    monkeypatch.setattr(dr, "_fetch_via_scrapo", lambda url, **k: "scrapo body")
+    assert dr.fetch_text("https://x.test/page") == "firecrawl markdown"
+
+
+def test_fetch_via_firecrawl_disabled_without_provider(monkeypatch):
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    assert dr._fetch_via_firecrawl("https://x.test/p", max_chars=100) == ""
+
+
 # ── fetch backends: Scrapo preferred, stdlib fallback ───────────────────────────
 def test_scrapo_disabled_via_env(monkeypatch):
     monkeypatch.setenv("WRITINGAGENT_NO_SCRAPO", "1")

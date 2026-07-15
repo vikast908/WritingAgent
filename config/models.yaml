@@ -30,6 +30,8 @@ nodes:
                                                # SVG fits after reasoning (6k starved it once)
   diagram_fallback: deepseek/deepseek-v4-flash # when pro reasons itself out of budget and
                                                # emits no SVG, flash reliably draws *something*
+  seo:           deepseek/deepseek-v4-flash    # keyword/hashtag/meta-description pack (plan §24)
+  repurpose:     deepseek/deepseek-v4-flash    # X thread / LinkedIn / teaser / TLDR / headlines
 
 # Per-node completion caps (tokens). Reasoning models (deepseek-v4-pro) spend tokens
 # THINKING before they emit the JSON, so the structured judgment nodes need headroom or the
@@ -43,6 +45,8 @@ max_tokens:
 
 temperature:
   toc:           0.4
+  seo:           0.2   # the signals pack should be stable run-to-run
+  repurpose:     0.7   # hooks want a little spark
   critic:        0.2
   judge:         0.2   # ranking drafts is a judgment call - low temp for stable, repeatable picks
   verifier:      0.2   # claim checking must be consistent, not creative

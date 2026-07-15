@@ -57,6 +57,9 @@ __all__ = [
     '_escalate',
     '_manuscript_section_bodies',
     '_replace_manuscript_section',
+    'record_rejected',
+    'read_rejected',
+    'reconcile_unit_images',
 ]
 
 
@@ -190,12 +193,22 @@ def _pick_variant(cfg, unit_desc, thesis, drafts: dict, crits: dict, ask, log,
     best = scalar_best
     note = pref = ""
     if use_judge and len(keys) > 1:
-        labelled = {str(i + 1): drafts[k] for i, k in enumerate(keys)}
+        # Shuffle presentation order to break position bias (LLM judges over-pick
+        # slot 1, and v0 - the most conservative temp - always sat there). The seed
+        # is derived from the draft texts, so a resumed run re-judges the same order
+        # and the pick stays reproducible.
+        import hashlib
+        import random
+        seed = int.from_bytes(hashlib.sha256(
+            "\x00".join(drafts[k] for k in keys).encode("utf-8")).digest()[:8], "big")
+        order = list(keys)
+        random.Random(seed).shuffle(order)
+        labelled = {str(i + 1): drafts[k] for i, k in enumerate(order)}
         try:
             ranking = nodes.rank_variants(cfg, unit_desc, labelled, thesis)
             w = ranking.winner
-            if isinstance(w, int) and 1 <= w <= len(keys):
-                best = keys[w - 1]
+            if isinstance(w, int) and 1 <= w <= len(order):
+                best = order[w - 1]
                 note = (ranking.winner_weakness or "").strip()
                 log(f"   judge picked variant {w}/{len(keys)}"
                     + (f" - {ranking.reason[:80]}" if ranking.reason else ""))
@@ -279,6 +292,64 @@ def _verify_claims_gate(cfg, state, draft: str, source_text: str, crit: S.Critiq
             + "\n".join(f'- "{c.claim}" [{c.source}]'
                         + (f" ({c.note})" if c.note else "") for c in bad))
     return crit, note
+
+
+# ── Rejected/dropped artifacts (for review, plan §26) ─────────────────────────
+_IMG_MD = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
+
+
+def record_rejected(paths, entry: dict) -> None:
+    """Append one dropped-artifact record to <root>/rejected.jsonl (best-effort).
+    Surfaced in the dashboard's Rejected view so nothing is silently discarded."""
+    try:
+        import datetime
+        import json
+        rec = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+               **entry}
+        with open(paths.root / "rejected.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001 - review breadcrumb must never break a run
+        pass
+
+
+def read_rejected(paths) -> list[dict]:
+    import json
+    p = paths.root / "rejected.jsonl"
+    if not p.exists():
+        return []
+    out: list[dict] = []
+    for line in p.read_text(encoding="utf-8").splitlines():
+        try:
+            out.append(json.loads(line))
+        except ValueError:
+            continue
+    return out
+
+
+def reconcile_unit_images(paths, unit_no: int, unit_tag: str, draft: str,
+                          images, log) -> str:
+    """Make generated figures reliable. Images are handed to the writer as *suggestions*
+    ('embed where relevant'), so placement depends on the model - which is why generated
+    diagrams got orphaned on disk (paid for, never shown). Here we deterministically
+    embed a generated section diagram the writer omitted, and record any still-unused
+    suggested image to rejected.jsonl for review. Returns the (possibly augmented) draft."""
+    if not images:
+        return draft
+    for md in images:
+        m = _IMG_MD.search(md or "")
+        if not m:
+            continue
+        ref = m.group(1)
+        fname = ref.rsplit("/", 1)[-1]
+        if fname in draft:
+            continue  # the writer placed it
+        if "_diagram.svg" in fname:   # a generated figure -> guarantee it appears
+            draft = draft.rstrip() + "\n\n" + md.strip() + "\n"
+            log(f"   [figure] embedded generated diagram the writer left out ({fname})")
+        else:                          # a suggested (e.g. Wikimedia) image the writer skipped
+            record_rejected(paths, {"unit": unit_tag, "kind": "image", "ref": ref,
+                                    "reason": "suggested but not placed by the writer"})
+    return draft
 
 
 # ── Preference signals for the learner (compounding, plan §8) ─────────────────
@@ -439,6 +510,8 @@ def _base_run_state(uid, abstract, *, intake, author, max_revisions, autonomous,
         "max_context_chars": settings.max_context_chars,
         "skill_duels": settings.skill_duels,
         "watch_blocking": settings.watch_blocking,
+        "verify_excerpt_chars": getattr(settings, "verify_excerpt_chars", 6000),
+        "seo_keyword": (getattr(settings, "seo_keyword", "") or "").strip(),
         "book_cohesion": settings.book_cohesion,
         # Register craft layer (plan §22): surgical show-don't-tell / de-passive toggle.
         # `register`/`field`/`citation_style` are set per-mode (book/article) at creation.
@@ -604,6 +677,15 @@ def _praised_passages(uid: str, max_chars: int = 4000) -> str:
     return "\n\n".join(chunks)
 
 
+# Watch-list memory bound: newest items first, oldest dropped past the cap (tunable).
+_WATCH_LIST_CAP = 40
+
+
+def _watch_key(line: str) -> str:
+    """Dedupe key for one '- pattern - why' watch line: the pattern half, case-folded."""
+    return line[2:].split(" - ")[0].strip().lower()
+
+
 def _run_learner(cfg, paths, plan, instructions: str, findings: str, *, log) -> None:
     """Shared learner tail (book + article): distill craft skills + a watch-list from a
     finished piece, write them, reconcile, log. Callers gather their own instructions /
@@ -614,7 +696,21 @@ def _run_learner(cfg, paths, plan, instructions: str, findings: str, *, log) -> 
                       praised=_praised_passages(uid), preferences=_read_preferences(paths))
     for prop in out.skills:
         skills_mod.write_skill(uid, prop)
-    watch = ["# Avoid list (watch-list)", ""] + [f"- {w.pattern} - {w.why}" for w in out.watch_items]
+    # MERGE with the existing watch-list instead of overwriting it: the watch-list is
+    # cross-run memory of failure patterns, and a fresh run used to erase every earlier
+    # project's lessons (a memory lifetime of exactly one piece). Newest first, deduped
+    # on the pattern, capped so it can't grow without bound.
+    new_items = [f"- {w.pattern} - {w.why}" for w in out.watch_items]
+    old_items = [ln.strip() for ln in (brain.read_text(brain.watch_list(uid)) or "").splitlines()
+                 if ln.strip().startswith("- ")]
+    merged = list(new_items)
+    seen = {_watch_key(ln) for ln in new_items}
+    for ln in old_items:
+        key = _watch_key(ln)
+        if key not in seen:
+            seen.add(key)
+            merged.append(ln)
+    watch = ["# Avoid list (watch-list)", ""] + merged[:_WATCH_LIST_CAP]
     brain.write_text(brain.watch_list(uid), "\n".join(watch))
     statuses = skills_mod.reconcile(uid)
     distilled = skills_mod.distill(uid) if load_settings().skill_distill else []

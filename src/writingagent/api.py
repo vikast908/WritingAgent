@@ -234,7 +234,6 @@ class Agent:
     # -- internal --------------------------------------------------------------
     def _apply_runtime(self) -> None:
         """Sync process-global LLM knobs to this agent's settings before a call."""
-        llm.configure_headroom(self.settings.use_headroom)
         llm.configure_timeout(self.settings.request_timeout)
         llm.configure_openrouter_providers(self.settings.openrouter_providers)
         llm.configure_fallback(self.models.fallback)
@@ -513,6 +512,24 @@ class Project:
         there was nothing to report)."""
         out = orchestrator.build_evidence_report(self._agent.user, self.id, log=progress or _noop)
         return brain.read_text(out) if out else ""
+
+    def seo_report(self, *, keyword: str = "", progress: Progress | None = None) -> str:
+        """Build (and return) seo_report.md - the deterministic on-page audit plus the
+        keyword/hashtag/meta-description signals pack (one flash call; `keyword` pins
+        the primary). Also writes keywords.json for `promote()` and the HTML export."""
+        self._agent._apply_runtime()
+        out = orchestrator.build_seo_report(self._agent.models, self._agent.user, self.id,
+                                            keyword=keyword, log=progress or _noop)
+        return brain.read_text(out) if out else ""
+
+    def promote(self, *, formats: list[str] | None = None, keyword: str = "",
+                progress: Progress | None = None) -> Path:
+        """Write promo/<format>.md (x-thread, linkedin, newsletter-teaser, tldr) plus
+        promo/headlines.md, reusing the SEO keyword pack. Returns the promo directory."""
+        self._agent._apply_runtime()
+        return orchestrator.build_promo_pack(self._agent.models, self._agent.user, self.id,
+                                             formats=formats, keyword=keyword,
+                                             log=progress or _noop)
 
     def memory(self) -> str:
         """Human-readable canon + entity-graph summary (books only)."""

@@ -313,6 +313,30 @@ def _throttle(host: str, *, min_interval: float = _HOST_MIN_INTERVAL) -> None:
         time.sleep(min(wait, min_interval))
 
 
+def _fetch_via_firecrawl(url: str, *, max_chars: int, timeout: float = 30.0) -> str:
+    """Firecrawl scrape -> markdown. Engaged only when the search provider is
+    'firecrawl' (with its key set); '' otherwise or on any failure, so the chain
+    falls through to Scrapo/stdlib exactly as before."""
+    from .search import firecrawl_key, provider
+    if provider() != "firecrawl" or not firecrawl_key():
+        return ""
+    try:
+        import json
+
+        from .search import FIRECRAWL_BASE
+        body = json.dumps({"url": url, "formats": ["markdown"]}).encode()
+        req = urllib.request.Request(
+            FIRECRAWL_BASE + "/v1/scrape", data=body, method="POST",
+            headers={"Authorization": f"Bearer {firecrawl_key()}",
+                     "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - fixed https host
+            data = json.loads(resp.read(_MAX_BYTES).decode("utf-8", errors="replace"))
+        md = ((data.get("data") or {}).get("markdown") or "").strip()
+        return md[:max_chars]
+    except Exception:  # noqa: BLE001 - non-fatal; Scrapo/stdlib take over
+        return ""
+
+
 def _fetch_via_urllib(url: str, *, max_chars: int, timeout: float = _FETCH_TIMEOUT) -> str:
     """Stdlib fetch + HTML->text extraction. '' on any failure or non-HTML response."""
     try:
@@ -351,7 +375,8 @@ def fetch_text(url: str, *, timeout: float = _FETCH_TIMEOUT,
     if not _fetch_permitted(url):
         return ""
     _throttle(urlparse(url).hostname or "")
-    text = (_fetch_via_scrapo(url, max_chars=max_chars)
+    text = (_fetch_via_firecrawl(url, max_chars=max_chars)
+            or _fetch_via_scrapo(url, max_chars=max_chars)
             or _fetch_via_urllib(url, max_chars=max_chars, timeout=timeout))
     if text:
         cache.put("fetch", (url, max_chars), text)

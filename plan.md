@@ -7,29 +7,33 @@ human when it's unsure, and **learns reusable craft skills per user across many 
 > **The loop:** write → judge → (approve | revise | escalate to human) → commit canon →
 > consolidate → learn skills → write the next chapter better.
 
-> **Implementation status (v1, updated 2026-06-12).** Built in `src/writingagent/` and shipped as an
+> **Implementation status (v1, updated 2026-07-15).** Built in `src/writingagent/` and shipped as an
 > interactive **WRITING AGENT** shell (a themed TUI with slash commands + per-agent model switching)
 > plus a one-shot CLI (`writing-agent` / `python writingagent.py`; see README).
 > **Live-validated** on OpenRouter + DeepSeek V4 Pro/Flash: fully autonomous runs completed a book
-> (9-page PDF, captured in `SampleRun/`) and a long-form article (6 sections, DOCX export).
+> (9-page PDF, captured in `SampleRun/`) and long-form articles (incl. an agentic 6-section run,
+> ~$0.52 / 606k tokens, before the budget cost mode existed).
 >
 > Features beyond the §1–16 spec: **article mode** (parallel section pipeline with editorial angle
 > picker, flat `articles/<id>/` layout, inline citations + sources.json); **`write` one-shot flow**
 > (upfront interview → fully autonomous run → exported file, §15.3); **humanizer** pass (strips
 > AI tells, 11 rules); **SVG diagram fallback** (LLM-generated `<svg>` when Wikimedia returns nothing,
 > saved to `images/`); **6 export formats** (pdf · epub · html · docx · txt · md; interactive picker);
-> **deep multi-source researcher** (§15.2); **10 TUI themes** (palette + wordmark figlet per theme,
-> `/theme`); **production guards** (run token budget kill-switch, per-call JSONL telemetry +
-> `/dashboard`, untrusted-web-content fencing - §15.1); **`/update` slash command** (describe changes
-> → AI reviews and advises); seed craft-skills (13 built-in); autonomous mode (best-draft commit +
-> contradiction auto-repair); `NO_SLOP` guardrails injected into every writer/humanizer/critic prompt.
+> **deep multi-source researcher** (§15.2) with **duckduckgo/firecrawl search providers**;
+> **11 TUI themes** (palette + wordmark figlet per theme, `/theme`); **production guards** (run token
+> budget kill-switch, per-call JSONL telemetry + `/dashboard`, untrusted-web-content fencing -
+> §15.1); a **budget cost mode** (§19 - lean knobs + flash-tier judgment nodes, ≤100k tokens/article
+> target); the **promotion layer** (§24 - `seo` + `promote` commands, SEO/OG tags in the HTML
+> export); **`/update` slash command** (describe changes → AI reviews and advises); seed craft-skills
+> (13 built-in); autonomous mode (best-draft commit + contradiction auto-repair); `NO_SLOP`
+> guardrails injected into every writer/humanizer/critic prompt.
 >
 > Two deliberate deviations: (1) the orchestrator (§6) is a **durable on-disk state machine**, not
 > LangGraph - the brain on disk is the checkpoint, giving resumable runs; LangGraph stays an
 > optional wrapper (§12). (2) genre-relevance (§10) uses **lexical similarity**, not embeddings
 > (clean seam to swap later). Verified: all modules compile; the data layer + whole orchestrator
 > (incl. escalation/review/resume, low-confidence + contradiction escalation, autonomous repair)
-> pass an offline fake-LLM pytest suite (**11 passing**).
+> pass an offline fake-LLM pytest suite (**~500 passing**; see CI for the exact count).
 
 ---
 
@@ -687,12 +691,12 @@ Durable decisions from the hardening pass. All thresholds are tunable config.
 | **Run-session serialization (A-021, 2026-06-16)** | The LLM wrapper's accounting state (`_client`, `_usage`, `_run_id`, the per-thread `unit`/`project` tags) is **module-global** - the design is one unattended run per process. `llm.run_session(project, budget=)` (a `threading.Lock` + reset-usage/set-project/set-budget on enter, clear tags on exit) wraps the whole `orchestrator.run` body (now a thin `run()` → `_run()`), so overlapping runs in a long-lived host (TUI/web) **serialize** instead of interleaving and corrupting each other's token tally / run-id / telemetry attribution. The web demo's own `_RUN_LOCK` is complementary. |
 | **Deterministic analytical nodes (A-022, 2026-06-16)** | `extract_canon`/`consolidate`/`learn` now pass explicit low/0 temperatures (`models.yaml`: `summarizer 0.0`, `consolidation 0.0`, `learner 0.2`) - they previously ran at the model default, making canon extraction and the continuity audit non-reproducible. |
 | **Writer repetition penalty (A-024, 2026-06-16)** | Per-node `frequency_penalty`/`presence_penalty` maps in `models.yaml` (clamped to OpenAI's [-2, 2] by `ModelConfig`); the writer ships `0.3`/`0.1` so token-level repetition is attacked at generation time rather than only cleaned up by the humanizer after the fact. Tunable; remove a node to leave it unset. |
-| **Context-overflow recovery (B-013, 2026-06-16)** | A `context_length_exceeded` rejection (sniffed from the error code/message, distinct from a generic 400) is recovered by `_shrink_for_context` (headroom compression, else truncate the longest message to 60%) and **one** retry, in both `complete_text` and `complete_structured` - so an over-long prompt shrinks instead of failing the node. |
+| **Context-overflow recovery (B-013, 2026-06-16)** | A `context_length_exceeded` rejection (sniffed from the error code/message, distinct from a generic 400) is recovered by `_shrink_for_context` (truncate the longest message to 60%) and **one** retry, in both `complete_text` and `complete_structured` - so an over-long prompt shrinks instead of failing the node. |
 | **Structured-output truncation recovery (2026-06-17)** | A reasoning model (e.g. `deepseek-v4-pro`) spends tokens *thinking* before it emits the JSON; if that fills `max_tokens` the reply is empty / cut off mid-object with `finish_reason=length`. `complete_structured` now detects this and **raises `max_tokens`** (double, capped at 16k) then retries the **same** model/prompt - no repair turn (the prompt was fine) - so the call stays on its routed (stronger) tier instead of burning its retries on the same budget and degrading to the flash fallback. Complemented by a `models.yaml` `max_tokens:` floor for the reasoning judgment nodes (`critic`/`judge`/`verifier` = 8000), the same headroom the `diagram` node's 16k budget already relies on. Confirmed live: the first real OpenRouter run hit this exactly once (sec05) and the fix recovers on-tier in one extra try. |
 | **Chat stream accounting (B-012, 2026-06-16)** | `stream_text` now honors the run budget (`_check_budget` up front), requests `stream_options.include_usage` + cost, and records usage + telemetry + the debug sink from the terminal chunk - TUI chat no longer bypasses the kill-switch or token accounting. No auto-retry (a stream can't be replayed once chunks are emitted; the caller holds the partial output). |
 | **Cross-chapter cohesion report (D-008, 2026-06-16)** | Books get a deterministic, LLM-free `cohesion_report.md` after assembly (`polish.cross_chapter_repetition`/`cohesion_report`, gated by `book_cohesion`, default on): it flags verbatim phrasings reused across chapters and near-identical chapter openers. A **detector, not a rewriter** - a whole 10-chapter rewrite (the article-cohesion analog) is impractical and risks losing narrative content, so the report feeds a targeted `revise`. |
 | **Observability join keys (D-013/D-014, 2026-06-16)** | Opt-in `WRITINGAGENT_LLM_DEBUG=1` records full prompt+completion to `.index/llm_debug-YYYYMMDD.jsonl` (`telemetry.log_debug`, off by default - large + may carry user text) for "why did it produce/escalate this" without a re-run. The agentic action trace now stamps the run's `run_id` (`llm.run_id()`) + `ts`, so controller decisions join to the call telemetry. |
-| **Context compression** | `headroom-ai` is **optional** (lazy import, silent fallback). Pinned to **0.10.17** (the last pure-Python release; ≥0.21 is a Rust/pyo3 ext with no Windows wheel), installed `--no-deps`. `_compress` always tells headroom a **tiktoken** model for counting - compression is model-agnostic, so DeepSeek runs still compress. |
+| **Context compression** | **Removed (2026-07-15).** `headroom-ai` was optional and default-off; a real run showed it perturbed the DeepSeek prompt-cache prefix (cache-hit 7% vs ~36% without), *raising* cost on this pipeline's single-turn calls. Deleted entirely; context-overflow now recovers by deterministic truncation only. |
 | **LLM call resilience** | We own retries: classified **exponential backoff + jitter**, honor `Retry-After`, **fail fast on 4xx**, per-request `request_timeout` (default 60s). Structured calls do a **repair retry** (feed the invalid output + error back). The OpenAI SDK's own retries are disabled. |
 | **Concurrency** | The chapter/section *prose* chain is **sequential by design** (continuity: each unit reads the previous summary). Everything independent of prose overlaps via a small thread pool (`concurrency.gather`): (a) within a unit, research ∥ image/SVG ∥ skill retrieval; (b) **unit n+1's research/images/skills are prefetched while unit n is written/critiqued** (they depend only on the plan/TOC; prefetch results are disk-cached so escalations waste nothing); (c) at commit, **humanize ∥ summarize ∥ canon-extraction** run as one batch (`strict=True` - a failed summary/extraction still aborts the commit) since all three derive from the same approved draft; (d) production's front/back-matter components. The SQLite `Store` is only touched on the main thread. |
 | **Prompt size** | The writer/critic canon block is capped at the **most recent `MAX_CANON_FACTS_PER_CHAR` (12) facts per character** - uncapped it grows linearly with the book and late chapters pay maximum latency/cost. Consolidation and extraction still see the full canon. |
@@ -1051,7 +1055,7 @@ live progress, the manuscript, the evidence report, and a `.md` download out.
 - **Streaming.** The blocking `Project.run(progress=)` runs in a worker thread; its log lines flow
   through a queue into the Gradio generator so progress is live.
 - **Packaging.** A `[web]` optional extra (gradio only); gradio is imported **lazily** (inside
-  `build_ui`) so the runtime helpers stay importable/testable without it (mirrors `deep`/`headroom`).
+  `build_ui`) so the runtime helpers stay importable/testable without it (mirrors the `deep` extra).
   Ships HF-Space deploy files (`web/requirements.txt`, `web/README.md` front-matter). Covered by
   `tests/test_web.py` (offline, incl. a full fake-mode run through the demo).
 - **Caveat (tracked):** `configure_runtime` mutates process-global env, so a public deploy must stay
@@ -1101,8 +1105,9 @@ prompt-cache discount, not prompt rewriting. Durable decisions:
   cached ~80% of the prompt prefix at ~3.5x lower cost. It's not 100% reliable over OpenRouter
   (instance load-balancing), so for guaranteed caching prefer **DeepSeek-direct** (`provider=deepseek`),
   whose context cache is automatic.
-- **`use_headroom` defaults OFF.** Compression saved ~nothing on single-turn payloads and risked
-  perturbing the cacheable prefix.
+- **Context compression (headroom) was removed (2026-07-15).** It saved ~nothing on single-turn
+  payloads and *perturbed* the cacheable prefix (a live run measured 7% cache-hit with it on vs
+  ~36% off), raising cost. Gone entirely.
 - **Schema dump is lossless-minimized** (`llm._strip_schema_noise` drops pydantic's auto `title`s).
 - **Thesis is split** (`nodes.thesis_brief`): writer gets the full thesis (it must engage the
   counterargument), critic + judge get claim+arguments only.
@@ -1113,6 +1118,28 @@ prompt-cache discount, not prompt rewriting. Durable decisions:
   it is a deliberate quality/cost trade left to the operator.
 - **Do NOT shrink** `NO_SLOP`, the scoring rubric, or the thesis machinery for tokens - cache them
   instead; trimming raises slop/insight-miss rates and triggers *more* revision loops (net increase).
+
+### 19.1 Cost modes (`cost_mode`, 2026-07-15)
+
+The 606k-token first real run priced an article at ~$0.52; the operating target is **≤100k tokens per
+article**. `cost_mode: budget` (settings.yaml; `standard` = previous behavior, and the dataclass
+default so the suite/CI are unchanged) applies one profile in ONE place - `config.apply_cost_mode`,
+called at project creation (bakes into run-state) and at `run()` (routing + the session budget):
+
+- **Pins lean knobs** (only ever tightens; a leaner user value is kept): `divergent_drafts=1`,
+  `max_revisions=1`, `table_read=off`, `max_context_chars=12000`, `max_run_tokens=100000` (the hard
+  ceiling - the run pauses, resumable, rather than overspending).
+- **Routes the judgment nodes to the flash tier** (`critic`/`judge`/`verifier`/`consolidation`/
+  `diagram` → the global `fallback` slug): pro-tier reasoning spend was dominated by these nodes'
+  thinking tokens; the writer stays on pro (prose quality is the product).
+- Applied pins are logged at run start (`[budget] cost mode pinned: ...`). Constants live in
+  `config.py` (`BUDGET_*`), tunable per CLAUDE.md.
+
+Two structural cost fixes ship alongside (both modes): drafts are **de-telled BEFORE critique**
+(the surgical flash pass / free mechanical clean), so the pro-tier critic no longer burns a whole
+WRITE→CRITIQUE revision round on regex-fixable tells - the dominant class of revision churn - and
+`complete_text` now **raises `max_tokens` on an empty length-truncated reply** instead of re-sending
+the same doomed budget (mirrors `complete_structured`).
 
 ---
 
@@ -1656,3 +1683,111 @@ Per-unit emotion (map a book chapter's `emotional_role` → an emotion key inste
 target), persona-aware critic notes (don't flag a persona's deliberate choices), a "blend = author a new
 persona" workflow, and surfacing the cascade in the TUI. The cascade seam is in place; these are
 additive.
+
+---
+
+## 24. The promotion layer - SEO signals + repurposing (2026-07-15)
+
+The pipeline used to stop at "manuscript on disk"; the author's job continues into distribution
+(search ranking, X, LinkedIn, newsletters). This layer covers that last step **without touching the
+writing pipeline** - both commands run over the finished manuscript, deterministic where possible
+(the evidence-report pattern), flash-tier where a model is needed.
+
+### 24.1 SEO signals + on-page audit (`seo.py`, `seo` command)
+
+- **Signals pack** (`seo.keyword_pack`, ONE flash call, deterministic fallback offline): primary
+  search phrase (pin with `--keyword`), 3-5 secondary phrases, a 120-160-char meta description, and
+  per-platform hashtags (X / LinkedIn). Persisted to `keywords.json` so every downstream surface
+  reuses the same signals.
+- **Deterministic audit** (`seo.validate`, no model call): title presence/length, keyword placement
+  (title / first 100 words / a subheading / description), keyword-density bounds, heading-hierarchy
+  skips, word-count floor, FK reading grade, outbound-link floor, image alt text. Scored 0-100 with
+  a fix line per miss -> `seo_report.md`, with the `craft.py` "feel" metrics appended (the
+  SEO + grammar + feel check in one artifact). Thresholds are module constants (tunable).
+- **HTML export upgrade**: `manuscript.html` now carries `<meta name="description">`, keywords, and
+  Open Graph + Twitter-card tags built from `keywords.json` (falls back to the thesis claim; no pack
+  -> byte-identical head as before).
+
+### 24.2 Repurposing (`promote.py`, `promote` command)
+
+Platform-native variants of the finished piece, one flash call each, all reusing the keyword pack so
+hashtags/keyword stay consistent: **x-thread** (6-10 tweets, hook first, `{LINK}` placeholder),
+**linkedin** (150-250 words, fold-surviving hook), **newsletter-teaser** (subject + teaser),
+**tldr** (5 specific bullets), plus **5 headline variants** (curiosity / how-to / contrarian /
+data-led / direct) for A/B posting. Written to `promo/<format>.md` + `promo/headlines.md`;
+`--to` filters formats. Every prompt forbids inventing facts not in the article. API surface:
+`Project.seo_report()` / `Project.promote()`. Routing: `seo`/`repurpose` nodes (flash) in models.yaml.
+The one-shot `write` flow runs seo+promote automatically on a FINISHED run (`auto_promote: true`,
+tunable; skipped when the run pauses). Local artifacts only - the manuscript is never modified and
+nothing is posted to any platform.
+
+### 24.3 Search providers (`search_provider`)
+
+`duckduckgo` (default, free, keyless) or `firecrawl` (needs `FIRECRAWL_API_KEY`): Firecrawl serves
+both the search API and - when selected - the deep-research page scrape (markdown), ahead of the
+Scrapo/stdlib chain. A missing key or a failed Firecrawl call degrades to DuckDuckGo/stdlib; search
+still never blocks a run. Disk cache is keyed by provider.
+
+---
+
+## 25. The web dashboard (`webui/`, 2026-07-15)
+
+A second full surface over the same engine the TUI drives - `writing-agent web` serves a
+single-page studio on **127.0.0.1** (local, single-user, no auth; never bind it to a network
+interface). Pure stdlib (`ThreadingHTTPServer` + SSE), zero new dependencies - the same
+portability contract as the rest of the engine.
+
+**Views.** *Studio* (topic → 3 proposed angles → pick → autonomous run), *Live run* (SSE log
+stream, phase/progress bar, pause-at-unit-boundary via the same `control` seam the TUI uses),
+*Projects* (status, per-unit critic scores, baked run settings), *Activity* (the agent's internal
+working: every `agent_trace.jsonl` decision - gather/draft/reoutline/revise, reasons, unit
+outcomes - joined with per-unit cost), *Evals* (eval_report + per-attempt critiques),
+*Artifacts* (manuscript, thesis, evidence/SEO/table-read reports, promo drafts - whitelisted
+paths only), *Telemetry* (cost/tokens/latency/cache **per agent-node, per unit (loop), per model,
+per session run** + recent calls), *Skills* (library + efficacy + watch-list), *Settings*
+(every tunable + model routing; same clamped save path as `/set`), and the **11 TUI themes**
+mapped to CSS variables.
+
+**Observability substrate.** Telemetry records now carry a `node` field: `ModelConfig.model_for`
+tags the calling thread (the one seam every call site resolves its model through), so per-agent
+cost attribution required no per-node plumbing. `telemetry.summarize` grew `by_node` + a
+`run_id` filter (per-session view) + cached-token totals.
+
+**Jobs.** One background job at a time (llm.run_session serializes runs anyway; a second start
+→ 409). Every job (run/resume/eval/seo/promote/export) streams buffered, replayable events -
+a page refresh reattaches to the live job. A finished web `write` runs the same tail as the CLI:
+auto seo+promote (when `auto_promote`) + md/html export.
+
+Files: `webui/server.py` (API + jobs), `webui/static/index.html` (the SPA, no build step),
+`cli` command `web` (`--port`, `--no-browser`), package-data glob in pyproject. Tests:
+`tests/test_webui.py` (API shape, run-to-done flow, SSE close, artifact-traversal guard,
+settings clamp, model-file isolation). The old Gradio demo (`web/app.py`) is untouched - it
+remains the zero-install marketing demo; this is the working surface.
+
+---
+
+## 26. Cost, figures & the web redesign (2026-07-15, follow-up)
+
+- **Headroom removed.** Context compression (headroom-ai) is gone: a live run showed it
+  perturbed the DeepSeek prompt-cache prefix (7% hit vs ~36%), raising cost on our single-turn
+  calls. `_shrink_for_context` keeps only deterministic truncation for context overflow.
+- **Budget scales with units (§19.1 refined).** The flat 100k cap couldn't fit a 6-section
+  piece, so it paused mid-way ("cap not working"). `config.budget_for_units` now returns
+  `BUDGET_OVERHEAD + units * budget_tokens_per_unit` (both tunable) as the session budget, so a
+  full article finishes; an explicit `max_run_tokens` remains a hard ceiling. Applied in
+  `book.run()` (reads the unit count from run_state) so every entry point (write/dashboard/
+  resume) is governed.
+- **Figures made reliable + Rejected review.** Diagrams were handed to the writer as
+  *suggestions*, so generated SVGs got orphaned on disk (1 of 4 in the RL article).
+  `common.reconcile_unit_images` deterministically embeds a generated diagram the writer omitted
+  and records unused suggested images to `rejected.jsonl`. The dashboard **Rejected** tab surfaces
+  dropped diagrams (rendered inline), reject records, and the `versions/` draft snapshots.
+- **SEO in the writing loop.** `seo_keyword` threads into the writer/critic up front;
+  `apply_seo` (auto-promote tail) rewrites the title to carry the keyword + fit SERP length and
+  refreshes the report so the HTML export's meta tags follow.
+- **Restyle.** `orchestrator.build_restyle` re-voices a finished piece into a chosen
+  register/persona/emotion on flash (facts/citations preserved) -> `restyled/<combo>.md`.
+- **Web dashboard redesign.** `design.md` is now the Hermes system (flat, blue-forward,
+  borderless + hairline, System/Light/Dark). The dashboard exports all six formats, exposes
+  register/persona/emotion as None-default dropdowns, adds the Rejected tab and the restyle
+  control. Sigurd/Collapse (proprietary) are substituted by system stacks; no fonts vendored.

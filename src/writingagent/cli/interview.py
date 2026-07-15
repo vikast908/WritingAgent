@@ -164,6 +164,28 @@ def cmd_write(args, cfg, settings, uid):
     else:
         orchestrator.run(cfg, uid, pid, log=print)
 
+    # Only export a FINISHED piece: a budget-pause or escalation used to fall straight
+    # through to _run_exports, printing export failures (or shipping a partial
+    # manuscript) directly under the paused card.
+    st = orchestrator.status(uid, pid)
+    if st.get("phase") != "done":
+        why = "review pending" if st.get("pending_review") else f"phase: {st.get('phase')}"
+        msg = (f"Run paused before completion ({why}) - skipping export. "
+               f"Resume with: writing-agent run --book-id {pid}")
+        console.print(f"\n  [{ui.DIM}]{msg}[/]") if console else print("\n" + msg)
+        return pid
+
+    # SEO audit + promo pack (plan §24), before export so the HTML export picks up the
+    # fresh keywords.json meta tags. LOCAL artifacts only: seo_report.md, keywords.json,
+    # and promo/*.md drafts - the manuscript is untouched and NOTHING is posted anywhere.
+    if getattr(settings, "auto_promote", True):
+        plog = (lambda m: console.print(f"  [{ui.DIM}]{m}[/]")) if console else print
+        try:
+            orchestrator.apply_seo(cfg, uid, pid, log=plog)   # optimize title/meta for the keyword
+            orchestrator.build_promo_pack(cfg, uid, pid, log=plog)
+        except Exception as e:  # noqa: BLE001 - promotion is additive, never fails a write
+            plog(f"[promote] skipped ({type(e).__name__}) - run `seo` / `promote` manually")
+
     ok = _run_exports(console, fmts, uid, pid)
     if ok and console:
         tail = f"exported {ok} formats" if ok > 1 else "finished"

@@ -95,14 +95,6 @@ def active_provider() -> providers.Provider:
     return providers.REGISTRY[_provider_id]
 
 
-# ── Headroom context compression (optional) ──────────────────────────────────
-_headroom_enabled: bool = False
-
-
-def configure_headroom(enabled: bool) -> None:
-    """Enable/disable headroom compression for all LLM calls (called at startup)."""
-    global _headroom_enabled
-    _headroom_enabled = enabled
 
 
 # ── Token-usage telemetry + run budget ────────────────────────────────────────
@@ -141,6 +133,13 @@ def set_project(project: str | None) -> None:
     """Tag all subsequent calls (any thread) with the project being run."""
     global _run_project
     _run_project = project
+
+
+def set_node(node: str | None) -> None:
+    """Tag this thread's next calls with the agent/node name (writer/critic/judge/...).
+    Set by ModelConfig.model_for - the seam every call site resolves its model through -
+    so telemetry can break cost down per agent."""
+    _tl_ctx.node = node
 
 
 def _check_budget() -> None:
@@ -278,6 +277,7 @@ def _log_call(kind: str, model: str, t0: float, attempts: int, resp,
         "run_id": _run_id,
         "project": _run_project,
         "unit": getattr(_tl_ctx, "unit", None),
+        "node": getattr(_tl_ctx, "node", None),
         "kind": kind,
         "model": model,
         "latency_ms": round((time.time() - t0) * 1000),
@@ -358,16 +358,8 @@ def _is_context_overflow(exc: Exception) -> bool:
 
 
 def _shrink_for_context(messages: list[dict], model: str) -> list[dict]:
-    """Make an over-long message list fit the window. Prefer headroom compression
-    (preserves meaning); if it's absent or doesn't help, hard-truncate the single
+    """Make an over-long message list fit the window by hard-truncating the single
     longest message to 60%. Best-effort - returns the original on any failure."""
-    try:
-        from headroom import compress as hr_compress
-        result = hr_compress(messages, model=_HEADROOM_COUNT_MODEL)
-        if result.tokens_saved > 0:
-            return result.messages
-    except Exception:  # noqa: BLE001 - fall through to the deterministic truncation
-        pass
     out = [dict(m) for m in messages]
     if not out:
         return out
@@ -403,36 +395,6 @@ def _debug_dump(kind: str, model: str, messages: list[dict], output: str) -> Non
     })
 
 
-# headroom uses the model name only to select a tokenizer for tallying savings;
-# its compression transforms (SmartCrusher, ContentRouter, …) are model-agnostic.
-# headroom's non-tiktoken (HuggingFace) backends hard-import `transformers` and
-# raise instead of falling back to estimation, so any non-OpenAI slug - e.g. the
-# DeepSeek models we run on OpenRouter - makes compression silently no-op. We
-# therefore count with a tiktoken-native model; the tally is approximate but the
-# compressed output is identical.
-_HEADROOM_COUNT_MODEL = "gpt-4o"
-
-
-def _compress(messages: list[dict], model: str) -> list[dict]:
-    """Compress messages via headroom before sending to the LLM.
-
-    Falls back to the original list silently if headroom is not installed or
-    compression raises any error - the pipeline must never block on this.
-    """
-    if not _headroom_enabled:
-        return messages
-    try:
-        from headroom import compress as hr_compress
-        result = hr_compress(messages, model=_HEADROOM_COUNT_MODEL)
-        if result.tokens_saved > 0:
-            _log.info(
-                "headroom: %d -> %d tokens (saved %d, %.0f%%)",
-                result.tokens_before, result.tokens_after,
-                result.tokens_saved, result.compression_ratio * 100,
-            )
-        return result.messages
-    except Exception:
-        return messages
 
 
 def _get_client() -> OpenAI:
@@ -574,10 +536,7 @@ def complete_text(
     _check_budget()   # kill-switch: before fake mode too, so tests exercise it offline
     if _fake_mode():
         return _FAKE_TEXT
-    messages = _compress(
-        [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        model,
-    )
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     t0 = time.time()
     last_err: Exception | None = None
     shrunk = False   # context-overflow recovery fires at most once per call
@@ -598,7 +557,13 @@ def complete_text(
                 _log_call("text", model, t0, attempt + 1, resp)
                 _debug_dump("text", model, messages, content)
                 return content
-            # Empty content (reasoning ate the budget) - retryable.
+            # Empty content (reasoning ate the budget) - retryable, but only a BIGGER
+            # budget can help: re-sending the same max_tokens just truncates again
+            # (mirrors complete_structured's finish_reason=length recovery).
+            if (resp.choices[0].finish_reason or "") == "length" and max_tokens < 16000:
+                max_tokens = min(max_tokens * 2, 16000)
+                _log.warning("text: empty output (finish_reason=length) - retrying "
+                             "with max_tokens=%d", max_tokens)
             raise _EmptyResponse(
                 f"empty response (finish_reason={resp.choices[0].finish_reason})")
         except Exception as e:  # noqa: BLE001
@@ -743,7 +708,7 @@ def stream_text(
     if history:
         raw.extend(history)
     raw.append({"role": "user", "content": user})
-    messages = _compress(raw, model)
+    messages = raw
     kwargs: dict = {"model": model, "max_tokens": max_tokens, "messages": messages,
                     "stream": True, "stream_options": {"include_usage": True},
                     **_cost_kwargs()}
@@ -820,10 +785,7 @@ def complete_structured(
     if _fake_mode():
         return _fake_instance(schema)
     system_full = system + "\n\n" + _json_instruction(schema)
-    messages = _compress(
-        [{"role": "system", "content": system_full}, {"role": "user", "content": user}],
-        model,
-    )
+    messages = [{"role": "system", "content": system_full}, {"role": "user", "content": user}]
     t0 = time.time()
     last_err: Exception | None = None
     use_response_format = True   # dropped if a model rejects it (BadRequest)
@@ -833,7 +795,7 @@ def complete_structured(
     # finish_reason=length. Re-sending the same too-small budget just truncates again, so the
     # node burns its retries and falls back to a weaker model for nothing. Instead, on a
     # length-truncation we RAISE the cap and retry the same prompt (no repair turn - the
-    # prompt was fine). Mirrors the diagram node's 16k headroom for the same reason.
+    # prompt was fine). Mirrors the diagram node's 16k token budget for the same reason.
     cur_max = max_tokens
     cap = max(16000, max_tokens)
     for attempt in range(_MAX_ATTEMPTS):

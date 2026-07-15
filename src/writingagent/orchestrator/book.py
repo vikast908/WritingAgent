@@ -40,6 +40,7 @@ from .common import (
     _save_version,
     _svg_diagram_figure,
     _with_intake,
+    reconcile_unit_images,
 )
 from .manage import apply_autonomous
 
@@ -67,6 +68,10 @@ def start_book(
     num_chapters: int, max_revisions: int, autonomous: bool = False,
     humanize: bool | None = None, intake: str | None = None, author: str | None = None,
 ) -> str:
+    from ..config import apply_cost_mode
+    cfg, settings, _cost = apply_cost_mode(cfg, settings)   # budget mode pins lean knobs
+    if getattr(settings, "cost_mode", "standard") == "budget":
+        max_revisions = min(max_revisions, settings.max_revisions)  # the arg bakes into state
     brain.ensure_user(uid)
     _record_author(uid, author)
     plan = nodes.planner_expand(cfg, _with_intake(abstract, intake), chosen)
@@ -110,9 +115,30 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
     # Serialize this whole run's use of the module-global usage/run-id/telemetry state and
     # reset+tag it for this run (A-021). Every early return below stays inside the session,
     # so a long-lived host (TUI/web) can't interleave two runs' token accounting.
-    with llm.run_session(book_id, budget=load_settings().max_run_tokens):
+    from ..config import apply_cost_mode, budget_for_units
+    cfg, settings, cost_notes = apply_cost_mode(cfg, load_settings())
+    # Scale the run token budget by the project's unit count so a full piece finishes
+    # (budget mode) unless the user pinned an explicit hard cap. Read the count from the
+    # already-persisted run_state; default 6 if it can't be read yet.
+    units = _project_unit_count(uid, book_id)
+    budget = budget_for_units(settings, units)
+    if cost_notes:
+        note = ", ".join(cost_notes)
+        if budget:
+            note += f", token budget≈{budget:,} ({units} units)"
+        log("   [budget] cost mode pinned: " + note)
+    with llm.run_session(book_id, budget=budget):
         return _run(cfg, uid, book_id, force=force, autonomous=autonomous,
                     log=log, ask=ask, control=control)
+
+
+def _project_unit_count(uid: str, book_id: str) -> int:
+    """Units (sections or chapters) for this project, read from run_state. 6 if unknown."""
+    for P in (ArticlePaths(book_id, uid), BookPaths(book_id, uid)):
+        if P.run_state.exists():
+            st = brain.read_json(P.run_state) or {}
+            return int(st.get("num_sections") or st.get("num_chapters") or 6)
+    return 6
 
 
 def _run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
@@ -423,11 +449,27 @@ def _book_run_ops(cfg, paths, plan, toc, store, prefetch, pool, log, ask, contro
         brain.write_text(paths.instruction_of(n),
                          f"Strengthen the {dim} of this chapter - it scored lowest there. "
                          "Keep everything that already works; change only what lifts it.")
-        brain.write_text(paths.ch_draft(n), brain.read_text(paths.ch(n)) or "")  # revise from committed
+        committed_text = brain.read_text(paths.ch(n)) or ""
+        brain.write_text(paths.ch_draft(n), committed_text)   # revise from committed
         paths.ch(n).unlink(missing_ok=True)                   # clear the resume guard -> re-draft
-        _process_chapter(cfg, paths, plan, toc, store, state, n, log, ask=ask)
+        result = None
+        try:
+            result = _process_chapter(cfg, paths, plan, toc, store, state, n, log, ask=ask)
+        finally:
+            # A revise must never LOSE a committed chapter: if the re-process escalated
+            # (or raised) it wrote only ch_draft(n), yet state still counts n committed
+            # and assembly would silently drop it - restore the original.
+            if result != "commit" and not paths.ch(n).exists():
+                brain.write_text(paths.ch(n), committed_text)
         paths.ch_draft(n).unlink(missing_ok=True)
         paths.instruction_of(n).unlink(missing_ok=True)
+        if result != "commit":
+            state["revisions_done"] = state.get("revisions_done", 0) + 1
+            brain.write_json(paths.run_state, state)
+            agentic.trace.append(paths, {"scope": "run-result", "action": "revise",
+                                         "unit": f"ch{n:02d}", "dim": dim, "result": "rolled_back"})
+            log(f"   [agentic] revise of chapter {n} did not approve - kept the committed version")
+            return "continue"
         # _finalize_unit APPENDED a fresh score/insight; move it onto unit n so the per-unit
         # arrays stay aligned with committed units (n stays committed, count unchanged).
         for key in ("scores", "insights"):
@@ -666,13 +708,21 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
     # with one signature across chapters and sections. skills= overrides the default set
     # (used by the ablation duel to draft a variant with one skill held out).
     def _write(notes, base, temperature=None, skeleton=False, skills=None):
-        return nodes.write_chapter(cfg, plan, blueprint, fix_notes=notes,
-                                   context=context, images=images,
-                                   skills=skill_bodies if skills is None else skills,
-                                   base_draft=base, requirements=requirements, voice=voice,
-                                   length_note=_length_note(0, blueprint.target_words),
-                                   temperature=temperature, register=register,
-                                   tools=_tools, tool_runner=_tool_runner)
+        draft_ = nodes.write_chapter(cfg, plan, blueprint, fix_notes=notes,
+                                     context=context, images=images,
+                                     skills=skill_bodies if skills is None else skills,
+                                     base_draft=base, requirements=requirements, voice=voice,
+                                     length_note=_length_note(0, blueprint.target_words),
+                                     temperature=temperature, register=register,
+                                     tools=_tools, tool_runner=_tool_runner)
+        # De-tell BEFORE critique: the surgical pass (flash-tier, only when tells exist)
+        # or the free typographic clean, so the pro-tier critic never spends a whole
+        # WRITE->CRITIQUE revision round on tells a cheap pass removes - and it reviews
+        # the prose in the form that will actually ship. The commit-time humanize then
+        # finds nothing left to rewrite, so there is no duplicate LLM cost.
+        if state.get("humanize"):
+            return humanizer.humanize(cfg, draft_, register)
+        return humanizer.mechanical_clean(draft_, registers.get(register).allow_em_dash)
 
     def _critique(d):
         return nodes.critique_chapter(
@@ -767,6 +817,7 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         if state.get("craft_passes", True):   # surgical show-don't-tell / de-passive (plan §22)
             from .. import surgery
             draft = surgery.apply(cfg, draft, register)
+        draft = reconcile_unit_images(paths, n, f"ch{n:02d}", draft, images, log)  # figures (plan §26)
         _commit(cfg, paths, plan, blueprint, store, n, draft, skill_names, first_pass,
                 log, humanize=bool(state.get("humanize")), sources=ch_sources,
                 register=register)
@@ -888,11 +939,16 @@ def _repair_contradictions(cfg, paths, plan, toc, store, report, *, humanize, lo
         if humanize:
             tasks["humanized"] = lambda d=draft: humanizer.humanize(cfg, d, register)
         out = concurrency.gather(tasks, strict=True)
-        brain.write_text(paths.ch(n), out.get("humanized") or draft)
+        # Same crash-safety ordering as _commit (A-016): the durable knowledge base
+        # (summary + canon) commits BEFORE the chapter .md, and the derived FTS index
+        # runs last. This block previously wrote ch(n) first - a crash mid-repair
+        # would leave the new prose with the OLD canon.
         brain.write_text(paths.ch_summary(n), out["summary"])
         ex = out["extraction"]
         store.update_from_extraction(n, ex)
         store.render_canon(paths, names=[c.name for c in ex.characters])
+        brain.write_text(paths.ch(n), out.get("humanized")
+                         or humanizer.mechanical_clean(draft, registers.get(register).allow_em_dash))
         store.index_chapter(paths, n)
         brain.append_text(paths.revision_log,
                           f"## Chapter {n} repaired ({len(relevant)} contradiction(s))")

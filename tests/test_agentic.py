@@ -480,8 +480,9 @@ def test_read_canon_slice_is_query_relevant():
 # ── Gap 2: trained policy distilled from the trace corpus (plan §21.11) ──────────
 def test_train_policy_fits_and_persists(tmp_brain, monkeypatch):
     from writingagent.agentic import learn
-    units = {("p", f"g{i}"): {"gathered": True, "first_pass": True} for i in range(3)}
-    units.update({("p", f"d{i}"): {"gathered": False, "first_pass": False} for i in range(3)})
+    n = learn._MIN_PER_ARM
+    units = {("p", f"g{i}"): {"gathered": True, "first_pass": True} for i in range(n)}
+    units.update({("p", f"d{i}"): {"gathered": False, "first_pass": False} for i in range(n)})
     monkeypatch.setattr(learn, "_collect_units", lambda uid: units)
     model = learn.train_policy("ufit")
     assert model and model["global"]["research_helps"] is True       # gathering lifts the reward here
@@ -490,10 +491,33 @@ def test_train_policy_fits_and_persists(tmp_brain, monkeypatch):
 
 def test_train_policy_undecided_on_thin_data(tmp_brain, monkeypatch):
     from writingagent.agentic import learn
+    # A handful of labelled units (below _MIN_PER_ARM) must not produce a model.
     monkeypatch.setattr(learn, "_collect_units",
-                        lambda uid: {("p", "u1"): {"gathered": True, "first_pass": True}})
+                        lambda uid: {("p", f"u{i}"): {"gathered": bool(i % 2), "first_pass": True}
+                                     for i in range(6)})
     assert learn.train_policy("uthin") is None                  # < MIN_PER_ARM -> no model
     assert learn.load_policy("uthin") is None                   # nothing written
+
+
+def test_collect_units_excludes_rescue_research(tmp_brain, monkeypatch):
+    """Mid-loop evidence-gap research fires only AFTER a failed critique - counting it
+    as 'gathered' poisons the arm with guaranteed non-first-pass units (the policy
+    would learn 'research hurts'). Only the controller's pre-draft gathering counts."""
+    from writingagent.agentic import learn, trace
+    paths = ArticlePaths("cfd", "ucf")
+    paths.ensure()
+    trace.append(paths, {"unit": "sec01", "action": "research",
+                         "reason": "evidence gap", "query": "rescue"})
+    trace.append(paths, {"scope": "unit-outcome", "unit": "sec01",
+                         "first_pass": False, "insight": 2})
+    trace.append(paths, {"unit": "sec02", "action": "research",
+                         "reason": "controller", "query": "pre-draft"})
+    trace.append(paths, {"scope": "unit-outcome", "unit": "sec02",
+                         "first_pass": True, "insight": 4})
+    monkeypatch.setattr(brain, "list_projects", lambda uid: [("cfd", "article")])
+    units = learn._collect_units("ucf")
+    assert units[("cfd", "sec01")]["gathered"] is False     # rescue research excluded
+    assert units[("cfd", "sec02")]["gathered"] is True      # pre-draft gathering counts
 
 
 def test_trace_policy_follows_learned_model():
@@ -577,6 +601,58 @@ def test_run_loop_exercises_reoutline_and_revise(tmp_brain, fake_llm, monkeypatc
     acts = [r["action"] for r in agentic.trace.read(ArticlePaths(aid, "urx"))
             if r.get("scope") == "run-result"]
     assert "reoutline" in acts and "revise" in acts
+
+
+def test_revise_escalation_keeps_committed_unit(tmp_brain, fake_llm, monkeypatch):
+    """Data-loss regression: a revise whose re-process ESCALATES (writes only the
+    escalation draft, no committed file) must roll the original section back -
+    state still counts it committed, so assembly would otherwise silently drop it."""
+    from writingagent.agentic import policy as pol_mod
+    from writingagent.orchestrator import article as article_mod
+
+    class ReviseGreedy:
+        name = "revise-greedy"
+        def decide(self, view, legal, default):
+            if "revise" in legal:
+                return agentic.RunDecision(action="revise")
+            return agentic.RunDecision(action=default)
+    monkeypatch.setattr(pol_mod, "make_run_policy", lambda *a, **k: ReviseGreedy())
+
+    real = article_mod._process_article_section
+
+    def escalate_on_revise(cfg, paths, outline, state, n, log, **kw):
+        if paths.instruction_of(n).exists():          # only the revise re-process has one
+            brain.write_text(paths.section_draft(n), "escalation draft")
+            return "escalate"
+        return real(cfg, paths, outline, state, n, log, **kw)
+    monkeypatch.setattr(article_mod, "_process_article_section", escalate_on_revise)
+
+    cfg = load_config()
+    aid = orchestrator.start_article(cfg, _settings(agentic=True, agentic_policy="llm"),
+                                     "urb", "abstract", _angle(), "urbr", 2, 1, autonomous=True)
+    state = orchestrator.run(cfg, "urb", aid, log=_silent)
+    paths = ArticlePaths(aid, "urb")
+    assert state["phase"] == "done"
+    from writingagent.orchestrator.common import _manuscript_section_bodies
+    bodies = _manuscript_section_bodies(brain.read_text(paths.manuscript) or "")
+    assert len(bodies) == state["num_sections"]       # no committed section was lost
+    assert all(b.strip() for b in bodies)
+    recs = agentic.trace.read(paths)
+    assert any(r.get("action") == "revise" and r.get("result") == "rolled_back"
+               for r in recs if r.get("scope") == "run-result")
+
+
+def test_budget_mode_bakes_lean_knobs_into_run_state(tmp_brain, fake_llm):
+    """cost_mode=budget must pin the spend knobs at project creation: the baked run
+    state (which every resume reads) carries the lean values."""
+    cfg = load_config()
+    aid = orchestrator.start_article(
+        cfg, _settings(cost_mode="budget", divergent_drafts=2, table_read=True),
+        "ubm", "abstract", _angle(), "ubmr", 2, 2, autonomous=True)
+    st = brain.read_json(ArticlePaths(aid, "ubm").run_state)
+    assert st["divergent_drafts"] == 1
+    assert st["max_revisions"] == 1              # the per-call arg is clamped too
+    assert st.get("table_read") is False
 
 
 def test_run_loop_escalate_pauses(tmp_brain, fake_llm, monkeypatch):
