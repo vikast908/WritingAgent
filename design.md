@@ -174,7 +174,7 @@ zIndex:
   tooltip: 500
 components:
   button-primary:      { backgroundColor: "{colors.accent}", textColor: "{colors.on-accent}", rounded: "{rounded.sm}", padding: "10px 20px" }
-  button-primary-hover:{ backgroundColor: "{colors.accent-hover}", textColor: "{colors.on-accent}" }
+  button-primary-hover: { backgroundColor: "{colors.accent-hover}", textColor: "{colors.on-accent}" }
   button-primary-disabled: { backgroundColor: "{colors.accent-disabled}", textColor: "{colors.on-accent}", cursor: not-allowed }
   button-destructive:  { backgroundColor: "{colors.error}", textColor: "{colors.on-error}", rounded: "{rounded.sm}" }
   button-secondary:    { backgroundColor: "{colors.accent-muted}", textColor: "{colors.accent}", rounded: "{rounded.sm}" }
