@@ -1,29 +1,29 @@
-# Examples — real output from Writing Agent
+# Examples - real output from Writing Agent
 
-Don't take the README's word for it. These are **actual, unedited pieces the system generated** — so
+Don't take the README's word for it. These are **actual, unedited pieces the system generated** - so
 you can judge the output before you install anything.
 
-## 📄 Article — *Your Voice Assistant's 100ms Problem*
+## 📄 Article - *Your Voice Assistant's 100ms Problem*
 
 A long-form technical article with a real thesis, inline-researched sources, and self-laid-out
 diagrams. Generated end-to-end, then the references/citations cleaned deterministically.
 
-- [**`voicebot-article/manuscript.md`**](voicebot-article/manuscript.md) — the finished piece (~16 min read, 6 sections, built-in SVG figures)
-- [**`voicebot-article/evidence_report.md`**](voicebot-article/evidence_report.md) — the receipts: the thesis it argues + **46 sources ranked by influence (0–100)**
+- [**`voicebot-article/manuscript.md`**](voicebot-article/manuscript.md) - the finished piece (~16 min read, 6 sections, built-in SVG figures)
+- [**`voicebot-article/evidence_report.md`**](voicebot-article/evidence_report.md) - the receipts: the thesis it argues + **46 sources ranked by influence (0–100)**
 
 > This is the headline differentiator made visible: the article takes a contestable position, and the
 > evidence report shows exactly which sources carried it. Most AI writing can't show you either.
 
-## 🅰️🅱️ A/B pilot — three more articles, benchmarked
+## 🅰️🅱️ A/B pilot - three more articles, benchmarked
 
 Three Writing Agent articles from the blind A/B pilot (vs Claude), in
-[**`ab-pilot/`**](ab-pilot/) — vector databases, underpowered A/B tests, and microservices for small
+[**`ab-pilot/`**](ab-pilot/) - vector databases, underpowered A/B tests, and microservices for small
 teams. The scoring + honest caveats are in [`../benchmarks/blind_ab/RESULTS.md`](../benchmarks/blind_ab/RESULTS.md).
 
-## 📚 Book — *The Misprint File*
+## 📚 Book - *The Misprint File*
 
 A full short novel (3 chapters) with canon/continuity tracking and front/back matter, in
-[**`../SampleRun/`**](../SampleRun/) — manuscript, per-chapter files, the canon (characters,
+[**`../SampleRun/`**](../SampleRun/) - manuscript, per-chapter files, the canon (characters,
 timeline, world rules), and the learned craft skills the run produced.
 
 ## Generate your own (≈$0.25, a couple of minutes)
@@ -44,6 +44,6 @@ WRITINGAGENT_FAKE=1 writingagent new --abstract "test" --pick 1 && writingagent 
 
 ## Contribute a sample
 
-Generated something good? PRs welcome — add a folder here with the `manuscript.md` (and its
+Generated something good? PRs welcome - add a folder here with the `manuscript.md` (and its
 `evidence_report.md` for articles), plus a one-line note on the topic and settings used. Real,
 diverse examples are the best advertisement the project has.

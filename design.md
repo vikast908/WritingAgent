@@ -2,7 +2,7 @@
 version: 2
 name: Editorial Design System
 description: >
-  A portable, cross-domain design system — editorial and literary: ink on warm
+  A portable, cross-domain design system - editorial and literary: ink on warm
   paper, one accent (the editor's manuscript red), a real serif worth reading.
   Flat, borderless, type-led. Built to be reused across software (web/desktop),
   terminal (TUI/CLI), print & long-form (books, PDF/EPUB), and demos. Writing
@@ -16,7 +16,7 @@ colors:
   # ── anchors ──
   ink: "#17171a"              # base text + brand mark (--fg)
   ink-soft: "#3a3a3d"         # heavier-than-secondary ink
-  paper: "#faf8f4"            # light background — warm off-white (--bg)
+  paper: "#faf8f4"            # light background - warm off-white (--bg)
   paper-sunken: "#f2ede4"     # sidebar / recessed light surface (--sidebar)
   surface: "#ffffff"          # cards, elevated light surfaces (--surface)
   # ── accent (manuscript red) + states ──
@@ -25,7 +25,7 @@ colors:
   accent-muted: "color-mix(in oklab, #a3341f 10%, transparent)"  # tint fills
   accent-disabled: "#d9b9b0"  # pale accent on disabled CTAs
   on-accent: "#faf8f4"        # text/icon on an accent fill
-  brass: "#b0812f"            # warm counterpoint — LARGE/rules/decorative only
+  brass: "#b0812f"            # warm counterpoint - LARGE/rules/decorative only
   # ── text hierarchy (ink over bg at alpha) ──
   text-primary: "rgba(23,23,26,0.94)"    # body, headings
   text-secondary: "rgba(23,23,26,0.72)"  # supporting, metadata
@@ -40,7 +40,7 @@ colors:
   # ── semantic / status ──
   success: "#2f7d5a"          # 4.71:1 on paper
   warning: "#a85f1e"          # 4.58:1 on paper (AA-fixed, was #c07a2b)
-  error: "#c23b2b"            # 5.01:1 — destructive; hotter than brand accent
+  error: "#c23b2b"            # 5.01:1 - destructive; hotter than brand accent
   error-strong: "#9e2a1d"     # error hover/pressed
   on-error: "#faf8f4"         # text on error fill
   info: "#3f6f78"             # informational banners (slate-teal)
@@ -130,7 +130,7 @@ typography:
     fontSize: 8.5pt
     lineHeight: 1.35
 rounded:
-  none: 0px      # content surfaces, cards, reading column — square, page-like
+  none: 0px      # content surfaces, cards, reading column - square, page-like
   xs: 2px
   sm: 3px        # buttons, inputs, chips
   md: 4px
@@ -207,16 +207,16 @@ components:
 
 ## Overview
 
-This is an **editorial, type-led design system** — ink on warm paper, one
+This is an **editorial, type-led design system** - ink on warm paper, one
 accent (the editor's *manuscript red*), a real serif worth reading, flat and
 borderless. It is written to be **reused across domains**: web/desktop software,
 terminal apps (TUI/CLI), **print & long-form (books, PDF/EPUB)**, and demos.
 Where the system needs a concrete example, **Writing Agent** is the reference
-implementation (Appendix A) — but the core below is portable.
+implementation (Appendix A) - but the core below is portable.
 
 **Voice.** A tireless, exacting editor: precise without being cold, literary
-without being precious. Interfaces should feel like a **well-set page** — the
-kind of thing worth reading — not a dashboard bolted onto a screen.
+without being precious. Interfaces should feel like a **well-set page** - the
+kind of thing worth reading - not a dashboard bolted onto a screen.
 
 **Principles.**
 
@@ -224,7 +224,7 @@ kind of thing worth reading — not a dashboard bolted onto a screen.
    mono play support. Prose respects an optimal *measure* (~66ch). Nothing
    competes with the text.
 2. **Ink and one accent.** Ink is the base for text and the brand mark. Exactly
-   one chromatic accent — **manuscript red `#a3341f`** — drives interaction,
+   one chromatic accent - **manuscript red `#a3341f`** - drives interaction,
    links, and marks. Brass is a rare warm counterpoint; everything else is paper
    and hairlines.
 3. **Flat, not boxed.** No card-in-card. Group with whitespace and a single
@@ -235,8 +235,8 @@ kind of thing worth reading — not a dashboard bolted onto a screen.
    menus, toasts.
 5. **Tokens over literals.** Everything is a token (below). Strokes and fills are
    *derived* from ink + accent, never hand-picked per component.
-6. **One primitive per pattern.** Each interactive pattern — button, field,
-   overlay, toast, loader — exists once. Forking a primitive is a regression.
+6. **One primitive per pattern.** Each interactive pattern - button, field,
+   overlay, toast, loader - exists once. Forking a primitive is a regression.
 7. **Accessible by construction.** Every color pair meets WCAG AA (verified);
    color is never the sole signal; focus is always visible. See Accessibility.
 
@@ -244,15 +244,15 @@ kind of thing worth reading — not a dashboard bolted onto a screen.
 
 Tokens are layered so the system ports to any stack without rewrites:
 
-- **Primitive tokens** — raw values (`#a3341f`, `16px`, `Fraunces`). Never used
+- **Primitive tokens** - raw values (`#a3341f`, `16px`, `Fraunces`). Never used
   directly in components.
-- **Semantic tokens** — role-named (`accent`, `text-secondary`, `border`,
+- **Semantic tokens** - role-named (`accent`, `text-secondary`, `border`,
   `error`, `shadow-page`). Components reference *only* these. Theming swaps
   primitives behind semantics.
-- **Component tokens** — per-component, per-state (`button-primary-hover`,
+- **Component tokens** - per-component, per-state (`button-primary-hover`,
   `input-error`). Reference semantics.
 
-**Naming:** `role[-variant][-state]` — e.g. `accent`, `accent-hover`,
+**Naming:** `role[-variant][-state]` - e.g. `accent`, `accent-hover`,
 `text-tertiary`, `banner-error`. Lowercase, hyphenated, stable across platforms.
 
 **Portability targets (1:1 mapping):**
@@ -272,25 +272,25 @@ entire system (see Theming → contract).
 
 ## Colors
 
-**Ink on paper with one accent.** Deliberately warm — a cream paper
-(`#faf8f4`), not the cool blue-white of a typical app — so it reads as *print*,
+**Ink on paper with one accent.** Deliberately warm - a cream paper
+(`#faf8f4`), not the cool blue-white of a typical app - so it reads as *print*,
 not *chrome*.
 
 **Anchors**
-- **Ink `#17171a`** — primary text + brand mark. Never pure black. 16.9:1 on paper.
-- **Accent / Manuscript red `#a3341f`** — the one interaction color: buttons,
+- **Ink `#17171a`** - primary text + brand mark. Never pure black. 16.9:1 on paper.
+- **Accent / Manuscript red `#a3341f`** - the one interaction color: buttons,
   links, focus rings, active nav, selected states, editorial marks. Oxblood, not
-  fire-engine — a red-pencil edit, not an alarm. `accent-hover #872a19` for
+  fire-engine - a red-pencil edit, not an alarm. `accent-hover #872a19` for
   press/hover.
-- **Brass `#b0812f`** — warm counterpoint, used sparingly (a rule above a byline,
-  a small highlight). **Large text / rules / decorative only** (3.28:1 — fails AA
+- **Brass `#b0812f`** - warm counterpoint, used sparingly (a rule above a byline,
+  a small highlight). **Large text / rules / decorative only** (3.28:1 - fails AA
   for body text). Never an interaction driver.
 
-**Surfaces** — paper `#faf8f4`, paper-sunken `#f2ede4` (sidebar/recessed),
+**Surfaces** - paper `#faf8f4`, paper-sunken `#f2ede4` (sidebar/recessed),
 surface `#ffffff` (cards). Dark: bg `#121211`, surface `#1c1b19`, raised
 `#211f1c`. Dark text is warm paper-white `#f3efe6`, never `#fff`.
 
-**Semantic / status** — separated from the brand so the UI never looks like one
+**Semantic / status** - separated from the brand so the UI never looks like one
 giant warning:
 
 | Role | Light | Dark | On paper |
@@ -298,7 +298,7 @@ giant warning:
 | success | `#2f7d5a` | `#5aa07f` | 4.71:1 ✓ |
 | warning | `#a85f1e` | `#d08a3a` | 4.58:1 ✓ |
 | error / destructive | `#c23b2b` | `#e0604e` | 5.01:1 ✓ |
-| info | `#3f6f78` | `#5a97a2` | — |
+| info | `#3f6f78` | `#5a97a2` | - |
 
 Error is hotter and more saturated than the oxblood accent so "delete" never
 reads as "link." Dark-mode accent lifts to `#d8664c` (4.86:1 on dark cards).
@@ -310,13 +310,13 @@ reads as "link." Dark-mode accent lifts to `#d8664c` (4.86:1 on dark cards).
 | text-primary | 94% | 16:1 | body, headings |
 | text-secondary | 72% | 6.9:1 | supporting, metadata |
 | text-tertiary | 60% | 4.6:1 | muted labels, placeholders |
-| text-quaternary | 34% | 2.2:1 | **disabled/decorative only — never information** |
+| text-quaternary | 34% | 2.2:1 | **disabled/decorative only - never information** |
 
 **Fills** (accent mixed at descending strength): `fill-primary` 14% (selected),
 `fill-secondary` 10% (active rows), `fill-tertiary` 7%, `fill-quaternary` 5%
 (secondary buttons), `fill-quinary` 3%.
 
-**Categorical / data-viz** — indicators only (charts, telemetry), never
+**Categorical / data-viz** - indicators only (charts, telemetry), never
 interaction: red · cyan-slate · brass · green · purple · gold (ordered for
 distinctness). See Data visualization for scales.
 
@@ -329,7 +329,7 @@ bold); UI components & graphics ≥ 3:1. All body text, links, button labels, an
 secondary text pass AA in both modes. Exceptions, by design:
 - **Brass** and **text-tertiary** clear only the 3:1 bar → **large text / rules /
   placeholders only**.
-- **text-quaternary** (2.2:1) is exempt (disabled/decorative) — **never carries
+- **text-quaternary** (2.2:1) is exempt (disabled/decorative) - **never carries
   information**.
 - A new theme MUST preserve these ratios (Theming → contract).
 
@@ -358,9 +358,9 @@ announce toasts/async results.
 
 Three families, strictly separated by role. **The serif is the identity.**
 
-**Fraunces** (display + reading — vendored). A characterful old-style serif with
+**Fraunces** (display + reading - vendored). A characterful old-style serif with
 optical-size + weight axes, one variable WOFF2 (SIL OFL, offline). Carries both
-**display** (wordmark, headings — high opsz, light weight, tight tracking) and
+**display** (wordmark, headings - high opsz, light weight, tight tracking) and
 **reading** (body at low opsz, weight 400, line-height 1.62, measure 66ch).
 Fallback: `'Iowan Old Style', Charter, Georgia, 'Times New Roman', serif`.
 
@@ -371,10 +371,10 @@ stack, never vendored. Base 0.8125rem / 1.55. Small labels use `label-caps`
 **JetBrains Mono** (code / figures / data). Stack falls back to Cascadia → SF
 Mono → system mono.
 
-**Kbd** — native UI face, small caps, never themed.
+**Kbd** - native UI face, small caps, never themed.
 
 **Reading surfaces** constrain prose to the **measure** (66ch), center it, and
-open with a **3-line drop cap** in accent — the signature reading flourish.
+open with a **3-line drop cap** in accent - the signature reading flourish.
 
 **Substitutes.** If Fraunces can't be vendored, `Newsreader` or `Source Serif 4`
 transfer cleanly; the system-serif fallback keeps the editorial feel with zero
@@ -402,12 +402,12 @@ For book, report, and print output the screen scale gives way to a print scale:
 - **Images & plates.** Full-measure or full-bleed; captions in `ui-sans` /
   small; figure numbering.
 - **Color management.** Screen tokens are sRGB; for offset print convert to
-  CMYK and expect the manuscript-red to shift — proof it. Provide **bleed**
+  CMYK and expect the manuscript-red to shift - proof it. Provide **bleed**
   (3mm) and trim marks for print PDFs. EPUB uses the screen tokens as-is.
 
 ## Layout & responsive
 
-**Spacing** — 4px base: `xxs 2 · xs 4 · sm 8 · md 16 · lg 24 · xl 48 · section
+**Spacing** - 4px base: `xxs 2 · xs 4 · sm 8 · md 16 · lg 24 · xl 48 · section
 64`. Group with space before rules.
 
 **Grid & containers.** Content max ~1100px on dashboard views; **reading
@@ -423,11 +423,11 @@ inset 32px.
 | lg | 880–1128 | full sidebar + main; grids 2–3 up |
 | xl | ≥ 1440 | content caps; gutters absorb the rest |
 
-Reduce columns at each step — never reflow rows unpredictably. Reading measure
+Reduce columns at each step - never reflow rows unpredictably. Reading measure
 never exceeds 66ch regardless of width.
 
 **Layering (z-index).** `base 0 · sticky 100 · dropdown 200 · overlay 300
-(toasts) · scrim 400 · modal 401 · tooltip 500`. Never hand-pick z-index — use
+(toasts) · scrim 400 · modal 401 · tooltip 500`. Never hand-pick z-index - use
 the scale.
 
 **Density.** Default is comfortable. An optional **compact** mode tightens
@@ -449,19 +449,19 @@ things you click or that float.
 | full | 9999px | toggles, pills, status dots, the brand tile |
 
 Square content + hairline rules reads like a set page. Do not soften cards "to
-look friendly" — that erases the identity.
+look friendly" - that erases the identity.
 
 ## Elevation & depth
 
 One shadow system, three levels:
 
-- **Flat** — 95% of surfaces: a single hairline, no shadow.
-- **`shadow-card`** — cards/composer that must read against any background: soft
+- **Flat** - 95% of surfaces: a single hairline, no shadow.
+- **`shadow-card`** - cards/composer that must read against any background: soft
   1px + hairline. Usually cards stay flat; elevation is for things that *float*.
-- **`shadow-page`** — the one overlay shadow (layered, downward-weighted, no hard
+- **`shadow-page`** - the one overlay shadow (layered, downward-weighted, no hard
   border), paired with `stroke-hair` (3% currentColor). Every dialog, menu,
   popover, tooltip, toast uses it.
-- **Scrim** — `rgba(0,0,0,0.32)` light / `0.5` dark behind modal overlays.
+- **Scrim** - `rgba(0,0,0,0.32)` light / `0.5` dark behind modal overlays.
 
 ## Motion
 
@@ -472,7 +472,7 @@ Quick and functional. Tokens: `fast 120ms` (controls), `base 180ms`, `slow
   animate-in).
 - **Overlay enter/exit:** fade + subtle scale (0.98→1, `slow`; reverse faster).
 - **View transitions:** fade, staggered per element.
-- **Loader — the Caret:** a blinking `▍` at `motion.caret` (see Notifications).
+- **Loader - the Caret:** a blinking `▍` at `motion.caret` (see Notifications).
 - **Reduced motion:** collapse everything beyond a fade.
 
 ## Edges & borders
@@ -498,13 +498,13 @@ Each pattern exists once, with an explicit **state set**:
 *default · hover · active · focus · disabled · loading · selected · error*.
 
 ### Buttons
-- **Primary** — accent fill, `on-accent` text; hover → `accent-hover`; flat.
-- **Destructive** — `error` fill, `on-error` text (distinct from primary red).
-- **Secondary** — `accent-muted` wash, accent text.
-- **Ghost** — transparent, hover `fill-tertiary`.
-- **Text / link** — no chrome, accent, underline on hover.
-- **Disabled** — `accent-disabled` (primary) / reduced opacity; `not-allowed`.
-- **Loading** — label swaps to the Caret; button stays sized, disabled.
+- **Primary** - accent fill, `on-accent` text; hover → `accent-hover`; flat.
+- **Destructive** - `error` fill, `on-error` text (distinct from primary red).
+- **Secondary** - `accent-muted` wash, accent text.
+- **Ghost** - transparent, hover `fill-tertiary`.
+- **Text / link** - no chrome, accent, underline on hover.
+- **Disabled** - `accent-disabled` (primary) / reduced opacity; `not-allowed`.
+- **Loading** - label swaps to the Caret; button stays sized, disabled.
 Icons inherit one size; never re-set per instance.
 
 ### Inputs, selects & forms
@@ -515,28 +515,28 @@ Shared control shape. Resting `border`; hover `border-strong`; focus full
 scrollbar, full keyboard + ARIA). **Error state** below (Error states).
 
 ### SegmentedControl / Switch / SearchField
-- **Segmented** — small mutually-exclusive sets; accent fill on the selected
+- **Segmented** - small mutually-exclusive sets; accent fill on the selected
   segment. Replaces radio piles.
-- **Switch** — bare toggle, `full` radius, accent when on, `aria-label`.
-- **SearchField** — borderless, underline-on-focus, auto-width; never a boxed
+- **Switch** - bare toggle, `full` radius, accent when on, `aria-label`.
+- **SearchField** - borderless, underline-on-focus, auto-width; never a boxed
   tile.
 
 ### Surfaces
-- **Card** — `surface`, square, hairline (or `shadow-card` when floating). No
+- **Card** - `surface`, square, hairline (or `shadow-card` when floating). No
   card-in-card.
-- **ListRow** — flat, flush-left: label / description / action. Prefer spacing to
+- **ListRow** - flat, flush-left: label / description / action. Prefer spacing to
   dividers.
-- **Code / CodeBlock** — JetBrains Mono; inline code 5% ink fill; blocks ride the
-  editor surface. A code frame may carry three **window-control dots** — editorial
+- **Code / CodeBlock** - JetBrains Mono; inline code 5% ink fill; blocks ride the
+  editor surface. A code frame may carry three **window-control dots** - editorial
   traffic lights (manuscript-red · brass · sage), **visible in both light and dark**
   (never a low-contrast gray). **Wide code** (e.g. ASCII diagrams) **scrolls
-  horizontally within its own frame — never clipped**, with a themed scrollbar.
-- **ReadingView** — the hero prose surface: measure + reading spec + drop cap.
+  horizontally within its own frame - never clipped**, with a themed scrollbar.
+- **ReadingView** - the hero prose surface: measure + reading spec + drop cap.
 
 ### Brand mark & Loader
-- **BrandMark** — the **pilcrow `¶`** in Fraunces on an ink tile (`full` radius),
+- **BrandMark** - the **pilcrow `¶`** in Fraunces on an ink tile (`full` radius),
   identical light/dark. Sidebar header, favicon, TUI banner. No mascots.
-- **Loader — the Caret** — a blinking `▍` (accent), optionally with a live
+- **Loader - the Caret** - a blinking `▍` (accent), optionally with a live
   word/token counter for long ops. Never the literal word "Loading…".
 
 ## Overlays
@@ -554,121 +554,121 @@ layer scale. Taxonomy:
 
 Rules: never the word "Close" (use an × icon); overlays close on Esc and
 outside-click *except* install/onboarding; menus should flip when near a
-viewport edge (collision) — a documented gap in the reference impl.
+viewport edge (collision) - a documented gap in the reference impl.
 
 ## Notifications & feedback
 
-- **Toast** — transient, bottom-right, `surface` + `shadow-page`; success/plain
+- **Toast** - transient, bottom-right, `surface` + `shadow-page`; success/plain
   vs error (error text in `error`). Auto-dismiss (~3s; ~6s for errors); × to
   close; announced via a live region. One at a time; queue extras.
-- **Banner** — persistent, in-flow, full-width: `info` / `success` / `warning` /
+- **Banner** - persistent, in-flow, full-width: `info` / `success` / `warning` /
   `error`, each a 10% tinted background + a 3px left accent bar + icon + message
   + optional action. For state that must stay visible (quota, degraded mode).
-- **Alert (inline)** — a compact banner scoped to a section or form.
-- **Badge** — small count/label pill (`accent-muted` + accent, `label-caps`).
-- **Status dot** — 7px `full` dot: success/warning/error/accent (e.g. a live-run
+- **Alert (inline)** - a compact banner scoped to a section or form.
+- **Badge** - small count/label pill (`accent-muted` + accent, `label-caps`).
+- **Status dot** - 7px `full` dot: success/warning/error/accent (e.g. a live-run
   pulse). Always paired with a text label (color-not-sole-signal).
-- **Progress** — thin accent bar on a faint track; indeterminate uses the Caret.
-- **Empty / loading / skeleton** — `EmptyState` (centered, one guiding line);
+- **Progress** - thin accent bar on a faint track; indeterminate uses the Caret.
+- **Empty / loading / skeleton** - `EmptyState` (centered, one guiding line);
   loading uses the Caret; skeletons are hairline-outlined blocks at `fill-tertiary`
   (no shimmer under reduced motion).
 
 ## Highlights & selection
 
-- **Text selection** — `selection` (accent @22%) via `::selection`.
-- **Selected item** — `fill-primary` wash + accent text/left-marker (nav item,
+- **Text selection** - `selection` (accent @22%) via `::selection`.
+- **Selected item** - `fill-primary` wash + accent text/left-marker (nav item,
   list row, segmented segment, `.csel` option with a ✓).
-- **Active row** — `fill-secondary`.
-- **Hover** — `fill-tertiary` (never a heavy block).
-- **Search / match highlight** — accent-tinted background on the matched span;
+- **Active row** - `fill-secondary`.
+- **Hover** - `fill-tertiary` (never a heavy block).
+- **Search / match highlight** - accent-tinted background on the matched span;
   keep text contrast ≥ 4.5:1.
-- **"New" / emphasis marker** — a small accent badge or dot, plus a label; never
+- **"New" / emphasis marker** - a small accent badge or dot, plus a label; never
   color alone.
-- **Focus highlight** — the `focus-ring`, distinct from selection.
+- **Focus highlight** - the `focus-ring`, distinct from selection.
 
 ## Error states
 
 Errors are explicit, calm, and never rely on color alone.
 
-- **Field validation** — border → `error`, an **icon + helper message** in
+- **Field validation** - border → `error`, an **icon + helper message** in
   `error` beneath, linked with `aria-describedby`; on submit, focus the first
   invalid field and summarize errors at the top of the form.
-- **Inline / section error** — an `alert` (error banner) scoped to the region
+- **Inline / section error** - an `alert` (error banner) scoped to the region
   with a retry action where relevant.
-- **Toast error** — for async/action failures; error text, longer timeout,
+- **Toast error** - for async/action failures; error text, longer timeout,
   live-region announced.
-- **Full-page / boundary error** — a canonical `ErrorState`: mark/icon, a plain
+- **Full-page / boundary error** - a canonical `ErrorState`: mark/icon, a plain
   title, one-sentence cause, and a primary recovery action. Same look for React
   error boundaries, boot failures, and empty-with-error.
-- **Destructive confirm** — a modal with **type-to-confirm** for irreversible
+- **Destructive confirm** - a modal with **type-to-confirm** for irreversible
   actions; the confirm button is `destructive`.
-- **Copy** — say what happened and what to do next ("Couldn't reach the model —
+- **Copy** - say what happened and what to do next ("Couldn't reach the model -
   check your key and retry"), never a raw stack trace.
 
 ## Iconography
 
 Inline SVGs, one set, no mixing libraries. 14px (0.875rem) standard / 12px
 compact; 1.5px stroke; inherit `currentColor`. Editorial glyphs (pilcrow ¶,
-caret ▍, em-dash —, section §) are typographic, set in the font — not drawn.
+caret ▍, em-dash -, section §) are typographic, set in the font - not drawn.
 Icons that carry meaning get an accessible label; icons beside text are
 `aria-hidden`. Terminal: Rich box-drawing + the caret motif (no emoji spinners).
 **Heading anchor links** (the copy-link affordance) use a **muted** icon that
-reveals on heading hover and turns **accent on hover** — never a loud, always-on
+reveals on heading hover and turns **accent on hover** - never a loud, always-on
 colored mark.
 
 ## Data visualization
 
-- **Categorical** — the ordered set (red · cyan-slate · brass · green · purple ·
+- **Categorical** - the ordered set (red · cyan-slate · brass · green · purple ·
   gold); stop at 6, then group "other." Each series also gets a label/shape, not
   hue alone.
-- **Sequential** — a single-hue ramp from `paper` → `accent` (or ink) for
+- **Sequential** - a single-hue ramp from `paper` → `accent` (or ink) for
   intensity.
-- **Diverging** — `error` ↔ neutral ↔ `success` for signed values.
-- **Contrast** — chart strokes/fills ≥ 3:1 against the surface; axis/labels use
+- **Diverging** - `error` ↔ neutral ↔ `success` for signed values.
+- **Contrast** - chart strokes/fills ≥ 3:1 against the surface; axis/labels use
   `text-tertiary` or stronger.
-- **Colorblind-safe** — for critical distinctions use the Okabe-Ito set (shipped
+- **Colorblind-safe** - for critical distinctions use the Okabe-Ito set (shipped
   as the `highcontrast` theme in the reference impl) and rely on shape + label.
 
 ## Imagery & brand
 
-- **Brand mark** — the pilcrow `¶`. **Clear space** ≥ the pilcrow's cap height on
+- **Brand mark** - the pilcrow `¶`. **Clear space** ≥ the pilcrow's cap height on
   all sides; **min size** 16px (favicon) / 20px (UI). Ink tile + paper glyph,
   constant across themes. Misuse: don't recolor per theme, don't add effects,
   don't substitute a mascot.
-- **Favicon** — ink tile, paper pilcrow, `xs` radius.
-- **Photography/illustration** (marketing/book) — full-measure or full-bleed;
+- **Favicon** - ink tile, paper pilcrow, `xs` radius.
+- **Photography/illustration** (marketing/book) - full-measure or full-bleed;
   let imagery carry visual weight so type can stay quiet (the editorial default).
 
 ## Voice & microcopy
 
-- **Case** — sentence case for UI text, buttons, and headings ("Propose angles",
+- **Case** - sentence case for UI text, buttons, and headings ("Propose angles",
   not "Propose Angles"). `label-caps` is the only uppercase, for tiny labels.
-- **Buttons** — a verb ("Save", "Propose angles", "Export"), not "OK/Submit".
-- **Errors** — plain, specific, actionable; no blame, no jargon, no stack traces.
-- **Empty states** — one line of guidance + the primary action.
-- **Numbers/dates** — tabular figures for aligned numerals; ISO or localized
+- **Buttons** - a verb ("Save", "Propose angles", "Export"), not "OK/Submit".
+- **Errors** - plain, specific, actionable; no blame, no jargon, no stack traces.
+- **Empty states** - one line of guidance + the primary action.
+- **Numbers/dates** - tabular figures for aligned numerals; ISO or localized
   dates consistently; currency/units explicit.
-- **Tone** — the editor's voice: exact, warm, unfussy.
+- **Tone** - the editor's voice: exact, warm, unfussy.
 
 ## Localization & RTL
 
 - Use **logical properties** (`margin-inline`, `padding-block`, `start/end`), not
   left/right, so layouts mirror for RTL automatically.
 - Mirror directional icons (chevrons, arrows) in RTL; never mirror the brand mark.
-- Allow text to grow ~30% (German/Finnish) — don't fix widths to English.
-- Provide non-Latin font fallbacks; the 66ch measure is Latin — adjust for
+- Allow text to grow ~30% (German/Finnish) - don't fix widths to English.
+- Provide non-Latin font fallbacks; the 66ch measure is Latin - adjust for
   scripts with different density (CJK ~ 40–45 characters).
 - Keep number/date/currency formatting locale-aware.
 
 ## Theming
 
-One identity, **recolored — never restructured**.
+One identity, **recolored - never restructured**.
 
-**Modes.** System (auto) · Light · Dark — one ink + manuscript-red identity;
+**Modes.** System (auto) · Light · Dark - one ink + manuscript-red identity;
 System follows the OS. Preference stored per-client, independent of engine
 settings.
 
-**Named themes.** A shared palette catalog recolors the flat editorial layout —
+**Named themes.** A shared palette catalog recolors the flat editorial layout -
 same structure, shapes, type, and shadows; only the hue changes. The accent slot
 takes the theme's brand color; ink/paper/edges derive from it via `color-mix`.
 
@@ -697,17 +697,17 @@ skins live in `~/.<app>/skins/` as YAML.
 - **Do** verify a new color/theme against the AA contrast table.
 - **Don't** reintroduce blue as the brand. Blue is not this system's color.
 - **Don't** nest cards; group with whitespace + a hairline.
-- **Don't** ship the word "Loading…" or a generic spinner — use the Caret.
+- **Don't** ship the word "Loading…" or a generic spinner - use the Caret.
 - **Don't** signal state with color alone; pair an icon/label.
 - **Don't** remove focus outlines; style them.
 - **Don't** use brass or text-tertiary for body text (large/rules/placeholder
   only); never text-quaternary for information.
-- **Don't** let a named theme change layout, shape, type, or shadows — colors
+- **Don't** let a named theme change layout, shape, type, or shadows - colors
   only.
 - **Don't** style chrome with a bare class selector (`.header`, `.card`) that can
-  also match a component's own sub-parts (e.g. a code-frame's `.header`) — scope to
+  also match a component's own sub-parts (e.g. a code-frame's `.header`) - scope to
   the element (`header.header`), or you get doubled borders and stray fills.
-- **Don't** size an icon in `em` next to large display type — it inherits the
+- **Don't** size an icon in `em` next to large display type - it inherits the
   heading's font size and balloons. Use a fixed `rem` for anchor/inline icons.
 
 ## Governance & versioning
@@ -718,7 +718,7 @@ skins live in `~/.<app>/skins/` as YAML.
   removing (keep an alias one minor cycle).
 - **Definition of done** for a component: all states specified, AA verified,
   keyboard + focus handled, tokens (not literals), documented here.
-- **Single source of truth** — this file. Implementations sync to it (see the
+- **Single source of truth** - this file. Implementations sync to it (see the
   reference impl); drift is a bug.
 
 ## Adopting this system in a new project
@@ -736,7 +736,7 @@ skins live in `~/.<app>/skins/` as YAML.
 
 ---
 
-## Appendix A — Reference implementation: Writing Agent
+## Appendix A - Reference implementation: Writing Agent
 
 Writing Agent (an autonomous writing system) implements this system across three
 surfaces that share one identity: a **web dashboard** (pure-stdlib server + SPA),
@@ -754,13 +754,13 @@ an **interactive TUI** (Rich + prompt_toolkit), and a **one-shot CLI**.
   style/persona/emotion). Custom `.csel` dropdowns, `ConfirmModal`
   (type-to-confirm), themed scrollbars.
 - **Theming:** System / Light / Dark + the shared named-theme catalog
-  (`ui.THEMES`) — colors-only recolor of the editorial layout, matched between
+  (`ui.THEMES`) - colors-only recolor of the editorial layout, matched between
   web and TUI.
 - **TUI default skin "ink & brass":** gold primary (`#c9a227`, legible on dark +
   distinct in the theme catalog), brass secondary, manuscript-red status, an
   oxblood→terracotta→gold wordmark gradient.
 - **Documentation site (Astro + Starlight, repo `writingagentdocs`):** the public
-  docs implement the same identity via Starlight CSS-variable overrides — ink on
+  docs implement the same identity via Starlight CSS-variable overrides - ink on
   warm paper, manuscript-red accent + links + hero CTA, **Fraunces** serif for
   headings and reading body (loaded from Google Fonts alongside **JetBrains Mono**),
   system sans for UI chrome, square hairline surfaces, accent-tinted selection.
@@ -768,10 +768,10 @@ an **interactive TUI** (Rich + prompt_toolkit), and a **one-shot CLI**.
   wide content; **heading anchor links** are muted (accent on hover, fixed 1rem
   icon); the landing faux-terminal previews the TUI **"ink & brass"** skin. The
   existing pen-nib **logo, favicon, and "WRITING AGENT" wordmark are retained**.
-  Header chrome is scoped to `header.header` — a bare `.header` collides with the
+  Header chrome is scoped to `header.header` - a bare `.header` collides with the
   inner nav wrapper and Expressive-Code frame headers (doubled hairlines).
 
-## Appendix B — Reference impl UI/UX audit & known gaps (2026-07-15)
+## Appendix B - Reference impl UI/UX audit & known gaps (2026-07-15)
 
 **Fixed in the redesign:** native `<select>` popups → custom `.csel`; native
 scrollbars → themed; native `prompt()/confirm()` → `ConfirmModal`
@@ -783,10 +783,10 @@ darkened, text-tertiary raised to 60%, dark accent lifted to `#d8664c`, brass
 restricted to large/rules).
 
 **Known gaps (accepted / documented):**
-- **Responsive** — the dashboard is desktop-tuned (fixed 216px sidebar); the
+- **Responsive** - the dashboard is desktop-tuned (fixed 216px sidebar); the
   breakpoint spec above is the target, not yet fully implemented.
 - **Markdown tables** in the artifact renderer show raw pipes (rare in reports).
 - **`title=` tooltips** are native (not the themed `tooltip`).
-- **Popover collision** — the `.csel` menu doesn't yet flip near a viewport edge.
-- **Contrast** — now verified by computation (this pass); re-verify any new token.
+- **Popover collision** - the `.csel` menu doesn't yet flip near a viewport edge.
+- **Contrast** - now verified by computation (this pass); re-verify any new token.
 - **SSE reconnect** is best-effort (no exponential backoff).

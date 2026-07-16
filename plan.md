@@ -628,29 +628,29 @@ surfaces via the prompt suffix and the escalation picker (the bottom toolbar was
   (rolling median per stage) and a **"self-edits"** line (revision / humanizer counts).
 - **Structured recovery**, never a dead stop: a *paused* card (budget-cap vs interrupt, with resume +
   alternatives) and export failures that say why + how to recover (file locked / missing optional dep).
-- **Accessibility**: `WRITINGAGENT_A11Y` line-mode (no in-place Live redraw — append-only full-sentence
+- **Accessibility**: `WRITINGAGENT_A11Y` line-mode (no in-place Live redraw - append-only full-sentence
   status for screen readers), `WRITINGAGENT_REDUCED_MOTION` (static stages, no spinner), a one-line
   wordmark on narrow (<60-col) terminals, and `NO_COLOR` / `--plain` honored throughout.
 - **Proactive key check**: the banner warns when the active provider has no API key (before the first
   call fails); `WRITINGAGENT_PROVIDER` now syncs `settings.provider` so the masthead is accurate.
 - **Progressive help**: `/help <topic>` shows only the matching commands.
 - **Second UX pass (2026-06-14, P1–P3):**
-  - **First-run onboarding** — with no API key, the welcome shows a "NO API KEY YET" block (set the key
+  - **First-run onboarding** - with no API key, the welcome shows a "NO API KEY YET" block (set the key
     *or* try the whole flow free with `WRITINGAGENT_FAKE=1`) instead of suggesting a command that fails.
-  - **Friendly recoverable errors** (`ui.explain_error`) — bad/missing key (401), rate-limit (429),
+  - **Friendly recoverable errors** (`ui.explain_error`) - bad/missing key (401), rate-limit (429),
     network blip, and locked files map to a clear next step (every hint notes progress is saved), wired
     into the shell + chat error sinks; unknown errors fall back to the raw message.
-  - **Whole-run ETA** — `_RunDashboard._run_eta` shows "~Nm left" from this session's average
+  - **Whole-run ETA** - `_RunDashboard._run_eta` shows "~Nm left" from this session's average
     time-per-unit, beside the X/N bar (complements the per-stage soft ETA).
-  - **Colourblind-safe theme** — `highcontrast` (Okabe-Ito; ok = blue, error = vermillion, never a
+  - **Colourblind-safe theme** - `highcontrast` (Okabe-Ito; ok = blue, error = vermillion, never a
     red/green pair; white text). The trust chip was already glyph+word+dot-meter, so status is never
     colour-only. **11 themes.**
-  - **Duel-aware `/skills`** — shows the ablation-duel win-rate (vs a 50/50 baseline) + count next to
+  - **Duel-aware `/skills`** - shows the ablation-duel win-rate (vs a 50/50 baseline) + count next to
     first-pass lift, and which signal decides trusted/retired (see §8).
-  - **Discoverability** — the new learning toggles (`skill_duels`, `skill_distill`, `watch_blocking`)
+  - **Discoverability** - the new learning toggles (`skill_duels`, `skill_distill`, `watch_blocking`)
     appear in `/features` (grid + static table). Live-run controls wording: all interrupts resumable;
     `/delete` discards.
-- **Reading time** is prose-only — fenced code and the references list are excluded
+- **Reading time** is prose-only - fenced code and the references list are excluded
   (`polish.read_time_min`, `READ_WPM`), so technical pieces no longer over-state "N min read".
 - **Version** is single-sourced from `writingagent.__version__` (pyproject derives it via
   `dynamic`/`attr`); the TUI imports it. Currently **0.2.0**.
@@ -944,7 +944,7 @@ in prose. At assembly (`_assemble_article`) the deterministic `polish.py` pass t
   when there's signal to rank against. `rank_references` setting (default on).
 - **Source authority (citation-quality gate, deterministic).** `source_authority(url)` scores each
   source's domain 0–100 (`AUTH_HIGH` gov/standards/primary research · `AUTH_REPUTABLE` established
-  outlets & official docs · `AUTH_NEUTRAL` unknown — absence of signal is not a penalty · `AUTH_LOW`
+  outlets & official docs · `AUTH_NEUTRAL` unknown - absence of signal is not a penalty · `AUTH_LOW`
   SEO/template/content-farm signals). Authority **breaks influence ties** (a heavily-cited low-authority
   pad ranks below an equally-cited credible source) and lets `build_references` drop an *uncited
   low-authority* pad. The evidence report surfaces it (high-authority count, average authority, and a

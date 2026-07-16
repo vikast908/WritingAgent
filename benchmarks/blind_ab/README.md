@@ -1,7 +1,7 @@
-# Blind A/B — Writing Agent vs ChatGPT/Claude
+# Blind A/B - Writing Agent vs ChatGPT/Claude
 
 The single most important thing to validate (PRD §9): **does the output actually beat just prompting
-ChatGPT/Claude on blind reads?** This kit runs that test honestly — same prompts, anonymized sides,
+ChatGPT/Claude on blind reads?** This kit runs that test honestly - same prompts, anonymized sides,
 score *before* you reveal which tool wrote which.
 
 ## The 5-step flow
@@ -23,7 +23,7 @@ python benchmarks/blind_ab/blind.py
 python benchmarks/blind_ab/tally.py
 ```
 
-Then paste the summary into [`RESULTS.md`](RESULTS.md) and commit it — that's the proof the README's
+Then paste the summary into [`RESULTS.md`](RESULTS.md) and commit it - that's the proof the README's
 claim rests on.
 
 ## Why each step
@@ -37,11 +37,11 @@ claim rests on.
 ## Notes & honesty caveats
 
 - **Cost:** `generate.py` makes real LLM calls. Use a small prompt set first. (Set `WRITINGAGENT_FAKE=1`
-  to dry-run the *wiring* with placeholder text — useful to test the flow, useless for judging quality.)
+  to dry-run the *wiring* with placeholder text - useful to test the flow, useless for judging quality.)
 - **Fairness:** keep the competitor prompt identical to `prompt.txt`, and give ChatGPT/Claude a fair
   shot (a normal "write a long-form article on X with sources" prompt). Document exactly what you
   pasted in RESULTS.md.
-- **Blinding isn't perfect** — writing *style* can still hint at the source. Judge the page on its
+- **Blinding isn't perfect** - writing *style* can still hint at the source. Judge the page on its
   merits; that's the spirit of SCORING.md.
 - **`cases/`, `score_sheet.md`, and `.blind_key.json` are gitignored** (run-local). Commit only the
   final numbers in `RESULTS.md`.
