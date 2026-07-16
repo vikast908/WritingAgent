@@ -35,11 +35,14 @@ from .common import (
     _record_author,
     _record_preference,
     _register_sources,
+    _reoutline_units,
     _research_brief_prefix,
+    _revise_weakest_unit,
     _run_learner,
     _save_version,
     _svg_diagram_figure,
     _with_intake,
+    _writer_tool_runner,
     reconcile_unit_images,
 )
 from .manage import apply_autonomous
@@ -323,18 +326,10 @@ def _chapter_tool_runner(cfg, plan, blueprint, store, state, log):
     The writer may call `research` (a web brief) or `read_canon` (a relevant canon slice) WHILE
     drafting; the runner dispatches to the same implementations the unit controller uses."""
     from .. import agentic
-    research_on = bool(state.get("use_researcher"))
-
-    def runner(name, args):
-        a = args or {}
-        if name == "research" and research_on:
-            return agentic.unit_research(cfg, plan, blueprint, a.get("query", ""), log)
-        if name == "verify_fact" and research_on:
-            return agentic.unit_research(cfg, plan, blueprint, f"verify: {a.get('claim', '')}", log)
-        if name == "read_canon":
-            return _read_canon_slice(store, a.get("query", ""))
-        return ""
-    return agentic.WRITER_TOOL_SCHEMAS, runner
+    return _writer_tool_runner(
+        state,
+        research=lambda q: agentic.unit_research(cfg, plan, blueprint, q, log),
+        read_canon=lambda q: _read_canon_slice(store, q))
 
 
 def _book_run_ops(cfg, paths, plan, toc, store, prefetch, pool, log, ask, control):
@@ -423,65 +418,25 @@ def _book_run_ops(cfg, paths, plan, toc, store, prefetch, pool, log, ask, contro
     def _reoutline(state, log):
         """Regenerate the blueprints of the NOT-YET-WRITTEN chapters (committed chapters and
         the total count are preserved), so the agent can fix a plan that's going wrong (§21 #2/#4)."""
-        n = state["current_chapter"]                          # first un-written chapter (1-based)
-        fresh = nodes.build_toc(cfg, plan, state["num_chapters"],
-                                structure=fields.resolve(state.get("register"), state.get("field", "")))
-        for i in range(n - 1, min(len(toc.chapters), len(fresh.chapters))):
-            bp = fresh.chapters[i]
-            bp.number = i + 1                                 # keep numbering stable
-            toc.chapters[i] = bp
-        brain.write_json(paths.root / "toc.json", toc.model_dump())
-        brain.write_text(paths.toc, render.render_toc_md(toc))
-        state["reoutlines"] = state.get("reoutlines", 0) + 1
-        brain.write_json(paths.run_state, state)
-        agentic.trace.append(paths, {"scope": "run-result", "action": "reoutline", "from_unit": n})
-        log(f"   [agentic] reoutlined chapters {n}..{state['num_chapters']}")
-        return "continue"
+        def _build(count):
+            return nodes.build_toc(cfg, plan, count,
+                                   structure=fields.resolve(state.get("register"),
+                                                            state.get("field", ""))).chapters
+
+        def _persist():
+            brain.write_json(paths.root / "toc.json", toc.model_dump())
+            brain.write_text(paths.toc, render.render_toc_md(toc))
+        return _reoutline_units(
+            state, paths, unit_word="chapter", current_key="current_chapter",
+            count_key="num_chapters", units=toc.chapters, build_fresh=_build, persist=_persist, log=log)
 
     def _revise(state, log):
-        """Rewrite the weakest committed chapter to lift its score (§21 #3). Re-processes the
-        unit with a targeted instruction; canon re-extraction is idempotent so this is safe."""
-        n = agentic.weakest_committed_unit(state)
-        if not n or n > state.get("committed", 0):
-            return "continue"
-        sc = (state.get("scores") or [{}])[n - 1]
-        dim = min(("insight", "clarity", "structure", "evidence"), key=lambda k: sc.get(k, 5))
-        brain.write_text(paths.instruction_of(n),
-                         f"Strengthen the {dim} of this chapter - it scored lowest there. "
-                         "Keep everything that already works; change only what lifts it.")
-        committed_text = brain.read_text(paths.ch(n)) or ""
-        brain.write_text(paths.ch_draft(n), committed_text)   # revise from committed
-        paths.ch(n).unlink(missing_ok=True)                   # clear the resume guard -> re-draft
-        result = None
-        try:
-            result = _process_chapter(cfg, paths, plan, toc, store, state, n, log, ask=ask)
-        finally:
-            # A revise must never LOSE a committed chapter: if the re-process escalated
-            # (or raised) it wrote only ch_draft(n), yet state still counts n committed
-            # and assembly would silently drop it - restore the original.
-            if result != "commit" and not paths.ch(n).exists():
-                brain.write_text(paths.ch(n), committed_text)
-        paths.ch_draft(n).unlink(missing_ok=True)
-        paths.instruction_of(n).unlink(missing_ok=True)
-        if result != "commit":
-            state["revisions_done"] = state.get("revisions_done", 0) + 1
-            brain.write_json(paths.run_state, state)
-            agentic.trace.append(paths, {"scope": "run-result", "action": "revise",
-                                         "unit": f"ch{n:02d}", "dim": dim, "result": "rolled_back"})
-            log(f"   [agentic] revise of chapter {n} did not approve - kept the committed version")
-            return "continue"
-        # _finalize_unit APPENDED a fresh score/insight; move it onto unit n so the per-unit
-        # arrays stay aligned with committed units (n stays committed, count unchanged).
-        for key in ("scores", "insights"):
-            arr = state.get(key) or []
-            if len(arr) > state.get("committed", 0):
-                arr[n - 1] = arr.pop()
-        state["revisions_done"] = state.get("revisions_done", 0) + 1
-        brain.write_json(paths.run_state, state)
-        agentic.trace.append(paths, {"scope": "run-result", "action": "revise",
-                                     "unit": f"ch{n:02d}", "dim": dim})
-        log(f"   [agentic] revised chapter {n} (weakest: {dim})")
-        return "continue"
+        """Rewrite the weakest committed chapter to lift its score (§21 #3)."""
+        return _revise_weakest_unit(
+            state, paths, unit_prefix="ch", unit_word="chapter",
+            committed_path=paths.ch, draft_path=paths.ch_draft,
+            process=lambda n: _process_chapter(cfg, paths, plan, toc, store, state, n, log, ask=ask),
+            log=log)
 
     def _escalate_run(state, log):
         _mark_escalated(state, paths, "chapter",

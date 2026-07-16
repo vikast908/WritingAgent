@@ -56,6 +56,9 @@ __all__ = [
     '_run_learner',
     '_escalate',
     '_record_escalated_score',
+    '_writer_tool_runner',
+    '_reoutline_units',
+    '_revise_weakest_unit',
     '_manuscript_section_bodies',
     '_replace_manuscript_section',
     'record_rejected',
@@ -768,6 +771,105 @@ def _record_escalated_score(state) -> None:
                                                 "structure": 3, "evidence": 3}
     state.setdefault("insights", []).append(sc.get("insight", 3))
     state.setdefault("scores", []).append(sc)
+
+
+# ── Shared agentic run-op bodies (identical logic for book chapters + article sections) ──────
+# The book and article macro-controllers (`_book_run_ops`/`_article_run_ops`) each expose the
+# same `revise` / `reoutline` / in-generation-tool-use actions; only the unit vocabulary (chapter
+# vs section), the path methods, and the per-unit process/plan functions differ. These helpers
+# hold the one copy of the logic; each pipeline passes in its vocabulary + callables. Behavior is
+# byte-identical to the old inline closures. (`draft` is intentionally NOT shared: its phase
+# transitions and has_canon rules genuinely differ between the two pipelines.)
+
+def _writer_tool_runner(state, *, research, read_canon):
+    """(tools, runner) for the writer's in-generation tool use (plan §21 Phase 3), shared by
+    chapters + sections. `research(query)` and `read_canon(query)` are the unit-specific
+    implementations; `research` (and `verify_fact`) are gated on `use_researcher`."""
+    from .. import agentic
+    research_on = bool(state.get("use_researcher"))
+
+    def runner(name, args):
+        a = args or {}
+        if name == "research" and research_on:
+            return research(a.get("query", ""))
+        if name == "verify_fact" and research_on:
+            return research(f"verify: {a.get('claim', '')}")
+        if name == "read_canon":
+            return read_canon(a.get("query", ""))
+        return ""
+    return agentic.WRITER_TOOL_SCHEMAS, runner
+
+
+def _reoutline_units(state, paths, *, unit_word, current_key, count_key, units,
+                     build_fresh, persist, log) -> str:
+    """Regenerate the not-yet-written units' plan - committed units and the total count are
+    preserved (§21 #2/#4). `build_fresh(count)` returns a fresh list of units; `units` is the
+    live list spliced in place; `persist()` writes the plan to disk."""
+    from .. import agentic
+    n = state[current_key]                              # first un-written unit (1-based)
+    count = state[count_key]
+    fresh = build_fresh(count)
+    for i in range(n - 1, min(len(units), len(fresh))):
+        u = fresh[i]
+        u.number = i + 1                                # keep numbering stable
+        units[i] = u
+    persist()
+    state["reoutlines"] = state.get("reoutlines", 0) + 1
+    brain.write_json(paths.run_state, state)
+    agentic.trace.append(paths, {"scope": "run-result", "action": "reoutline", "from_unit": n})
+    log(f"   [agentic] reoutlined {unit_word}s {n}..{count}")
+    return "continue"
+
+
+def _revise_weakest_unit(state, paths, *, unit_prefix, unit_word,
+                         committed_path, draft_path, process, log) -> str:
+    """Rewrite the weakest committed unit to lift its score (§21 #3). `committed_path(n)` /
+    `draft_path(n)` are the unit's on-disk paths and `process(n)` re-runs its
+    write->critique->commit episode with a targeted instruction (canon re-extraction is
+    idempotent, so this is safe). Rolls back to the committed text if the re-process does not
+    approve, and realigns the per-unit scores/insights arrays so they stay 1:1 with `committed`."""
+    from .. import agentic
+    n = agentic.weakest_committed_unit(state)
+    if not n or n > state.get("committed", 0):
+        return "continue"
+    sc = (state.get("scores") or [{}])[n - 1]
+    dim = min(("insight", "clarity", "structure", "evidence"), key=lambda k: sc.get(k, 5))
+    brain.write_text(paths.instruction_of(n),
+                     f"Strengthen the {dim} of this {unit_word} - it scored lowest there. "
+                     "Keep everything that already works; change only what lifts it.")
+    committed_text = brain.read_text(committed_path(n)) or ""
+    brain.write_text(draft_path(n), committed_text)     # revise from the committed text
+    committed_path(n).unlink(missing_ok=True)           # clear the resume guard -> re-draft
+    result = None
+    try:
+        result = process(n)
+    finally:
+        # A revise must never LOSE a committed unit: if the re-process escalated (or raised) it
+        # wrote only the draft, yet state still counts n committed and assembly would silently
+        # drop it - restore the original.
+        if result != "commit" and not committed_path(n).exists():
+            brain.write_text(committed_path(n), committed_text)
+    draft_path(n).unlink(missing_ok=True)
+    paths.instruction_of(n).unlink(missing_ok=True)
+    unit = f"{unit_prefix}{n:02d}"
+    if result != "commit":
+        state["revisions_done"] = state.get("revisions_done", 0) + 1
+        brain.write_json(paths.run_state, state)
+        agentic.trace.append(paths, {"scope": "run-result", "action": "revise",
+                                     "unit": unit, "dim": dim, "result": "rolled_back"})
+        log(f"   [agentic] revise of {unit_word} {n} did not approve - kept the committed version")
+        return "continue"
+    # _finalize_unit appended a fresh score/insight; move it onto unit n so the per-unit arrays
+    # stay aligned with committed units (n stays committed, count unchanged).
+    for key in ("scores", "insights"):
+        arr = state.get(key) or []
+        if len(arr) > state.get("committed", 0):
+            arr[n - 1] = arr.pop()
+    state["revisions_done"] = state.get("revisions_done", 0) + 1
+    brain.write_json(paths.run_state, state)
+    agentic.trace.append(paths, {"scope": "run-result", "action": "revise", "unit": unit, "dim": dim})
+    log(f"   [agentic] revised {unit_word} {n} (weakest: {dim})")
+    return "continue"
 
 
 def _manuscript_section_bodies(ms: str) -> list[str]:

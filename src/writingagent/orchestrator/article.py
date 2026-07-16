@@ -35,14 +35,17 @@ from .common import (
     _record_preference,
     _register_sources,
     _renumber_citations,
+    _reoutline_units,
     _replace_manuscript_section,
     _research_brief_prefix,
+    _revise_weakest_unit,
     _run_learner,
     _save_version,
     _strip_section_prefix,
     _svg_diagram_figure,
     _verify_claims_gate,
     _with_intake,
+    _writer_tool_runner,
     reconcile_unit_images,
 )
 from .export import _unique_sources, build_evidence_report
@@ -229,18 +232,10 @@ def _section_tool_runner(cfg, outline, section, paths, n, state, log):
     The writer may call `research` (a web brief) or `read_canon` (prior-section context) WHILE
     drafting; the runner dispatches to the same implementations the unit controller uses."""
     from .. import agentic
-    research_on = bool(state.get("use_researcher"))
-
-    def runner(name, args):
-        a = args or {}
-        if name == "research" and research_on:
-            return agentic.unit_research_article(cfg, outline, section, a.get("query", ""), log)
-        if name == "verify_fact" and research_on:
-            return agentic.unit_research_article(cfg, outline, section, f"verify: {a.get('claim', '')}", log)
-        if name == "read_canon":
-            return _assemble_article_context(paths, n)
-        return ""
-    return agentic.WRITER_TOOL_SCHEMAS, runner
+    return _writer_tool_runner(
+        state,
+        research=lambda q: agentic.unit_research_article(cfg, outline, section, q, log),
+        read_canon=lambda q: _assemble_article_context(paths, n))
 
 
 def _article_run_ops(cfg, paths: ArticlePaths, outline, prefetch, pool, log, ask, control):
@@ -284,64 +279,26 @@ def _article_run_ops(cfg, paths: ArticlePaths, outline, prefetch, pool, log, ask
         """Regenerate the not-yet-written sections' plan (committed sections + total count
         preserved), so the agent can fix a plan that's going wrong (§21 #2/#4)."""
         from .. import schemas as S
-        n = state["current_section"]
-        angle = S.ArticleAngle(title=getattr(outline, "title", "") or "",
-                               angle=getattr(outline, "angle", "") or "",
-                               audience=getattr(outline, "audience", "") or "", hook="")
-        fresh = nodes.build_article_outline(
-            cfg, state.get("abstract", ""), angle, state["num_sections"],
-            structure=fields.resolve(state.get("register"), state.get("field", "")))
-        for i in range(n - 1, min(len(outline.sections), len(fresh.sections))):
-            sec = fresh.sections[i]
-            sec.number = i + 1
-            outline.sections[i] = sec
-        brain.write_json(paths.outline_json, outline.model_dump())
-        state["reoutlines"] = state.get("reoutlines", 0) + 1
-        brain.write_json(paths.run_state, state)
-        agentic.trace.append(paths, {"scope": "run-result", "action": "reoutline", "from_unit": n})
-        log(f"   [agentic] reoutlined sections {n}..{state['num_sections']}")
-        return "continue"
+
+        def _build(count):
+            angle = S.ArticleAngle(title=getattr(outline, "title", "") or "",
+                                   angle=getattr(outline, "angle", "") or "",
+                                   audience=getattr(outline, "audience", "") or "", hook="")
+            return nodes.build_article_outline(
+                cfg, state.get("abstract", ""), angle, count,
+                structure=fields.resolve(state.get("register"), state.get("field", ""))).sections
+        return _reoutline_units(
+            state, paths, unit_word="section", current_key="current_section",
+            count_key="num_sections", units=outline.sections, build_fresh=_build,
+            persist=lambda: brain.write_json(paths.outline_json, outline.model_dump()), log=log)
 
     def _revise(state, log):
         """Rewrite the weakest committed section to lift its score (§21 #3)."""
-        n = agentic.weakest_committed_unit(state)
-        if not n or n > state.get("committed", 0):
-            return "continue"
-        sc = (state.get("scores") or [{}])[n - 1]
-        dim = min(("insight", "clarity", "structure", "evidence"), key=lambda k: sc.get(k, 5))
-        brain.write_text(paths.instruction_of(n),
-                         f"Strengthen the {dim} of this section - it scored lowest there. "
-                         "Keep everything that already works; change only what lifts it.")
-        committed_text = brain.read_text(paths.section(n)) or ""
-        brain.write_text(paths.section_draft(n), committed_text)
-        paths.section(n).unlink(missing_ok=True)              # clear the resume guard -> re-draft
-        result = None
-        try:
-            result = _process_article_section(cfg, paths, outline, state, n, log, ask=ask)
-        finally:
-            # A revise must never LOSE a committed section: an escalate (or raise) wrote
-            # only section_draft(n) while state still counts n committed - restore.
-            if result != "commit" and not paths.section(n).exists():
-                brain.write_text(paths.section(n), committed_text)
-        paths.section_draft(n).unlink(missing_ok=True)
-        paths.instruction_of(n).unlink(missing_ok=True)
-        if result != "commit":
-            state["revisions_done"] = state.get("revisions_done", 0) + 1
-            brain.write_json(paths.run_state, state)
-            agentic.trace.append(paths, {"scope": "run-result", "action": "revise",
-                                         "unit": f"sec{n:02d}", "dim": dim, "result": "rolled_back"})
-            log(f"   [agentic] revise of section {n} did not approve - kept the committed version")
-            return "continue"
-        for key in ("scores", "insights"):                    # keep per-unit arrays aligned
-            arr = state.get(key) or []
-            if len(arr) > state.get("committed", 0):
-                arr[n - 1] = arr.pop()
-        state["revisions_done"] = state.get("revisions_done", 0) + 1
-        brain.write_json(paths.run_state, state)
-        agentic.trace.append(paths, {"scope": "run-result", "action": "revise",
-                                     "unit": f"sec{n:02d}", "dim": dim})
-        log(f"   [agentic] revised section {n} (weakest: {dim})")
-        return "continue"
+        return _revise_weakest_unit(
+            state, paths, unit_prefix="sec", unit_word="section",
+            committed_path=paths.section, draft_path=paths.section_draft,
+            process=lambda n: _process_article_section(cfg, paths, outline, state, n, log, ask=ask),
+            log=log)
 
     def dispatch(action, state, log):
         llm.set_unit(state.get("phase"))
