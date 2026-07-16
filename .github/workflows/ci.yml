@@ -44,7 +44,7 @@ jobs:
         # One upload per run (the ubuntu · 3.12 cell). Non-blocking: a missing token or a
         # Codecov outage must never fail the build.
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
