@@ -407,33 +407,57 @@ def test_first_run_setup_enter_picks_free_preview(monkeypatch):
     import sys
     import types
 
-    from writingagent import shell
+    from writingagent import providers, shell
     from writingagent.config import Settings
     monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(providers, "configured", lambda: [])    # no key anywhere -> pick-a-host menu
     monkeypatch.setattr(sys, "stdin", types.SimpleNamespace(isatty=lambda: True))
-    console = _FakeConsole([""])                                # just press Enter
+    console = _FakeConsole([""])                                # just press Enter = try free
     shell._first_run_setup(console, Settings(provider="deepseek"))
     import os
     assert os.environ.get("WRITINGAGENT_FAKE") == "1"          # free preview on, no restart
     assert any("free preview" in o for o in console.out)
 
 
-def test_first_run_setup_paste_key(tmp_path, monkeypatch):
+def test_first_run_setup_pick_host_and_paste_key(tmp_path, monkeypatch):
+    # No blessed default: the writer chooses a host from the menu, then pastes THAT host's key.
     import sys
     import types
 
-    from writingagent import brain, shell
+    from writingagent import brain, providers, shell
     from writingagent.config import Settings
     monkeypatch.setattr(brain, "_ROOT", tmp_path)
     monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(providers, "configured", lambda: [])
     monkeypatch.setattr(sys, "stdin", types.SimpleNamespace(isatty=lambda: True))
-    console = _FakeConsole(["1", "sk-zzz"])                     # paste a key
+    # _FIRST_RUN_CHOICES = openrouter, openai, anthropic, deepseek, google -> deepseek is choice 4.
+    # Active provider is the delenv'd deepseek so the picker reliably appears (no ambient key).
+    console = _FakeConsole(["4", "sk-zzz"])
     shell._first_run_setup(console, Settings(provider="deepseek"))
     import os
     assert os.environ["DEEPSEEK_API_KEY"] == "sk-zzz"
     assert (tmp_path / ".env").read_text(encoding="utf-8").strip().endswith("sk-zzz")
+
+
+def test_first_run_setup_uses_detected_key(monkeypatch):
+    # A key already set for another host is OFFERED, not ignored (no OpenRouter assumption).
+    import sys
+    import types
+
+    from writingagent import llm, providers, shell
+    from writingagent.config import Settings
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(providers, "configured", lambda: [providers.REGISTRY["openai"]])
+    switched = {}
+    monkeypatch.setattr(llm, "configure_provider", lambda pid: switched.setdefault("pid", pid))
+    monkeypatch.setattr(sys, "stdin", types.SimpleNamespace(isatty=lambda: True))
+    console = _FakeConsole(["1"])                               # use the detected OpenAI key
+    s = Settings(provider="deepseek")
+    shell._first_run_setup(console, s)
+    assert s.provider == "openai" and switched.get("pid") == "openai"
 
 
 def test_first_run_setup_noop_when_key_present(monkeypatch):

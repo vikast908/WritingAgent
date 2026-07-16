@@ -48,6 +48,10 @@ _PROVIDERS = [
              notes="direct - deepseek-chat, deepseek-reasoner"),
     Provider("openai", "OpenAI", "https://api.openai.com/v1",
              ("OPENAI_API_KEY",), "OPENAI_BASE_URL", notes="gpt-* via chat completions"),
+    Provider("anthropic", "Anthropic Claude", "https://api.anthropic.com/v1",
+             ("ANTHROPIC_API_KEY",), "ANTHROPIC_BASE_URL",
+             notes="claude-* via Anthropic's OpenAI-compatible endpoint (bare slugs, "
+                   "e.g. claude-sonnet-4); for full structured-output support route via OpenRouter"),
     Provider("google", "Google Gemini",
              "https://generativelanguage.googleapis.com/v1beta/openai",
              ("GEMINI_API_KEY", "GOOGLE_API_KEY"), "GOOGLE_BASE_URL",
@@ -56,6 +60,13 @@ _PROVIDERS = [
              ("XAI_API_KEY",), "XAI_BASE_URL", notes="grok-* via chat completions"),
     Provider("groq", "Groq", "https://api.groq.com/openai/v1",
              ("GROQ_API_KEY",), "GROQ_BASE_URL", notes="fast inference, open-weights"),
+    Provider("cerebras", "Cerebras", "https://api.cerebras.ai/v1",
+             ("CEREBRAS_API_KEY",), "CEREBRAS_BASE_URL", notes="very fast open-weights inference"),
+    Provider("sambanova", "SambaNova", "https://api.sambanova.ai/v1",
+             ("SAMBANOVA_API_KEY",), "SAMBANOVA_BASE_URL", notes="fast open-weights inference"),
+    Provider("perplexity", "Perplexity", "https://api.perplexity.ai",
+             ("PERPLEXITY_API_KEY",), "PERPLEXITY_BASE_URL",
+             notes="sonar* - answers with live web citations"),
     Provider("mistral", "Mistral", "https://api.mistral.ai/v1",
              ("MISTRAL_API_KEY",), "MISTRAL_BASE_URL"),
     Provider("moonshot", "Moonshot / Kimi", "https://api.moonshot.ai/v1",
@@ -74,6 +85,21 @@ _PROVIDERS = [
     Provider("lmstudio", "LM Studio (local)", "http://127.0.0.1:1234/v1",
              (), "LMSTUDIO_BASE_URL", local=True,
              notes="local models - start the LM Studio server"),
+    # ── enterprise / gateway-fronted (need an OpenAI-compatible gateway URL) ───
+    # AWS Bedrock and Azure OpenAI are NOT plain OpenAI-compatible base-URL swaps
+    # (Bedrock uses SigV4/boto3; Azure needs api-version + a deployment). The whole
+    # pipeline speaks one wire format, so both are reached through an OpenAI-compatible
+    # gateway you point the *_BASE_URL var at - e.g. a LiteLLM proxy, or AWS's own
+    # `bedrock-access-gateway`. The gateway holds the cloud credentials; the key here is
+    # the gateway's key. (A native boto3 Bedrock transport is a roadmap item, see ROADMAP.md.)
+    Provider("bedrock", "AWS Bedrock (via gateway)", "",
+             ("AWS_BEDROCK_API_KEY", "BEDROCK_API_KEY"), "AWS_BEDROCK_BASE_URL",
+             notes="set AWS_BEDROCK_BASE_URL to an OpenAI-compatible Bedrock gateway "
+                   "(LiteLLM / bedrock-access-gateway); model = the gateway's slug"),
+    Provider("azure", "Azure OpenAI (via gateway)", "",
+             ("AZURE_OPENAI_API_KEY", "AZURE_API_KEY"), "AZURE_OPENAI_BASE_URL",
+             notes="set AZURE_OPENAI_BASE_URL to an OpenAI-compatible Azure gateway/proxy; "
+                   "model = your deployment name"),
     # ── escape hatch ─────────────────────────────────────────────────────────
     Provider("custom", "Custom endpoint", "",
              ("WRITINGAGENT_API_KEY", "OPENAI_API_KEY"), "WRITINGAGENT_BASE_URL",
@@ -87,15 +113,23 @@ ALIASES = {
     "or": "openrouter", "router": "openrouter",
     "ds": "deepseek",
     "gpt": "openai", "oai": "openai", "chatgpt": "openai",
+    "claude": "anthropic", "anthropicai": "anthropic",
     "gemini": "google", "googleai": "google",
     "grok": "xai",
     "kimi": "moonshot", "moonshotai": "moonshot",
     "qwen": "dashscope", "alibaba": "dashscope", "aliyun": "dashscope",
     "glm": "zhipu", "zhipuai": "zhipu", "zai": "zhipu", "bigmodel": "zhipu",
     "nim": "nvidia",
+    "pplx": "perplexity", "sonar": "perplexity",
+    "aws": "bedrock", "amazon": "bedrock",
+    "azureopenai": "azure", "aoai": "azure",
     "local": "ollama", "lm-studio": "lmstudio", "lms": "lmstudio",
 }
 
+# No blessed default: the writer chooses a host (first-run wizard, `/provider`, the `provider`
+# setting, or WRITINGAGENT_PROVIDER). This value is only the last-resort seed when nothing is
+# configured and no provider key is auto-detected - OpenRouter because it fronts every vendor
+# below with one key and reports real USD cost, so a brand-new user has the widest reach.
 DEFAULT = "openrouter"
 
 
@@ -136,6 +170,16 @@ def names() -> list[str]:
     return [p.id for p in _PROVIDERS]
 
 
+def configured() -> list[Provider]:
+    """Providers usable RIGHT NOW - a key is present in the environment. Excludes local
+    servers (always "usable" but not proof of intent) and gateway/custom entries (their key
+    env doubles as another provider's). Drives the no-default first-run picker: if the writer
+    has exactly one key set we use it; if several, we ask; if none, we offer the full menu."""
+    gateways = {"custom", "bedrock", "azure"}
+    return [p for p in _PROVIDERS
+            if p.id not in gateways and not p.local and api_key_for(p) is not None]
+
+
 # A small, curated catalog of popular models for discovery (`/model list` and slug
 # completion). These are OpenRouter slugs (vendor/model) - the default host; on a
 # first-party host (see /provider) use that host's own bare slug. NOT exhaustive -
@@ -151,6 +195,7 @@ POPULAR_MODELS: list[tuple[str, tuple[str, ...]]] = [
     ("xAI",       ("x-ai/grok-2",)),
     ("Qwen",      ("qwen/qwen-2.5-72b-instruct",)),
     ("Mistral",   ("mistralai/mistral-large",)),
+    ("Perplexity", ("perplexity/sonar", "perplexity/sonar-pro")),
 ]
 
 

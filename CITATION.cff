@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use Writing Agent in your research or work, please cite it as below."
+title: "Writing Agent: a self-correcting, autonomous writing system for books and articles"
+abstract: >-
+  Writing Agent turns a topic into a long-form, thesis-driven, source-cited manuscript.
+  It is a pipeline (a durable state machine) rather than a single prompt: a separate critic,
+  an enforced thesis, claim-to-source verification, a register/persona/emotion craft engine,
+  and an optional agentic controller. Runs on any OpenAI-compatible model host.
+type: software
+authors:
+  - name: "Writing Agent contributors"
+repository-code: "https://github.com/vikast908/WritingAgent"
+url: "https://github.com/vikast908/WritingAgent"
+license: MIT
+version: "0.2.0"
+keywords:
+  - llm
+  - autonomous agents
+  - long-form writing
+  - retrieval
+  - fact-checking

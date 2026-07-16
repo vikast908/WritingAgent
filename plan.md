@@ -516,21 +516,29 @@ The pipeline speaks **one** wire format - OpenAI chat-completions (text + JSON-m
 output, no tool-calls or thinking-block replay) - so it talks to any OpenAI-compatible host through
 a **single transport**. `providers.py` is a small frozen-dataclass registry (`id`, `name`,
 `base_url`, key env vars, optional `*_BASE_URL` override, `reports_cost`, extra headers, `local`).
-**OpenRouter is the default** (and the only host that reports real USD `usage.cost`); also built in:
-DeepSeek, OpenAI, Google Gemini (compat endpoint), xAI, Groq, Mistral, Moonshot/Kimi, Qwen/DashScope,
-Zhipu GLM, NVIDIA NIM, Together/Fireworks/DeepInfra aggregators, **Ollama** and **LM Studio** (local,
-no key), and a `custom` escape hatch (`WRITINGAGENT_BASE_URL`). Aliases resolve shorthand (`grok→xai`,
-`ds→deepseek`, `kimi→moonshot`, …). Adding a provider is **one registry entry**, nothing else.
+**No blessed default** (2026-07-16): the writer chooses a host via the first-run wizard, `/provider`,
+the `provider` setting, or `WRITINGAGENT_PROVIDER`. `providers.DEFAULT` (OpenRouter) is only the
+last-resort seed when nothing is configured - OpenRouter because one key fronts every vendor and it's
+the only host that reports real USD `usage.cost`. 23 hosts ship: OpenRouter, **OpenAI**, **Anthropic**
+(`claude-*` via the OpenAI-compat endpoint), DeepSeek, Google Gemini, xAI, Groq, **Cerebras**,
+**SambaNova**, **Perplexity**, Mistral, Moonshot/Kimi, Qwen/DashScope, Zhipu GLM, NVIDIA NIM,
+Together/Fireworks/DeepInfra aggregators, **Ollama** and **LM Studio** (local, no key), **AWS Bedrock**
+and **Azure OpenAI** (gateway entries - see below), and a `custom` escape hatch. Aliases resolve
+shorthand (`claude→anthropic`, `grok→xai`, `aws→bedrock`, …). Adding an OpenAI-compatible provider is
+**one registry entry**, nothing else. `providers.configured()` returns the hosts with a key present -
+the no-default first-run picker uses it (auto-offer a set key, else let the writer choose).
 
 Switch with **`/provider <id>`** (lists every host with a key/local/no-key marker, persists to
 `settings.provider`, rebuilds the client), `/set provider <id>`, or **`WRITINGAGENT_PROVIDER`**.
 Credentials are resolved lazily - switching to a key-less host never crashes startup; the clear
 "set `XAI_API_KEY`" error only fires on the first real call. Each host reads its own key env var; a
-`*_BASE_URL` var points any provider at a proxy/self-hosted gateway. *Deliberately out of scope
-(Hermes has them; a writing pipeline doesn't need them): Anthropic-native / Bedrock / Codex-Responses
-transports (all reachable via OpenRouter or a compat shim), a `NormalizedResponse` layer (one wire
-format ⇒ nothing to normalize), and OAuth-device/AWS-SDK auth. Model **slugs are not auto-translated**
-across hosts - set them per host with `/model`.*
+`*_BASE_URL` var points any provider at a proxy/self-hosted gateway. **AWS Bedrock and Azure OpenAI**
+are NOT plain base-URL swaps (SigV4/boto3; api-version + deployment), so they ship as **gateway
+entries**: point `AWS_BEDROCK_BASE_URL` / `AZURE_OPENAI_BASE_URL` at an OpenAI-compatible gateway
+(LiteLLM proxy, `bedrock-access-gateway`) that holds the cloud credentials - preserving the single
+transport. *Roadmap (see ROADMAP.md): a native boto3/SigV4 Bedrock transport + native Azure client as
+optional extras. Still out of scope: a `NormalizedResponse` layer (one wire format ⇒ nothing to
+normalize). Model **slugs are not auto-translated** across hosts - set them per host with `/model`.*
 
 ---
 
@@ -979,16 +987,16 @@ model authors) alongside the "ONE idea / 5-9 nodes, 12 max" budget; it governs b
 
 ---
 
-## 17. Working process - `resume.md` (session continuity)
+## 17. Working process - `docs/dev/resume.md` (session continuity)
 
 Build work spans multiple Claude sessions, so progress is journaled at the project root.
 
 - **`plan.md`** = the spec (durable decisions; what to build).
-- **`resume.md`** = the log (what happened, what's next; newest entry on top).
-- **`CLAUDE.md`** = a pointer telling each new session to read `resume.md` then `plan.md` first.
+- **`docs/dev/resume.md`** = the log (what happened, what's next; newest entry on top).
+- **`CLAUDE.md`** = a pointer telling each new session to read `docs/dev/resume.md` then `plan.md` first.
 
-Rule: at the **start** of a session, read `resume.md` → `plan.md`. At the **end**, prepend a
-dated entry to `resume.md` (changes, decisions, concrete next step) and move any durable
+Rule: at the **start** of a session, read `docs/dev/resume.md` → `plan.md`. At the **end**, prepend a
+dated entry to `docs/dev/resume.md` (changes, decisions, concrete next step) and move any durable
 decision into `plan.md`. Never duplicate content between the two.
 
 ---
@@ -1083,7 +1091,7 @@ narrative ones.
 blocking/nits + confidence; per-user (not per-book) learning, genre-relevance retrieved;
 fully autonomous with human escalation via directed instructions; CLI-first. *Later additions:*
 per-node model routing (§12.1); a Book Production layer for front/back matter + assembly (§16,
-re-scoped from the original Post-production agent); a `resume.md` session-log convention (§17).
+re-scoped from the original Post-production agent); a `docs/dev/resume.md` session-log convention (§17).
 
 ---
 

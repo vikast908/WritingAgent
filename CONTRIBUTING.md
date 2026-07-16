@@ -84,8 +84,8 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
 
 ## Conventions
 
-- **`plan.md`** is the architecture/spec source of truth; **`resume.md`** is the running
-  dev journal (newest entry on top). Durable decisions go in `plan.md`, not `resume.md`.
+- **`plan.md`** is the architecture/spec source of truth; **`docs/dev/resume.md`** is the running
+  dev journal (newest entry on top). Durable decisions go in `plan.md`, not `docs/dev/resume.md`.
 - Keep nodes as deterministic, single-purpose LLM calls - see `plan.md` §4. (Self-directing
   behavior is the **opt-in** agentic controller in `agentic/` (`plan.md` §21), a separate layer -
   don't bake it into a node.)

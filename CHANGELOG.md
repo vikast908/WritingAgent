@@ -7,6 +7,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Provider reach + no blessed default (`providers.py`, first-run wizard).** Added first-party
+  **Anthropic** (`claude-*` via the OpenAI-compatible endpoint), **Perplexity** (`sonar`),
+  **Cerebras**, and **SambaNova**, plus **AWS Bedrock** and **Azure OpenAI** via an OpenAI-compatible
+  gateway (`AWS_BEDROCK_BASE_URL` / `AZURE_OPENAI_BASE_URL`) — 23 hosts total, all one transport.
+  There is **no default host**: the first-run wizard detects any key already in the environment and
+  offers it, or lets the writer *choose* a provider (then paste its key); `providers.configured()`
+  drives the picker. `.env.example` rewritten to show the choice across all vendors. (Native boto3
+  Bedrock + native Azure are on the roadmap.)
+- **Open-source hardening.** PyPI release automation (`.github/workflows/release.yml` — build +
+  Trusted-Publishing/OIDC on a `v*` tag), CI now runs **coverage** (pytest-cov → Codecov, non-blocking)
+  and a **gitleaks** secret-scan job; **Dependabot** (pip + actions); README **CI / coverage / PyPI**
+  badges; `CODEOWNERS`, issue-template `config.yml`, `CITATION.cff`, `FUNDING.yml`, and `ROADMAP.md`.
+- **Tidier repo root.** The maintainer journals moved to `docs/dev/` (`resume.md` session log,
+  `test.md` verification log) with a `docs/dev/README.md` explaining them; references updated. `plan.md`
+  (architecture spec) and `CLAUDE.md` (tooling) stay at the root.
 - **Local web dashboard (`writing-agent web`).** A pure-stdlib `ThreadingHTTPServer` + Server-Sent-Events
   + single-page app (`src/writingagent/webui/`) runs the whole pipeline from the browser: Studio, live
   run (SSE), Projects, per-project Overview / Activity / Evals / Artifacts / **Rejected** / Export /

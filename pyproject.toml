@@ -44,6 +44,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=7.0",
+  "pytest-cov>=4.0",
   "ruff>=0.4",
 ]
 # Deep-researcher fetch backend. Optional: deep_research.py imports Scrapo lazily and
@@ -109,6 +110,17 @@ ignore = [
 pythonpath = ["src"]   # tests import writingagent from src without an install
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.coverage.run]
+# source_pkgs (not source): the repo-root launcher `writingagent.py` shadows the package
+# name for a plain `source`, so coverage collects nothing. This forces package resolution.
+source_pkgs = ["writingagent"]
+branch = true
+
+[tool.coverage.report]
+# The dev journal / demo entrypoints aren't part of the library's covered surface.
+omit = ["*/webui/*", "*/web/*"]
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "if __name__ == .__main__.:"]
 
 [build-system]
 requires = ["setuptools>=77"]

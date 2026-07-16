@@ -6,7 +6,7 @@
 > written as a story, in the order things actually happen.
 >
 > (For the precise engineering spec, see `plan.md`. For the running history of changes, see
-> `resume.md`. This file is the friendly tour that sits in front of both.)
+> `docs/dev/resume.md`. This file is the friendly tour that sits in front of both.)
 
 ---
 
@@ -137,9 +137,9 @@ WritingAgent/
 ├── writingagent/          ← a small Node/npm launcher (alternative way to install/run)
 ├── README.md              ← the front-door "what is this / how to run" doc
 ├── plan.md                ← the authoritative engineering spec (the "law")
-├── resume.md              ← the running session log ("what changed last time")
 ├── learning.md            ← THIS file
-├── PRD.md, CHANGELOG.md, CONTRIBUTING.md, ...  ← supporting docs
+├── docs/dev/              ← maintainer journals: resume.md (session log) + test.md (verification log)
+├── PRD.md, CHANGELOG.md, CONTRIBUTING.md, ROADMAP.md, ...  ← supporting docs
 └── pyproject.toml         ← the project's "ingredients list" (dependencies, how to install)
 ```
 

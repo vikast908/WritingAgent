@@ -2,6 +2,9 @@
 
 <img src="assets/writing-agent-banner.svg" alt="Writing Agent - a self-correcting, autonomous writing system that turns a topic into a publication-ready manuscript" width="860">
 
+[![CI](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/vikast908/WritingAgent/actions/workflows/ci.yml)
+[![codecov](https://img.shields.io/codecov/c/github/vikast908/WritingAgent?style=flat-square)](https://codecov.io/gh/vikast908/WritingAgent)
+[![PyPI](https://img.shields.io/pypi/v/writing-agent?style=flat-square)](https://pypi.org/project/writing-agent/)
 [![Docs](https://img.shields.io/badge/docs-docs--writingagent.vercel.app-6f9ed9?style=flat-square)](https://docs-writingagent.vercel.app/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://www.python.org/)
 [![Platforms](https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-informational?style=flat-square)](#install)
@@ -38,7 +41,7 @@ too (multi-chapter, with continuity audits + a production layer).
 - **Figures that lay themselves out** — the model authors a diagram *spec*; a layout engine places it so labels never overflow
 - **Use it your way** — interactive TUI, one-shot CLI, a **local web dashboard** (`writing-agent web` — run pieces from the browser with live logs, per-agent cost, traces, and evals), an embeddable Python API, or a global `writingagent` npm launcher
 - **Self-correcting *and* (optionally) self-directing** — the default pipeline self-corrects via fixed quality gates; flip on **agentic mode** and an LLM *controller* takes the wheel, choosing the next move both per unit (gather research / read canon before drafting) and over the whole piece (draft, reoutline, revise, consolidate, repair, produce, learn, escalate, done) — and the writer can call tools *mid-draft*. Off by default, with the fixed pipeline as a byte-identical fallback (see [Self-directing mode](#self-directing-mode-opt-in))
-- **Local-first** — everything is plain markdown + JSON on disk; your own OpenRouter/DeepSeek key; kill a run and it resumes exactly where it stopped; a global `fallback` model keeps an unattended run alive if a tier has an outage
+- **Your model, your choice** — no blessed default: run on any OpenAI-compatible host (OpenAI, Anthropic, DeepSeek, Gemini, Groq, Perplexity, OpenRouter, AWS Bedrock/Azure via gateway, local Ollama/LM Studio, …), picked in the first-run wizard or `/provider`; everything is plain markdown + JSON on disk; kill a run and it resumes exactly where it stopped; a global `fallback` model keeps an unattended run alive if a tier has an outage
 - **Promotes, not just writes** — after the piece is done, `seo` audits it against on-page fundamentals (keyword placement, description, headings, readability) and names its keywords + hashtags, and `promote` repurposes it into an X thread, LinkedIn post, newsletter teaser, TL;DR, and 5 A/B headlines — the HTML export ships SEO/OG/Twitter meta tags (see [Promote it](#promote-it--seo-x-threads-linkedin))
 - **Cheap by default** — `cost_mode: budget` pins the spend-heavy knobs and routes the judgment nodes to the flash tier, targeting **≤100k tokens (~$0.10–0.15) per article** with a hard, resumable token ceiling
 
@@ -70,10 +73,16 @@ npm install -g writingagent          # the CLI   (needs Node ≥ 16)
 writingagent setup                   # one-time: installs the Python engine (Python 3.10+ & pip)
 ```
 
-Point it at your [OpenRouter](https://openrouter.ai/) key and give it a topic:
+Point it at **any** model host — there's no blessed default, you choose. OpenAI, Anthropic,
+DeepSeek, Google Gemini, xAI, Groq, Mistral, Perplexity, Cerebras, SambaNova, aggregators
+(OpenRouter, Together, Fireworks), AWS Bedrock / Azure via a gateway, or a local Ollama / LM
+Studio — anything OpenAI-compatible (see [`providers.py`](src/writingagent/providers.py) or run
+`/provider`). The first-run wizard lets you pick one. Set that host's key and give it a topic —
+OpenRouter is the widest-reach starting point (one key fronts every vendor + reports real USD cost):
 
 ```bash
-export OPENROUTER_API_KEY=sk-or-...   # or drop it in a .env in your working directory
+export OPENROUTER_API_KEY=sk-or-...   # or your host's key: OPENAI_API_KEY, ANTHROPIC_API_KEY, ...
+# export WRITINGAGENT_PROVIDER=openai # pick a host (or use the first-run wizard / `/provider`)
 writingagent write "How stoicism applies to modern burnout"
 ```
 

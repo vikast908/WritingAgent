@@ -40,10 +40,19 @@ __all__ = [
 #: Where a writer gets an API key, per provider id - shown in the first-run wizard.
 SIGNUP_URLS = {
     "openrouter": "https://openrouter.ai/keys",
-    "deepseek": "https://platform.deepseek.com/api_keys",
     "openai": "https://platform.openai.com/api-keys",
+    "anthropic": "https://console.anthropic.com/settings/keys",
+    "deepseek": "https://platform.deepseek.com/api_keys",
     "google": "https://aistudio.google.com/app/apikey",
+    "xai": "https://console.x.ai",
+    "groq": "https://console.groq.com/keys",
+    "mistral": "https://console.mistral.ai/api-keys",
+    "perplexity": "https://www.perplexity.ai/settings/api",
 }
+
+#: The providers offered in the first-run picker (order = how they're listed). A curated,
+#: no-default menu so a new writer chooses a host instead of inheriting one.
+_FIRST_RUN_CHOICES = ("openrouter", "openai", "anthropic", "deepseek", "google")
 
 
 def _sync_palette() -> None:
@@ -259,58 +268,104 @@ def _write_env_key(env_name: str, value: str) -> Path | None:
         return None
 
 
-def _first_run_setup(console, settings) -> None:
-    """A one-time, friendly key step shown only at an interactive prompt when no key is set.
+def _apply_provider(settings, pid: str) -> None:
+    """Persist a provider choice to settings.yaml and activate it live. Best-effort - a
+    read-only install still gets the live switch even if the save can't be written."""
+    from .. import llm
+    try:
+        from ..config import save_settings
+        settings.provider = pid
+        save_settings(settings)
+    except Exception:  # noqa: BLE001 - read-only location; the live switch below still applies
+        pass
+    try:
+        llm.configure_provider(pid)
+    except Exception:  # noqa: BLE001 - cosmetic; the first real call will re-report a bad choice
+        pass
 
-    Turns the dead-end "⚠ no API key" warning into a choice a new writer can act on in one
-    keypress: paste a key (saved to .env *and* applied live), try the whole flow free with
-    placeholder output (set live - no "restart with WRITINGAGENT_FAKE=1" dance), or skip and
-    add one later with /setkey. No-op when not a TTY, already in fake mode, or a key exists."""
+
+def _first_run_setup(console, settings) -> None:
+    """A one-time, friendly setup shown only at an interactive prompt when the active host has
+    no key. There is NO blessed provider: if a key for some host is already in the environment
+    we offer to use it; otherwise the writer PICKS a host (then pastes its key, saved to .env +
+    applied live), or tries the whole flow free ($0 placeholder output), or skips. No-op when
+    not a TTY, already in fake mode, or a key for the active provider exists."""
     import sys
     if not console or os.getenv("WRITINGAGENT_FAKE") or not _provider_needs_key(settings):
         return
     if not getattr(sys.stdin, "isatty", lambda: False)():
         return
     from rich.text import Text
-    p = _active_provider(settings)
-    name = p.name if p else "your provider"
-    env = (p.key_env[0] if p and getattr(p, "key_env", None) else "the API key")
-    url = SIGNUP_URLS.get(getattr(p, "id", ""), "")
+
+    from .. import providers
     _section(console, "WELCOME  ·  LET'S GET YOU WRITING")
-    console.print(Text(f"  No API key yet for {name} — pick how to start "
-                       "(you can change this later):", style=PARCH))
-    _cmd_table(console, [
-        ("1", f"Paste a {name} key now  ·  saved to .env, used right away"),
-        ("Enter", "Try it free now  ·  the whole flow, placeholder output, $0"),
-        ("s", "Skip — I'll add a key later with /setkey"),
-    ])
-    if url:
-        console.print(Text(f"  Need a key? Get one free at {url}", style=DIM))
-    try:
-        choice = console.input(f"  [{GOLD}]choice[/] [dim][Enter = try free]:[/] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        console.print()
-        return
-    if choice == "1":
+
+    def _ask(prompt: str) -> str | None:
         try:
-            key = console.input(f"  paste your {env}: ").strip()
+            return console.input(prompt).strip().lower()
         except (EOFError, KeyboardInterrupt):
-            key = ""
-        if key:
-            path = _write_env_key(env, key)
-            if path:
-                _out(console, f"[bold {ON_CLR}]✓ key saved[/] [dim]→ {path}  ·  real runs are on[/]")
-            else:
-                _out(console, f"[bold {ON_CLR}]✓ key set for this session[/] [dim]— couldn't write "
-                              f".env (read-only?); set {env} in your shell to keep it[/]")
-        else:
-            _out(console, "[dim]no key entered — run /setkey when you're ready[/]")
-    elif choice in ("s", "skip"):
-        _out(console, f"[dim]ok — real runs need a key; run /setkey anytime (or set {env} in .env)[/]")
-    else:
+            console.print()
+            return None
+
+    def _go_free() -> None:
         os.environ["WRITINGAGENT_FAKE"] = "1"
-        _out(console, f"[bold {GOLD}]✓ free preview on[/] [dim]— placeholder output, $0. "
-                      "Add a key later with /setkey for real runs.[/]")
+        _out(console, f"[bold {GOLD}]✓ free preview on[/] [dim]— the whole flow, placeholder "
+                      "output, $0. Add a key later with /setkey for real runs.[/]")
+
+    # 1) A key is already set for some host? Offer it - never assume OpenRouter.
+    active = providers.resolve(settings.provider)
+    usable = [p for p in providers.configured() if p.id != active]
+    if usable:
+        console.print(Text(f"  Found a key for: {', '.join(p.name for p in usable)}. "
+                           "Use one for real runs?", style=PARCH))
+        rows = [(str(i + 1), f"Write with {p.name}") for i, p in enumerate(usable)]
+        rows += [("f", "Try it free instead ($0, placeholder)"), ("s", "Not now")]
+        _cmd_table(console, rows)
+        choice = _ask(f"  [{GOLD}]choice[/] [dim][1 = {usable[0].name}]:[/] ")
+        if choice is None or choice in ("s", "skip", "n", "no"):
+            return
+        if choice in ("f", "free"):
+            return _go_free()
+        idx = int(choice) - 1 if (choice.isdigit() and 0 < int(choice) <= len(usable)) else 0
+        cp = usable[idx]
+        _apply_provider(settings, cp.id)
+        _out(console, f"[bold {ON_CLR}]✓ using {cp.name}[/] [dim]— real runs on (saved). "
+                      "Set per-node models with /model.[/]")
+        return
+
+    # 2) No key anywhere - let them CHOOSE a host, then paste its key.
+    console.print(Text("  No API key yet — pick a host to write with "
+                       "(any of these, or run free; change it anytime with /provider):", style=PARCH))
+    choices = [providers.REGISTRY[c] for c in _FIRST_RUN_CHOICES if c in providers.REGISTRY]
+    rows = [(str(i + 1), f"{p.name}  [dim]· {p.notes}[/]") for i, p in enumerate(choices)]
+    rows += [("Enter", "Try it free now  ·  the whole flow, placeholder output, $0"),
+             ("s", "Skip — I'll add a key later with /setkey")]
+    _cmd_table(console, rows)
+    choice = _ask(f"  [{GOLD}]choice[/] [dim][Enter = try free]:[/] ")
+    if choice is None:
+        return
+    if choice in ("s", "skip"):
+        _out(console, "[dim]ok — real runs need a key; pick a host with /provider then /setkey[/]")
+        return
+    if not (choice.isdigit() and 0 < int(choice) <= len(choices)):
+        return _go_free()
+    cp = choices[int(choice) - 1]
+    _apply_provider(settings, cp.id)                 # so /setkey + real calls target the chosen host
+    env = cp.key_env[0] if cp.key_env else "the API key"
+    url = SIGNUP_URLS.get(cp.id, "")
+    if url:
+        console.print(Text(f"  Get a {cp.name} key at {url}", style=DIM))
+    key = _ask(f"  paste your {cp.name} key ([dim]{env}[/]) [dim](Enter to skip for now):[/] ")
+    if key:
+        path = _write_env_key(env, key)
+        os.environ.pop("WRITINGAGENT_FAKE", None)    # a real key means real runs
+        if path:
+            _out(console, f"[bold {ON_CLR}]✓ {cp.name} key saved[/] [dim]→ {path}  ·  real runs on[/]")
+        else:
+            _out(console, f"[bold {ON_CLR}]✓ key set for this session[/] [dim]— couldn't write .env "
+                          f"(read-only?); set {env} in your shell to keep it[/]")
+    else:
+        _out(console, f"[dim]{cp.name} selected (saved) — add its key anytime with /setkey[/]")
 
 
 def _banner(console, cfg: ModelConfig | None = None, settings: Settings | None = None) -> None:

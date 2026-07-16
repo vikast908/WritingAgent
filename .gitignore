@@ -7,6 +7,10 @@ venv/
 .index/
 .pytest_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 .claude/
 *.egg-info/
 dist/
@@ -18,8 +22,9 @@ config/settings.yaml
 test_diagram.svg
 reseed.py
 
-# NOTE: plan.md, resume.md, docs.md are intentionally TRACKED for now - the author works
-# across multiple laptops and syncs them via git. Move them here only at open-source time.
+# NOTE: the maintainer journals moved to docs/dev/ (resume.md = session log, test.md =
+# verification log) at open-source time. They stay TRACKED (synced across machines via git);
+# plan.md (architecture spec) stays at the repo root.
 
 # Playwright MCP browser artifacts (CI debugging)
 .playwright-mcp/

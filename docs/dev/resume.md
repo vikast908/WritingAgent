@@ -5,6 +5,36 @@
 
 ## Current status
 
+- **New (2026-07-16 - OPEN-SOURCE HARDENING + PROVIDER EXPANSION - DONE, branch
+  `feat/oss-and-providers`):** made the repo publish-ready and broadened model-host support with no
+  blessed default. Suite **525 passed / 1 skipped**, ruff clean, coverage ~70%.
+  - **Providers (`providers.py`): 17 → 23 hosts.** Added **Anthropic** (`claude-*` via the OpenAI-compat
+    endpoint), **Perplexity** (`sonar`), **Cerebras**, **SambaNova**, plus **AWS Bedrock** + **Azure
+    OpenAI** as gateway entries (`AWS_BEDROCK_BASE_URL` / `AZURE_OPENAI_BASE_URL`) - honest to the
+    single-OpenAI-transport design; native boto3/SigV4 Bedrock + native Azure are roadmap. Aliases +
+    `POPULAR_MODELS` (Perplexity) updated. New `providers.configured()` (keyed-and-usable hosts).
+  - **No default, people choose (`shell/branding.py` `_first_run_setup`).** Rewrote the wizard: if a key
+    for ANY host is already in the env it's offered (no OpenRouter assumption); else the writer picks a
+    host from a menu (`_FIRST_RUN_CHOICES`) then pastes its key. New `_apply_provider` persists the
+    choice (settings.yaml) + activates live. `SIGNUP_URLS` expanded. `.env.example` rewritten to present
+    the choice. Tests rewritten (`test_ui.py`): free-preview, pick-host-and-paste, use-detected-key,
+    noop-when-key-present.
+  - **OSS files.** `release.yml` (build + PyPI **Trusted Publishing/OIDC** on a `v*` tag - needs the
+    one-time pending-publisher setup on pypi.org, documented in the workflow header); CI gained
+    **coverage** (pytest-cov → Codecov, non-blocking; `source_pkgs` in pyproject because the root
+    launcher shadows a plain `source`) + a **gitleaks** secret-scan job + `permissions: contents: read`;
+    `dependabot.yml` (pip + actions); README **CI/coverage/PyPI** badges; `CODEOWNERS`, issue
+    `config.yml`, `CITATION.cff`, `FUNDING.yml`, `ROADMAP.md`. `.gitignore` gained coverage artifacts.
+  - **Tidy root.** Moved the maintainer journals to `docs/dev/` (**this file** + `test.md`) + a
+    `docs/dev/README.md`; updated refs in CLAUDE.md/CONTRIBUTING.md/plan.md/learning.md/.gitignore.
+    `plan.md` (29 refs, architecture SoT) and `CLAUDE.md` (Claude Code auto-load) intentionally stay at
+    root. README/CLAUDE one-liners de-biased off "OpenRouter + DeepSeek".
+  - **NOT yet done (needs the user / external):** (1) the PyPI pending-publisher setup on pypi.org +
+    the first `vX.Y.Z` tag to actually publish; (2) enable GitHub **Discussions** + set a `CODECOV_TOKEN`
+    secret (coverage upload is non-blocking without it); (3) republish the npm launcher post-PyPI. Native
+    Bedrock/Azure + the book/article dedup remain roadmap.
+  - **Next:** commit/push/merge `feat/oss-and-providers`; then the PyPI + Discussions setup above.
+
 - **New (2026-07-16 - full-codebase REVIEW-DRIVEN FIX SWEEP - DONE):** ran a redundancy/mismatch/
   optimization review across every subsystem (7 parallel reviewers + own verification), then fixed
   every confirmed defect on branch `fix/review-sweep-2026-07-16`. Suite **523 passed / 1 skipped**

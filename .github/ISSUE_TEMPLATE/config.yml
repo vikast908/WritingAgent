@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & ideas
+    url: https://github.com/vikast908/WritingAgent/discussions
+    about: Ask a question, share what you built, or propose an idea in Discussions.
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/vikast908/WritingAgent/security/policy
+    about: Please report security issues privately - see SECURITY.md, not a public issue.
