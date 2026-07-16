@@ -55,6 +55,7 @@ __all__ = [
     '_praised_passages',
     '_run_learner',
     '_escalate',
+    '_record_escalated_score',
     '_manuscript_section_bodies',
     '_replace_manuscript_section',
     'record_rejected',
@@ -541,7 +542,7 @@ def _load(uid: str, book_id: str):
     paths = BookPaths(book_id, uid)
     state = brain.read_json(paths.run_state)
     if state is None:
-        raise FileNotFoundError(f"No run_state for book '{book_id}'. Run `book new` first.")
+        raise FileNotFoundError(f"No run_state for book '{book_id}'. Run `new` first.")
     plan = S.BookPlan(**brain.read_json(paths.root / "plan.json"))
     toc = S.TOC(**brain.read_json(paths.root / "toc.json"))
     return paths, state, plan, toc
@@ -734,19 +735,39 @@ def _train_agentic_policy(paths, log) -> None:
         pass
 
 
-def _escalate(paths, n, crit: S.Critique, draft: str) -> None:
+def _escalate(paths, n, crit: S.Critique, draft: str, *, state=None,
+              unit: str = "chapter") -> None:
     brain.write_text(paths.ch_draft(n), draft)
     lines = [
-        f"# Review needed - chapter {n}", "",
+        f"# Review needed - {unit} {n}", "",
         f"- verdict: {crit.verdict}", f"- confidence: {crit.confidence:.2f}", "",
         "## Blocking",
         *(f"- [{b.type}] {b.where}: {b.detail}\n  fix: {b.fix}" for b in crit.blocking),
         "", "## Nits", *(f"- {x}" for x in crit.nits), "",
         "## Your directed instructions",
-        "_Run: book review --chapter N --instruction \"...\" - then book run to resume._",
+        # The --chapter flag is universal (it addresses the Nth section too); the command is
+        # `review`/`run`, not the obsolete `book <subcmd>` prefix - and the unit word tracks
+        # the pipeline so an article never tells the user to review a "chapter".
+        f'_Run: review --chapter {n} --instruction "..." - then run to resume._',
     ]
     brain.write_text(paths.review_of(n), "\n".join(lines))
-    brain.append_text(paths.revision_log, f"## Chapter {n} ESCALATED ({crit.verdict})")
+    brain.append_text(paths.revision_log, f"## {unit.capitalize()} {n} ESCALATED ({crit.verdict})")
+    # Persist the blocking critique's scores so an approve-as-is (approve_escalation) can keep
+    # the per-unit scores/insights arrays 1:1 with `committed` - otherwise they desync and
+    # every later scores[n-1] lookup (weakest-unit revise, summary card) targets the wrong unit.
+    if state is not None:
+        state["escalated_score"] = {"insight": crit.insight, "clarity": crit.clarity,
+                                    "structure": crit.structure, "evidence": crit.evidence}
+
+
+def _record_escalated_score(state) -> None:
+    """Append the escalating critique's scores (stashed by _escalate) to the per-unit
+    scores/insights arrays, keeping them aligned with `committed` after an approve-as-is.
+    Falls back to a neutral score if none was stashed (older paused run-states)."""
+    sc = state.pop("escalated_score", None) or {"insight": 3, "clarity": 3,
+                                                "structure": 3, "evidence": 3}
+    state.setdefault("insights", []).append(sc.get("insight", 3))
+    state.setdefault("scores", []).append(sc)
 
 
 def _manuscript_section_bodies(ms: str) -> list[str]:

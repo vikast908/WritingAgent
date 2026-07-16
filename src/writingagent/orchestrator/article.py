@@ -717,9 +717,10 @@ def _process_article_section(cfg, paths: ArticlePaths, outline, state, n, log,
         if agentic_on:   # label the controller's gather decisions with this unit's outcome (§21.11)
             from .. import agentic
             agentic.trace.append(paths, {"scope": "unit-outcome", "unit": f"sec{n:02d}",
-                                         "first_pass": bool(first_pass), "insight": crit.insight})
+                                         "first_pass": bool(first_pass), "insight": crit.insight,
+                                         "revised": instruction is not None})
         return "commit"
-    _escalate(paths, n, crit, draft)
+    _escalate(paths, n, crit, draft, state=state, unit="section")
     return "escalate"
 
 

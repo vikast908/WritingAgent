@@ -233,7 +233,7 @@ def _run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
                                                prefetched=pf, ask=ask)
                 if outcome == "escalate":
                     _mark_escalated(state, paths, "chapter",
-                                    f"[!] Chapter {n} escalated. Resolve with `book review` then `book run`.",
+                                    f"[!] Chapter {n} escalated. Resolve with `review` then `run`.",
                                     log)
                     return state
                 state["committed"] += 1
@@ -248,7 +248,7 @@ def _run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
                                      skip_next_consolidation=True)
                         brain.write_json(paths.run_state, state)
                         log(f"[!] Consolidation found {len(report.contradictions)} contradiction(s) "
-                            f"-> review. Resume with: book run --force")
+                            f"-> review. Resume with: run --force")
                         return state
                 state["skip_next_consolidation"] = False
                 brain.write_json(paths.run_state, state)
@@ -260,7 +260,7 @@ def _run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
                     state.update(pending_review=True, review_kind="consolidation")
                     brain.write_json(paths.run_state, state)
                     log(f"[!] Final consolidation found {len(report.contradictions)} contradiction(s) "
-                        f"-> review. Resume with: book run --force")
+                        f"-> review. Resume with: run --force")
                     return state
                 if state.get("autonomous") and report.contradictions:
                     _repair_contradictions(cfg, paths, plan, toc, store, report,
@@ -363,7 +363,7 @@ def _book_run_ops(cfg, paths, plan, toc, store, prefetch, pool, log, ask, contro
         )
         if agentic.run_unit(cfg, state, ops=ops, log=log) == "escalate":
             _mark_escalated(state, paths, "chapter",
-                            f"[!] Chapter {n} escalated. Resolve with `book review` then `book run`.",
+                            f"[!] Chapter {n} escalated. Resolve with `review` then `run`.",
                             log)
             return "pause"
         state["committed"] += 1
@@ -485,7 +485,7 @@ def _book_run_ops(cfg, paths, plan, toc, store, prefetch, pool, log, ask, contro
 
     def _escalate_run(state, log):
         _mark_escalated(state, paths, "chapter",
-                        "[!] Controller escalated. Resolve with `book review` then `book run`.", log)
+                        "[!] Controller escalated. Resolve with `review` then `run`.", log)
         return "pause"
 
     def dispatch(action, state, log):
@@ -651,8 +651,12 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         log(f"\n== Chapter {n}: {blueprint.title} ==")
         log("   [resume] already committed - advancing")
         return "commit"
+    # Pass the setting through as-is: None (unset) -> assemble_context's default cap, but an
+    # explicit 0 means "unbounded" per the config contract (config.py; _within_budget honors
+    # budget<=0). The old `... or None` collapsed 0 into None, silently re-capping at 24000.
+    _mcc = state.get("max_context_chars")
     base_context = retrieval.assemble_context(
-        store, paths, blueprint, max_chars=int(state.get("max_context_chars") or 0) or None)
+        store, paths, blueprint, max_chars=None if _mcc is None else int(_mcc))
     # extra_context: research/canon the agentic controller gathered for this unit before
     # drafting (plan §21.3). None in the fixed pipeline, so behaviour is identical there.
     if extra_context:
@@ -761,6 +765,29 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         glimpse = _draft_glimpse(draft)
         if glimpse:
             log(f'   · opens: "{glimpse}"')
+        # Agentic critique panel (plan §21.10): a diverse-lens majority review before approving.
+        # (The article pipeline's fact-check panel has no book analogue - a chapter has no
+        # per-unit research source_text to verify cited claims against.)
+        if (agentic_on and bool(state.get("agentic_critique_panel"))
+                and crit.verdict == "approve"):
+            from .. import agentic
+
+            def _critique_lens(lens, _d=draft, _ctx=context):
+                return nodes.critique_chapter(
+                    cfg, plan, blueprint, _d, context=_ctx, watch_list=watch,
+                    skills=skill_bodies, requirements=requirements,
+                    watch_blocking=bool(state.get("watch_blocking", True)),
+                    length_note=_length_note(len(_d.split()), blueprint.target_words),
+                    register=register, lens=lens)
+            passed, _blocks = agentic.panels.critique_panel(_critique_lens, log=log)
+            if not passed:
+                crit.blocking.append(S.BlockingIssue(
+                    type="quality", where="(critique panel)",
+                    detail="A majority of independent reviewers (distinct lenses) raised a "
+                           "blocking concern with this chapter.",
+                    fix="Address the strongest shared concern: tighten vague claims, ground "
+                        "them concretely, and cut filler."))
+                crit.verdict = "revise"
         brain.write_json(paths.eval_of(n),
                          {"chapter_id": n, "attempt": attempt, **crit.model_dump()})
         log(f"   verdict={crit.verdict} confidence={crit.confidence:.2f} "
@@ -825,9 +852,10 @@ def _process_chapter(cfg, paths, plan, toc, store, state, n, log, prefetched=Non
         if agentic_on:   # label the controller's gather decisions with this unit's outcome (§21.11)
             from .. import agentic
             agentic.trace.append(paths, {"scope": "unit-outcome", "unit": f"ch{n:02d}",
-                                         "first_pass": bool(first_pass), "insight": crit.insight})
+                                         "first_pass": bool(first_pass), "insight": crit.insight,
+                                         "revised": instruction is not None})
         return "commit"
-    _escalate(paths, n, crit, draft)
+    _escalate(paths, n, crit, draft, state=state, unit="chapter")
     return "escalate"
 
 
@@ -887,7 +915,7 @@ def _write_consolidation_review(paths, tag, report) -> None:
     lines += [f"- [{c.kind}] ch{c.chapters}: {c.detail}\n  fix: {c.fix}"
               for c in report.contradictions]
     lines += ["", f"Full report: consolidation/{tag}.md",
-              "Fix canon/chapters as needed, then resume with: `book run --force`"]
+              "Fix canon/chapters as needed, then resume with: `run --force`"]
     brain.write_text(paths.reviews / f"consolidation-{tag}.md", "\n".join(lines))
     brain.append_text(paths.revision_log, f"## Consolidation ESCALATED ({tag})")
 
@@ -960,6 +988,14 @@ _BIBLIO_RE = re.compile(r"bibliograph|reference|works.?cited|sources|further.?re
 
 
 def _production(cfg, paths, plan, store, *, log) -> None:
+    # Resume guard (mirrors _produce_article): if production already completed - manuscript
+    # assembled AND front/back-matter generated - and we re-enter after a crash/budget pause
+    # before the phase advanced to learn, don't pay to regenerate every component again.
+    fm = list(paths.frontmatter.glob("*.md")) if paths.frontmatter.exists() else []
+    bm = list(paths.backmatter.glob("*.md")) if paths.backmatter.exists() else []
+    if brain.read_text(paths.manuscript) and (fm or bm):
+        log("   [resume] manuscript already assembled - skipping production")
+        return
     sources = brain.read_json(paths.sources_json) or []
     pplan = nodes.plan_production(cfg, plan, num_sources=len(sources))
     author_meta = brain.read_text(brain.user_profile(paths.uid))

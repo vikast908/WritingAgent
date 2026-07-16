@@ -276,10 +276,13 @@ def project_root(uid: str, project_id: str) -> Path:
 # ── Export save location (where rendered deliverables land; see /path) ─────────
 # The rendered files an export produces. NOT the brain's `manuscript.md` source -
 # that and every other working file stay in the project root; only these move.
-EXPORT_DELIVERABLES = (
-    "manuscript.pdf", "manuscript.epub", "manuscript.html",
-    "manuscript.docx", "manuscript.txt", "manuscript_export.md",
-)
+# format -> the on-disk deliverable filename. Single source for the export writers AND the
+# "refresh whatever deliverables exist" logic (cli/export.py) so the two can't drift.
+EXPORT_DELIVERABLE_BY_FORMAT = {
+    "pdf": "manuscript.pdf", "epub": "manuscript.epub", "html": "manuscript.html",
+    "docx": "manuscript.docx", "txt": "manuscript.txt", "md": "manuscript_export.md",
+}
+EXPORT_DELIVERABLES = tuple(EXPORT_DELIVERABLE_BY_FORMAT.values())
 _EXPORT_DIR_SIDECAR = "export_dir.txt"   # one line: the per-project save folder
 
 

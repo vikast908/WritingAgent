@@ -191,9 +191,8 @@ def cmd_export(args, cfg, settings, uid):
         console.print(f"  [{ui.DIM}]{line}[/]") if console else print(line)
 
 
-_DELIVERABLE = {"pdf": "manuscript.pdf", "epub": "manuscript.epub",
-                "html": "manuscript.html", "docx": "manuscript.docx",
-                "txt": "manuscript.txt", "md": "manuscript_export.md"}
+# Single-sourced from brain (format -> deliverable filename) so it can't drift.
+_DELIVERABLE = brain.EXPORT_DELIVERABLE_BY_FORMAT
 
 
 def cmd_polish(args, cfg, settings, uid):

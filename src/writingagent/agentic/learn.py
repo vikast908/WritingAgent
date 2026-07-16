@@ -62,6 +62,11 @@ def _collect_units(uid: str) -> dict:
                 if r.get("reason") != "evidence gap":
                     d["gathered"] = True
             if r.get("scope") == "unit-outcome" and r.get("first_pass") is not None:
+                # A `revise` re-commit re-labels the unit with first_pass=False (instruction set),
+                # which would overwrite the genuine first-draft outcome and teach "research hurts".
+                # Skip revised re-labels; keep the first (unrevised) outcome for this unit.
+                if r.get("revised") or d["first_pass"] is not None:
+                    continue
                 d["first_pass"] = bool(r.get("first_pass"))
                 d["insight"] = r.get("insight")
     return units

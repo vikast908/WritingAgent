@@ -36,7 +36,7 @@ class Persona:
     kind: str                         # "archetype" | "author"
     signature: str                    # the manner card: diction / rhythm / devices / stance / avoid
     registers: tuple[str, ...] = ()   # compatible register names; () = compatible with all
-    exemplar: str = ""                # filename in personas/ (original pastiche prose)
+    # The exemplar file is `personas/<name>.md` by convention (original pastiche prose).
 
 
 _PERSONAS: dict[str, Persona] = {
@@ -453,8 +453,6 @@ _PERSONAS: dict[str, Persona] = {
         registers=("children", "poetry")),
 }
 
-_KINDS = ("archetype", "author")
-
 
 def names() -> list[str]:
     return list(_PERSONAS)
@@ -505,7 +503,7 @@ def block(name: str | None, register: str | None, max_chars: int = 1400) -> str 
     parts = [f"PERSONA — write in the voice of the {p.name} ({p.description}). "
              f"This shapes MANNER ONLY; obey the register's rules, stay in the present, invent "
              f"no archaic words.\n{p.signature}"]
-    ex = _exemplar_text(p.exemplar or f"{p.name}.md", max_chars)
+    ex = _exemplar_text(f"{p.name}.md", max_chars)
     if ex:
         parts.append("Exemplar of this voice - match its rhythm, diction, and stance; do NOT "
                      "copy its content:\n\n" + ex)

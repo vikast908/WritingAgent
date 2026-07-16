@@ -34,7 +34,7 @@ __all__ = [
 
 _NEEDS_PROJECT = {"run", "status", "read", "export", "review", "revise", "memory",
                    "delete", "produce", "consolidate", "versions", "brief",
-                   "tableread", "eval"}
+                   "tableread", "eval", "seo", "promote", "polish", "evidence"}
 
 # The chat assistant must NOT silently auto-execute destructive or
 # config/tenant-changing commands - the human has to type these. (The model may

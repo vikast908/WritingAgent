@@ -91,6 +91,67 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   enabled search).
 
 ### Fixed
+- **Review-driven fix sweep (2026-07-16).** A full-codebase review (redundancy · mismatches ·
+  optimization) across every subsystem drove one batch. All confirmed defects fixed; suite green
+  (**523 passed / 1 skipped**), ruff clean. No dead `Settings` keys were found (all 55 are read).
+  - **Escalation no longer desyncs the per-unit score arrays (`review.py`, `common.py`).** Approving an
+    escalated chapter/section (`approve_escalation`) committed the unit but never appended to
+    `state["scores"]`/`["insights"]`, so every later `scores[n-1]` lookup (the agentic `revise` target,
+    the summary card) pointed at the WRONG unit (and could `IndexError`). `_escalate` now stashes the
+    blocking critique's scores and `approve_escalation` re-appends them via `_record_escalated_score`,
+    keeping the arrays 1:1 with `committed`.
+  - **Citation-preservation guard was blind to `[N12]` markers (`humanizer.py`, `surgery.py`).** The
+    guard matched only `[\d+]`, so a humanizer/surgery rewrite could silently strip an N-style
+    synthesis citation while passing the guard. Now matches `[N?\d+]` (mirrors `polish._INLINE_CITE`).
+  - **Surgical craft passes honor the register in their anti-slop guard (`surgery.py`).** A valid
+    literary rewrite using a word the register permits (`landscape`, an em-dash) was rejected as "new
+    slop" because the guard used the register-neutral tell matcher; the register's matcher is now
+    threaded through `apply → show_dont_tell/de_passive → _guard`.
+  - **`max_context_chars: 0` ("unbounded") is honored (`book.py`).** The orchestrator collapsed an
+    explicit `0` to `None` (re-capping context at 24000), contradicting the config contract (`0` =
+    unbounded, which `_within_budget` already honors); the setting is now passed through unchanged.
+  - **Chapter-writer length-truncation recovery works (`llm.py`).** The empty-`finish_reason=length`
+    recovery only grew `max_tokens` when below 16000, but the chapter writer requests 16000 — so a
+    truncated chapter re-sent the same doomed budget until its retries were spent. A shared
+    `_LEN_RETRY_CEILING` (32000) gives real headroom in both `complete_text` and `complete_structured`.
+  - **Learned-policy corpus no longer poisoned by `revise` (`learn.py`, `book.py`, `article.py`).** A
+    `revise` re-commit re-labelled a unit `first_pass=False`, overwriting the genuine first-draft
+    outcome and skewing `train_policy`; unit-outcome trace records now carry `revised` and the collector
+    keeps the first (unrevised) outcome per unit.
+  - **Agentic critique panel now runs for books too (`book.py`, `nodes.py`).** `agentic_critique_panel`
+    was wired only in the article pipeline (silently ignored on books); `critique_chapter` gained a
+    `lens` param and the book gate runs the diverse-lens majority review. (The article fact-check panel
+    has no book analogue — a chapter has no per-unit research source to verify against.)
+  - **`Store.open` no longer leaks the SQLite connection on a corrupt/locked db (`store.py`).** A
+    non-`OperationalError` during schema init now closes the connection before propagating, so a
+    caller's `finally: store.close()` can't be starved (Windows/synced-folder resilience).
+  - **Web dashboard: dropped raster images render (`webui/server.py`).** `images/*.png|jpg|…` were
+    404'd (only `.svg` was whitelisted) and would have crashed a `read_text`; they're now served as a
+    data-URI `<img>`. Finished/errored jobs are pruned (cap 20) so a long-lived dashboard can't grow its
+    event buffers (or the `/api/state` payload) without bound. Removed a permanently-empty `_evals` glob.
+  - **Exported `<img>` tags no longer corrupt on a recurring src (`export.py`).** The data-URI/path swap
+    now replaces only the captured `src="…"` span, not a bare `str.replace` that also rewrote a matching
+    `alt`/`title`.
+  - **Shell: `seo`/`promote`/`polish`/`evidence` no longer silently no-op with ≥2 projects
+    (`shell/dispatch.py`).** Added to `_NEEDS_PROJECT` so they trigger the project picker instead of a
+    swallowed `SystemExit`.
+  - **Emotion resolution matches whole words (`emotions.py`).** `hopeless` no longer resolves to its
+    opposite `hope` via substring; free-text roles like "a sense of dread" still resolve.
+  - **SEO keyword density uses word-boundary matching (`seo.py`).** A phrase keyword ("data model") no
+    longer over-counts inside a longer word ("data modeling") and falsely trips the stuffing warning.
+  - **Misc.** `apply_cost_mode` no longer mis-tags the telemetry thread (via a side-effect-free
+    `ModelConfig.resolved_for`); `configure_timeout`/`configure_provider` only discard the cached OpenAI
+    client when the value actually changes; `render_canon` batches its per-character reads (removed an
+    N+1); book production gained the article's assembled-manuscript resume guard; `cmd_status` reads the
+    manuscript once; stale `book review`/`book run`/`book new` hints in run messages → `review`/`run`/
+    `new`; the `/agentic` help line and the chat theme list (missing `highcontrast`) were corrected;
+    `web` is now discoverable in the shell command list.
+  - **Dead code removed.** `prompts.HUMANIZER_SYS` (unused — the live path is the surgical humanizer;
+    it also re-hardcoded the slop lexicon), `personas.Persona.exemplar` (never populated) and
+    `personas._KINDS` (unreferenced); the duplicated `_avg` closure (now `_score_avg`) and the
+    `_DELIVERABLE` filename table (now single-sourced from `brain.EXPORT_DELIVERABLE_BY_FORMAT`).
+    `CRITIC_SYS`'s example tells are now generated from `slop.BANNED_VERBS/BANNED_TRANSITIONS` so they
+    can't drift from the lexicon.
 - **Structured-output truncation on the reasoning tier (`llm.py`, `models.yaml`).** A reasoning model
   (`deepseek-v4-pro`) spends tokens *thinking* before it emits JSON; when that filled `max_tokens` the
   reply came back empty / cut off with `finish_reason=length`, and the old retry re-sent the same

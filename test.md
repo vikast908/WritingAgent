@@ -4,6 +4,25 @@ Verification log for recent sessions (newest first). The living suite is `tests/
 (run `pytest -q` with `WRITINGAGENT_FAKE=1`); this file records what was executed,
 where, and what it proved.
 
+## 2026-07-16 (session 16): review-driven fix sweep
+
+A full-codebase review (redundancy · mismatches · optimization) across every subsystem, then a
+fix batch on branch `fix/review-sweep-2026-07-16`. See `CHANGELOG.md` (Unreleased → Fixed) and
+`plan.md` §15.1 (review-sweep invariants row) for the decisions.
+
+| Check | How | Result |
+|---|---|---|
+| Full offline suite | `python -m pytest -q` (Windows, py3.13) + `ruff check src tests` | **523 passed, 1 skipped** (opt-in live-net test); ruff clean (baseline was 521/1) |
+| Dead config keys | scripted scan of all 55 `Settings` fields vs. repo usage | **none** - every field is read outside `config.py` |
+| Escalation score alignment (Tier-1 bug) | new `tests/test_pipeline.py::test_record_escalated_score_keeps_arrays_aligned` | `approve_escalation` re-appends the stashed crit's scores so `scores`/`insights` stay 1:1 with `committed` (was silently desyncing → wrong `revise` target / `IndexError`) |
+| N-style citation guard (Tier-1 bug) | new `tests/test_quality.py::test_rewrite_ok_preserves_n_style_citations` | the humanizer/surgery guard now preserves `[N12]`, not just `[12]` |
+| Whole-word emotion resolution | extended `tests/test_compositor.py::test_emotion_resolution_with_aliases` | `hopeless` no longer resolves to its opposite `hope`; phrase roles ("a sense of dread") still resolve |
+| Everything else | existing suite (unchanged) | book critique-panel wiring, register-aware surgery guard, `max_context_chars=0`, `Store.open` safety, webui raster/job-pruning, `export` src-swap, shell `_NEEDS_PROJECT`, dead-code removals - all covered by the green suite; no regressions |
+
+**Deliberately deferred** (not bugs; high-risk refactors whose concrete harms were already fixed in
+both pipelines): the full `book.py`/`article.py` `_revise`/`_reoutline`/`_draft`/tool-runner dedup,
+and unifying the legacy-vs-agentic consolidation-cadence state keys.
+
 ## 2026-06-17 (session 15): craft engine (§22) + compositor (§23)
 
 Built and verified two layers: the **craft engine** (plan §22, branch `feat/craft-engine-all-tiers`)

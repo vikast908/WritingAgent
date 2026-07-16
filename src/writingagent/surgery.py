@@ -58,7 +58,8 @@ def _find(text: str, pattern: re.Pattern, cap: int = 30) -> list[tuple[int, int,
     return out
 
 
-def _guard(old: str, new: str, defect_re: re.Pattern, *, max_ratio: float = 3.0) -> bool:
+def _guard(old: str, new: str, defect_re: re.Pattern, *, max_ratio: float = 3.0,
+           tre: re.Pattern | None = None) -> bool:
     """Accept a rewrite only if it preserves meaning-bearing tokens and actually helps.
 
     - inline [n] citations preserved exactly (same multiset)
@@ -66,7 +67,12 @@ def _guard(old: str, new: str, defect_re: re.Pattern, *, max_ratio: float = 3.0)
     - length within 0.4-max_ratio x (show-don't-tell may lengthen, so the cap is generous)
     - the targeted defect count strictly decreases (otherwise it's pointless churn)
     - no NEW anti-slop tell is introduced by the rewrite
+
+    `tre` is the register-aware tell matcher (defaults to the neutral _TELL_RE); passing
+    the register's matcher stops a valid literary rewrite (e.g. one using 'landscape' or an
+    em-dash the register permits) from being rejected as "new slop".
     """
+    tre = tre or humanizer._TELL_RE
     if not new or not new.strip():
         return False
     if sorted(humanizer._CITE_MARKS.findall(old)) != sorted(humanizer._CITE_MARKS.findall(new)):
@@ -78,11 +84,11 @@ def _guard(old: str, new: str, defect_re: re.Pattern, *, max_ratio: float = 3.0)
         return False
     if len(defect_re.findall(new)) >= len(defect_re.findall(old)):
         return False
-    return not humanizer._TELL_RE.search(new)
+    return not tre.search(new)
 
 
 def _run(cfg: ModelConfig, text: str, flagged, system: str, defect_re: re.Pattern,
-         *, max_ratio: float = 3.0) -> str:
+         *, max_ratio: float = 3.0, tre: re.Pattern | None = None) -> str:
     if not flagged:
         return text
     numbered = "\n".join(f"[{i + 1}] {sent}" for i, (_, _, sent) in enumerate(flagged))
@@ -98,24 +104,25 @@ def _run(cfg: ModelConfig, text: str, flagged, system: str, defect_re: re.Patter
     for i in range(len(flagged) - 1, -1, -1):   # splice from the end so spans stay valid
         start, end, old = flagged[i]
         new = rewrites.get(i + 1)
-        if new and _guard(old, new, defect_re, max_ratio=max_ratio):
+        if new and _guard(old, new, defect_re, max_ratio=max_ratio, tre=tre):
             result = result[:start] + new + result[end:]
     return result
 
 
-def show_dont_tell(cfg: ModelConfig, text: str) -> str:
+def show_dont_tell(cfg: ModelConfig, text: str, register: str | None = None) -> str:
     """Replace filter verbs and told emotion with the concrete image/action (fiction)."""
     if _fake_mode():
         return text
-    return _run(cfg, text, _find(text, _TELLING_RE), P.SHOW_DONT_TELL_SYS, _TELLING_RE)
+    return _run(cfg, text, _find(text, _TELLING_RE), P.SHOW_DONT_TELL_SYS, _TELLING_RE,
+                tre=humanizer._tell_re(register))
 
 
-def de_passive(cfg: ModelConfig, text: str) -> str:
+def de_passive(cfg: ModelConfig, text: str, register: str | None = None) -> str:
     """Rewrite passive sentences active where active reads better."""
     if _fake_mode():
         return text
     return _run(cfg, text, _find(text, craft._PARTICIPLE), P.DE_PASSIVE_SYS,
-                craft._PARTICIPLE, max_ratio=2.5)
+                craft._PARTICIPLE, max_ratio=2.5, tre=humanizer._tell_re(register))
 
 
 def apply(cfg: ModelConfig, text: str, register: str | None = None) -> str:
@@ -124,13 +131,14 @@ def apply(cfg: ModelConfig, text: str, register: str | None = None) -> str:
     Fiction-shaped registers (those that track filter verbs / sensory density) get
     show-don't-tell; prose registers get de-passive. Poetry and screenplay are skipped
     (fragments and present-tense action make both detectors noisy). No-op in fake mode.
+    The register also relaxes the anti-slop guard so words it permits survive.
     """
     if _fake_mode():
         return text
     reg = registers.get(register)
     out = text
     if "filter_words" in reg.metrics or "concrete_sensory" in reg.metrics:
-        out = show_dont_tell(cfg, out)
+        out = show_dont_tell(cfg, out, register)
     if reg.name not in ("poetry", "screenplay"):
-        out = de_passive(cfg, out)
+        out = de_passive(cfg, out, register)
     return out

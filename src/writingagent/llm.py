@@ -52,11 +52,19 @@ _MAX_ATTEMPTS = 4
 _BACKOFF_BASE = 1.0   # seconds; doubles each attempt
 _BACKOFF_CAP = 30.0
 _request_timeout: float = 60.0   # per-request timeout (s); see configure_timeout
+# Ceiling for the finish_reason=length recovery (complete_text/complete_structured): when a
+# reasoning model spends its whole budget thinking and emits an empty/cut-off reply, we DOUBLE
+# max_tokens and retry the same tier (no repair turn) up to this cap. It sits above the common
+# 16000 writer request so a truncated chapter actually gets headroom to grow; if a provider
+# rejects the larger budget it 400s cheaply (non-retryable) and degrades to the fallback tier.
+_LEN_RETRY_CEILING = 32000
 
 
 def configure_timeout(seconds: float) -> None:
     """Set the per-request network timeout (called at startup from settings)."""
     global _request_timeout, _client
+    if seconds == _request_timeout:
+        return  # unchanged - don't discard the cached client (defeats _get_client's caching)
     _request_timeout = seconds
     _client = None  # force the client to be rebuilt with the new timeout
 
@@ -85,9 +93,10 @@ def configure_provider(provider_id: str) -> None:
     if pid not in providers.REGISTRY:
         valid = ", ".join(providers.names())
         raise ValueError(f"unknown provider '{provider_id}' - valid: {valid}")
-    _provider_id = pid
     _include_cost = providers.REGISTRY[pid].reports_cost
-    _client = None  # rebuild against the new base_url/key on next use
+    if pid != _provider_id:
+        _provider_id = pid
+        _client = None  # rebuild against the new base_url/key on next use
 
 
 def active_provider() -> providers.Provider:
@@ -560,8 +569,9 @@ def complete_text(
             # Empty content (reasoning ate the budget) - retryable, but only a BIGGER
             # budget can help: re-sending the same max_tokens just truncates again
             # (mirrors complete_structured's finish_reason=length recovery).
-            if (resp.choices[0].finish_reason or "") == "length" and max_tokens < 16000:
-                max_tokens = min(max_tokens * 2, 16000)
+            _len_cap = max(_LEN_RETRY_CEILING, max_tokens)
+            if (resp.choices[0].finish_reason or "") == "length" and max_tokens < _len_cap:
+                max_tokens = min(max_tokens * 2, _len_cap)
                 _log.warning("text: empty output (finish_reason=length) - retrying "
                              "with max_tokens=%d", max_tokens)
             raise _EmptyResponse(
@@ -797,7 +807,7 @@ def complete_structured(
     # length-truncation we RAISE the cap and retry the same prompt (no repair turn - the
     # prompt was fine). Mirrors the diagram node's 16k token budget for the same reason.
     cur_max = max_tokens
-    cap = max(16000, max_tokens)
+    cap = max(_LEN_RETRY_CEILING, max_tokens)
     for attempt in range(_MAX_ATTEMPTS):
         kwargs: dict = {"model": model, "max_tokens": cur_max, "messages": messages,
                         **_cost_kwargs()}

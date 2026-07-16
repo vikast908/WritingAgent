@@ -64,7 +64,7 @@ _SLASH_HELP = [
         ("/mode [book|article]", "show or set the project mode (default: book)"),
         ("/path [...]", "where exports are saved - default or per-project (no args = interactive menu)"),
         ("/auto [on|off]", "autonomous (never pause) vs manual (review each unit)"),
-        ("/agentic [on|off|llm]", "agentic controller (units self-direct) vs fixed pipeline · policy"),
+        ("/agentic [on|off|default|llm|trace]", "agentic controller (units self-direct) vs fixed pipeline · policy"),
         ("/trace", "the active project's controller action trace (agentic runs)"),
         ("/retry", "resend the last chat message"),
         ("/reset · /compact", "clear · summarize the assistant's conversation memory"),
@@ -149,8 +149,8 @@ Map the user's intent to the right command and trigger it; don't just describe i
   /provider [<id>]           Switch the model host (openrouter, deepseek, openai, ollama, ...).
   /path [...]                Where exports are saved (default or per-project). "save exports to ~/Desktop".
   /praise [N]                Mark a committed chapter/section as great (feeds the voice + learner).
-  /theme [<name>]            List or switch theme - editorial (default), kazama, supabase, violet-bloom,
-                             t3-chat, starry-night, vercel, fallout, mimi, astrovista.
+  /theme [<name>]            List or switch theme - editorial (default), highcontrast, kazama, supabase,
+                             violet-bloom, t3-chat, starry-night, vercel, fallout, mimi, astrovista.
   /features                  Interactive toggle grid for the feature flags.
   /dashboard [<project>]     Telemetry rollup: calls, tokens, cost, latency, errors.
   /trace                     The active project's agentic controller decisions.

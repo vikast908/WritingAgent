@@ -37,18 +37,26 @@ class Store:
     def open(cls, paths: BookPaths) -> Store:
         paths.index_db.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(paths.index_db))
-        conn.executescript(_SCHEMA)
-        fts = True
+        # Anything that fails during schema init (e.g. DatabaseError on a corrupt/locked db -
+        # common on Windows when the .index is in a synced folder) must close `conn` before
+        # propagating: open() returns nothing, so the caller's `finally: store.close()` never
+        # runs and the connection (and its file lock) would leak.
         try:
-            conn.execute(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS docs USING fts5(kind, ref, body)"
-            )
-        except sqlite3.OperationalError:
-            fts = False
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS docs (kind TEXT, ref TEXT, body TEXT)"
-            )
-        conn.commit()
+            conn.executescript(_SCHEMA)
+            fts = True
+            try:
+                conn.execute(
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS docs USING fts5(kind, ref, body)"
+                )
+            except sqlite3.OperationalError:
+                fts = False
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS docs (kind TEXT, ref TEXT, body TEXT)"
+                )
+            conn.commit()
+        except BaseException:
+            conn.close()
+            raise
         return cls(conn, fts)
 
     def close(self) -> None:
@@ -206,17 +214,31 @@ class Store:
         """Render canon pages. names limits the character pages rewritten (per-commit
         only the characters the extraction touched can have changed)."""
         c = self.conn
+        # Which characters to render, with their status (one query, optionally name-filtered) -
+        # then batch facts/voice for exactly those names, instead of 3 queries per character.
         if names is None:
-            rows = c.execute("SELECT name FROM character ORDER BY name").fetchall()
+            char_rows = c.execute("SELECT name, status FROM character ORDER BY name").fetchall()
         else:
-            rows = [(n,) for n in sorted(set(names))
-                    if c.execute("SELECT 1 FROM character WHERE name=?", (n,)).fetchone()]
-        for (name,) in rows:
-            status = c.execute("SELECT status FROM character WHERE name=?", (name,)).fetchone()[0]
-            facts = [r[0] for r in c.execute(
-                "SELECT fact FROM character_fact WHERE name=? ORDER BY chapter", (name,))]
-            voice = [r[0] for r in c.execute(
-                "SELECT note FROM character_voice WHERE name=?", (name,))]
+            wanted = sorted(set(names))
+            ph = ",".join("?" * len(wanted))
+            char_rows = c.execute(
+                f"SELECT name, status FROM character WHERE name IN ({ph}) ORDER BY name",
+                wanted).fetchall() if wanted else []
+        render_names = sorted({name for name, _ in char_rows})
+        facts_by: dict[str, list[str]] = {}
+        voice_by: dict[str, list[str]] = {}
+        if render_names:
+            ph = ",".join("?" * len(render_names))
+            for nm, fact in c.execute(
+                    f"SELECT name, fact FROM character_fact WHERE name IN ({ph}) "
+                    "ORDER BY name, chapter", render_names):
+                facts_by.setdefault(nm, []).append(fact)
+            for nm, note in c.execute(
+                    f"SELECT name, note FROM character_voice WHERE name IN ({ph})", render_names):
+                voice_by.setdefault(nm, []).append(note)
+        for name, status in char_rows:
+            facts = facts_by.get(name, [])
+            voice = voice_by.get(name, [])
             fact_lines = [f"- {f}" for f in facts] or ["- (none yet)"]
             lines = [
                 "---", "type: character", f"name: {name}",

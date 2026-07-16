@@ -32,6 +32,12 @@ class ModelConfig:
         # (plan §12.1 fallback). Empty = no fallback. One global slug, not per-node.
         self._fallback = data.get("fallback", "")
 
+    def resolved_for(self, node: str) -> str:
+        """The model slug routed for `node`, WITHOUT model_for's telemetry side effect.
+        Use this for routing DECISIONS (e.g. cost-mode setup) that must not re-tag the
+        telemetry thread with a node whose LLM call hasn't happened yet."""
+        return self._nodes.get(node, self._default)
+
     def model_for(self, node: str) -> str:
         # Every call site resolves its model via model_for(<node>) immediately before
         # the LLM call, so this is the one seam that knows which AGENT a call belongs
@@ -41,7 +47,7 @@ class ModelConfig:
             llm.set_node(node)
         except Exception:  # noqa: BLE001 - attribution must never break routing
             pass
-        return self._nodes.get(node, self._default)
+        return self.resolved_for(node)
 
     def temperature_for(self, node: str):
         """May be None. The LLM wrapper drops it for models that reject sampling."""
@@ -262,7 +268,7 @@ def apply_cost_mode(cfg: ModelConfig, settings: Settings):
     if flash:
         cfg2 = ModelConfig(cfg.to_dict())
         for node in BUDGET_FLASH_NODES:
-            if cfg.model_for(node) != flash:
+            if cfg.resolved_for(node) != flash:
                 cfg2.set_node(node, flash)
                 notes.append(f"{node}->{flash.rsplit('/', 1)[-1]}")
         cfg = cfg2

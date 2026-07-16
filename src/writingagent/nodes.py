@@ -164,6 +164,7 @@ def critique_chapter(
     requirements: str | None = None,
     watch_blocking: bool = True,
     register: str | None = None,
+    lens: str | None = None,
 ) -> S.Critique:
     model = cfg.model_for("critic")
     # Cache-friendly ordering (mirrors write_chapter): stable cross-chapter blocks lead
@@ -173,6 +174,8 @@ def critique_chapter(
         parts.append("AUTHOR REQUIREMENTS (gathered upfront; treat a clear violation - wrong "
                      f"audience, length, tone, or a missing must-include - as BLOCKING):\n{requirements}")
     parts.append(f"Chapter blueprint:\n{_ctx(blueprint)}")
+    if lens:   # diverse-perspective panel (plan §21.10): review through one specific lens
+        parts.append(f"ADOPT THIS REVIEWER LENS for your critique: {lens}")
     if context:
         parts.append(f"Canonical context:\n{context}")
     wb = _watch_block(watch_list, watch_blocking)

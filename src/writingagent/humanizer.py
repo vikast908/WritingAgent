@@ -74,7 +74,9 @@ def _tell_re(register: str | None):
     return re.compile(slop.tell_pattern(register), re.IGNORECASE)
 
 _SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
-_CITE_MARKS = re.compile(r"\[\d+\]")
+# Inline citation markers, including the [N1] synthesis form (mirror polish._INLINE_CITE);
+# a plain \[\d+\] guard was blind to [N12] and let a rewrite silently strip the marker.
+_CITE_MARKS = re.compile(r"\[N?\d+\]")
 _NUMBERS = re.compile(r"\d+(?:\.\d+)?")
 
 

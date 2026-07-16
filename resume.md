@@ -5,6 +5,47 @@
 
 ## Current status
 
+- **New (2026-07-16 - full-codebase REVIEW-DRIVEN FIX SWEEP - DONE):** ran a redundancy/mismatch/
+  optimization review across every subsystem (7 parallel reviewers + own verification), then fixed
+  every confirmed defect on branch `fix/review-sweep-2026-07-16`. Suite **523 passed / 1 skipped**
+  (was 521; +2 regression tests), ruff clean. **No dead `Settings` keys** (verified all 55 are read).
+  - **Correctness bugs (Tier 1):** (1) escalation-approval desynced the per-unit `scores`/`insights`
+    arrays - `approve_escalation` bumped `committed` but never appended, so every later `scores[n-1]`
+    lookup (agentic `revise` target, summary card) hit the WRONG unit / could `IndexError`. `_escalate`
+    now stashes the blocking crit's scores; `approve_escalation` re-appends via new
+    `common._record_escalated_score` (both pipelines). (2) `humanizer._CITE_MARKS` matched only `[\d+]`,
+    blind to `[N12]` - a rewrite could silently strip an N-citation; now `[N?\d+]` (surgery reuses it).
+    (3) `max_context_chars: 0` ("unbounded") was collapsed to `None`→24000 in `book.py:655`; passed
+    through now. (4) `learn._collect_units` let a `revise` re-commit overwrite a unit's first-pass label
+    (poisoning `train_policy`); unit-outcome trace records now carry `revised`, collector keeps the
+    first. (5) chapter-writer length-recovery was dead (writer sends 16000, recovery required `<16000`)
+    → shared `llm._LEN_RETRY_CEILING=32000`. (6) `Store.open` leaked the conn on a non-`OperationalError`
+    (Windows/synced-folder) → wrapped in try/except-close. (7) webui dropped raster images 404'd + would
+    crash `read_text` → served as data-URI `<img>`. (8) `export._replace_src` replaces the `src` span,
+    not a bare `.replace` that also hit `alt`/`title`.
+  - **Mismatches (Tier 2):** `agentic_critique_panel` now runs for books (`critique_chapter` gained
+    `lens`; fact-check panel is article-only by design - no book source_text); `surgery` guard is now
+    register-aware (was discarding valid literary rewrites); escalation review files + run messages use
+    `review`/`run`/`new`, not the obsolete `book <subcmd>`; shell `seo`/`promote`/`polish`/`evidence`
+    added to `_NEEDS_PROJECT` (were silently no-op with ≥2 projects); `emotions.get` matches whole words
+    (`hopeless`↛`hope`); `seo` density word-boundary match; `apply_cost_mode` no longer mis-tags the
+    telemetry thread (`ModelConfig.resolved_for`).
+  - **Redundancy/dead code:** removed `prompts.HUMANIZER_SYS` (unused + re-hardcoded the lexicon),
+    `personas.Persona.exemplar` (never set) + `_KINDS`; `CRITIC_SYS` example tells now generated from
+    `slop`; `_DELIVERABLE` single-sourced from `brain.EXPORT_DELIVERABLE_BY_FORMAT`; `_avg`→`_score_avg`
+    (dedup). **Optimizations:** webui job pruning (cap 20), `render_canon` N+1→batched, book production
+    resume guard, `configure_timeout/provider` client-cache preserved, `cmd_status` single manuscript
+    read.
+  - **DELIBERATELY DEFERRED (not bugs - high-risk architectural refactors whose concrete harms are
+    already fixed):** (a) the full extraction of the near-identical `book.py`/`article.py`
+    `_revise`/`_reoutline`/`_draft`/tool-runner blocks into `common.py`, and (b) unifying the legacy-vs-
+    agentic consolidation-cadence state keys (`skip_next_consolidation` vs `consolidated_at`). Both are
+    maintainability refactors of a working 500-test pipeline; the divergence-driven *bugs* were fixed in
+    both paths directly. Do these as a dedicated, separately-reviewed refactor if desired.
+  - **Docs:** CHANGELOG `[Unreleased] → Fixed` (full sweep entry), this file, plan.md §15.1 (new
+    hardening rows). **Not yet committed** - branch is staged for review.
+  - **Next:** review the branch diff, commit + merge to master; optionally (a)/(b) above.
+
 - **New (2026-07-15 - ENV RECOVERY + EDITORIAL REBRAND + design.md v2 + AA/UI conformance):** the
   working tree was wiped mid-session by a OneDrive Files-On-Demand eviction. Recovered by adopting the
   parallel **non-synced** copy at `C:\Users\vikas\Documents\MY PROJECTS GITHUB\WritingAgent` (all

@@ -47,9 +47,11 @@ def test_no_living_author_personas():
 # ── Emotions (anti-cliché, not a symptom dictionary) ────────────────────────────
 def test_emotion_resolution_with_aliases():
     assert emotions.get("fear") is emotions.get("dread")          # alias
-    assert emotions.get("a creeping sense of dread")["cue"]       # substring
+    assert emotions.get("a creeping sense of dread")["cue"]       # whole-word in free text
     assert emotions.get("nope") is None
     assert emotions.cue("grief")
+    # whole-word match: 'hopeless' must NOT resolve to its opposite 'hope' via substring
+    assert emotions.get("hopeless") is not emotions.get("hope")
 
 
 def test_emotion_avoid_phrases_feed_cliche_detector():

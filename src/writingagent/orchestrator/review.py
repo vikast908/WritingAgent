@@ -22,6 +22,7 @@ from .common import (
     _load,
     _manuscript_section_bodies,
     _merge_fix_notes,
+    _record_escalated_score,
     _save_version,
 )
 
@@ -51,6 +52,7 @@ def approve_escalation(cfg: ModelConfig, uid: str, book_id: str, *, log=print) -
         _commit_section(cfg, art, outline.sections[n - 1], n, draft, [], [], False,
                         log, humanize=bool(state.get("humanize")))
         art.section_draft(n).unlink(missing_ok=True)
+        _record_escalated_score(state)   # keep scores/insights 1:1 with committed
         state.update(pending_review=False, review_kind=None,
                      committed=state.get("committed", 0) + 1, current_section=n + 1)
         brain.write_json(art.run_state, state)
@@ -68,6 +70,7 @@ def approve_escalation(cfg: ModelConfig, uid: str, book_id: str, *, log=print) -
     finally:
         store.close()
     paths.ch_draft(n).unlink(missing_ok=True)
+    _record_escalated_score(state)   # keep scores/insights 1:1 with committed
     state.update(pending_review=False, review_kind=None,
                  committed=state.get("committed", 0) + 1, current_chapter=n + 1)
     brain.write_json(paths.run_state, state)

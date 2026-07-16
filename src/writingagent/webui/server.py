@@ -37,6 +37,7 @@ from ..config import (
 
 _STATIC = Path(__file__).parent / "static"
 _EVENT_CAP = 5000          # max buffered events per job (a run logs ~hundreds)
+_MAX_RETAINED_JOBS = 20    # cap finished jobs kept in memory (each holds up to _EVENT_CAP events)
 _RECORDS_CAP = 800         # max raw telemetry rows returned per request
 
 
@@ -88,11 +89,20 @@ class JobManager:
         with self.lock:
             return next((j for j in self.jobs.values() if j.status == "running"), None)
 
+    def _prune(self) -> None:
+        """Cap retained finished jobs so a long-lived dashboard doesn't accumulate thousands
+        of buffered event dicts (and an ever-growing /api/state payload). Running jobs are
+        always kept; the oldest finished jobs beyond the cap are dropped. Caller holds the lock."""
+        finished = [jid for jid, j in self.jobs.items() if j.status != "running"]
+        for jid in finished[:max(0, len(finished) - _MAX_RETAINED_JOBS)]:  # dict is insertion-ordered
+            del self.jobs[jid]
+
     def start(self, kind: str, project: str | None, body) -> Job:
         """Run `body(job)` on a daemon thread. Raises RuntimeError if a job is live."""
         with self.lock:
             if any(j.status == "running" for j in self.jobs.values()):
                 raise RuntimeError("a job is already running - one run at a time")
+            self._prune()
             job = Job(kind, project)
             self.jobs[job.id] = job
 
@@ -210,7 +220,8 @@ _ARTIFACTS = {
     "toc": "toc.md",
     "cohesion": "cohesion_report.md",
 }
-_ART_OK_SUFFIX = {".md", ".json", ".txt", ".jsonl", ".svg"}
+_ART_RASTER = {".png", ".jpg", ".jpeg", ".gif", ".webp"}   # binary; served as a data-URI <img>
+_ART_OK_SUFFIX = {".md", ".json", ".txt", ".jsonl", ".svg"} | _ART_RASTER
 _ART_DYN = re.compile(r"^(promo|versions|restyled|images)/[\w.\- ]+$")
 
 
@@ -246,8 +257,7 @@ def _evals(uid: str, pid: str) -> dict:
     p = _paths(uid, pid)
     state = brain.read_json(p.run_state) or {}
     per_attempt = []
-    for f in sorted(p.root.glob("eval_*.json")) + sorted(
-            getattr(p, "eval", p.root).glob("ch*.json") if hasattr(p, "eval") else []):
+    for f in sorted(p.root.glob("eval_*.json")):
         d = brain.read_json(f)
         if d:
             per_attempt.append(d)
@@ -530,6 +540,16 @@ class Handler(BaseHTTPRequestHandler):
         path = _artifact_path(_paths(uid, pid).root, q.get("name", ""))
         if not path:
             return self._err("unknown artifact", 404)
+        if path.suffix.lower() in _ART_RASTER:
+            # Binary image: read_text would crash. Hand the SPA an <img> data-URI it can
+            # inject as-is (same code path as an inline SVG), so raster dropped-figures render.
+            import base64
+            import mimetypes
+            media = mimetypes.guess_type(path.name)[0] or "image/png"
+            b64 = base64.b64encode(path.read_bytes()).decode()
+            text = (f'<img src="data:{media};base64,{b64}" '
+                    f'style="max-width:100%;height:auto" alt="{path.name}">')
+            return self._json({"name": q.get("name"), "text": text})
         self._json({"name": q.get("name"), "text": path.read_text(encoding="utf-8")})
 
     def _rejected(self, q: dict) -> None:

@@ -15,6 +15,8 @@ docs/proposal-personas-emotions-composition.md.
 """
 from __future__ import annotations
 
+import re
+
 # Each emotion: the cliché phrases to AVOID (deny-list) and the craft cue (how to land it).
 _EMOTIONS: dict[str, dict] = {
     "fear": {
@@ -132,11 +134,15 @@ def get(name: str | None) -> dict | None:
         return _EMOTIONS[key]
     if key in _ALIASES:
         return _EMOTIONS[_ALIASES[key]]
-    for token, target in _ALIASES.items():     # substring: 'a sense of dread' -> fear
-        if token in key:
+    # Match on WHOLE WORDS in the free-text role, not raw substrings: 'a sense of dread'
+    # still resolves (dread is a word), but 'hopeless' must not resolve to 'hope' (its
+    # opposite) and 'disgraced' must not resolve to 'grief'-adjacent keys.
+    words = set(re.findall(r"[a-z]+", key))
+    for token, target in _ALIASES.items():
+        if token in words:
             return _EMOTIONS[target]
     for ekey in _EMOTIONS:
-        if ekey in key:
+        if ekey in words:
             return _EMOTIONS[ekey]
     return None
 

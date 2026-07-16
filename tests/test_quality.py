@@ -195,6 +195,15 @@ def test_rewrite_ok_guards():
     assert not humanizer._rewrite_ok(old, "Uses caching " * 40 + "100 ms [2].")
 
 
+def test_rewrite_ok_preserves_n_style_citations():
+    # [N12] synthesis-style citations must be preserved by the guard, not just plain [12] -
+    # a \[\d+\] guard was blind to the N-form and let a rewrite silently strip the marker.
+    old = "We rely on the primary study [N12] for this."
+    assert humanizer._rewrite_ok(old, "We rely on the primary study [N12] here.")
+    # dropping the N-citation (leaving the bare number) must now be rejected
+    assert not humanizer._rewrite_ok(old, "We rely on the primary study 12 for this.")
+
+
 def test_humanize_splices_only_guarded_rewrites(monkeypatch):
     monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     text = ("Keep this sentence. We delve into caching here.\n\n"

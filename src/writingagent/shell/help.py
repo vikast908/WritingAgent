@@ -43,6 +43,7 @@ def _command_help_rows(settings: Settings) -> list[tuple[str, str]]:
         ("read", "section (--chapter N) · --summary · --manuscript" if is_article
                  else "chapter (--chapter N) · --summary · --manuscript"),
         ("export [fmt ... | all]", export_desc),
+        ("web", "open the local browser dashboard (Studio · telemetry · artifacts)"),
         ("memory · skills · list", "canon & timeline · craft skills · all projects"),
         ("delete [--yes]", "permanently delete a project"),
         ("/mode book", "switch to book mode (chapters, novel/nonfiction)") if is_article

@@ -39,10 +39,11 @@ def cmd_status(args, cfg, settings, uid):
     is_article = mode == "article"
     cur_key, tot_key = (("current_section", "num_sections") if is_article
                         else ("current_chapter", "num_chapters"))
-    words = _project_word_count(uid, book_id, mode)
-    # Reading time: prose-only from the assembled manuscript when it exists (code blocks +
-    # references aren't read at prose speed); fall back to the live word count mid-run.
+    # Read the assembled manuscript at most once: derive both the word count and the
+    # (prose-only) reading time from it when it exists; fall back to the committed-parts
+    # count mid-run. (Avoids _project_word_count reading the manuscript a second time.)
     _mtext = brain.read_text(_paths_for(uid, book_id).manuscript) or ""
+    words = ui.word_count(_mtext) if _mtext else _project_word_count(uid, book_id, mode)
     read_src = _mtext if _mtext else words
     console = _console()
 

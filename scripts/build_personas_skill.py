@@ -22,7 +22,7 @@ EXEMPLAR_DIR = ROOT / "src" / "writingagent" / "personas"
 
 def exemplar_body(p) -> str:
     """Raw exemplar prose with the leading markdown heading line(s) stripped."""
-    path = EXEMPLAR_DIR / (p.exemplar or f"{p.name}.md")
+    path = EXEMPLAR_DIR / f"{p.name}.md"
     text = path.read_text(encoding="utf-8")
     lines = [ln for ln in text.splitlines() if not ln.lstrip().startswith("#")]
     return "\n".join(lines).strip()

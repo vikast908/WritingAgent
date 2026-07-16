@@ -106,6 +106,14 @@ WRITER_SYS = (
     "or explanations.\n\n" + NO_SLOP
 )
 
+# Illustrative surface tells for the critic prompts, GENERATED from slop.py so this sample
+# can't drift from the lexicon the writer prompt + humanizer are built from. A short sample
+# is enough - the deterministic pass, not the critic, enforces the full list.
+_TELL_EG = (
+    "banned verbs (" + ", ".join(list(slop.BANNED_VERBS)[:8]) + "), banned transitions ("
+    + ", ".join(t.strip('"') for t in slop.BANNED_TRANSITIONS[:4]) + ")"
+)
+
 CRITIC_SYS = (
     "You are a rigorous book editor and evaluator. Judge the chapter against the book plan, "
     "its blueprint, and the established canon. Check: continuity, character integrity, plot "
@@ -120,9 +128,7 @@ CRITIC_SYS = (
     "heading hierarchy, fenced and language-tagged code blocks, and numbered "
     "figures/tables/listings with captions.\n\n"
     "Also flag as BLOCKING: fabricated statistics or attributions, and sentences that are "
-    "so generic they could appear on any site unchanged. Surface tells - banned verbs "
-    "(delve, leverage, utilize, foster, bolster, underscore, streamline, endeavour), banned "
-    "transitions (furthermore, moreover, 'that being said', 'it is worth noting'), and "
+    "so generic they could appear on any site unchanged. Surface tells - " + _TELL_EG + ", and "
     "em-dashes - are removed by a deterministic pass before you see the draft; report any "
     "stragglers as nits, never as blocking.\n\n"
     "CITATION QUALITY (where the chapter cites sources): a [N] should specifically support the "
@@ -221,31 +227,6 @@ PRODUCTION_COMPONENT_SYS = (
     "year, ISBN, dedication text, real acknowledgments) are FACTS you must not invent - use a "
     "clearly-marked placeholder like [AUTHOR NAME] or [YEAR] when the fact is unknown. Output "
     "only the component's Markdown content."
-)
-
-HUMANIZER_SYS = (
-    "You are a line editor making prose read as if written by a skilled human, removing AI tells "
-    "WITHOUT changing plot, meaning, characters, facts, structure, or Markdown.\n\n"
-    "Apply every rule below. Do not skip any:\n"
-    "(1) REMOVE em-dashes and en-dashes: rewrite with a comma, period, semicolon, or parentheses.\n"
-    "(2) REMOVE inflated significance: 'pivotal moment', 'transformative', 'groundbreaking', "
-    "'serves as a testament', 'left an indelible mark', 'unwavering commitment'.\n"
-    "(3) REMOVE symbolic language: 'reflecting', 'showcasing', 'symbolizing', 'a tapestry of', "
-    "'a symphony of', 'a beacon of'.\n"
-    "(4) REMOVE weak construction verbs - replace: 'serves as'→is, 'features'→has, "
-    "'boasts'→has/offers; use direct verbs.\n"
-    "(5) REMOVE vague expert attributions - use named specific sources or rewrite.\n"
-    "(6) REMOVE synonym cycling - repeat the clearest term rather than hunting synonyms.\n"
-    "(7) REMOVE filler openers: 'In today's world', 'It's important to note', "
-    "'When it comes to', 'At the end of the day', 'Let me know if this helps!'.\n"
-    "(8) REMOVE AI transition phrases: furthermore, moreover, 'that being said', 'in essence', "
-    "'it is worth noting that', 'to put it simply'.\n"
-    "(9) VARY sentence length and rhythm; allow short sentences and fragments for emphasis.\n"
-    "(10) CUT hedging and filler: cut 'really', 'very', 'quite', 'basically', 'essentially'.\n"
-    "(11) DO NOT overuse the rule of three.\n"
-    "PRESERVE all Markdown, headings, fenced code blocks, image embeds, and inline citation "
-    "markers like [1], [2] exactly. Output only the revised text."
-    "\n\n" + NO_SLOP
 )
 
 RESEARCHER_SYS = (

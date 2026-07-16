@@ -150,7 +150,9 @@ def validate(manuscript_md: str, pack: S.KeywordPack,
             "primary keyword " + ("in a subheading" if any(kw in h for h in heads)
                                   else "in no subheading"),
             "Use the primary keyword (or a close variant) in at least one H2/H3.")
-        hits = len(re.findall(re.escape(kw), prose.lower()))
+        # Word-boundary match so a phrase keyword ("data model") isn't over-counted inside a
+        # longer word ("data modeling"), which falsely tripped the stuffing warning.
+        hits = len(re.findall(rf"\b{re.escape(kw)}\b", prose.lower()))
         density = 100.0 * hits * max(1, len(kw.split())) / max(1, len(words))
         add("keyword-density", KEYWORD_DENSITY[0] <= density <= KEYWORD_DENSITY[1],
             f"{density:.2f}% ({hits} uses; healthy {KEYWORD_DENSITY[0]}-{KEYWORD_DENSITY[1]}%)",

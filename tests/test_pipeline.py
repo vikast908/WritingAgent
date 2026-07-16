@@ -101,3 +101,22 @@ def test_autonomous_never_pauses(tmp_brain, fake_llm, monkeypatch):
     assert state["phase"] == "done"                  # completed despite revise + contradiction
     assert state["pending_review"] is False
     assert BookPaths(bid, "u").ch(1).exists()        # best draft committed
+
+
+def test_record_escalated_score_keeps_arrays_aligned():
+    """approve_escalation commits a unit outside the attempt loop, so the per-unit
+    scores/insights arrays must be appended to (via _record_escalated_score) or every
+    later scores[n-1] lookup (weakest-unit revise, summary card) targets the wrong unit."""
+    from writingagent.orchestrator.common import _record_escalated_score
+    state = {"scores": [{"insight": 4, "clarity": 4, "structure": 4, "evidence": 4}],
+             "insights": [4], "committed": 1,
+             "escalated_score": {"insight": 2, "clarity": 3, "structure": 3, "evidence": 2}}
+    _record_escalated_score(state)
+    assert len(state["scores"]) == len(state["insights"]) == 2   # now 1:1 with committed
+    assert state["scores"][1]["insight"] == 2                    # used the stashed crit
+    assert state["insights"][1] == 2
+    assert "escalated_score" not in state                        # consumed
+    # Fallback (older paused run-state with nothing stashed): still stays aligned.
+    st2 = {"scores": [], "insights": []}
+    _record_escalated_score(st2)
+    assert len(st2["scores"]) == len(st2["insights"]) == 1

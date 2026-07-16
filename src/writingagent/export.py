@@ -22,6 +22,16 @@ def _resolve_local(src: str, base_dir: Path | None) -> Path | None:
     return p if p.is_file() else None
 
 
+def _replace_src(m: re.Match, new: str) -> str:
+    """Replace ONLY the captured src="..." value within the matched <img> tag, by span.
+    A bare m.group(0).replace(old_src, new) would also rewrite the path anywhere else it
+    appears in the tag (e.g. a matching alt/title, or a short src that is a substring of
+    other text), corrupting the markup."""
+    tag = m.group(0)
+    s, e = m.start(1) - m.start(0), m.end(1) - m.start(0)
+    return tag[:s] + new + tag[e:]
+
+
 def _inline_images(html_body: str, base_dir: Path | None) -> str:
     """Rewrite local <img> srcs to data URIs so the HTML file is self-contained."""
     def repl(m):
@@ -30,7 +40,7 @@ def _inline_images(html_body: str, base_dir: Path | None) -> str:
             return m.group(0)
         media = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
         b64 = base64.b64encode(p.read_bytes()).decode()
-        return m.group(0).replace(m.group(1), f"data:{media};base64,{b64}")
+        return _replace_src(m, f"data:{media};base64,{b64}")
     return _IMG_TAG.sub(repl, html_body)
 
 
@@ -51,10 +61,10 @@ def _pdf_prepare_images(html_body: str, base_dir: Path | None) -> str:
                 import cairosvg
                 png = cairosvg.svg2png(url=str(p), output_width=860)
                 uri = "data:image/png;base64," + base64.b64encode(png).decode()
-                return m.group(0).replace(src, uri)
+                return _replace_src(m, uri)
             except Exception:  # noqa: BLE001 - cairosvg absent or bad SVG
                 pass
-        return m.group(0).replace(src, str(p))
+        return _replace_src(m, str(p))
     return _IMG_TAG.sub(repl, html_body)
 
 

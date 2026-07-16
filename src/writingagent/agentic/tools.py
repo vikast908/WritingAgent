@@ -160,16 +160,18 @@ def _budget_line() -> str:
             f"{' - LOW, wrap up' if left < cap * 0.15 else ''}.")
 
 
+def _score_avg(s: dict) -> float:
+    """Mean of a unit's 4 rubric scores (insight/clarity/structure/evidence)."""
+    return (s.get("insight", 0) + s.get("clarity", 0)
+            + s.get("structure", 0) + s.get("evidence", 0)) / 4.0
+
+
 def _quality_line(state: dict, unit: str) -> str:
     """A per-unit quality summary (avg score + the weakest committed unit) for the view."""
     scores = state.get("scores") or []
     if not scores:
         return ""
-
-    def _avg(s):
-        return (s.get("insight", 0) + s.get("clarity", 0)
-                + s.get("structure", 0) + s.get("evidence", 0)) / 4.0
-    avgs = [_avg(s) for s in scores]
+    avgs = [_score_avg(s) for s in scores]
     weakest = min(range(len(avgs)), key=lambda i: avgs[i])
     per = ", ".join(f"{unit}{i + 1}:{a:.1f}" for i, a in enumerate(avgs))
     return f"\nCommitted-unit quality (avg/5): {per}; weakest = {unit}{weakest + 1}."
@@ -181,11 +183,7 @@ def weakest_committed_unit(state: dict) -> int | None:
     scores = state.get("scores") or []
     if not scores:
         return None
-
-    def _avg(s):
-        return (s.get("insight", 0) + s.get("clarity", 0)
-                + s.get("structure", 0) + s.get("evidence", 0)) / 4.0
-    return min(range(len(scores)), key=lambda i: _avg(scores[i])) + 1
+    return min(range(len(scores)), key=lambda i: _score_avg(scores[i])) + 1
 
 
 def build_run_view(state: dict, legal: list[str]) -> str:
