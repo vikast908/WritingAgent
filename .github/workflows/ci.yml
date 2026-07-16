@@ -5,6 +5,9 @@ on:
     branches: [master, main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: test (${{ matrix.os }} · py${{ matrix.python-version }})
@@ -33,6 +36,27 @@ jobs:
         run: ruff check .
 
       - name: Test
-        run: pytest -q
+        run: pytest -q --cov=writingagent --cov-report=xml --cov-report=term-missing
         env:
           WRITINGAGENT_FAKE: "1"   # tests run fully offline; no API key needed
+
+      - name: Upload coverage to Codecov
+        # One upload per run (the ubuntu · 3.12 cell). Non-blocking: a missing token or a
+        # Codecov outage must never fail the build.
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  secret-scan:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # scan full history, not just the tip
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
