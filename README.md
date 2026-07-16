@@ -69,8 +69,8 @@ turning a topic into a sourced, non-generic, finished long-form piece.
 ## Quickstart
 
 ```bash
-npm install -g writingagent          # the CLI   (needs Node ≥ 16)
-writingagent setup                   # one-time: installs the Python engine (Python 3.10+ & pip)
+pip install writing-agent            # Python 3.10+ · gives you the `writing-agent` command
+# or, isolated:  pipx install writing-agent
 ```
 
 Point it at **any** model host — there's no blessed default, you choose. OpenAI, Anthropic,
@@ -83,48 +83,53 @@ OpenRouter is the widest-reach starting point (one key fronts every vendor + rep
 ```bash
 export OPENROUTER_API_KEY=sk-or-...   # or your host's key: OPENAI_API_KEY, ANTHROPIC_API_KEY, ...
 # export WRITINGAGENT_PROVIDER=openai # pick a host (or use the first-run wizard / `/provider`)
-writingagent write "How stoicism applies to modern burnout"
+writing-agent write "How stoicism applies to modern burnout"
 ```
 
 `write` asks a few questions upfront (audience, depth, tone, must-includes), then runs fully
-autonomously and hands you an exported file. Prefer to drive each step? `writingagent new → run →
+autonomously and hands you an exported file. Prefer to drive each step? `writing-agent new → run →
 export` — every command is in the [**command reference ↗**](https://docs-writingagent.vercel.app/reference/commands/).
 
 **Try it with no API key.** *Fake mode* returns deterministic placeholder output, so you can
 exercise the whole pipeline and exports for free:
 
 ```bash
-WRITINGAGENT_FAKE=1 writingagent new --abstract "test" --pick 1 && writingagent run
+WRITINGAGENT_FAKE=1 writing-agent new --abstract "test" --pick 1 && writing-agent run
 ```
 
-<sub>Windows PowerShell: <code>$env:WRITINGAGENT_FAKE=1; writingagent new --abstract "test" --pick 1; writingagent run</code></sub>
+<sub>Windows PowerShell: <code>$env:WRITINGAGENT_FAKE=1; writing-agent new --abstract "test" --pick 1; writing-agent run</code></sub>
 
 ---
 
 ## Install
 
-**Requirements:** Node ≥ 16 (for the CLI) · Python 3.10+ with pip (the engine) · Linux / macOS /
-Windows · an [OpenRouter API key](https://openrouter.ai/) for real runs (free tier works; none needed for fake mode).
+**Requirements:** Python 3.10+ with pip · Linux / macOS / Windows · a model-host API key for real
+runs (any OpenAI-compatible host — OpenRouter, OpenAI, Anthropic, …; none needed for fake mode).
 
 ```bash
-# npm (recommended)
-npm install -g writingagent          # the CLI
-writingagent setup                   # installs the Python engine from source; `writingagent doctor` verifies
+# pip (recommended) — installs the `writing-agent` command
+pip install writing-agent
+# or isolated (keeps its deps out of your global env):
+pipx install writing-agent
 
-# …or from source with pip
+# …or the npm launcher (wraps the same engine; only needed if you prefer npm — needs Node ≥ 16)
+npm install -g writingagent
+writingagent setup                   # installs the Python engine; `writingagent doctor` verifies
+
+# …or from source (for development)
 git clone https://github.com/vikast908/WritingAgent && cd WritingAgent
-pip install -e .                     # gives you the `writing-agent` command (hyphen) directly
+pip install -e ".[dev]"              # editable install + test/lint tooling
 ```
 
-**Prefer a browser?** A zero-install **web demo** (`web/app.py`) runs the whole pipeline behind a
-Gradio UI — try it free in fake mode with no key, or paste your own key for a real run. Run it with
+Optional extras install alongside: `pip install "writing-agent[deep]"` (higher-fidelity deep
+research) and `pip install "writing-agent[web]"` (the Gradio web demo's dependency). Each optional
+feature (deep research, DOCX export, D2 diagrams, embeddings) degrades gracefully when its extra
+isn't installed — see the [**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
+
+**Prefer a browser?** A **web demo** (`web/app.py`, in the repo) runs the whole pipeline behind a
+Gradio UI — try it free in fake mode with no key, or paste your own key for a real run. From a clone:
 `pip install -e ".[web]" && python web/app.py`, or deploy it as a Hugging Face Space (see
 [`web/README.md`](web/README.md)).
-
-With npm, `setup` is optional — the first run of `writingagent` offers to install the engine for
-you. Later, **`writingagent update`** pulls the latest engine. Optional extras (deep research,
-DOCX export, D2 diagrams, embeddings) each degrade gracefully — see the
-[**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
 
 ---
 
@@ -242,8 +247,8 @@ appended.
 `craft_passes`, `persona`, `emotion`. All clamped to their known sets; leave them empty and the agent
 infers sensible defaults and behaves exactly as before.
 
-> Spec: `plan.md` §22 (the craft engine) and §23 (the compositor). Validated across **477 tests**
-> (2 skipped), ruff-clean, on Linux · macOS · Windows × Python 3.10–3.13.
+> Spec: `plan.md` §22 (the craft engine) and §23 (the compositor). Validated across **525 tests**
+> (1 skipped), ruff-clean, on Linux · macOS · Windows × Python 3.10–3.13.
 
 ---
 

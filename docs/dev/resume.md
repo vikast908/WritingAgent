@@ -7,7 +7,7 @@
 
 - **New (2026-07-16 - OPEN-SOURCE HARDENING + PROVIDER EXPANSION - DONE, branch
   `feat/oss-and-providers`):** made the repo publish-ready and broadened model-host support with no
-  blessed default. Suite **525 passed / 1 skipped**, ruff clean, coverage ~70%.
+  blessed default. Suite **524 passed / 1 skipped**, ruff clean, coverage ~70%.
   - **Providers (`providers.py`): 17 → 23 hosts.** Added **Anthropic** (`claude-*` via the OpenAI-compat
     endpoint), **Perplexity** (`sonar`), **Cerebras**, **SambaNova**, plus **AWS Bedrock** + **Azure
     OpenAI** as gateway entries (`AWS_BEDROCK_BASE_URL` / `AZURE_OPENAI_BASE_URL`) - honest to the

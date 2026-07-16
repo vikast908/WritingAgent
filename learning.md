@@ -129,7 +129,7 @@ WritingAgent/
 ├── config/                ← settings you can tweak (which AI model, defaults)
 ├── brain/                 ← the program's MEMORY — everything it produces (see §5)
 ├── seeds/                 ← starter "craft skills" shipped with the project
-├── tests/                 ← ~480 automated checks that prove the code works
+├── tests/                 ← ~525 automated checks that prove the code works
 ├── examples/              ← real finished pieces, so you can judge output before installing
 ├── benchmarks/            ← a blind A/B kit to compare quality vs other tools
 ├── SampleRun/             ← a complete sample book (manuscript + its working files)
@@ -672,15 +672,17 @@ A **persona** is a *manner* — a way of speaking — that flavours the writing 
 already allows. It changes the diction, the rhythm, how often it reaches for a rhetorical flourish, and
 its stance — but it can never overrule the genre's rules (that's the cascade from §9.4).
 
-**Fourteen personas ship**, in two families:
+**Forty-six personas ship**, in two families:
 
-- **Six archetypes** — invented voices you can name: the **wry skeptic**, the **warm mentor**, the
+- **Eighteen archetypes** — invented voices you can name: the **wry skeptic**, the **warm mentor**, the
   **hard-boiled minimalist** (short, flat, unsentimental), the **lyrical maximalist** (rich, musical,
-  long-lined), the **deadpan technical**, and the **firebrand essayist**.
-- **Eight public-domain *manners*** — written in the *spirit* of long-dead, out-of-copyright authors:
-  **Shakespearean**, **Nietzschean**, **Austen-ironic**, **Twain-vernacular**, **Wildean** (epigram and
-  paradox), **Poe-gothic** (slow-tightening dread), **Dickensian** (comic, teeming with character), and
-  **Whitmanesque** (expansive free-verse cataloguing).
+  long-lined), the **deadpan technical**, the **firebrand essayist**, and a dozen more (the
+  **lucid explainer**, **cultural critic**, **investigative long-form**, **epic-fantasy**, and so on).
+- **Twenty-eight public-domain *manners*** — written in the *spirit* of long-dead, out-of-copyright
+  authors: **Shakespearean**, **Nietzschean**, **Austen-ironic**, **Twain-vernacular**, **Wildean**
+  (epigram and paradox), **Poe-gothic** (slow-tightening dread), **Dickensian** (comic, teeming with
+  character), **Whitmanesque** (expansive free-verse cataloguing), **Chekhovian**, **Kafkaesque**,
+  **Dostoevskian**, **Tolstoyan**, and many more.
 
 Two boundaries are drawn firmly and on purpose. First, these are the *manner* only — the writing stays
 in plain modern language; a "Shakespearean" piece doesn't invent fake-archaic words or pretend to be
@@ -729,7 +731,9 @@ for "dread", "fury", "envy", or "awe" and it resolves to fear, anger, jealousy, 
 
 ## 10. How you actually run it
 
-There are three ways in, all backed by the same engine:
+First install it (Python 3.10+): `pip install writing-agent` (or `pipx install writing-agent` to
+keep it isolated). That gives you the `writing-agent` command. Then there are three ways in, all
+backed by the same engine:
 
 1. **Interactive console (most fun):**
    ```
@@ -749,7 +753,7 @@ There are three ways in, all backed by the same engine:
    WRITINGAGENT_FAKE=1 writing-agent
    ```
    This runs the *entire* process with placeholder text instead of real AI calls — perfect for
-   understanding the machinery without spending anything. (It's also how the ~480 automated tests run.)
+   understanding the machinery without spending anything. (It's also how the ~525 automated tests run.)
 
 To do real runs you need a free **API key** from an AI host (e.g. OpenRouter), placed in a file named
 `.env`. An API key is just a password that lets the program use the AI service on your account. If you
@@ -802,7 +806,7 @@ fix — and your progress is always saved, so you just run again.
   whatever clashes, and logs why. Its job is *selection*, not accumulation — because piling instructions
   on a weak model produces mush.
 - **Persona:** a chosen *voice/manner* (e.g. the wry skeptic, the lyrical maximalist, a Shakespearean
-  cadence) that flavours the writing within the register's rules. Fourteen ship — six archetypes + eight
+  cadence) that flavours the writing within the register's rules. Forty-six ship — 18 archetypes + 28
   public-domain manners; never living/in-copyright authors, and examples are original homage, not the
   real authors' text.
 - **Emotion (craft):** writing a passage with a target feeling, done *inside-out* — a deny-list of the

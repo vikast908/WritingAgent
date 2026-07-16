@@ -54,8 +54,9 @@ detected (Python interpreter, console scripts, project directory, and the comman
 ## Prerequisites
 
 - **Node.js ≥ 16** (to run this launcher).
-- **Python 3.10+ with pip** — `writingagent setup` uses it to install the engine. (Already have a
-  clone? `pip install -e .` from the repo, or set `WRITINGAGENT_HOME` to it, works too.)
+- **Python 3.10+ with pip** — `writingagent setup` uses it to install the engine. (You can also skip
+  this launcher entirely and just `pip install writing-agent`, which creates the `writing-agent`
+  console script directly; or from a clone, `pip install -e .` / set `WRITINGAGENT_HOME`.)
 
 ## Why a separate name?
 

@@ -678,7 +678,7 @@ equivalents) and MUST preserve the Accessibility ratios (body ≥ 4.5:1, UI ≥
 
 **Terminal (TUI).** A palette catalog (default **"ink & brass"**: gold primary,
 brass secondary, manuscript-red status + wordmark gradient). Switch with
-`/theme` (alias `/skin`). Skins define banner colors, accent, ok/warn/error,
+`/theme`. Skins define banner colors, accent, ok/warn/error,
 status-bar meters, and the wordmark; missing values inherit the default. User
 skins live in `~/.<app>/skins/` as YAML.
 

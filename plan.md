@@ -1456,7 +1456,7 @@ pipeline.
 ### 21.7 Config (tunable, per CLAUDE.md)
 
 Added to `Settings`, threaded through `_base_run_state` like the existing toggles (these are the
-five fields actually shipped):
+seven fields actually shipped):
 - `agentic: bool = False` - master switch. **Default off ⇒ today's behavior, zero risk.**
 - `agentic_policy: str = "default"` - `default` (== fixed pipeline) | `llm` (ReAct controller) |
   `trace` (Phase-5 seam).
@@ -1465,6 +1465,10 @@ five fields actually shipped):
 - `agentic_max_unit_steps: int = 3` - max research/read_canon gathering steps before a unit is drafted.
 - `agentic_factcheck_panel: bool = False` - majority-vote fact-check panel (§21.10; article + deep
   research only).
+- `agentic_inline_tools: bool = False` - the writer may call tools (research/read_canon/verify_fact)
+  mid-draft via a bounded tool-use loop (§21 Phase 3).
+- `agentic_critique_panel: bool = False` - diverse-lens majority critique before approving a unit
+  (§21.10; both pipelines - `critique_chapter`/`critique_article_section` take a `lens`).
 
 ### 21.8 Public API & UX surface
 

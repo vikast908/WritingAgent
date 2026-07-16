@@ -19,6 +19,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Trusted-Publishing/OIDC on a `v*` tag), CI now runs **coverage** (pytest-cov → Codecov, non-blocking)
   and a **gitleaks** secret-scan job; **Dependabot** (pip + actions); README **CI / coverage / PyPI**
   badges; `CODEOWNERS`, issue-template `config.yml`, `CITATION.cff`, `FUNDING.yml`, and `ROADMAP.md`.
+- **Install docs lead with `pip install writing-agent`.** README quickstart/install, `learning.md`,
+  and the npm launcher README now present the PyPI install as the primary path (with `pipx` and the
+  npm launcher / source as alternatives); example commands use the `writing-agent` console script.
 - **Tidier repo root.** The maintainer journals moved to `docs/dev/` (`resume.md` session log,
   `test.md` verification log) with a `docs/dev/README.md` explaining them; references updated. `plan.md`
   (architecture spec) and `CLAUDE.md` (tooling) stay at the root.
