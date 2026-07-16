@@ -78,7 +78,7 @@ SampleRun/
 ## Reproduce
 
 ```bash
-pip install -r requirements.txt           # needs OPENROUTER_API_KEY in .env
+pip install -e .                          # or: pip install writing-agent  (set a host key in .env)
 python writingagent.py new --autonomous --pick 1 --chapters 3 --max-revisions 1 \
   --abstract "<your idea>"
 python writingagent.py run

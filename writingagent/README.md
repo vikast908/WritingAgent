@@ -1,6 +1,6 @@
 # writingagent
 
-A tiny, zero-dependency **global CLI launcher** for the [Writing Agent](../README.md) — a
+A tiny, zero-dependency **global CLI launcher** for the [Writing Agent](../README.md) - a
 self-correcting (and optionally self-directing) autonomous writing system for books and articles. The heavy lifting is done by
 the Python engine; this package just gives you a `writingagent` command on your PATH that forwards
 to it (passing your terminal straight through, so the interactive TUI works).
@@ -10,14 +10,18 @@ writing, selectable personas, and per-piece emotions.
 
 ## Install
 
+> Most users should just **`pip install writing-agent`** (see the [main README](../README.md)) - that
+> creates the `writing-agent` command directly. This npm launcher is an **optional** convenience if you
+> live in Node-land and want a `writingagent` command that installs/manages the Python engine for you.
+
 ```bash
 npm install -g writingagent       # the CLI  (needs Node >= 16)
 writingagent setup                # one-time: installs the whole stack (needs Python 3.10+ & pip)
 ```
 
-`setup` installs everything for you: the **Python engine** (pip, straight from GitHub — no clone),
+`setup` installs everything for you: the **Python engine** (pip, straight from GitHub - no clone),
 **cairosvg** (crisp PDF diagrams), and the **d2 binary** (downloaded for your platform, used for
-diagrams). All best-effort — the app degrades gracefully if cairosvg/d2 can't install. You can even
+diagrams). All best-effort - the app degrades gracefully if cairosvg/d2 can't install. You can even
 skip `setup`: the first run of `writingagent` offers to do it. Then, from anywhere:
 
 ```bash
@@ -31,7 +35,7 @@ writingagent update               # update the engine to the latest version
 writingagent doctor               # show how the engine was resolved
 ```
 
-On a fresh machine you can even skip `setup` — the first run of `writingagent` offers to install
+On a fresh machine you can even skip `setup` - the first run of `writingagent` offers to install
 the engine for you.
 
 `writingagent --version`, `writingagent --help`, and `writingagent doctor` are handled by the
@@ -42,10 +46,10 @@ the agent's own help for `run`).
 
 The launcher tries, in order:
 
-1. **`$WRITINGAGENT_CMD`** — an explicit executable you point it at (advanced).
-2. **A console script on PATH** — `writing-agent`, created when you
+1. **`$WRITINGAGENT_CMD`** - an explicit executable you point it at (advanced).
+2. **A console script on PATH** - `writing-agent`, created when you
    `pip install` the Python package. This is the normal path.
-3. **`python writingagent.py`** — when the project directory is found via **`$WRITINGAGENT_HOME`** or by
+3. **`python writingagent.py`** - when the project directory is found via **`$WRITINGAGENT_HOME`** or by
    searching upward from your current directory for `writingagent.py`.
 
 If none is found it prints how to fix it. Run **`writingagent doctor`** to see exactly what was
@@ -54,7 +58,7 @@ detected (Python interpreter, console scripts, project directory, and the comman
 ## Prerequisites
 
 - **Node.js ≥ 16** (to run this launcher).
-- **Python 3.10+ with pip** — `writingagent setup` uses it to install the engine. (You can also skip
+- **Python 3.10+ with pip** - `writingagent setup` uses it to install the engine. (You can also skip
   this launcher entirely and just `pip install writing-agent`, which creates the `writing-agent`
   console script directly; or from a clone, `pip install -e .` / set `WRITINGAGENT_HOME`.)
 
@@ -67,7 +71,7 @@ The Python package's own console script is `writing-agent` (with a hyphen). This
 ## Develop / test
 
 ```bash
-npm test        # node --test — covers PATH resolution, arg parsing, project discovery
+npm test        # node --test - covers PATH resolution, arg parsing, project discovery
 ```
 
 ## License

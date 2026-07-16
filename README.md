@@ -10,7 +10,7 @@
 
 ### The autonomous long-form writer that argues a thesis and cites real sources - not slop.
 
-**One command → a researched, self-critiqued, fact-checked, exported article (or book).** Local-first, on your own model key, for cents.
+**One command → a researched, self-critiqued, fact-checked, exported article (or book).** Local-first and **model-agnostic** (any OpenAI-compatible host), on your own key, for cents.
 
 #### ▶ Try it in your browser - no install, no key
 A **[web demo](web/)** runs the whole pipeline behind a simple UI: a **free preview** (placeholder output, $0, no key) shows exactly how a run works, or paste your own key for a real piece. Run it with `pip install -e ".[web]" && python web/app.py`, or deploy it as a Hugging Face Space ([guide](web/README.md)).
@@ -39,7 +39,7 @@ too (multi-chapter, with continuity audits + a production layer).
 - **Figures that lay themselves out** - the model authors a diagram *spec*; a layout engine places it so labels never overflow
 - **Use it your way** - interactive TUI, one-shot CLI, a **local web dashboard** (`writing-agent web` - run pieces from the browser with live logs, per-agent cost, traces, and evals), an embeddable Python API, or a global `writingagent` npm launcher
 - **Self-correcting *and* (optionally) self-directing** - the default pipeline self-corrects via fixed quality gates; flip on **agentic mode** and an LLM *controller* takes the wheel, choosing the next move both per unit (gather research / read canon before drafting) and over the whole piece (draft, reoutline, revise, consolidate, repair, produce, learn, escalate, done) - and the writer can call tools *mid-draft*. Off by default, with the fixed pipeline as a byte-identical fallback (see [Self-directing mode](#self-directing-mode-opt-in))
-- **Your model, your choice** - no blessed default: run on any OpenAI-compatible host (OpenAI, Anthropic, DeepSeek, Gemini, Groq, Perplexity, OpenRouter, AWS Bedrock/Azure via gateway, local Ollama/LM Studio, …), picked in the first-run wizard or `/provider`; everything is plain markdown + JSON on disk; kill a run and it resumes exactly where it stopped; a global `fallback` model keeps an unattended run alive if a tier has an outage
+- **Model-agnostic - your model, your choice** - no blessed default: run on any OpenAI-compatible host (OpenAI, Anthropic, DeepSeek, Gemini, Groq, Perplexity, OpenRouter, AWS Bedrock/Azure via gateway, local Ollama/LM Studio, …), picked in the first-run wizard or `/provider`, with per-node models swappable via `/model`; everything is plain markdown + JSON on disk; kill a run and it resumes exactly where it stopped; a global `fallback` model keeps an unattended run alive if a tier has an outage
 - **Promotes, not just writes** - after the piece is done, `seo` audits it against on-page fundamentals (keyword placement, description, headings, readability) and names its keywords + hashtags, and `promote` repurposes it into an X thread, LinkedIn post, newsletter teaser, TL;DR, and 5 A/B headlines - the HTML export ships SEO/OG/Twitter meta tags (see [Promote it](#promote-it--seo-x-threads-linkedin))
 - **Cheap by default** - `cost_mode: budget` pins the spend-heavy knobs and routes the judgment nodes to the flash tier, targeting **≤100k tokens (~$0.10–0.15) per article** with a hard, resumable token ceiling
 
@@ -105,12 +105,12 @@ WRITINGAGENT_FAKE=1 writing-agent new --abstract "test" --pick 1 && writing-agen
 runs (any OpenAI-compatible host - OpenRouter, OpenAI, Anthropic, …; none needed for fake mode).
 
 ```bash
-# pip (recommended) — installs the `writing-agent` command
+# pip (recommended) - installs the `writing-agent` command
 pip install writing-agent
 # or isolated (keeps its deps out of your global env):
 pipx install writing-agent
 
-# …or the npm launcher (wraps the same engine; only needed if you prefer npm — needs Node ≥ 16)
+# …or the npm launcher (wraps the same engine; only needed if you prefer npm - needs Node ≥ 16)
 npm install -g writingagent
 writingagent setup                   # installs the Python engine; `writingagent doctor` verifies
 
@@ -315,7 +315,7 @@ sources." It's generated deterministically from the finished piece (no model cal
 trustworthy:
 
 ```markdown
-# Evidence report — Your Voice Assistant's 100ms Problem
+# Evidence report - Your Voice Assistant's 100ms Problem
 
 ## The argument it makes
 > Real-time voice AI at sub-100ms is impossible without streaming partial responses and
@@ -378,7 +378,7 @@ single draft, one revision, 12k context, judgment nodes on the flash tier, and a
 ## The web dashboard
 
 ```bash
-writing-agent web            # opens http://127.0.0.1:8787 — local only, no account, no cloud
+writing-agent web            # opens http://127.0.0.1:8787 - local only, no account, no cloud
 ```
 
 Everything the TUI does, in a browser - plus the observability the terminal can't show:
@@ -407,12 +407,12 @@ don't expose the port.
 A **multi-agent pipeline on a durable state machine**, in layers from the surface down to the
 models. Your interface (TUI · CLI · npm · API) drives the **orchestrator**, which runs each unit
 through the **agents** - Writer → Critic → Judge → Humanizer - persists to the **markdown brain**
-(canon · skills · versions), and feeds the **Learner** so the next piece is better. Every agent
-routes to its own model tier on OpenRouter.
+(canon · skills · versions), and feeds the **Learner** so the next piece is better. It's
+model-agnostic: every agent routes to its own model tier on whatever OpenAI-compatible host you pick.
 
 <div align="center">
 
-<img src="assets/architecture.svg" alt="Layered architecture and multi-agent workflow: an interface layer (TUI, CLI, npm, API) sends commands to an orchestration layer (the state machine running write→critique→revise→commit); the orchestrator routes every call to the models layer (OpenRouter/DeepSeek) and drives the agents layer, where Writer → Critic → Judge → Humanizer run the per-unit workflow; results commit to the memory layer (the markdown brain of canon, skills, and versions), which feeds the Learner that returns new skills to the orchestrator." width="900">
+<img src="assets/architecture.svg" alt="Layered architecture and multi-agent workflow: an interface layer (TUI, CLI, npm, API) sends commands to an orchestration layer (the state machine running write→critique→revise→commit); the orchestrator routes every call to the models layer (any OpenAI-compatible host) and drives the agents layer, where Writer → Critic → Judge → Humanizer run the per-unit workflow; results commit to the memory layer (the markdown brain of canon, skills, and versions), which feeds the Learner that returns new skills to the orchestrator." width="900">
 
 <sub><i>↑ the layered pipeline, kept compact so it stays legible - see [Architecture ↗](https://docs-writingagent.vercel.app/concepts/architecture/) for the full picture</i></sub>
 
@@ -460,5 +460,5 @@ Built and maintained by [**@vikast908**](https://github.com/vikast908). Question
 [MIT](LICENSE).
 
 <div align="center">
-  <sub>Built with DeepSeek V4 on OpenRouter · runs on Linux · macOS · Windows</sub>
+  <sub>Model-agnostic · runs on any OpenAI-compatible host · Linux · macOS · Windows</sub>
 </div>
