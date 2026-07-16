@@ -9,6 +9,10 @@ updates:
     groups:
       python-deps:
         patterns: ["*"]
+    ignore:
+      # svglib is pinned <1.6 on purpose: >=1.6 pulls rlpycairo -> pycairo, which has no Linux
+      # wheels, so a bare `pip install` breaks on Linux. Do not let Dependabot bump it.
+      - dependency-name: "svglib"
     labels: ["dependencies"]
 
   # GitHub Actions used in workflows (keeps pinned action versions fresh)

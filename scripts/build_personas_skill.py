@@ -71,7 +71,6 @@ def main() -> None:
     print(rows("author"))
 
     # By-register index ("a voice for every genre").
-    from writingagent import registers as R  # noqa: E402
     order = ["nonfiction", "technical", "literary-fiction", "genre-fiction", "academic",
              "journalism", "copywriting", "business", "poetry", "screenplay", "children"]
     by_reg: dict[str, list[str]] = {r: [] for r in order}

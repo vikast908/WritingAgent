@@ -102,6 +102,8 @@ ignore = [
 # The orchestrator package __init__ is a pure facade: it re-exports the seam
 # submodules (from .common import * etc.) so `orchestrator.X` keeps resolving for
 # every caller and test. Star re-exports are intentional here.
+# The Colab quickstart notebook uses one-line/late imports for brevity in a demo cell.
+"examples/*.ipynb" = ["E401", "E402", "I001"]
 "src/writingagent/orchestrator/__init__.py" = ["F401", "F403", "F405"]
 "src/writingagent/shell/__init__.py" = ["F401", "F403", "F405"]
 "src/writingagent/cli/__init__.py" = ["F401", "F403", "F405"]
