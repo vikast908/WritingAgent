@@ -21,8 +21,8 @@ pip install -e ".[dev]"            # editable install + pytest + ruff
 
 Optional - the app runs fine without them (imported lazily, degrade gracefully).
 
-- **Deep-research fetch backend:** `pip install -e ".[deep]"` (Scrapo + Playwright, Python 3.11+),
-  then `python -m playwright install chromium`.
+- **Deep-research fetch backend:** `pip install -e ".[deep]"` (the `scrapo-ai` engine + Playwright,
+  Python 3.11+), then `python -m playwright install chromium`. Absent it, a stdlib fetch is used.
 - **Firecrawl search:** set `FIRECRAWL_API_KEY` in `.env` and `search_provider: firecrawl` to swap
   the default DuckDuckGo backend (a missing key falls back to DuckDuckGo).
 
