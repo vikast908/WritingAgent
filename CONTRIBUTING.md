@@ -127,7 +127,7 @@ A 60-second map (full detail in `plan.md` and the README's Architecture section)
   neither posts or schedules anything.
 - `webui/` - the local web dashboard (`server.py`: stdlib `ThreadingHTTPServer` + SSE, `static/`:
   the single-page app). `writing-agent web` serves it on `127.0.0.1` only, no auth, one job at a
-  time; no build step and no npm dependency. It calls the same engine facade as the TUI/CLI.
+  time; no build step and no bundler. It calls the same engine facade as the TUI/CLI.
 - `registers.py` / `craft.py` / `exemplars.py` / `surgery.py` / `fields.py` - the craft engine:
   genre/register profiles, deterministic craft metrics, few-shot exemplars, surgical
   show-don't-tell / passive passes, and structural templates (`plan.md` §22).

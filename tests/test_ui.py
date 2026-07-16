@@ -386,7 +386,7 @@ def test_write_env_key_creates_then_updates_in_place(tmp_path, monkeypatch):
 
 
 def test_write_env_key_readonly_location_sets_live_without_crashing(tmp_path, monkeypatch):
-    """On a pip/npm-installed copy brain._ROOT is read-only. The key must still apply to
+    """On a pip-installed copy brain._ROOT is read-only. The key must still apply to
     THIS session (the live os.environ set comes first) and the write must degrade to None,
     never raise - a crash here would hit the first-run wizard at startup."""
     import os

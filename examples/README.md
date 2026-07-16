@@ -29,17 +29,18 @@ timeline, world rules), and the learned craft skills the run produced.
 ## Generate your own (≈$0.25, a couple of minutes)
 
 ```bash
-writingagent write "How vector databases actually work"
+pip install writing-agent
+writing-agent write "How vector databases actually work"
 # → researches, drafts, self-critiques, fact-checks, humanises, exports a finished file
 #   + an evidence_report.md next to it
 ```
 
 Zero-install try: open [`colab_quickstart.ipynb`](colab_quickstart.ipynb) in Google Colab and run it
-(you'll need a free [OpenRouter](https://openrouter.ai/) key). Or run locally in **fake mode** (no key,
-placeholder output) to see the whole flow for free:
+(you'll need a model-host API key, e.g. a free [OpenRouter](https://openrouter.ai/) one). Or run
+locally in **fake mode** (no key, placeholder output) to see the whole flow for free:
 
 ```bash
-WRITINGAGENT_FAKE=1 writingagent new --abstract "test" --pick 1 && writingagent run
+WRITINGAGENT_FAKE=1 writing-agent new --abstract "test" --pick 1 && writing-agent run
 ```
 
 ## Contribute a sample

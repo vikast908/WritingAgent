@@ -80,7 +80,7 @@ and self-corrects until it isn't slop"** - and you own the data and the spend.
 ## 6. Scope
 
 **In scope (now):** long-form articles + books; research (shallow + deep); the quality machinery;
-6 export formats; diagrams; TUI + CLI + npm launcher + Python API + a **local web dashboard**; the
+6 export formats; diagrams; TUI + CLI + Python API + a **local web dashboard**; the
 markdown brain + learning loop; a register-parameterized **craft engine** (11 genre profiles +
 persona/emotion **compositor**) that makes the writer good across many fields on a basic model, with
 the nonfiction default unchanged byte-for-byte; an opt-in self-directing (agentic) controller atop
@@ -306,7 +306,7 @@ audience - and keep the nonfiction default byte-for-byte so the wedge persona se
 |---|---|---|
 | Terminal-only caps the audience | High | Zero-install demo; later GUI/extension - but only after artifact pull |
 | Differentiator is *told*, not *shown* | High | Evidence report (done) + ChatGPT side-by-side + examples gallery |
-| Setup/cost friction (key, Python+Node) | Med | Fake mode (done) + clear cost expectation + npm `setup` |
+| Setup/cost friction (API key, Python) | Med | Fake mode (done) + `pip install writing-agent` + clear cost expectation |
 | Book quality unproven | Med | Validate before promoting; lead with articles |
 | **Agentic mode adds cost/latency or loops** (extra controller + tool calls; an eager model over-researches) | Med | **Default-off** (opt-in only); per-round + total tool-call caps; a token budget that drops optional polish actions under pressure; the fixed pipeline is the always-legal fallback. *(A live run did surface tool over-calling - caught and capped.)* |
 | **Agentic mode unproven at scale** (single live run; learned policy needs corpus volume) | Med | Frame honestly as advanced/opt-in; the deterministic `default` pipeline stays recommended; learned policy never auto-promoted (efficacy gate owns promotion); validate at volume before promoting (roadmap/Next) |

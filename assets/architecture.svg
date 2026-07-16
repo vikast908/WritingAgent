@@ -7,7 +7,7 @@
     <rect x="24" y="58" width="210" height="116" rx="10" fill="#e9f1fe" stroke="#4f8ef7" stroke-width="1.8"/>
     <text x="129" y="90" text-anchor="middle" font-size="16" font-weight="700" fill="#1a1a1a">Interface</text>
     <text x="129" y="124" text-anchor="middle" font-size="12.5" fill="#5b6470">TUI · CLI</text>
-    <text x="129" y="148" text-anchor="middle" font-size="12.5" fill="#5b6470">npm · Python API</text>
+    <text x="129" y="148" text-anchor="middle" font-size="12.5" fill="#5b6470">Python API</text>
   </g>
   <g>
     <rect x="271" y="58" width="210" height="116" rx="10" fill="#f1ecfe" stroke="#a78bfa" stroke-width="1.8"/>

@@ -134,7 +134,6 @@ WritingAgent/
 ├── benchmarks/            ← a blind A/B kit to compare quality vs other tools
 ├── SampleRun/             ← a complete sample book (manuscript + its working files)
 ├── assets/                ← brand images (logo, banner)
-├── writingagent/          ← a small Node/npm launcher (alternative way to install/run)
 ├── README.md              ← the front-door "what is this / how to run" doc
 ├── plan.md                ← the authoritative engineering spec (the "law")
 ├── learning.md            ← THIS file
