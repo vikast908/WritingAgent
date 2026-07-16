@@ -30,7 +30,7 @@ timeline, world rules), and the learned craft skills the run produced.
 
 ```bash
 pip install writing-agent
-writing-agent write "How vector databases actually work"
+writing-agent write --abstract "How vector databases actually work"
 # → researches, drafts, self-critiques, fact-checks, humanises, exports a finished file
 #   + an evidence_report.md next to it
 ```

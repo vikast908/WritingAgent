@@ -81,7 +81,7 @@ OpenRouter is the widest-reach starting point (one key fronts every vendor + rep
 ```bash
 export OPENROUTER_API_KEY=sk-or-...   # or your host's key: OPENAI_API_KEY, ANTHROPIC_API_KEY, ...
 # export WRITINGAGENT_PROVIDER=openai # pick a host (or use the first-run wizard / `/provider`)
-writing-agent write "How stoicism applies to modern burnout"
+writing-agent write --abstract "How stoicism applies to modern burnout"
 ```
 
 `write` asks a few questions upfront (audience, depth, tone, must-includes), then runs fully
