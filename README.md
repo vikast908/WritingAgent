@@ -2,7 +2,7 @@
 
 <img src="assets/writing-agent-banner.svg" alt="Writing Agent - a self-correcting, autonomous writing system that turns a topic into a publication-ready manuscript" width="860">
 
-[![PyPI](https://img.shields.io/pypi/v/writing-agent?style=flat-square)](https://pypi.org/project/writing-agent/)
+[![PyPI](https://img.shields.io/pypi/v/writing-agent?style=flat-square&cacheSeconds=3600)](https://pypi.org/project/writing-agent/)
 [![Docs](https://img.shields.io/badge/docs-docs--writingagent.vercel.app-6f9ed9?style=flat-square)](https://docs-writingagent.vercel.app/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://www.python.org/)
 [![Platforms](https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-informational?style=flat-square)](#install)

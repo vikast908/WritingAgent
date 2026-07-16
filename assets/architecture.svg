@@ -55,5 +55,5 @@
   <path d="M 870 174 V 312 H 376 V 178" stroke="#64748b" stroke-width="1.8" fill="none" stroke-dasharray="5 4"/>
   <polygon points="376,174 371,183 381,183" fill="#64748b"/>
   <rect x="471" y="303" width="304" height="18" rx="7" fill="#f8f9fb"/>
-  <text x="623" y="316" text-anchor="middle" font-size="11.5" fill="#5b6470">Learner — distills skills that compound on the next run</text>
+  <text x="623" y="316" text-anchor="middle" font-size="11.5" fill="#5b6470">Learner - distills skills that compound on the next run</text>
 </svg>
