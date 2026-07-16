@@ -33,7 +33,7 @@ dependencies = [
   # pycairo ships no Linux wheels - a bare `pip install` on Linux then fails trying to
   # build it from source (needs pkg-config + libcairo2-dev). 1.5.x has no cairo chain;
   # xhtml2pdf only needs svglib's svg2rlg, not the cairo rasterizer.
-  "svglib<1.6",
+  "svglib<2.1",
   "rich>=13.0",
   "pyfiglet>=1.0",
   "prompt_toolkit>=3.0",
