@@ -9,6 +9,7 @@ users/<uid>/skills_index.json. Promotion is lift-over-baseline:
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import yaml
 
@@ -40,6 +41,11 @@ def _index_path(uid: str):
 def seed_builtin(uid: str) -> int:
     """Copy built-in seed skills (seeds/skills/) into the user's library if absent."""
     src = brain._ROOT / "seeds" / "skills"
+    if not src.exists():
+        # pip installs have no repo-root seeds/; fall back to the copies bundled inside
+        # the wheel (kept in sync with seeds/skills/ by a test). The skills still land
+        # in the user's brain library, which is the editable location.
+        src = Path(__file__).resolve().parent / "resources" / "seeds" / "skills"
     if not src.exists():
         return 0
     brain.ensure_user(uid)

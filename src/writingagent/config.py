@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import dataclasses
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,6 +11,10 @@ import yaml
 _ROOT = Path(__file__).resolve().parents[2]
 _MODELS = _ROOT / "config" / "models.yaml"
 _SETTINGS = _ROOT / "config" / "settings.yaml"
+# Defaults bundled inside the wheel (pip installs have no repo-root config/). models.yaml
+# is copied out to _MODELS on first load so /model edits land in a real, user-editable
+# file. Kept byte-identical to the repo's config/models.yaml by a sync test.
+_BUNDLED = Path(__file__).resolve().parent / "resources"
 
 
 class ModelConfig:
@@ -277,7 +282,17 @@ def apply_cost_mode(cfg: ModelConfig, settings: Settings):
 
 def load_config() -> ModelConfig:
     if not _MODELS.exists():
-        return ModelConfig({})   # sensible defaults; mirrors load_settings' guard
+        bundled = _BUNDLED / "models.yaml"
+        if not bundled.exists():
+            return ModelConfig({})   # sensible defaults; mirrors load_settings' guard
+        try:
+            _MODELS.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(bundled, _MODELS)
+        except OSError:
+            # Read-only install dir etc.: still serve the bundled routing (incl. the
+            # fallback model) read-only rather than degrading to bare defaults.
+            with open(bundled, encoding="utf-8") as f:
+                return ModelConfig(yaml.safe_load(f) or {})
     with open(_MODELS, encoding="utf-8") as f:
         return ModelConfig(yaml.safe_load(f) or {})
 

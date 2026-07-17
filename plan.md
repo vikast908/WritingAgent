@@ -1851,3 +1851,11 @@ remains the zero-install marketing demo; this is the working surface.
   exports all six formats, exposes register/persona/emotion as None-default dropdowns, adds the
   Rejected tab and the restyle control. No proprietary fonts vendored - serif display with
   system-stack fallbacks.
+- **Shipped defaults bundled in the wheel (2026-07-17).** Pip installs used to get no
+  `config/models.yaml` (so no per-node routing and **no fallback model**) and no `seeds/`
+  (`seed-skills` installed 0). `src/writingagent/resources/` now bundles both as package-data:
+  `load_config()` **copies models.yaml out to `config/models.yaml` on first run** (so `/model`
+  edits land in a real, editable file; read-only installs fall back to reading the bundle),
+  and `seed_builtin()` reads the bundled seeds when the repo-root `seeds/` is absent. The
+  bundled copies are pinned byte-identical to the repo originals by sync tests
+  (`tests/test_bundled_resources.py`) - edit the root files, then re-copy into `resources/`.

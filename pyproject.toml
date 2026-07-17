@@ -82,8 +82,12 @@ where = ["src"]
 [tool.setuptools.package-data]
 # Ship the gold-corpus (registers.gold_exemplars) and persona (personas.block) exemplars
 # plus the web dashboard's SPA inside the wheel; they are data, not modules, so
-# packages.find alone would drop them.
-writingagent = ["gold/*.md", "personas/*.md", "webui/static/*.html"]
+# packages.find alone would drop them. resources/ bundles the shipped defaults
+# (models.yaml routing incl. the fallback model, and the 13 seed skills) so pip
+# installs get them too - models.yaml is copied out on first run; seeds are read
+# in place. Both are kept in sync with the repo-root config/ and seeds/ by tests.
+writingagent = ["gold/*.md", "personas/*.md", "webui/static/*.html",
+                "resources/models.yaml", "resources/seeds/skills/*.md"]
 
 [tool.ruff]
 line-length = 110

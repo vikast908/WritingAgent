@@ -6,6 +6,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Shipped defaults now bundled in the wheel (`src/writingagent/resources/`).** Pip installs
+  used to get no `config/models.yaml` - so no per-node routing and **no fallback model** - and
+  no `seeds/`, so `seed-skills` silently installed 0 of the 13 built-in craft skills. The wheel
+  now bundles both: `load_config()` copies `models.yaml` out to `config/models.yaml` on first
+  run (a real, user-editable file; read-only installs fall back to reading the bundle in place),
+  and `seed_builtin()` reads the bundled seeds when the repo-root `seeds/` is absent. Sync tests
+  (`tests/test_bundled_resources.py`) pin the bundled copies byte-identical to the repo originals.
+
 ### Changed
 - **Model-agnostic messaging + de-slop sweep across the docs.** README and the human-authored
   docs were reworked to lead with "any OpenAI-compatible host, no blessed default" instead of an
