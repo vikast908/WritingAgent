@@ -41,6 +41,10 @@ human when it's unsure, and **learns reusable craft skills per user across many 
 
 > A **LangGraph** pipeline that writes into a **GBrain-style** markdown-canonical memory and
 > learns **Hermes-style** skills, per user, across books.
+>
+> *(As built: "LangGraph" here is the borrowed pattern, not the dependency - v1 ships a durable
+> on-disk state machine whose checkpoint is `run_state.json`; LangGraph is deliberately not used
+> in v1 - see the deviation note at the top.)*
 
 Three layers, no overlap:
 
@@ -48,7 +52,7 @@ Three layers, no overlap:
 |---|---|---|
 | **Memory substrate** | GBrain | markdown = source of truth, synced queryable index, entity graph, periodic consolidation |
 | **Learning layer** | Hermes | skills generated from experience, user modeling across books |
-| **Orchestration** | LangGraph | state machine, checkpointing, human-interrupt on escalation |
+| **Orchestration** | LangGraph *(pattern only - v1 is a durable on-disk state machine, no langgraph dependency)* | state machine, checkpointing (`run_state.json`), human-interrupt on escalation |
 
 We borrow these projects' **patterns**, not their surface area. No multi-platform gateways,
 no CRM schemas, no 40-tool general agents. This is a narrow book pipeline.
@@ -81,9 +85,9 @@ Explicit non-goals for v1 (deferred, not rejected):
 
 | Scope | Lives where | Contents | Leaks across books? |
 |---|---|---|---|
-| **Book canon** | `books/<book>/` | plan, TOC, characters, timeline, world rules, chapters, summaries | **Never** |
-| **User craft** (genre-tagged) | `user/skills/`, `user/prefs/` | reusable skills + craft prefs, retrieved by genre relevance | Yes - to *similar* books |
-| **User global** | `user/profile.md`, `user/prefs/_global.md` | who the user is, universal mechanics ("no em-dashes", chapter length) | Always |
+| **Book canon** | `users/<uid>/books/<book>/` | plan, TOC, characters, timeline, world rules, chapters, summaries | **Never** |
+| **User craft** (genre-tagged) | `users/<uid>/skills/`, `users/<uid>/prefs/` | reusable skills + craft prefs, retrieved by genre relevance | Yes - to *similar* books |
+| **User global** | `users/<uid>/profile.md`, `users/<uid>/prefs/_global.md` | who the user is, universal mechanics ("no em-dashes", chapter length) | Always |
 
 ### 3.2 Markdown is the source of truth (GBrain pattern)
 
@@ -97,32 +101,46 @@ Explicit non-goals for v1 (deferred, not rejected):
 
 ```text
 brain/                              # the git repo ("brain")
-  user/
-    profile.md                      # who the user is (global)
-    prefs/
-      _global.md                    # universal prefs/mechanics
-      <freeform-tag>.md             # craft prefs, freeform genre tag (retrieved by similarity)
-    skills/
-      <skill-name>.md               # learned skills (markdown, agentskills.io-style)
-  books/
-    <book-id>/
-      book_plan.md                  # premise, themes, genre, tone, audience, constraints, world rules
-      toc.md                        # chapter blueprints
-      canon/
-        characters/<name>.md        # frontmatter + canon facts + voice + timeline
-        locations/<name>.md
-        threads/<thread>.md         # plot threads: setup, status, payoff
-        timeline.md                 # discrete dated/ordered events
-        world_rules.md
-      chapters/
-        ch01.md
-        ch01.summary.md
-      eval/
-        ch01.json                   # critic output
-      reviews/
-        <ts>-ch03.md                # escalation review queue (pending + answered)
-      revision_log.md               # audit of revisions + human instructions
-.index/                             # derived, gitignored: SQLite/PGLite, FTS, embeddings, graph
+  users/
+    <uid>/                          # per-user scope ("default" unless /user switches it)
+      profile.md                    # who the user is (global)
+      prefs/
+        _global.md                  # universal prefs/mechanics
+        <freeform-tag>.md           # craft prefs, freeform genre tag (retrieved by similarity)
+        watch_list.md               # recurring weaknesses the critic watches for
+      skills/
+        <skill-name>.md             # learned skills (markdown, agentskills.io-style)
+      voice/                        # admired samples (.md/.txt) + /praise'd passages - register to match
+      books/
+        <book-id>/
+          book_plan.md              # premise, themes, genre, tone, audience, constraints, world rules
+          toc.md                    # chapter blueprints
+          run_state.json            # the orchestrator checkpoint (durable state machine, §6)
+          canon/
+            characters/<name>.md    # frontmatter + canon facts + voice + timeline
+            locations/<name>.md
+            threads/<thread>.md     # plot threads: setup, status, payoff
+            timeline.md             # discrete dated/ordered events
+            world_rules.md
+          chapters/
+            ch01.md
+            ch01.summary.md
+          eval/
+            ch01.json               # critic output
+          reviews/
+            ch03.md                 # escalation review queue (pending + answered)
+          revision_log.md           # audit of revisions + human instructions
+          manuscript.md             # assembled output (after produce)
+      articles/
+        <article-id>/               # article mode: FLAT - core files at root, images/ the only subdir
+          run_state.json            # checkpoint (same durable state machine)
+          outline.json / outline.md / article_angle.json / sources.json
+          section_NN.md             # intermediate; cleaned up after assembly
+          manuscript.md / revision_log.md
+          images/
+.index/                             # derived, gitignored: per-project SQLite index (FTS docs +
+                                    # canon/graph tables), telemetry JSONL, response + embed caches,
+                                    # shell history
 ```
 
 ### 3.4 Entity graph (continuity engine, GBrain pattern)
@@ -267,6 +285,9 @@ PLAN ──(human picks direction)──▶ TOC ──▶ ┌─ per chapter ─
               BOOK_DONE ─▶ CONSOLIDATE (final) ─▶ PRODUCTION ─▶ LEARN
 ```
 
+- The machine is **durable on disk**: `run_state.json` in the project dir is the checkpoint, so
+  any transition can be resumed after a pause or crash (LangGraph deliberately not used in v1 -
+  see the deviation note at the top).
 - **Hard revision cap** (default 2): the 3rd failed attempt **escalates** - no infinite loops.
 - **COMMIT** is the only place canon changes: update entity pages, graph edges, timeline,
   write the chapter summary. Append-mostly, audited (git history + soft-deletes).
@@ -294,7 +315,8 @@ When a unit stalls, the shell shows the Critic's blocking issues and offers one 
 command remain the non-interactive path.
 
 Escalation contract:
-1. Orchestrator **checkpoints** (LangGraph interrupt) and records a pending review.
+1. Orchestrator **checkpoints** (the durable on-disk `run_state.json` - LangGraph's interrupt
+   pattern, without LangGraph; see §6) and records a pending review.
 2. Human is notified; the run can pause for as long as needed.
 3. Human responds with **directed instructions** ("make the confrontation colder, cut the
    backstory") - they **do not edit prose**; they steer, the model always writes.
@@ -444,13 +466,13 @@ by similarity to the book's profile, so cross-book learning still accumulates.
 
 | Concern | v1 choice | Scale-up path |
 |---|---|---|
-| Orchestration | **LangGraph** (graph + checkpointer + `interrupt()`) | same |
-| Why LangGraph | durable pause/resume for human-in-the-loop is first-class; nodes are mostly *deterministic LLM calls*, so we use the graph/checkpoint/interrupt - not "agentic" behavior | - |
-| State store / index | **SQLite or PGLite** + FTS + pgvector-style embeddings | Postgres (Supabase/self-hosted) |
+| Orchestration | **LangGraph pattern** (graph + checkpointer + `interrupt()`) - *as built: a durable on-disk state machine, checkpoint = `run_state.json`; LangGraph deliberately not used in v1 (no `langgraph` dependency) - see the deviation note at the top* | LangGraph proper if ever needed |
+| Why the LangGraph pattern | durable pause/resume for human-in-the-loop is first-class; nodes are mostly *deterministic LLM calls*, so we keep the graph/checkpoint/interrupt shape - not "agentic" behavior | - |
+| State store / index | **SQLite** + FTS (per-project, derived, in `.index/`) | Postgres (Supabase/self-hosted) |
 | Canonical memory | **markdown in a git repo** | same |
 | Provider | **OpenRouter** via the OpenAI SDK (`OPENROUTER_API_KEY`) | any OpenAI-compatible host |
-| Models | DeepSeek **V4 Pro** (planner/writer/consolidation) + **V4 Flash** (rest) | per-node in §12.1 |
-| Language | Python (LangGraph-native) | same |
+| Models | DeepSeek **V4 Pro** (planner/writer/consolidation + the judgment nodes: critic/judge/verifier/diagram) + **V4 Flash** (rest) | per-node in §12.1 |
+| Language | Python | same |
 | Platforms | **Linux · macOS · Windows** - CI runs the suite on all three × Python 3.10–3.13 | same |
 
 Caveat: the real engineering is the **memory schema + retrieval + state machine** - all
@@ -476,8 +498,8 @@ nodes:
   learner:       deepseek/deepseek-v4-flash
   researcher:    deepseek/deepseek-v4-flash
   humanizer:     deepseek/deepseek-v4-flash    # surgical line edits only
-  diagram:       deepseek/deepseek-v4-pro      # SVG figures: pro composes better; 16k budget
-  diagram_fallback: deepseek/deepseek-v4-flash # draws the figure if pro emits no SVG
+  diagram:       deepseek/deepseek-v4-pro      # diagram spec (nodes/edges/labels): pro composes better; 4k cap
+  diagram_fallback: deepseek/deepseek-v4-flash # specifies the figure if pro returns no spec
 temperature:                                   # DeepSeek accepts sampling params
   toc:        0.4
   critic:     0.2
@@ -486,8 +508,9 @@ temperature:                                   # DeepSeek accepts sampling param
   humanizer:  0.3   # surgical - must not get creative
 ```
 
-Defaults route **DeepSeek V4 Pro** to Writer/Planner/Consolidation (the high-leverage nodes) and
-**V4 Flash** to the rest - the bulk of calls by volume. All calls go through **OpenRouter** via the
+Defaults route **DeepSeek V4 Pro** to Writer/Planner/Consolidation (the high-leverage nodes) *and*
+the judgment nodes - Critic/Judge/Verifier/Diagram, per the yaml above - and **V4 Flash** to the
+rest, the bulk of calls by volume (budget cost mode re-routes the judgment nodes to flash - §19). All calls go through **OpenRouter** via the
 OpenAI SDK (`OPENROUTER_API_KEY`); structured node outputs use **JSON mode + Pydantic validation**
 (with one repair retry), since DeepSeek has no Anthropic-style `messages.parse`.
 
@@ -557,9 +580,11 @@ and canon in any editor):
   rollup, autocomplete + persistent history, and a `❧ <model>` prompt. No bottom toolbar (it
   read as noise; state lives in the prompt prefix + welcome footer). Type commands directly (no
   command-name prefix); lines starting with `/` are slash commands; anything else is free chat.
-  **First-run key wizard** (`_first_run_setup`, before the welcome): with no key at an interactive
-  prompt, the writer gets a one-keypress choice - *paste a key* (written to `.env` **and** applied
-  live, no restart), *try it free* (`WRITINGAGENT_FAKE=1` set **live**, no restart dance), or *skip*.
+  **First-run wizard** (`_first_run_setup`, before the welcome; provider-picker-first, no blessed
+  default - §12.2): with no key for the active host at an interactive prompt, a key already in the
+  environment for *any* host is offered first; otherwise the writer *picks a host* and pastes its
+  key (written to `.env` **and** applied live, no restart), *tries it free* (`WRITINGAGENT_FAKE=1`
+  set **live**, no restart dance), or *skips*.
   **`/setkey [<key>]`** is the "add a key later" path (upserts `.env` via `_write_env_key`, applies
   live, clears fake mode). The welcome leads with one action (`write`) and points the no-key block at
   `/setkey`. **Front door:** the README opens with the zero-install web demo (§18.1) so a writer can
@@ -582,23 +607,36 @@ and canon in any editor):
 | `tableread [--as "persona"]` | Skeptical-reader cold read of the finished piece (optional persona) (§15.4) |
 | `eval` | Quality report: judged 5-dim rubric + deterministic metrics → `eval_report.md` (§15.5) |
 | `export [fmt ... \| all]` | Render the manuscript: pdf · epub · html · docx · txt · md. Takes one format, a list (`export pdf epub`), or **`all`**; one failing format never aborts the rest (§16.5) |
+| `polish [--format ...]` | Re-fix an existing manuscript (references, citations, figures) - no LLM - then re-export (§16.6) |
+| `evidence` | Write `evidence_report.md` - thesis + influence-ranked sources (no LLM) (§15.6) |
+| `seo [--keyword ...]` | Write `seo_report.md` - deterministic on-page audit + keyword/hashtag pack (§24) |
+| `promote [--to ...]` | Write `promo/` - X thread, LinkedIn, newsletter teaser, TL;DR + headline variants (§24) |
+| `web [--port N]` | Local web dashboard: run pieces + evals/traces/cost in a browser (§25) |
 | `memory` | Inspect canon (characters/timeline) + entity graph |
 | `consolidate` · `produce` | Run those passes on demand |
 | `skills` · `seed-skills` | List skills + efficacy · install built-in craft skills |
 | `list` · `config` | List books · show model routing + settings |
+| `delete <id> [--yes]` | Permanently delete a project (confirmation prompt unless `--yes`) |
 
 **Slash commands (shell only):** `/help`, `/auto [on|off]` (autonomous ↔ manual run mode; aliases
-`/autonomous`, `/manual`), `/praise [N]` (mark a committed unit as great → saved to `voice/`,
+`/autonomous`, `/manual`), `/mode [book|article]` (the mode the next `new` uses), `/agentic
+[on|off|llm|default]` + `/trace` (agentic controller toggle / policy + its decision trace, §21),
+`/praise [N]` (mark a committed unit as great → saved to `voice/`,
 feeds the writer + learner; §15.4), `/model [<agent>] <slug>` (switch any model, per agent,
 persisted to `config/models.yaml`), `/skills`, `/skill <name>`, `/seed-skills`, `/use <book>`,
-`/books`, `/user <id>`, `/config`, `/theme [<name>]` (themes change *everything* - palette,
-wordmark figlet face, fleuron, gradient; each a distinct hue family. `editorial` blue-ink default
-with semantic status colors; alternates `kazama` (flame, sheared) · `supabase` (emerald) ·
-`violet-bloom` (purple) · `t3-chat` (pink) · `starry-night` (indigo+gold) · `vercel` (monochrome) ·
-`fallout` (CRT amber) · `mimi` (rose pastels) · `astrovista` (mars rust); registry in `ui.THEMES`
+`/books`, `/user <id>`, `/config`, `/update [msg]` (describe your changes → AI reviews and
+advises), `/retry` (re-send the last chat message), `/reset` (clear the chat context), `/compact`
+(fold the chat history into one summary), `/theme [<name>]` (themes change *everything* - palette,
+wordmark figlet face, fleuron, gradient; each a distinct hue family. `editorial` ink-&-brass
+default (manuscript red + gold on parchment) with semantic status colors; alternates
+`highcontrast` (Okabe-Ito colourblind-safe, §13.1) · `kazama` (flame, sheared) · `supabase`
+(emerald) · `violet-bloom` (purple) · `t3-chat` (pink) · `starry-night` (indigo+gold) · `vercel`
+(monochrome) · `fallout` (CRT amber) · `mimi` (rose pastels) · `astrovista` (mars rust) - 11 in
+all; registry in `ui.THEMES`
 incl. `FONT`/`WORDS`/`SHEAR`, persisted via `settings.theme`), `/dashboard [<project>]` (telemetry
 rollup - calls/tokens/cost/latency/errors; per-unit breakdown when a project is named; reads the
-JSONL call log, §15.1), `/provider [<id>]` (switch the model host, §12.2), `/features` (interactive
+JSONL call log, §15.1), `/provider [<id>]` (switch the model host, §12.2), `/setkey [<key>]` (add
+or update the active host's API key - upserts `.env`, applies live), `/features` (interactive
 toggle grid), `/path` (where exports are saved, §16.5), `/set <key> <value>`, `/clear`, `/exit`.
 
 Run modes: **interactive** (prompts inline on escalation via the picker, §7), **autonomous**
@@ -683,7 +721,7 @@ The open items are now settled. All numeric thresholds are **tunable config**, n
 | **Notification channel** | Markdown review queue in `books/<id>/reviews/` + terminal print (interactive); surfaced by `writing-agent status` / `writing-agent review`. Any later channel tails the file queue. (§7) |
 | **Consolidation cadence** | Fixed: every `N=5` committed chapters + mandatory before `BOOK_DONE` + manual `writing-agent consolidate`. (§9) |
 | **Skill efficacy metric** | Lift over baseline: promote at `applied≥5`, `p_skill≥p_base`, `target_failures=0`; retire on sustained under-performance. (§8) |
-| **Researcher depth** | Two tiers, both optional. **Shallow** (`use_researcher`): one DuckDuckGo query -> snippets -> a short brief (facts + style cues). **Deep** (`deep_research`, layers on `use_researcher`): LLM query-expansion -> several queries fanned out concurrently -> dedup + per-domain cap -> fetch and extract the actual page text of the top sources -> a synthesis node reads across full pages and cites sources by number. See §15.2. |
+| **Researcher depth** | Two tiers, both toggleable; shallow is on by default (`use_researcher: true`), deep is opt-in. **Shallow** (`use_researcher`): one DuckDuckGo query -> snippets -> a short brief (facts + style cues). **Deep** (`deep_research`, layers on `use_researcher`): LLM query-expansion -> several queries fanned out concurrently -> dedup + per-domain cap -> fetch and extract the actual page text of the top sources -> a synthesis node reads across full pages and cites sources by number. See §15.2. |
 
 ### 15.1 Reliability, performance & safety (2026-06-10 hardening)
 
@@ -899,7 +937,8 @@ component set - a literary novel and a technical nonfiction book need very diffe
   `books/<id>/backmatter/`.
 - TOC is generated from the committed chapter files/titles - never hand-written.
 - Assembles the ordered deliverable **front matter → chapters → back matter** into
-  `books/<id>/manuscript.md` (export formats - EPUB/PDF/DOCX - are post-v1).
+  `books/<id>/manuscript.md`. Export formats shipped - all six (pdf · epub · html · docx ·
+  txt · md) via the `export` command (§13, §16.5).
 
 ### 16.3 Facts it can't invent
 
@@ -1136,8 +1175,11 @@ default so the suite/CI are unchanged) applies one profile in ONE place - `confi
 called at project creation (bakes into run-state) and at `run()` (routing + the session budget):
 
 - **Pins lean knobs** (only ever tightens; a leaner user value is kept): `divergent_drafts=1`,
-  `max_revisions=1`, `table_read=off`, `max_context_chars=12000`, `max_run_tokens=100000` (the hard
-  ceiling - the run pauses, resumable, rather than overspending).
+  `max_revisions=1`, `table_read=off`, `max_context_chars=12000`. The run token budget is **not a
+  flat pin anymore** (the original `max_run_tokens=100000` pin is superseded - see §26): it is
+  computed per-run by `config.budget_for_units` (~25k overhead + `budget_tokens_per_unit` ≈
+  20k/unit) so a full piece *finishes* rather than pausing mid-way; an explicit `max_run_tokens`
+  remains the hard ceiling that always wins.
 - **Routes the judgment nodes to the flash tier** (`critic`/`judge`/`verifier`/`consolidation`/
   `diagram` → the global `fallback` slug): pro-tier reasoning spend was dominated by these nodes'
   thinking tokens; the writer stays on pro (prose quality is the product).
@@ -1162,7 +1204,10 @@ mandatory. Already shared (do not re-extract): `_pick_variant`, `_save_version`,
 `_length_note`, `_merge_fix_notes`, `_escalate`. **Done:** `_run_learner` (shared learner tail);
 `_base_run_state` (shared run-state keys for `start_book`/`start_article`); `_divergent_first_draft` +
 `_finalize_unit` (shared attempt-0 divergent drafting and post-loop bookkeeping - Tier 2);
-`_mark_escalated` + `_log_run_complete` (shared run-loop escalation + completion footer - Tier 3).
+`_mark_escalated` + `_log_run_complete` (shared run-loop escalation + completion footer - Tier 3);
+`_writer_tool_runner` (the writer's in-generation tool loop, §21), `_reoutline_units` (re-outline
+the remaining units) and `_revise_weakest_unit` (revise the weakest committed unit) - all three
+extracted to `orchestrator/common.py`.
 
 Prioritized, by risk:
 
@@ -1265,7 +1310,7 @@ names tests reach for). Pure code movement, suite-gated per step.
 > fully-trained π remains. Phase 4 is `panels.fact_check_panel` (article + `deep_research`, behind
 > `agentic_factcheck_panel`). **TUI surface:** `/agentic on|off|llm|default`, `/trace`, a controller line
 > in the dashboard. Opt-in is free: `Agent(agentic=True, agentic_policy="llm")` and `/set agentic true`.
-> **41 offline tests** (`tests/test_agentic.py` 31 + `tests/test_agentic_tui.py` 9 + `test_agentic_tui`),
+> **57 offline tests** (`tests/test_agentic.py` 47 + `tests/test_agentic_tui.py` 10, counts as of 2026-07-17),
 > including the equivalence guarantee and full macro runs of both pipelines through `run_loop`. Full
 > suite green (424 passed / 2 skipped), agentic code ruff-clean. **In-generation tool use is now built**
 > (`llm.complete_text_with_tools` - a real OpenAI tool-use loop; the writer may call `research`/
@@ -1305,7 +1350,7 @@ Everything below is constrained by three things that stay exactly as they are to
 
 The mechanism that enforces invariant #2 cheaply: **tools wrap existing orchestrator functions at
 their current granularity.** `draft_unit` *is* `_process_chapter` / `_process_article_section`
-(`book.py:294`, `article.py:232`) - the full divergent-draft + duel + revise-loop + commit +
+(`book.py` / `article.py`) - the full divergent-draft + duel + revise-loop + commit +
 `record_chapter`. The controller calls it as one tool; the measured episode is literally the same
 code. There is no raw `write_chapter` tool that could bypass critique.
 
@@ -1377,7 +1422,7 @@ def controller_run(cfg, state, paths, registry, control, log):
 policy disabled, `controller_run` must produce **byte-identical output to the legacy `run()`** - this
 equivalence is the Phase-1 acceptance test and the core safety proof.
 
-**Dispatch.** In `run()` (`book.py:100`) and `_run_article` (`article.py:110`), after loading state:
+**Dispatch.** In `run()` (`book.py`) and `_run_article` (`article.py`), after loading state:
 `if state.get("controller") == "agentic": return agentic.controller_run(...)` else the existing loop.
 `agentic` sits *above* the orchestrator seams (imports `common`/`book`/`article`); the dispatch uses a
 **lazy import** to keep the DAG acyclic - the same pattern as the existing `chat → repl` back-edge.
@@ -1423,8 +1468,8 @@ fallback:
 ### 21.5 Episode & duel integrity (the proof invariant #2/#3 hold)
 
 Because `draft_unit` *is* the unchanged `_process_chapter` / `_process_article_section`:
-- the divergent-draft + ablation **duel** (`common.py:496`, same temp, same context, only the skill
-  list differs) fires exactly as today when `skill_duels` is on;
+- the divergent-draft + ablation **duel** (`common.py` `_divergent_first_draft`, same temp, same
+  context, only the skill list differs) fires exactly as today when `skill_duels` is on;
 - `record_chapter(uid, applied_names, first_pass)` and `record_duel(uid, name, won)` are called with
   identical arguments;
 - `reconcile` / `distill` (post-hoc, §8) are untouched.
@@ -1800,7 +1845,9 @@ remains the zero-install marketing demo; this is the working surface.
   refreshes the report so the HTML export's meta tags follow.
 - **Restyle.** `orchestrator.build_restyle` re-voices a finished piece into a chosen
   register/persona/emotion on flash (facts/citations preserved) -> `restyled/<combo>.md`.
-- **Web dashboard redesign.** `design.md` is now the Hermes system (flat, blue-forward,
-  borderless + hairline, System/Light/Dark). The dashboard exports all six formats, exposes
-  register/persona/emotion as None-default dropdowns, adds the Rejected tab and the restyle
-  control. Sigurd/Collapse (proprietary) are substituted by system stacks; no fonts vendored.
+- **Web dashboard redesign.** `design.md` is now the **Editorial system (v2)**: type-led ink on
+  warm paper with one accent - **manuscript red `#a3341f`** - flat, borderless + hairline,
+  System/Light/Dark (its Don'ts explicitly forbid reintroducing blue as the brand). The dashboard
+  exports all six formats, exposes register/persona/emotion as None-default dropdowns, adds the
+  Rejected tab and the restyle control. No proprietary fonts vendored - serif display with
+  system-stack fallbacks.

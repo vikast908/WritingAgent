@@ -21,7 +21,9 @@ fix batch on branch `fix/review-sweep-2026-07-16`. See `CHANGELOG.md` (Unrelease
 
 **Deliberately deferred** (not bugs; high-risk refactors whose concrete harms were already fixed in
 both pipelines): the full `book.py`/`article.py` `_revise`/`_reoutline`/`_draft`/tool-runner dedup,
-and unifying the legacy-vs-agentic consolidation-cadence state keys.
+and unifying the legacy-vs-agentic consolidation-cadence state keys. *[Update 2026-07-17: the
+`_revise`/`_reoutline`/tool-runner extraction has since landed - `_revise_weakest_unit`,
+`_reoutline_units`, `_writer_tool_runner` now live in `orchestrator/common.py`; see plan.md §20.]*
 
 ## 2026-06-17 (session 15): craft engine (§22) + compositor (§23)
 
@@ -31,7 +33,7 @@ Built and verified two layers: the **craft engine** (plan §22, branch `feat/cra
 
 | Check | How | Result |
 |---|---|---|
-| Full offline suite | `python -m pytest -q` (Windows, `WRITINGAGENT_FAKE=1`) + `ruff check src tests` | **250 passed, 1 skipped** (opt-in live-net test); ruff clean |
+| Full offline suite | `python -m pytest -q` (Windows, `WRITINGAGENT_FAKE=1`) + `ruff check src tests` | **250 passed, 1 skipped** (opt-in live-net test); ruff clean *[editorial note, 2026-07-17: this figure is inconsistent with the adjacent sessions (433 in session 14, 523 in session 16) - treat it as a partial-run record]* |
 | Craft engine (plan §22) | new `tests/test_craft_engine.py` | registers, register-aware anti-slop, craft metrics, few-shot exemplars, surgical passes, field templates, citation styles, voice-drift report |
 | Compositor (plan §23) | new `tests/test_compositor.py` | personas, emotions, the voice-layer precedence + conflict resolution |
 | Byte-for-byte back-compat | `tests/test_craft_engine.py` | `register=None`/`nonfiction` reproduces the old `slop.render_constraints()` / `tell_pattern()` **byte-for-byte** - every pre-existing run is unchanged |

@@ -12,8 +12,8 @@
 
 **One command → a researched, self-critiqued, fact-checked, exported article (or book).** Local-first and **model-agnostic** (any OpenAI-compatible host), on your own key, for cents.
 
-#### ▶ Try it in your browser - no install, no key
-A **[web demo](web/)** runs the whole pipeline behind a simple UI: a **free preview** (placeholder output, $0, no key) shows exactly how a run works, or paste your own key for a real piece. Run it with `pip install -e ".[web]" && python web/app.py`, or deploy it as a Hugging Face Space ([guide](web/README.md)).
+#### ▶ Try it in your browser - no API key needed
+A **[web demo](web/)** runs the whole pipeline behind a simple UI: a **free preview** (placeholder output, $0, no key) shows exactly how a run works, or paste your own key for a real piece. Run the web demo locally with one pip install - `pip install -e ".[web]" && python web/app.py` from a clone - or deploy it as a Hugging Face Space ([guide](web/README.md)).
 
 [Try in browser](web/) · [Quickstart](#quickstart) · [Install](#install) · [Why not just prompt ChatGPT?](#why-not-just-prompt-chatgpt) · [Examples](examples/) · [**Docs ↗**](https://docs-writingagent.vercel.app/)
 
@@ -29,8 +29,9 @@ backs it with real, ranked sources** - then proves it with an **evidence report*
 **pipeline, not a prompt**: a durable state machine with a *separate critic*, a *thesis* it enforces,
 and *claim↔source verification* - not a single API call.
 
-**Best at articles** (a finished, sourced piece for ~$0.25 in a couple of minutes); it does **books**
-too (multi-chapter, with continuity audits + a production layer).
+**Best at articles** (a finished, sourced piece for **~$0.10–0.25 per article depending on model and
+cost mode**, in a couple of minutes); it does **books** too (multi-chapter, with continuity audits + a
+production layer).
 
 - **One command** - `write` asks a few questions upfront, then researches, writes, self-critiques, fact-checks, humanises, and exports the finished file with zero babysitting
 - **Argues, doesn't just cover** - a per-piece *thesis* the critic enforces, a side-by-side *judge* that picks the strongest of N drafts, and **claim↔source verification** that blocks unsupported citations
@@ -41,7 +42,7 @@ too (multi-chapter, with continuity audits + a production layer).
 - **Self-correcting *and* (optionally) self-directing** - the default pipeline self-corrects via fixed quality gates; flip on **agentic mode** and an LLM *controller* takes the wheel, choosing the next move both per unit (gather research / read canon before drafting) and over the whole piece (draft, reoutline, revise, consolidate, repair, produce, learn, escalate, done) - and the writer can call tools *mid-draft*. Off by default, with the fixed pipeline as a byte-identical fallback (see [Self-directing mode](#self-directing-mode-opt-in))
 - **Model-agnostic - your model, your choice** - no blessed default: run on any OpenAI-compatible host (OpenAI, Anthropic, DeepSeek, Gemini, Groq, Perplexity, OpenRouter, AWS Bedrock/Azure via gateway, local Ollama/LM Studio, …), picked in the first-run wizard or `/provider`, with per-node models swappable via `/model`; everything is plain markdown + JSON on disk; kill a run and it resumes exactly where it stopped; a global `fallback` model keeps an unattended run alive if a tier has an outage
 - **Promotes, not just writes** - after the piece is done, `seo` audits it against on-page fundamentals (keyword placement, description, headings, readability) and names its keywords + hashtags, and `promote` repurposes it into an X thread, LinkedIn post, newsletter teaser, TL;DR, and 5 A/B headlines - the HTML export ships SEO/OG/Twitter meta tags (see [Promote it](#promote-it---seo-x-threads-linkedin))
-- **Cheap by default** - `cost_mode: budget` pins the spend-heavy knobs and routes the judgment nodes to the flash tier, targeting **≤100k tokens (~$0.10–0.15) per article** with a hard, resumable token ceiling
+- **Cheap when you want it** - the recommended opt-in `/set cost_mode budget` pins the spend-heavy knobs and routes the judgment nodes to the flash tier, auto-scaling the token budget to the piece's size so a full article still finishes (the default `cost_mode` is `standard`)
 
 > 📂 See real output in [**`examples/`**](examples/) · 📚 full manual at [docs-writingagent.vercel.app](https://docs-writingagent.vercel.app/).
 
@@ -92,7 +93,8 @@ export` - every command is in the [**command reference ↗**](https://docs-writi
 exercise the whole pipeline and exports for free:
 
 ```bash
-WRITINGAGENT_FAKE=1 writing-agent new --abstract "test" --pick 1 && writing-agent run
+export WRITINGAGENT_FAKE=1                            # applies to both commands below
+writing-agent new --abstract "test" --pick 1 && writing-agent run
 ```
 
 <sub>Windows PowerShell: <code>$env:WRITINGAGENT_FAKE=1; writing-agent new --abstract "test" --pick 1; writing-agent run</code></sub>
@@ -116,7 +118,8 @@ pip install -e ".[dev]"              # editable install + test/lint tooling
 ```
 
 Optional extras install alongside: `pip install "writing-agent[deep]"` (the higher-fidelity
-`scrapo-ai` fetch engine + its Playwright browser tier) and
+`scrapo-ai` fetch engine + its Playwright browser tier - **Python 3.11+ only**; on 3.10 the extra
+installs nothing and the stdlib fetcher is used) and
 `pip install "writing-agent[web]"` (the Gradio web demo's dependency). Each optional feature (deep
 research, DOCX export, D2 diagrams, embeddings) degrades gracefully when its extra
 isn't installed - see the [**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
@@ -148,7 +151,7 @@ for a *take*, not just the absence of tells:
 
 </div>
 
-Already generated a piece? **`writingagent polish <id>`** re-runs the references, citation, and figure
+Already generated a piece? **`writing-agent polish --book-id <id>`** re-runs the references, citation, and figure
 cleanup and re-exports - with **no model call** (≈0 tokens).
 
 Deep dives: [Quality machinery ↗](https://docs-writingagent.vercel.app/reference/quality/) ·
@@ -330,7 +333,7 @@ trustworthy:
 …
 ```
 
-Regenerate any time with **`writingagent evidence <id>`** (or `Project.evidence_report()`).
+Regenerate any time with **`writing-agent evidence --book-id <id>`** (or `Project.evidence_report()`).
 
 ---
 
@@ -343,9 +346,9 @@ Everything is **local artifacts only**: a report, `keywords.json`, and draft fil
 the manuscript itself is never modified, and nothing is ever posted or submitted anywhere.
 
 ```bash
-writingagent seo <id> --keyword "voice ai latency"   # audit + signals pack → seo_report.md
-writingagent promote <id>                            # X thread · LinkedIn · teaser · TL;DR → promo/
-writingagent promote <id> --to x-thread,linkedin     # just the formats you want
+writing-agent seo --book-id <id> --keyword "voice ai latency"       # audit + signals pack → seo_report.md
+writing-agent promote --book-id <id>                                # X thread · LinkedIn · teaser · TL;DR → promo/
+writing-agent promote --book-id <id> --to x-thread,linkedin         # just the formats you want
 ```
 
 - **`seo`** writes `seo_report.md`: a **0–100 on-page audit** (keyword in title/opening/headings,
@@ -364,10 +367,12 @@ Search grounding runs on **DuckDuckGo** (free, keyless, default) or **Firecrawl*
 (`search_provider: firecrawl` + `FIRECRAWL_API_KEY` - also upgrades deep-research page scraping);
 a missing key degrades gracefully to the free path.
 
-**Cost:** `cost_mode: budget` (in `config/settings.yaml`) targets **≤100k tokens per article** - 
-single draft, one revision, 12k context, judgment nodes on the flash tier, and a hard
-`max_run_tokens` ceiling at 100k (a run that hits it pauses resumably instead of overspending).
-`cost_mode: standard` restores the previous behavior; every pin is an ordinary tunable.
+**Cost:** the recommended opt-in `cost_mode: budget` (in `config/settings.yaml`; `/set cost_mode
+budget`) pins the spend-heavy knobs - single draft, one revision, 12k context, judgment nodes on the
+flash tier - and **auto-scales** the run's token budget to the piece's size (`budget_for_units` ≈ 25k
+fixed overhead + ~20k per unit) so a full piece finishes instead of pausing mid-way. Setting an
+explicit `max_run_tokens` (> 0) is a hard ceiling that always wins and pauses the run resumably at the
+cap. The shipped default is `cost_mode: standard`; every pin is an ordinary tunable.
 
 ---
 

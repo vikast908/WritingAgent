@@ -136,7 +136,7 @@ audience - and keep the nonfiction default byte-for-byte so the wedge persona se
   finished `write` (`auto_promote`, default on) or on demand (`writing-agent seo` / `promote`).
   **Local artifacts only - it edits the piece and names keywords/hashtags, but never posts or
   schedules anywhere.**
-- **Cost - budget mode** (plan §19): `cost_mode: budget` (the shipped default) pins the spend-heavy
+- **Cost - budget mode** (plan §19): `cost_mode: budget` (opt-in - the shipped default is `standard`; recommended when spend matters) pins the spend-heavy
   knobs lean, routes the judgment nodes (critic/judge/verifier/consolidation/diagram) to the flash
   tier, and auto-scales the run token budget by unit count (`budget_tokens_per_unit`, ~20k/unit +
   overhead) so a full piece *finishes* rather than pausing - targeting **≤100k tokens/article**.
@@ -237,7 +237,7 @@ audience - and keep the nonfiction default byte-for-byte so the wedge persona se
   prefix-cache pin was confirmed engaging (**36% of prompt tokens cached**), and the run surfaced a
   structured-output truncation on the reasoning tier - now fixed (raise `max_tokens`, stay on-tier).*
   Suite: 524 passed / 1 skipped, ruff clean. *(Advanced mode; the fixed pipeline stays the recommended
-  default. Maturity caveat: the learned `trace` policy is still corpus-hungry - it needs ≥3 labelled
+  default. Maturity caveat: the learned `trace` policy is still corpus-hungry - it needs ≥10 labelled
   units per arm and runs so far yield too few "gather" units, so it abstains - see Next.)*
 - **Resilience + safety hardening** (from an exhaustive code review): a global **`fallback` model**
   (any node whose primary exhausts its retries degrades once onto a cheaper tier rather than killing an

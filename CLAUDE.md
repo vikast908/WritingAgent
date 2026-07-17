@@ -6,6 +6,7 @@ A self-correcting, autonomous writing system (books, articles, and more). Intera
 ## Start every session here
 
 1. Read **`docs/dev/resume.md`** - the session log: what happened last time and the next step.
+   (maintainer-local, not in the repo; skip if absent)
 2. Read **`plan.md`** - the authoritative spec (architecture, memory, nodes, state machine,
    learning, production, model routing, CLI).
 
@@ -19,4 +20,4 @@ A self-correcting, autonomous writing system (books, articles, and more). Intera
 - `plan.md` = single source of truth. `docs/dev/resume.md` = running log (with `docs/dev/test.md`,
   the verification log). Don't duplicate between them.
 - All numeric thresholds in `plan.md` are **tunable config**, not hard-coded.
-- Borrow *patterns* from Hermes/GBrain, not their surface area. This is a narrow book pipeline.
+- Borrow *patterns* from Hermes/GBrain, not their surface area. This is a narrow writing pipeline.

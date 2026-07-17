@@ -4,7 +4,7 @@ Status: **ADOPTED and built (v1)**, 2026-06-17 - see plan.md §23 and `composito
 `personas.py` / `emotions.py`. Originally a proposal for discussion (craft-engine design pass,
 2026-06-16, branch `feat/craft-engine-all-tiers`). The owner approved "finish tiers, then
 compositor; personas = archetypes + public-domain." All three verdicts below were implemented
-as recommended: personas as register-gated voice bundles (10 shipped, no living authors),
+as recommended: personas as register-gated voice bundles (46 shipped - initially 10; no living authors),
 emotions as anti-cliché deny-lists + cues (NOT a symptom dictionary), and a precedence-cascade
 compositor (the voice layer is wired; §23.6 lists what's deferred). This document is kept as the
 design rationale; the build is on branch `feat/compositor-personas-emotions`.

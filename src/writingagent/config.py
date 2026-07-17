@@ -156,7 +156,7 @@ class Settings:
     #                                          after assembly (detector, not a rewriter - a full
     #                                          10-chapter rewrite is impractical/lossy; D-008)
     use_images: bool = True                  # fetch Wikimedia Commons images (non-fiction/illustrated)
-    diagram_engine: str = "auto"             # SVG layout: auto (D2+ELK if d2 is installed, else builtin) | d2 | builtin
+    diagram_engine: str = "auto"             # diagram renderer: auto (= builtin) | d2 (explicit opt-in, D2+ELK) | builtin
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
     request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
     max_run_tokens: int = 0                 # HARD ceiling: pause a run once total tokens exceed this (0 =

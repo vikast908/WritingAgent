@@ -25,9 +25,11 @@ conduct which could reasonably be considered inappropriate.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainers via a GitHub issue or the security contact
-in `SECURITY.md`. All complaints will be reviewed and investigated promptly and
-fairly.
+reported **privately** to the maintainer, [@vikast908](https://github.com/vikast908),
+via the contact listed on their GitHub profile. **Do not use public GitHub issues
+for conduct reports** (and the `SECURITY.md` channel is for vulnerabilities, not
+conduct). All complaints will be reviewed and investigated promptly and fairly, and
+the reporter's privacy and safety will be respected.
 
 ## Attribution
 

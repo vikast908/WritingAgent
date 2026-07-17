@@ -1,5 +1,6 @@
-# Per-node model routing via OpenRouter (OpenAI-compatible). Set OPENROUTER_API_KEY.
-# "Pro" = high tier (planner/writer/consolidation); "Flash" = everything else.
+# Per-node model routing via your configured host (OpenAI-compatible). Set your host's key.
+# "Pro" = judgment + prose nodes (planner/writer/consolidation/critic/judge/verifier/diagram);
+# "Flash" = the mechanical rest.
 # DeepSeek accepts temperature; the map below applies to any node that sets one.
 default: deepseek/deepseek-v4-pro
 # Tried once for ANY node after the primary model exhausts its retries (outage, content
@@ -22,21 +23,21 @@ nodes:
   summarizer:    deepseek/deepseek-v4-flash    # chapter summaries + canon extraction
   production:    deepseek/deepseek-v4-flash    # front/back matter + assembly
   learner:       deepseek/deepseek-v4-flash    # distill skills from a finished book
-  researcher:    deepseek/deepseek-v4-flash    # optional shallow research brief (off by default)
+  researcher:    deepseek/deepseek-v4-flash    # shallow research brief (on by default; deep opt-in)
   humanizer:     deepseek/deepseek-v4-flash    # strip AI tells from committed prose
   chat:          deepseek/deepseek-v4-flash    # TUI conversational assistant
-  diagram:       deepseek/deepseek-v4-pro      # SVG diagrams: pro plans layout/composition far
-                                               # better; paired with a 16k token budget so the
-                                               # SVG fits after reasoning (6k starved it once)
+  diagram:       deepseek/deepseek-v4-pro      # diagram spec (nodes/edges/labels): pro picks the
+                                               # figure + composition far better; layout is rendered
+                                               # downstream. The node calls it with max_tokens=4000.
   diagram_fallback: deepseek/deepseek-v4-flash # when pro reasons itself out of budget and
-                                               # emits no SVG, flash reliably draws *something*
+                                               # returns no spec, flash reliably specifies *something*
   seo:           deepseek/deepseek-v4-flash    # keyword/hashtag/meta-description pack (plan §24)
   repurpose:     deepseek/deepseek-v4-flash    # X thread / LinkedIn / teaser / TLDR / headlines
 
 # Per-node completion caps (tokens). Reasoning models (deepseek-v4-pro) spend tokens
 # THINKING before they emit the JSON, so the structured judgment nodes need headroom or the
 # reply truncates (finish_reason=length) and wastes a pro call before falling back to flash -
-# same failure the diagram node's 16k budget already guards against. complete_structured also
+# same failure the diagram node's max_tokens=4000 spec budget already guards against. complete_structured also
 # auto-raises the cap on a live truncation, so these are first-call floors, not hard limits.
 max_tokens:
   critic:        8000   # insight scoring + thesis/evidence checks: reasons, then a rich verdict

@@ -6,6 +6,28 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Model-agnostic messaging + de-slop sweep across the docs.** README and the human-authored
+  docs were reworked to lead with "any OpenAI-compatible host, no blessed default" instead of an
+  OpenRouter/DeepSeek default, and the project's own #1 anti-slop rule (no em-dashes) was applied
+  to the human-authored prose and the banner / architecture SVGs. Redundant files were removed.
+- **Book/article run-op bodies de-duplicated (`orchestrator/`).** The near-identical book and
+  article run-op implementations were consolidated behind the shared scaffolding. Pure refactor,
+  behavior-preserving, suite-gated.
+- **CI maintenance.** GitHub Actions bumped to current majors (incl. `actions/setup-python` 5→6);
+  `ruff check .` made green across the whole repo (CI lints everything, not just `src/`/`tests/`).
+
+### Fixed
+- **Docs.** Corrected the `write` invocation (it takes `--abstract`, not a positional) and fixed two
+  README anchor links broken by de-em-dashing the headings.
+
+### Removed
+- **The npm launcher.** The `writingagent` npm launcher was removed entirely - it was never actually
+  published or maintained. The Python install (`pip install writing-agent`, `pipx`, or source) is the
+  only supported path.
+
+## [0.2.0] - 2026-07-16
+
 ### Added
 - **Provider reach + no blessed default (`providers.py`, first-run wizard).** Added first-party
   **Anthropic** (`claude-*` via the OpenAI-compatible endpoint), **Perplexity** (`sonar`),
@@ -17,11 +39,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Bedrock + native Azure are on the roadmap.)
 - **Open-source hardening.** PyPI release automation (`.github/workflows/release.yml` — build +
   Trusted-Publishing/OIDC on a `v*` tag), CI now runs **coverage** (pytest-cov → Codecov, non-blocking)
-  and a **gitleaks** secret-scan job; **Dependabot** (pip + actions); README **CI / coverage / PyPI**
-  badges; `CODEOWNERS`, issue-template `config.yml`, `CITATION.cff`, `FUNDING.yml`, and `ROADMAP.md`.
-- **Install docs lead with `pip install writing-agent`.** README quickstart/install, `learning.md`,
-  and the npm launcher README now present the PyPI install as the primary path (with `pipx` and the
-  npm launcher / source as alternatives); example commands use the `writing-agent` console script.
+  and a **gitleaks** secret-scan job; **Dependabot** (pip + actions); README **PyPI / Docs / Python /
+  Platforms / License** badges; `CODEOWNERS`, issue-template `config.yml`, `CITATION.cff`, `FUNDING.yml`,
+  and `ROADMAP.md`.
+- **Install docs lead with `pip install writing-agent`.** README quickstart/install and `learning.md`
+  now present the PyPI install as the primary path (with `pipx` and source as alternatives); example
+  commands use the `writing-agent` console script.
 - **Tidier repo root.** The maintainer journals moved to `docs/dev/` (`resume.md` session log,
   `test.md` verification log) with a `docs/dev/README.md` explaining them; references updated. `plan.md`
   (architecture spec) and `CLAUDE.md` (tooling) stay at the root.
@@ -86,119 +109,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   episode loops), and a commit line that carries the final verdict chip
   (`✓ committed §3 · approved · insight 5/5`). Presentation-only curation of already-emitted signal,
   plus the one new log line per loop; the fixed pipeline's behavior is unchanged.
-
-### Changed
-- **Cache-friendly prompt ordering (token efficiency, no quality cost).** The writer + critic prompts
-  (book & article, `nodes.py`) now lead with the stable, cross-unit blocks (plan/outline → author
-  requirements → thesis → voice exemplars) and place the per-unit blueprint + volatile revision state
-  last, so a provider's prompt-prefix cache spans the shared head across every unit. Pairs with the
-  `openrouter_providers` setting (pin a cache-capable upstream so DeepSeek's auto prefix-cache engages).
-  This changes prompt *text*, not meaning — output is no longer byte-identical to prior runs, but
-  quality/consistency are unaffected.
-- **Run-scoped research memo (`agentic/tools.py`).** The inline-tool / controller writer re-issuing the
-  same research query within a run no longer repeats the web search + LLM synthesis — the synthesized
-  brief is cached by `(unit, query)` and auto-cleared when the `run_id` changes.
-- **Natural language now runs *any* slash command, including `/set`.** The chat assistant's system
-  prompt (`_const.py`) was expanded to document the full slash surface with NL triggers (`/agentic`,
-  `/auto`, `/mode`, `/model`, `/provider`, `/path`, `/praise`, `/theme`, `/features`, `/dashboard`,
-  `/trace`, …), and `/set` was removed from the chat denylist (`dispatch.py`) so config requests
-  ("turn on researcher", "set chapters to 12", "use the poe-gothic persona", "write with a grief tone")
-  execute from plain English. Reversible config + each executed line is echoed; only `/user` (identity)
-  and `delete` (destructive) stay manual. Also fixed a latent inconsistency where the prompt told the
-  model to emit `/set` while the extractor silently dropped it (so "turn on web search and write" never
-  enabled search).
-
-### Fixed
-- **Review-driven fix sweep (2026-07-16).** A full-codebase review (redundancy · mismatches ·
-  optimization) across every subsystem drove one batch. All confirmed defects fixed; suite green
-  (**523 passed / 1 skipped**), ruff clean. No dead `Settings` keys were found (all 55 are read).
-  - **Escalation no longer desyncs the per-unit score arrays (`review.py`, `common.py`).** Approving an
-    escalated chapter/section (`approve_escalation`) committed the unit but never appended to
-    `state["scores"]`/`["insights"]`, so every later `scores[n-1]` lookup (the agentic `revise` target,
-    the summary card) pointed at the WRONG unit (and could `IndexError`). `_escalate` now stashes the
-    blocking critique's scores and `approve_escalation` re-appends them via `_record_escalated_score`,
-    keeping the arrays 1:1 with `committed`.
-  - **Citation-preservation guard was blind to `[N12]` markers (`humanizer.py`, `surgery.py`).** The
-    guard matched only `[\d+]`, so a humanizer/surgery rewrite could silently strip an N-style
-    synthesis citation while passing the guard. Now matches `[N?\d+]` (mirrors `polish._INLINE_CITE`).
-  - **Surgical craft passes honor the register in their anti-slop guard (`surgery.py`).** A valid
-    literary rewrite using a word the register permits (`landscape`, an em-dash) was rejected as "new
-    slop" because the guard used the register-neutral tell matcher; the register's matcher is now
-    threaded through `apply → show_dont_tell/de_passive → _guard`.
-  - **`max_context_chars: 0` ("unbounded") is honored (`book.py`).** The orchestrator collapsed an
-    explicit `0` to `None` (re-capping context at 24000), contradicting the config contract (`0` =
-    unbounded, which `_within_budget` already honors); the setting is now passed through unchanged.
-  - **Chapter-writer length-truncation recovery works (`llm.py`).** The empty-`finish_reason=length`
-    recovery only grew `max_tokens` when below 16000, but the chapter writer requests 16000 — so a
-    truncated chapter re-sent the same doomed budget until its retries were spent. A shared
-    `_LEN_RETRY_CEILING` (32000) gives real headroom in both `complete_text` and `complete_structured`.
-  - **Learned-policy corpus no longer poisoned by `revise` (`learn.py`, `book.py`, `article.py`).** A
-    `revise` re-commit re-labelled a unit `first_pass=False`, overwriting the genuine first-draft
-    outcome and skewing `train_policy`; unit-outcome trace records now carry `revised` and the collector
-    keeps the first (unrevised) outcome per unit.
-  - **Agentic critique panel now runs for books too (`book.py`, `nodes.py`).** `agentic_critique_panel`
-    was wired only in the article pipeline (silently ignored on books); `critique_chapter` gained a
-    `lens` param and the book gate runs the diverse-lens majority review. (The article fact-check panel
-    has no book analogue — a chapter has no per-unit research source to verify against.)
-  - **`Store.open` no longer leaks the SQLite connection on a corrupt/locked db (`store.py`).** A
-    non-`OperationalError` during schema init now closes the connection before propagating, so a
-    caller's `finally: store.close()` can't be starved (Windows/synced-folder resilience).
-  - **Web dashboard: dropped raster images render (`webui/server.py`).** `images/*.png|jpg|…` were
-    404'd (only `.svg` was whitelisted) and would have crashed a `read_text`; they're now served as a
-    data-URI `<img>`. Finished/errored jobs are pruned (cap 20) so a long-lived dashboard can't grow its
-    event buffers (or the `/api/state` payload) without bound. Removed a permanently-empty `_evals` glob.
-  - **Exported `<img>` tags no longer corrupt on a recurring src (`export.py`).** The data-URI/path swap
-    now replaces only the captured `src="…"` span, not a bare `str.replace` that also rewrote a matching
-    `alt`/`title`.
-  - **Shell: `seo`/`promote`/`polish`/`evidence` no longer silently no-op with ≥2 projects
-    (`shell/dispatch.py`).** Added to `_NEEDS_PROJECT` so they trigger the project picker instead of a
-    swallowed `SystemExit`.
-  - **Emotion resolution matches whole words (`emotions.py`).** `hopeless` no longer resolves to its
-    opposite `hope` via substring; free-text roles like "a sense of dread" still resolve.
-  - **SEO keyword density uses word-boundary matching (`seo.py`).** A phrase keyword ("data model") no
-    longer over-counts inside a longer word ("data modeling") and falsely trips the stuffing warning.
-  - **Misc.** `apply_cost_mode` no longer mis-tags the telemetry thread (via a side-effect-free
-    `ModelConfig.resolved_for`); `configure_timeout`/`configure_provider` only discard the cached OpenAI
-    client when the value actually changes; `render_canon` batches its per-character reads (removed an
-    N+1); book production gained the article's assembled-manuscript resume guard; `cmd_status` reads the
-    manuscript once; stale `book review`/`book run`/`book new` hints in run messages → `review`/`run`/
-    `new`; the `/agentic` help line and the chat theme list (missing `highcontrast`) were corrected;
-    `web` is now discoverable in the shell command list.
-  - **Dead code removed.** `prompts.HUMANIZER_SYS` (unused — the live path is the surgical humanizer;
-    it also re-hardcoded the slop lexicon), `personas.Persona.exemplar` (never populated) and
-    `personas._KINDS` (unreferenced); the duplicated `_avg` closure (now `_score_avg`) and the
-    `_DELIVERABLE` filename table (now single-sourced from `brain.EXPORT_DELIVERABLE_BY_FORMAT`).
-    `CRITIC_SYS`'s example tells are now generated from `slop.BANNED_VERBS/BANNED_TRANSITIONS` so they
-    can't drift from the lexicon.
-- **Structured-output truncation on the reasoning tier (`llm.py`, `models.yaml`).** A reasoning model
-  (`deepseek-v4-pro`) spends tokens *thinking* before it emits JSON; when that filled `max_tokens` the
-  reply came back empty / cut off with `finish_reason=length`, and the old retry re-sent the same
-  too-small budget (futile repair turns) before degrading to the flash fallback — wasting a pro call each
-  time (observed live once on the first real OpenRouter run). `complete_structured` now detects a
-  length-truncation and **raises `max_tokens`** (double, capped at 16k) then retries the **same**
-  model/prompt with no repair turn, so the call stays on its stronger routed tier. Complemented by a new
-  `models.yaml` `max_tokens:` floor for the judgment nodes (`critic`/`judge`/`verifier` = 8000) so the
-  common path has reasoning headroom up front — the same guard the `diagram` node's 16k budget relies on.
-  Verified by a unit test and a real-API check (forced truncation recovers on-tier, no flash fallback).
-- **Rich-markup hotkey/hint bug class (TUI).** A literal `[x]` whose contents read as a style name
-  (letters/spaces) was parsed as a markup tag and silently dropped, eating the leading character. Fixed
-  in the review/escalation menu (`dashboard.py` — the `[f]/[i]/[a]/[g]/[r]/[s]` hotkeys) and the `/path`
-  + `/use` pickers (`commands.py` — the `[enter to cancel]` hint and the `[article]`/`[book]` type tag)
-  by escaping the opening bracket (`\[…]`). `Text(...)`-rendered output (the run event log) is not
-  markup-parsed and was unaffected.
-- **Test suite no longer reads the developer's personal config (`tests/conftest.py`).** A new autouse
-  `_isolated_settings` fixture points `config._SETTINGS` at a tmp path, so the suite always runs against
-  shipped dataclass defaults; a local `config/settings.yaml` (e.g. `agentic=true`) can no longer turn a
-  local run red while CI (which has no such file, it's gitignored) stays green.
-- **Consolidation review no longer returns silently (`dashboard.py`).** A book run in manual mode that
-  stalled on a continuity-check contradiction (`pending_review` with `review_kind="consolidation"`) fell
-  through the post-run router — which only handled `chapter`/`section` escalations — and dropped back to
-  the prompt with no card (only a `[!]` line buried in the event log). It now shows a `_consolidation_card`
-  with the resume command (`run --force`), and a catch-all final branch guarantees no not-done terminal
-  state ever returns silently. (Autonomous runs auto-repair contradictions, so they were unaffected.)
-  Also added `explain_error` coverage for **context-window overflow** and **token-budget** failures.
-
-### Added (earlier this cycle)
 - **The compositor — personas, emotions, and layer composition (plan §23, 2026-06-17).** Built the
   §22.6 deferral as **one composition model**, not three feature silos: register (rules+voice), field
   (structure), persona (manner), emotion (affect), and skills (technique) are all voice/constraint
@@ -292,29 +202,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `RUN_CONTROLLER_SYS` prompt, `RunDecision`/`RunOps` schema, `make_run_policy`. +10 tests. Both
   pipelines validated end-to-end through the macro controller (offline). Remaining toward full autonomy:
   true in-generation tool-calling and a trained policy π (seams in place for both).
-
-### Removed
-- **The checked-in `requirements.lock.txt` (C-010).** It pinned unresolvable versions and a stale
-  editable git self-reference, and nothing consumed it (CI installs via `pyproject.toml` extras, which
-  stays canonical). Replaced by `scripts/gen_lock.py` — a generator that resolves the closure of the
-  project's declared deps against a clean installed environment (so a shared venv can't pollute the
-  lock) — plus a CONTRIBUTING note on regenerating in a clean venv from public PyPI.
-
-### Changed
-- **Anti-slop lexicon fully single-sourced (A-008 follow-up).** The humanizer's tell-detector regex
-  (`_TELL_RE`) is now GENERATED from `slop.py` (`slop.tell_pattern()`) instead of being a parallel
-  hand-maintained pattern — the morphological rules (verb inflections, apostrophe tolerance, the
-  "in today's [anything]" wildcard) live in `slop.py` too. Adding a banned word there now updates both
-  the writer prompt and the stripper, so they can't drift; the cross-check test became a guarantee by
-  construction. (Also added `boast→have` to the lexicon.)
-- **`cli.py` split into a `cli/` package (C-011).** The 1003-line CLI god-module is now a facade
-  `__init__` over six seams — `_common` (console / project+path resolution / spinner / diff), `create`
-  (the `new` command + outline gate), `interview` (the autonomous `write` flow), `commands` (the core
-  project commands), `export` (export/polish/evidence), and `app` (registry + argparse + `main()`).
-  `cli.X` and `from writingagent.cli import X` resolve unchanged for the entry point, the shell, and the
-  test suite; largest seam is 301 lines. Pure code movement, suite-gated.
-
-### Added
 - **Deferred-review batch (A-021/A-022/A-024/B-005/B-012/B-013/D-008/D-013/D-014).** Closed the
   pending review findings in one pass. **A-021:** process-global LLM accounting state is now serialized
   by `llm.run_session()` (a process lock + reset/tag/clear) wrapping the whole `orchestrator.run`, so two
@@ -385,8 +272,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   command saves the active provider's key to `.env`, applies it live, and turns off fake mode — the
   "I'll add a key later" path. The welcome leads with one action (`write`), points the no-key block at
   `/setkey`, and frames manual control as "press `m` to pause & steer" rather than a separate command.
-- **Web demo is the front-door CTA.** `README.md` now opens with "Try it in your browser — no install,
-  no key," linking the web demo before the install steps.
+- **Web demo is the front-door CTA.** `README.md` now opens with "Try it in your browser," linking
+  the web demo before the install steps.
 - **Zero-install web demo (`web/app.py`, `pip install -e ".[web]"`).** A small Gradio front-end over
   the public `Agent`/`Project` facade so anyone can try the pipeline in a browser — no terminal, no
   install, no key. A **free preview** runs the whole flow offline (fake mode) to show its shape at zero
@@ -419,56 +306,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Whole-run ETA** on the live dashboard (~Nm left, from this session's average time-per-unit).
 - **First-run onboarding**: with no API key set, the welcome shows how to set the key *or* try the whole
   flow free with `WRITINGAGENT_FAKE=1`, instead of suggesting a command that would fail.
-
-### Changed
-- **Exports show their absolute path** — `✓ pdf  /abs/path/manuscript.pdf` (clickable) so "where's my
-  file?" is never a guess; the default export dir is the project's brain folder, not the writer's cwd.
-- **Internals reorganised into packages (behavior-preserving).** The two largest modules were split
-  behind stable facades so every `orchestrator.X` / `shell.X` import is unchanged: `orchestrator/`
-  (`common · book · article · export · manage · review`) and `shell/` (`branding · help · commands ·
-  dashboard · chat · dispatch · slash · session · repl`). Preceded by a book↔article de-duplication pass
-  (shared draft/critique/finalize/learner scaffolding). No file now exceeds ~1k lines.
-- **Friendlier, recoverable errors** — bad/missing API key, rate-limit, network blip, and locked export
-  files now show a clear next step (`ui.explain_error`) instead of a raw `RuntimeError: …`.
-- **`/features`** lists the new toggles (`skill_duels`, `skill_distill`, `watch_blocking`); live-run
-  controls wording clarified (all interrupts are resumable; `/delete` discards).
-- **Token / cost-efficiency pass** (telemetry-grounded; quality unchanged). Prompt tokens were ~58%
-  of spend, mostly repeated prefixes, so the work targets repetition without touching output: (1)
-  **cache-hit telemetry** - `usage.prompt_tokens_details.cached_tokens` captured per call, rolled into
-  `usage_summary` ("N cached, X% of prompt") + the JSONL, so the provider prompt-cache discount is
-  measurable; (2) **lossless schema shrink** - the JSON-Schema dumped on every structured call drops
-  pydantic's auto `"title"` keys (~20-30% smaller; types/enums/required intact); (3) **`use_headroom`
-  now defaults OFF** - it saved ~nothing on single-turn payloads and could perturb the cacheable
-  system prefix; (4) **thesis brief** - the critic + judge get claim+arguments only
-  (`nodes.thesis_brief`); the full thesis still goes to the writer (it must engage the
-  counterargument); (5) **per-node `max_tokens`** in `models.yaml` + `ModelConfig.max_tokens_for`
-  (defaults unchanged - a tuning lever); (6) chat history 10→8.
-- **Actually claim the DeepSeek prompt-cache (OpenRouter).** Telemetry showed `cached_tokens: 0` -
-  OpenRouter load-balances DeepSeek across upstreams and only some cache. New **`openrouter_providers`**
-  setting pins the upstream order (e.g. `DeepSeek`, fallbacks on) via OpenRouter's `provider` routing;
-  measured live, this cached ~80% of the prompt prefix at ~3.5x lower cost vs default routing (which
-  never cached). Cache-hit detection also now reads DeepSeek-direct's `prompt_cache_hit_tokens`, so
-  hits are visible whichever host is active. For guaranteed caching, `provider=deepseek` is best.
-- **`divergent_skeletons` setting (opt-in, default off):** draft the N divergent variants SHORT, judge,
-  then expand only the winner to full length - cuts discarded-draft completion tokens ~60%. Off by
-  default (a skeleton reveals less than a full draft); enable and A/B against telemetry.
-- **Diagrams: structured spec → deterministic renderer.** The model no longer emits SVG
-  (it can't measure text, so labels overflowed and edge pills collided). It now returns a
-  structured `DiagramSpec` (nodes/edges/labels/archetype) and a new pure-Python layout engine
-  (`diagram.py`) measures text, sizes boxes to fit, places nodes on a grid (so boxes can't
-  overlap), routes orthogonal edges, and draws explicit arrowheads (PDF-safe). Back edges are
-  detected via DFS so a feedback arrow no longer reverses a pipeline. `flow` and `layered`
-  archetypes; `cycle`/`comparison` degrade to `flow`.
-- **`diagram_engine: auto` now defaults to the built-in engine** (`auto|d2|builtin`). It measures
-  text and lays figures out compactly (~590px with title, lane headers, readable boxes), and the
-  `comparison` archetype de-duplicates repeated relationship labels (`provides`×3 → ×1) so edge pills
-  no longer stack/overlap. **D2 + ELK is now explicit opt-in** (`diagram_engine: d2`): the same
-  `DiagramSpec` is laid out by the [D2](https://d2lang.com) CLI with ELK (a colour legend is injected
-  to match the built-in engine), but it tends to render very wide and hard to read, so it is no longer
-  auto-selected just because the `d2` binary is present ($WRITINGAGENT_D2 / PATH still locates it when
-  opted in). The zero-dependency built-in engine stays the default and the fallback.
-
-### Added
 - **Evidence report (shareable proof, deterministic).** Every article now ships an
   `evidence_report.md` - the thesis it argues + every source ranked by influence (0-100), built from
   the finished manuscript with no model call. Auto-generated at assembly, refreshed by `polish`,
@@ -605,7 +442,184 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--plain` / `NO_COLOR` mode.
 - Per-request `request_timeout` setting.
 
+### Changed
+- **Cache-friendly prompt ordering (token efficiency, no quality cost).** The writer + critic prompts
+  (book & article, `nodes.py`) now lead with the stable, cross-unit blocks (plan/outline → author
+  requirements → thesis → voice exemplars) and place the per-unit blueprint + volatile revision state
+  last, so a provider's prompt-prefix cache spans the shared head across every unit. Pairs with the
+  `openrouter_providers` setting (pin a cache-capable upstream so DeepSeek's auto prefix-cache engages).
+  This changes prompt *text*, not meaning — output is no longer byte-identical to prior runs, but
+  quality/consistency are unaffected.
+- **Run-scoped research memo (`agentic/tools.py`).** The inline-tool / controller writer re-issuing the
+  same research query within a run no longer repeats the web search + LLM synthesis — the synthesized
+  brief is cached by `(unit, query)` and auto-cleared when the `run_id` changes.
+- **Natural language now runs *any* slash command, including `/set`.** The chat assistant's system
+  prompt (`_const.py`) was expanded to document the full slash surface with NL triggers (`/agentic`,
+  `/auto`, `/mode`, `/model`, `/provider`, `/path`, `/praise`, `/theme`, `/features`, `/dashboard`,
+  `/trace`, …), and `/set` was removed from the chat denylist (`dispatch.py`) so config requests
+  ("turn on researcher", "set chapters to 12", "use the poe-gothic persona", "write with a grief tone")
+  execute from plain English. Reversible config + each executed line is echoed; only `/user` (identity)
+  and `delete` (destructive) stay manual. Also fixed a latent inconsistency where the prompt told the
+  model to emit `/set` while the extractor silently dropped it (so "turn on web search and write" never
+  enabled search).
+- **Anti-slop lexicon fully single-sourced (A-008 follow-up).** The humanizer's tell-detector regex
+  (`_TELL_RE`) is now GENERATED from `slop.py` (`slop.tell_pattern()`) instead of being a parallel
+  hand-maintained pattern — the morphological rules (verb inflections, apostrophe tolerance, the
+  "in today's [anything]" wildcard) live in `slop.py` too. Adding a banned word there now updates both
+  the writer prompt and the stripper, so they can't drift; the cross-check test became a guarantee by
+  construction. (Also added `boast→have` to the lexicon.)
+- **`cli.py` split into a `cli/` package (C-011).** The 1003-line CLI god-module is now a facade
+  `__init__` over six seams — `_common` (console / project+path resolution / spinner / diff), `create`
+  (the `new` command + outline gate), `interview` (the autonomous `write` flow), `commands` (the core
+  project commands), `export` (export/polish/evidence), and `app` (registry + argparse + `main()`).
+  `cli.X` and `from writingagent.cli import X` resolve unchanged for the entry point, the shell, and the
+  test suite; largest seam is 301 lines. Pure code movement, suite-gated.
+- **Exports show their absolute path** — `✓ pdf  /abs/path/manuscript.pdf` (clickable) so "where's my
+  file?" is never a guess; the default export dir is the project's brain folder, not the writer's cwd.
+- **Internals reorganised into packages (behavior-preserving).** The two largest modules were split
+  behind stable facades so every `orchestrator.X` / `shell.X` import is unchanged: `orchestrator/`
+  (`common · book · article · export · manage · review`) and `shell/` (`branding · help · commands ·
+  dashboard · chat · dispatch · slash · session · repl`). Preceded by a book↔article de-duplication pass
+  (shared draft/critique/finalize/learner scaffolding). No file now exceeds ~1k lines.
+- **Friendlier, recoverable errors** — bad/missing API key, rate-limit, network blip, and locked export
+  files now show a clear next step (`ui.explain_error`) instead of a raw `RuntimeError: …`.
+- **`/features`** lists the new toggles (`skill_duels`, `skill_distill`, `watch_blocking`); live-run
+  controls wording clarified (all interrupts are resumable; `/delete` discards).
+- **Token / cost-efficiency pass** (telemetry-grounded; quality unchanged). Prompt tokens were ~58%
+  of spend, mostly repeated prefixes, so the work targets repetition without touching output: (1)
+  **cache-hit telemetry** - `usage.prompt_tokens_details.cached_tokens` captured per call, rolled into
+  `usage_summary` ("N cached, X% of prompt") + the JSONL, so the provider prompt-cache discount is
+  measurable; (2) **lossless schema shrink** - the JSON-Schema dumped on every structured call drops
+  pydantic's auto `"title"` keys (~20-30% smaller; types/enums/required intact); (3) **`use_headroom`
+  now defaults OFF** - it saved ~nothing on single-turn payloads and could perturb the cacheable
+  system prefix; (4) **thesis brief** - the critic + judge get claim+arguments only
+  (`nodes.thesis_brief`); the full thesis still goes to the writer (it must engage the
+  counterargument); (5) **per-node `max_tokens`** in `models.yaml` + `ModelConfig.max_tokens_for`
+  (defaults unchanged - a tuning lever); (6) chat history 10→8.
+- **Actually claim the DeepSeek prompt-cache (OpenRouter).** Telemetry showed `cached_tokens: 0` -
+  OpenRouter load-balances DeepSeek across upstreams and only some cache. New **`openrouter_providers`**
+  setting pins the upstream order (e.g. `DeepSeek`, fallbacks on) via OpenRouter's `provider` routing;
+  measured live, this cached ~80% of the prompt prefix at ~3.5x lower cost vs default routing (which
+  never cached). Cache-hit detection also now reads DeepSeek-direct's `prompt_cache_hit_tokens`, so
+  hits are visible whichever host is active. For guaranteed caching, `provider=deepseek` is best.
+- **`divergent_skeletons` setting (opt-in, default off):** draft the N divergent variants SHORT, judge,
+  then expand only the winner to full length - cuts discarded-draft completion tokens ~60%. Off by
+  default (a skeleton reveals less than a full draft); enable and A/B against telemetry.
+- **Diagrams: structured spec → deterministic renderer.** The model no longer emits SVG
+  (it can't measure text, so labels overflowed and edge pills collided). It now returns a
+  structured `DiagramSpec` (nodes/edges/labels/archetype) and a new pure-Python layout engine
+  (`diagram.py`) measures text, sizes boxes to fit, places nodes on a grid (so boxes can't
+  overlap), routes orthogonal edges, and draws explicit arrowheads (PDF-safe). Back edges are
+  detected via DFS so a feedback arrow no longer reverses a pipeline. `flow` and `layered`
+  archetypes; `cycle`/`comparison` degrade to `flow`.
+- **`diagram_engine: auto` now defaults to the built-in engine** (`auto|d2|builtin`). It measures
+  text and lays figures out compactly (~590px with title, lane headers, readable boxes), and the
+  `comparison` archetype de-duplicates repeated relationship labels (`provides`×3 → ×1) so edge pills
+  no longer stack/overlap. **D2 + ELK is now explicit opt-in** (`diagram_engine: d2`): the same
+  `DiagramSpec` is laid out by the [D2](https://d2lang.com) CLI with ELK (a colour legend is injected
+  to match the built-in engine), but it tends to render very wide and hard to read, so it is no longer
+  auto-selected just because the `d2` binary is present ($WRITINGAGENT_D2 / PATH still locates it when
+  opted in). The zero-dependency built-in engine stays the default and the fallback.
+- **`use_researcher` now defaults on** - citations are unverifiable otherwise; with it off the
+  critic flags specific stats/attributions as fabrication risks and production warns.
+- **Critic routed to `deepseek-v4-pro`** - insight scoring and thesis checks need the pro tier's
+  judgment (was flash). Writer temperature set explicit (0.9); humanizer dropped to 0.3.
+- PDF page size A5 → A4 so code fits.
+- Hardened LLM calls: classified retry with exponential backoff, fail-fast on 4xx,
+  request timeout, and a real structured-output repair retry.
+- Atomic, resumable on-disk state; durable against crashes mid-run.
+- `pyproject.toml` is now the canonical dependency source; packaging metadata
+  completed (license, authors, URLs, classifiers, `dev`/`headroom` extras).
+
 ### Fixed
+- **Review-driven fix sweep (2026-07-16).** A full-codebase review (redundancy · mismatches ·
+  optimization) across every subsystem drove one batch. All confirmed defects fixed; suite green
+  (**523 passed / 1 skipped**), ruff clean. No dead `Settings` keys were found (all 55 are read).
+  - **Escalation no longer desyncs the per-unit score arrays (`review.py`, `common.py`).** Approving an
+    escalated chapter/section (`approve_escalation`) committed the unit but never appended to
+    `state["scores"]`/`["insights"]`, so every later `scores[n-1]` lookup (the agentic `revise` target,
+    the summary card) pointed at the WRONG unit (and could `IndexError`). `_escalate` now stashes the
+    blocking critique's scores and `approve_escalation` re-appends them via `_record_escalated_score`,
+    keeping the arrays 1:1 with `committed`.
+  - **Citation-preservation guard was blind to `[N12]` markers (`humanizer.py`, `surgery.py`).** The
+    guard matched only `[\d+]`, so a humanizer/surgery rewrite could silently strip an N-style
+    synthesis citation while passing the guard. Now matches `[N?\d+]` (mirrors `polish._INLINE_CITE`).
+  - **Surgical craft passes honor the register in their anti-slop guard (`surgery.py`).** A valid
+    literary rewrite using a word the register permits (`landscape`, an em-dash) was rejected as "new
+    slop" because the guard used the register-neutral tell matcher; the register's matcher is now
+    threaded through `apply → show_dont_tell/de_passive → _guard`.
+  - **`max_context_chars: 0` ("unbounded") is honored (`book.py`).** The orchestrator collapsed an
+    explicit `0` to `None` (re-capping context at 24000), contradicting the config contract (`0` =
+    unbounded, which `_within_budget` already honors); the setting is now passed through unchanged.
+  - **Chapter-writer length-truncation recovery works (`llm.py`).** The empty-`finish_reason=length`
+    recovery only grew `max_tokens` when below 16000, but the chapter writer requests 16000 — so a
+    truncated chapter re-sent the same doomed budget until its retries were spent. A shared
+    `_LEN_RETRY_CEILING` (32000) gives real headroom in both `complete_text` and `complete_structured`.
+  - **Learned-policy corpus no longer poisoned by `revise` (`learn.py`, `book.py`, `article.py`).** A
+    `revise` re-commit re-labelled a unit `first_pass=False`, overwriting the genuine first-draft
+    outcome and skewing `train_policy`; unit-outcome trace records now carry `revised` and the collector
+    keeps the first (unrevised) outcome per unit.
+  - **Agentic critique panel now runs for books too (`book.py`, `nodes.py`).** `agentic_critique_panel`
+    was wired only in the article pipeline (silently ignored on books); `critique_chapter` gained a
+    `lens` param and the book gate runs the diverse-lens majority review. (The article fact-check panel
+    has no book analogue — a chapter has no per-unit research source to verify against.)
+  - **`Store.open` no longer leaks the SQLite connection on a corrupt/locked db (`store.py`).** A
+    non-`OperationalError` during schema init now closes the connection before propagating, so a
+    caller's `finally: store.close()` can't be starved (Windows/synced-folder resilience).
+  - **Web dashboard: dropped raster images render (`webui/server.py`).** `images/*.png|jpg|…` were
+    404'd (only `.svg` was whitelisted) and would have crashed a `read_text`; they're now served as a
+    data-URI `<img>`. Finished/errored jobs are pruned (cap 20) so a long-lived dashboard can't grow its
+    event buffers (or the `/api/state` payload) without bound. Removed a permanently-empty `_evals` glob.
+  - **Exported `<img>` tags no longer corrupt on a recurring src (`export.py`).** The data-URI/path swap
+    now replaces only the captured `src="…"` span, not a bare `str.replace` that also rewrote a matching
+    `alt`/`title`.
+  - **Shell: `seo`/`promote`/`polish`/`evidence` no longer silently no-op with ≥2 projects
+    (`shell/dispatch.py`).** Added to `_NEEDS_PROJECT` so they trigger the project picker instead of a
+    swallowed `SystemExit`.
+  - **Emotion resolution matches whole words (`emotions.py`).** `hopeless` no longer resolves to its
+    opposite `hope` via substring; free-text roles like "a sense of dread" still resolve.
+  - **SEO keyword density uses word-boundary matching (`seo.py`).** A phrase keyword ("data model") no
+    longer over-counts inside a longer word ("data modeling") and falsely trips the stuffing warning.
+  - **Misc.** `apply_cost_mode` no longer mis-tags the telemetry thread (via a side-effect-free
+    `ModelConfig.resolved_for`); `configure_timeout`/`configure_provider` only discard the cached OpenAI
+    client when the value actually changes; `render_canon` batches its per-character reads (removed an
+    N+1); book production gained the article's assembled-manuscript resume guard; `cmd_status` reads the
+    manuscript once; stale `book review`/`book run`/`book new` hints in run messages → `review`/`run`/
+    `new`; the `/agentic` help line and the chat theme list (missing `highcontrast`) were corrected;
+    `web` is now discoverable in the shell command list.
+  - **Dead code removed.** `prompts.HUMANIZER_SYS` (unused — the live path is the surgical humanizer;
+    it also re-hardcoded the slop lexicon), `personas.Persona.exemplar` (never populated) and
+    `personas._KINDS` (unreferenced); the duplicated `_avg` closure (now `_score_avg`) and the
+    `_DELIVERABLE` filename table (now single-sourced from `brain.EXPORT_DELIVERABLE_BY_FORMAT`).
+    `CRITIC_SYS`'s example tells are now generated from `slop.BANNED_VERBS/BANNED_TRANSITIONS` so they
+    can't drift from the lexicon.
+- **Structured-output truncation on the reasoning tier (`llm.py`, `models.yaml`).** A reasoning model
+  (`deepseek-v4-pro`) spends tokens *thinking* before it emits JSON; when that filled `max_tokens` the
+  reply came back empty / cut off with `finish_reason=length`, and the old retry re-sent the same
+  too-small budget (futile repair turns) before degrading to the flash fallback — wasting a pro call each
+  time (observed live once on the first real OpenRouter run). `complete_structured` now detects a
+  length-truncation and **raises `max_tokens`** (double, capped at 16k) then retries the **same**
+  model/prompt with no repair turn, so the call stays on its stronger routed tier. Complemented by a new
+  `models.yaml` `max_tokens:` floor for the judgment nodes (`critic`/`judge`/`verifier` = 8000) so the
+  common path has reasoning headroom up front — the same guard the `diagram` node's 16k budget relies on.
+  Verified by a unit test and a real-API check (forced truncation recovers on-tier, no flash fallback).
+- **Rich-markup hotkey/hint bug class (TUI).** A literal `[x]` whose contents read as a style name
+  (letters/spaces) was parsed as a markup tag and silently dropped, eating the leading character. Fixed
+  in the review/escalation menu (`dashboard.py` — the `[f]/[i]/[a]/[g]/[r]/[s]` hotkeys) and the `/path`
+  + `/use` pickers (`commands.py` — the `[enter to cancel]` hint and the `[article]`/`[book]` type tag)
+  by escaping the opening bracket (`\[…]`). `Text(...)`-rendered output (the run event log) is not
+  markup-parsed and was unaffected.
+- **Test suite no longer reads the developer's personal config (`tests/conftest.py`).** A new autouse
+  `_isolated_settings` fixture points `config._SETTINGS` at a tmp path, so the suite always runs against
+  shipped dataclass defaults; a local `config/settings.yaml` (e.g. `agentic=true`) can no longer turn a
+  local run red while CI (which has no such file, it's gitignored) stays green.
+- **Consolidation review no longer returns silently (`dashboard.py`).** A book run in manual mode that
+  stalled on a continuity-check contradiction (`pending_review` with `review_kind="consolidation"`) fell
+  through the post-run router — which only handled `chapter`/`section` escalations — and dropped back to
+  the prompt with no card (only a `[!]` line buried in the event log). It now shows a `_consolidation_card`
+  with the resume command (`run --force`), and a catch-all final branch guarantees no not-done terminal
+  state ever returns silently. (Autonomous runs auto-repair contradictions, so they were unaffected.)
+  Also added `explain_error` coverage for **context-window overflow** and **token-budget** failures.
 - **Typing a command word without its slash** (e.g. `help`, `features`) silently went to the chat
   assistant - a dead end (and a wasted LLM call in real mode). It now runs the command.
 - **The run summary card's border glued onto the last log line** (`manuscript.md┌─ ✓ complete`) - the
@@ -650,26 +664,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   developer's `.index/telemetry`, surfacing as phantom errors in `/dashboard`.
   Brain + index isolation is now autouse for every test.
 
-### Changed
-- **`use_researcher` now defaults on** - citations are unverifiable otherwise; with it off the
-  critic flags specific stats/attributions as fabrication risks and production warns.
-- **Critic routed to `deepseek-v4-pro`** - insight scoring and thesis checks need the pro tier's
-  judgment (was flash). Writer temperature set explicit (0.9); humanizer dropped to 0.3.
-- PDF page size A5 → A4 so code fits.
-- Hardened LLM calls: classified retry with exponential backoff, fail-fast on 4xx,
-  request timeout, and a real structured-output repair retry.
-- Atomic, resumable on-disk state; durable against crashes mid-run.
-- `pyproject.toml` is now the canonical dependency source; packaging metadata
-  completed (license, authors, URLs, classifiers, `dev`/`headroom` extras).
-
 ### Security
 - The conversational assistant can no longer auto-execute `delete` / `/user` /
   `/set`; project/user ids are validated and deletes are confined to the brain dir.
+  (Later relaxed - `/set` is intentionally allowed from chat so natural-language
+  config takes effect; see the "Natural language now runs *any* slash command" entry
+  under Changed. `delete` and `/user` remain fenced.)
 - Exported HTML is sanitized (script/iframe/event handlers stripped).
 - Deep-research fetches are SSRF-guarded (public-address-only hosts, redirect
   re-validation), robots.txt-respecting, and per-host rate-limited.
 
 ### Removed
+- **The checked-in `requirements.lock.txt` (C-010).** It pinned unresolvable versions and a stale
+  editable git self-reference, and nothing consumed it (CI installs via `pyproject.toml` extras, which
+  stays canonical). Replaced by `scripts/gen_lock.py` — a generator that resolves the closure of the
+  project's declared deps against a clean installed environment (so a shared venv can't pollute the
+  lock) — plus a CONTRIBUTING note on regenerating in a clean venv from public PyPI.
 - Dead vertical-slice prototype (`run.py`, `src/writingagent/slice.py`).
 
 ## [0.1.0]

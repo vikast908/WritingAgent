@@ -61,7 +61,7 @@ _STRONG_SLASH = {
 _SLASH_HELP = [
     ("session", [
         ("/use <book> · /books", "set active book · list books"),
-        ("/mode [book|article]", "show or set the project mode (default: book)"),
+        ("/mode [book|article]", "show or set the project mode (default: article)"),
         ("/path [...]", "where exports are saved - default or per-project (no args = interactive menu)"),
         ("/auto [on|off]", "autonomous (never pause) vs manual (review each unit)"),
         ("/agentic [on|off|default|llm|trace]", "agentic controller (units self-direct) vs fixed pipeline · policy"),

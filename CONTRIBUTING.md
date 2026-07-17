@@ -115,8 +115,9 @@ A 60-second map (full detail in `plan.md` and the README's Architecture section)
   self-directing controller layered over it (`plan.md` §21).
 - `nodes.py` / `prompts.py` / `schemas.py` - the LLM nodes, their prompts (incl. the
   `wrap_untrusted` injection fence), and structured outputs.
-- `llm.py` - OpenRouter wrapper (retry/backoff, timeout, repair, run token budget, usage/cost
-  tallies; `cost_mode: budget` routes the judgment nodes to the flash tier).
+- `llm.py` - model-host client (OpenAI-compatible, works with any of the 23 hosts): retry/backoff,
+  timeout, repair, run token budget, usage/cost tallies; `cost_mode: budget` routes the judgment
+  nodes to the flash tier.
 - `telemetry.py` - per-call JSONL records + the `/dashboard` aggregation (per-node / per-unit cost
   attribution behind the web Telemetry / Cost views).
 - `brain.py` / `store.py` - markdown filesystem layout + SQLite/FTS canon & graph.
