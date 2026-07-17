@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-17
+
 ### Added
 - **Shipped defaults now bundled in the wheel (`src/writingagent/resources/`).** Pip installs
   used to get no `config/models.yaml` - so no per-node routing and **no fallback model** - and
@@ -29,6 +31,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **Docs.** Corrected the `write` invocation (it takes `--abstract`, not a positional) and fixed two
   README anchor links broken by de-em-dashing the headings.
+- **Repo-wide docs consistency sweep (audited against the code).** README command snippets
+  (`writing-agent <cmd> --book-id`, fake-mode env now covers both commands), SECURITY.md's
+  `/set` and outbound-endpoint claims, the budget-mode-default and OpenRouter-only wording
+  across README/PRD/plan and the docs site, the trace-policy data floor (≥10 per arm), the
+  diagram node's spec/4k-cap description, and plan.md's superseded early sections (brain
+  layout, LangGraph framing, export status, command inventory) were all corrected to match
+  the implementation. Stale in-app strings fixed (`/mode` default is `article`).
 
 ### Removed
 - **The npm launcher.** The `writingagent` npm launcher was removed entirely - it was never actually
