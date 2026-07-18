@@ -67,8 +67,8 @@ The suite runs fully offline. Tests that exercise the pipeline use **fake mode**
 output - no network, no key. You can drive the whole app this way too:
 
 ```bash
-WRITINGAGENT_FAKE=1 python writingagent.py new --abstract "test" --pick 1
-WRITINGAGENT_FAKE=1 python writingagent.py run
+WRITINGAGENT_FAKE=1 python -m writingagent new --abstract "test" --pick 1
+WRITINGAGENT_FAKE=1 python -m writingagent run
 ```
 
 ## Linting & formatting

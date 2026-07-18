@@ -9,7 +9,7 @@ human when it's unsure, and **learns reusable craft skills per user across many 
 
 > **Implementation status (v1, updated 2026-07-15).** Built in `src/writingagent/` and shipped as an
 > interactive **WRITING AGENT** shell (a themed TUI with slash commands + per-agent model switching)
-> plus a one-shot CLI (`writing-agent` / `python writingagent.py`; see README).
+> plus a one-shot CLI (`writing-agent` / `python -m writingagent`; see README).
 > **Live-validated** on OpenRouter + DeepSeek V4 Pro/Flash: fully autonomous runs completed a book
 > (9-page PDF, captured in `examples/sample-run/`) and long-form articles (incl. an agentic 6-section run,
 > ~$0.52 / 606k tokens, before the budget cost mode existed).
@@ -570,7 +570,7 @@ normalize). Model **slugs are not auto-translated** across hosts - set them per 
 Two surfaces over one engine (plus the markdown brain repo, which is half the UI - read chapters
 and canon in any editor):
 
-- **Interactive shell - the WRITING AGENT TUI.** Run `writing-agent` / `python writingagent.py`
+- **Interactive shell - the WRITING AGENT TUI.** Run `writing-agent` / `python -m writingagent`
   with no command (see the `shell/` package). Themed masthead (gradient-filled ANSI Shadow wordmark; theme
   also sets palette/figlet/glyphs - `ui.THEMES`), a **compact welcome** (START + your projects +
   a status footer - sized so the wordmark is still on screen at the first prompt on a 30-row
@@ -589,7 +589,7 @@ and canon in any editor):
   live, clears fake mode). The welcome leads with one action (`write`) and points the no-key block at
   `/setkey`. **Front door:** the README opens with the zero-install web demo (§18.1) so a writer can
   try the whole flow before any install or key.
-- **One-shot CLI** - `python writingagent.py <command> ...` (same commands), for scripting.
+- **One-shot CLI** - `python -m writingagent <command> ...` (same commands), for scripting.
   Exports print the **absolute** path (the default export dir is the project's brain folder, not the
   cwd) so "where's my file?" is never a guess.
 

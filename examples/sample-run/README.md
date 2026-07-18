@@ -79,8 +79,8 @@ sample-run/
 
 ```bash
 pip install -e .                          # or: pip install writing-agent  (set a host key in .env)
-python writingagent.py new --autonomous --pick 1 --chapters 3 --max-revisions 1 \
+python -m writingagent new --autonomous --pick 1 --chapters 3 --max-revisions 1 \
   --abstract "<your idea>"
-python writingagent.py run
-python writingagent.py export
+python -m writingagent run
+python -m writingagent export
 ```

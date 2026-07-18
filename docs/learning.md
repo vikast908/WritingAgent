@@ -124,7 +124,7 @@ Here is the whole project laid out. Top level first, then we go into the importa
 
 ```
 WritingAgent/
-├── writingagent.py                ← the "start button" for the command-line version
+├── src/writingagent/              ← the program itself (run it: writing-agent, or python -m writingagent)
 ├── src/writingagent/        ← ALL the actual program lives here (see §4.2)
 ├── config/                ← settings you can tweak (which AI model, defaults)
 ├── brain/                 ← the program's MEMORY — everything it produces (see §5)
@@ -736,7 +736,7 @@ backed by the same engine:
 
 1. **Interactive console (most fun):**
    ```
-   writing-agent           # or: python writingagent.py
+   writing-agent           # or: python -m writingagent
    ```
    You get a themed prompt; type a topic or chat with it; watch the live dashboard as it writes.
 

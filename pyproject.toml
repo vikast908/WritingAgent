@@ -118,8 +118,7 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.coverage.run]
-# source_pkgs (not source): the repo-root launcher `writingagent.py` shadows the package
-# name for a plain `source`, so coverage collects nothing. This forces package resolution.
+# Resolve coverage by package name (src layout).
 source_pkgs = ["writingagent"]
 branch = true
 
