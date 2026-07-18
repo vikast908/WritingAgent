@@ -136,15 +136,16 @@ h1,h2,h3{font-family:var(--serif);font-weight:540;letter-spacing:-.01em}
 /* collapse control lives on the sidebar; the logo re-opens a closed sidebar */
 .sidecollapse{margin-left:auto;flex:none;padding:2px 5px;border-radius:var(--r-sm);color:var(--fg-4);font-size:15px;line-height:1}
 .sidecollapse:hover{background:var(--fill-2);color:var(--fg-2)}
-/* collapsed sidebar (manual toggle) → icon rail; same visual as the narrow-screen rail */
-body.side-collapsed #side{width:56px;min-width:56px}
-body.side-collapsed .brand{padding:16px 0 12px;text-align:center}
+/* collapsed sidebar (manual toggle) → icon rail: proper 40px rounded icon buttons */
+body.side-collapsed #side{width:64px;min-width:64px}
+body.side-collapsed .brand{padding:16px 0 14px;text-align:center}
 body.side-collapsed .brand .mark{justify-content:center;gap:0}
 body.side-collapsed .brand .wm,body.side-collapsed .brand .sub,body.side-collapsed .sidecollapse{display:none}
-body.side-collapsed .brand .sq{cursor:pointer}
+body.side-collapsed .brand .sq{width:30px;height:30px;font-size:19px;cursor:pointer}
 body:not(.side-collapsed) .brand .sq::after{content:none}   /* logo tooltip only helps when closed */
-body.side-collapsed #nav{padding:6px 8px}
-body.side-collapsed #nav .item{justify-content:center;padding:9px 0;gap:0}
+body.side-collapsed #nav{padding:6px 0}
+body.side-collapsed #nav .item{width:40px;height:40px;justify-content:center;padding:0;gap:0;margin:3px auto;border-radius:8px}
+body.side-collapsed #nav .item .ic{width:auto;font-size:18px;opacity:1}
 body.side-collapsed #nav .nlbl{display:none}
 body.side-collapsed .foot{display:none}
 .brand{padding:20px 16px 16px}
@@ -158,7 +159,7 @@ body.side-collapsed .foot{display:none}
   cursor:pointer;color:var(--fg-2);font-size:13px;margin-bottom:1px}
 #nav .item:hover{background:var(--fill-2)}
 #nav .item.on{background:var(--fill);color:var(--accent);font-weight:500}
-#nav .item .ic{width:15px;text-align:center;opacity:.8;font-family:var(--mono);font-size:12px}
+#nav .item .ic{width:17px;text-align:center;opacity:.9;font-family:var(--mono);font-size:14px}
 .foot{padding:12px 20px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:11px;color:var(--fg-3);line-height:1.7}
 
 #main{flex:1;display:flex;flex-direction:column;min-width:0}
