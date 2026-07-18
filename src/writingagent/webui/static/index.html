@@ -208,6 +208,24 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .bar{height:5px;background:var(--fill-2);border-radius:9999px;overflow:hidden;margin:12px 0 6px}
 .bar i{display:block;height:100%;width:100%;background:var(--blue-2);transform-origin:left;transition:transform var(--dur-slow) var(--ease-out)}
 
+/* live-run: pipeline stepper + the "now" activity line (design.md: show the agent thinking) */
+.pipe{display:flex;align-items:center;margin:2px 0 16px;flex-wrap:wrap;row-gap:8px}
+.pipe .step{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--fg-3);white-space:nowrap}
+.pipe .step .dot{width:9px;height:9px;border-radius:50%;background:var(--fill);box-shadow:inset 0 0 0 1.5px var(--fg-4);flex:none;transition:background .2s var(--ease-out)}
+.pipe .step.done{color:var(--fg-2)}
+.pipe .step.done .dot{background:var(--green);box-shadow:none}
+.pipe .step.on{color:var(--accent);font-weight:600}
+.pipe .step.on .dot{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent);animation:pulse 1.3s infinite}
+.pipe .link{flex:1;min-width:14px;height:1.5px;background:var(--hair);margin:0 9px}
+.pipe .link.done{background:var(--green)}
+.nowline{display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:var(--r-md);background:var(--fill-2);margin-bottom:12px}
+.nowline .spin{width:14px;height:14px;border-radius:50%;border:2px solid color-mix(in srgb,var(--accent) 24%,transparent);border-top-color:var(--accent);animation:spin .7s linear infinite;flex:none}
+.nowline.idle .spin{animation:none;border-top-color:color-mix(in srgb,var(--accent) 24%,transparent)}
+.nowline.ok .spin{border:2px solid var(--green);animation:none}
+.nowline .lbl2{font-size:13.5px;color:var(--fg);font-weight:500}
+.nowline .sub2{font-size:11.5px;color:var(--fg-3)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
 /* activity timeline */
 .tl{border-left:1.5px solid var(--stroke);margin-left:5px;padding-left:20px}
 .tl .ev{position:relative;margin-bottom:15px}
@@ -640,22 +658,74 @@ async function doStart(){
     attachJob(d.job,null);go('run');}catch(e){toast(e.message,1)}
 }
 /* live run */
-function renderRun(){$('#view').innerHTML=head('Live','Run')+'<div id="runWrap"></div>';renderRunInner();}
+const PIPE={article:['sections','produce','learn','done'],book:['chapters','consolidate','production','learn','done']};
+const PIPE_LABEL={sections:'Write',chapters:'Write',consolidate:'Consolidate',produce:'Assemble',production:'Assemble',learn:'Learn',done:'Done'};
+function pipeHTML(phase,mode){
+  const steps=PIPE[mode==='book'?'book':'article'];let cur=steps.indexOf(phase);if(cur<0)cur=(phase==='done'?steps.length-1:0);
+  return steps.map((s,i)=>{const cls=i<cur?'done':i===cur?'on':'';
+    const link=i<steps.length-1?`<span class="link ${i<cur?'done':''}"></span>`:'';
+    return `<span class="step ${cls}"><span class="dot"></span>${PIPE_LABEL[s]||s}</span>${link}`;}).join('');
+}
+/* the newest recognizable log line -> a human "now doing X" activity (the run's heartbeat) */
+function runActivity(log){
+  for(let i=log.length-1;i>=0;i--){const l=log[i].trim();let m;
+    if(/^== (Chapter|Section)/.test(l))return{lbl:l.replace(/^==\s*|\s*==$/g,''),sub:'starting this unit',work:1};
+    if(/^writing \(draft\)/.test(l))return{lbl:'Drafting',sub:'the writer is composing',work:1};
+    if((m=l.match(/^writing \(revision (\d+)\)/)))return{lbl:'Revising · pass '+m[1],sub:'applying the critic’s notes',work:1};
+    if(/^critiqu/.test(l))return{lbl:'Critiquing',sub:'the critic is grading this draft',work:1};
+    if(/research/i.test(l))return{lbl:'Researching',sub:'gathering and reading sources',work:1};
+    if(/verif/i.test(l))return{lbl:'Verifying claims',sub:'checking each citation against its source',work:1};
+    if(/humaniz/i.test(l))return{lbl:'Humanizing',sub:'stripping AI tells',work:1};
+    if(/^\[OK\] committed/.test(l))return{lbl:l.replace('[OK] ','').replace(/^./,c=>c.toUpperCase()),sub:'committed to disk',work:0,ok:1};
+    if(/^\[consolidat/.test(l))return{lbl:'Consolidating',sub:'cross-checking the whole piece',work:1};
+    if(/^\[production\]/.test(l))return{lbl:'Assembling the manuscript',sub:'front/back matter and exports',work:1};
+    if(/^\[learn\]/.test(l))return{lbl:'Learning',sub:'distilling reusable craft skills',work:1};
+    if(/^[—-].*[—-]$/.test(l))return{lbl:'Finished',sub:'',work:0,ok:1};
+  }
+  return{lbl:'Starting the run',sub:'warming up',work:1};
+}
+function runVerdict(log){
+  for(let i=log.length-1;i>=0;i--){const m=log[i].match(/verdict=(\w+)\s+confidence=([\d.]+)\s+blocking=(\d+)\s+nits=(\d+)/);
+    if(m)return{v:m[1],conf:m[2],blk:m[3],nits:m[4]};}
+  return null;
+}
+function renderRun(){$('#view').innerHTML=head('Live','Run')+'<div id="runWrap"></div>';RUN._shell='';renderRunInner();}
 function renderRunInner(){
   const w=$('#runWrap');if(!w)return;const st=RUN.state||{};
-  const total=st.num_sections||st.num_chapters||0,done=st.committed||0,pct=total?Math.round(100*done/total):(RUN.status==='done'?100:0);
-  const doneBanner=(RUN.status==='done'&&RUN.project)?`<div class="banner success"><span class="bi">✓</span>
-    <div style="flex:1">Finished — <b>${esc(RUN.project)}</b> is ready to read.</div>
-    <button class="primary" onclick="go('project','${RUN.project}')">Open the piece →</button></div>`:'';
-  w.innerHTML=doneBanner+`<div class="card">${RUN.job?`<div class="row">
-    <span class="chip ${RUN.status==='running'?'blue':RUN.status==='done'?'ok':RUN.status==='error'?'err':''}">${RUN.status}</span>
-    <span class="chip">${esc(RUN.project||'starting…')}</span><span class="chip">phase · ${esc(st.phase||'…')}</span>
-    <span class="chip">${done}/${total||'?'} committed</span>${st.pending_review?'<span class="chip err">review pending</span>':''}
-    <span class="spacer"></span>${RUN.status==='running'?'<button onclick="pauseRun()">Pause</button>':''}
-    ${RUN.project?`<button class="secondary" onclick="go('project','${RUN.project}')">Open project</button>`:''}</div>
-    <div class="bar"><i style="transform:scaleX(${(pct/100).toFixed(3)})"></i></div><div id="log" role="log">${esc(RUN.log.join('\n'))||'· awaiting first line…'}</div>`
-    :'<div class="muted">No live run. Start one in the Studio, or resume from Projects.</div>'}</div>`;
-  const lg=$('#log');if(lg)lg.scrollTop=lg.scrollHeight;
+  if(!RUN.job){if(RUN._shell!=='empty'){w.innerHTML='<div class="card"><div class="muted">No live run. Start one in the Studio, or resume from Projects.</div></div>';RUN._shell='empty';}return;}
+  // Rebuild the shell ONLY when the job or status changes - so the spinner and phase pulse
+  // animate continuously through the stream instead of restarting on every log event.
+  const key=RUN.job+'|'+RUN.status;
+  if(RUN._shell!==key){
+    RUN._shell=key;RUN._pipe='';
+    const done=RUN.status==='done',err=RUN.status==='error';
+    const db=(done&&RUN.project)?`<div class="banner success"><span class="bi">✓</span>
+      <div style="flex:1">Finished — <b>${esc(RUN.project)}</b> is ready to read.</div>
+      <button class="primary" onclick="go('project','${RUN.project}')">Open the piece →</button></div>`:'';
+    w.innerHTML=db+`<div class="card">
+      <div class="row" style="margin-bottom:14px">
+        <span class="chip ${RUN.status==='running'?'blue':done?'ok':err?'err':''}">${RUN.status}</span>
+        <span class="chip">${esc(RUN.project||'starting…')}</span>
+        <span class="chip" id="rnUnit"></span><span id="rnVerdict"></span>
+        <span class="spacer"></span>
+        ${RUN.status==='running'?'<button onclick="pauseRun()">Pause</button>':''}
+        ${RUN.project?`<button class="secondary" onclick="go('project','${RUN.project}')">Open project</button>`:''}</div>
+      <div class="pipe" id="rnPipe"></div>
+      <div class="nowline" id="rnNow"><span class="spin"></span><div><div class="lbl2" id="rnNowLbl"></div><div class="sub2" id="rnNowSub"></div></div></div>
+      <div class="bar"><i id="rnBar"></i></div>
+      <div id="log" role="log"></div></div>`;
+  }
+  const total=st.num_sections||st.num_chapters||0,done=st.committed||0,pct=total?done/total:(RUN.status==='done'?1:0);
+  const unit=$('#rnUnit');if(unit)unit.textContent=`${done}/${total||'?'} committed`;
+  const phase=st.phase||(RUN.status==='done'?'done':'sections');
+  if(RUN._pipe!==phase){RUN._pipe=phase;const pe=$('#rnPipe');if(pe)pe.innerHTML=pipeHTML(phase,st.num_chapters?'book':'article');}
+  const bar=$('#rnBar');if(bar)bar.style.transform=`scaleX(${pct.toFixed(3)})`;
+  const vd=runVerdict(RUN.log),ve=$('#rnVerdict');
+  if(ve)ve.innerHTML=vd?`<span class="chip ${vd.v==='approve'?'ok':'warn'}" data-tip="critic confidence ${vd.conf} · ${vd.blk} blocking, ${vd.nits} nits">critic: ${esc(vd.v)}</span>`:'';
+  const act=RUN.status==='running'?runActivity(RUN.log):(RUN.status==='done'?{lbl:'Finished',sub:'',ok:1}:{lbl:RUN.status,sub:''});
+  const now=$('#rnNow');if(now){now.className='nowline'+(act.work?'':(act.ok?' ok':' idle'));
+    $('#rnNowLbl').textContent=act.lbl;$('#rnNowSub').textContent=act.sub||'';}
+  const lg=$('#log');if(lg){const txt=esc(RUN.log.join('\n'))||'· awaiting first line…';if(lg.innerHTML!==txt){lg.innerHTML=txt;lg.scrollTop=lg.scrollHeight;}}
 }
 /* projects */
 function renderProjects(){
