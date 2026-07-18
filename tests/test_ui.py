@@ -374,7 +374,7 @@ def test_write_env_key_creates_then_updates_in_place(tmp_path, monkeypatch):
     import os
 
     from writingagent import brain, shell
-    monkeypatch.setattr(brain, "_ROOT", tmp_path)
+    monkeypatch.setattr(brain, "HOME", tmp_path)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     shell._write_env_key("OPENROUTER_API_KEY", "sk-aaa")
     assert os.environ["OPENROUTER_API_KEY"] == "sk-aaa"          # applied live, no restart
@@ -386,13 +386,13 @@ def test_write_env_key_creates_then_updates_in_place(tmp_path, monkeypatch):
 
 
 def test_write_env_key_readonly_location_sets_live_without_crashing(tmp_path, monkeypatch):
-    """On a pip-installed copy brain._ROOT is read-only. The key must still apply to
+    """A locked-down agent home may be read-only. The key must still apply to
     THIS session (the live os.environ set comes first) and the write must degrade to None,
     never raise - a crash here would hit the first-run wizard at startup."""
     import os
 
     from writingagent import brain, shell
-    monkeypatch.setattr(brain, "_ROOT", tmp_path)
+    monkeypatch.setattr(brain, "HOME", tmp_path)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     def _boom(*_a, **_k):
@@ -427,7 +427,7 @@ def test_first_run_setup_pick_host_and_paste_key(tmp_path, monkeypatch):
 
     from writingagent import brain, providers, shell
     from writingagent.config import Settings
-    monkeypatch.setattr(brain, "_ROOT", tmp_path)
+    monkeypatch.setattr(brain, "HOME", tmp_path)
     monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setattr(providers, "configured", lambda: [])
@@ -479,7 +479,7 @@ def test_cmd_setkey_saves_key_and_clears_fake(tmp_path, monkeypatch):
     from writingagent import brain
     from writingagent.config import Settings
     from writingagent.shell.commands import _cmd_setkey
-    monkeypatch.setattr(brain, "_ROOT", tmp_path)
+    monkeypatch.setattr(brain, "HOME", tmp_path)
     monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     _cmd_setkey(_FakeConsole([]), Settings(provider="deepseek"), ["sk-direct"])

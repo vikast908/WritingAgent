@@ -23,7 +23,7 @@ teams. The scoring + honest caveats are in [`../benchmarks/blind_ab/RESULTS.md`]
 ## 📚 Book - *The Misprint File*
 
 A full short novel (3 chapters) with canon/continuity tracking and front/back matter, in
-[**`../SampleRun/`**](../SampleRun/) - manuscript, per-chapter files, the canon (characters,
+[**`sample-run/`**](sample-run/) - manuscript, per-chapter files, the canon (characters,
 timeline, world rules), and the learned craft skills the run produced.
 
 ## Generate your own (≈$0.25, a couple of minutes)

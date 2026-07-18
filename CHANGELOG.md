@@ -6,6 +6,47 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Repository restructure: clean root, one home per thing.** Spec docs moved under `docs/`
+  (`plan.md`, `design.md`, `prd.md`, `learning.md`, `roadmap.md`, `proposals/`); the Gradio
+  Hugging Face Space demo renamed `web/` → `demo/` (no longer confusable with the package's
+  `webui/`); `SampleRun/` moved to `examples/sample-run/` (the bulky `manuscript.pdf` dropped -
+  the markdown output shows the same run); the docs-site working copy renamed to `website/`
+  (still its own nested repo). The repo root now holds only standard community files +
+  `pyproject.toml`.
+- **BREAKING - runtime state moved out of the repo to the agent home.** `brain/`, `.index/`,
+  `config/models.yaml` + `config/settings.yaml`, and the `/setkey` `.env` now live under
+  `$WRITINGAGENT_HOME`, else the OS user-data dir (`%LOCALAPPDATA%\writingagent` on Windows,
+  `~/Library/Application Support/writingagent` on macOS, `$XDG_DATA_HOME/writingagent` on
+  Linux) - see `src/writingagent/paths.py`. Running the tool from any directory no longer
+  scatters state there, and pip installs stop writing into site-packages. To migrate an old
+  checkout, move those files/folders from the repo root into the agent home.
+- **BREAKING - the repo-root launcher `writingagent.py` was removed.** Use the installed
+  `writing-agent` command or `python -m writingagent` (new `__main__.py`).
+- **Shipped data single-sourced under `src/writingagent/resources/`.** `personas/` and `gold/`
+  moved inside `resources/` (so `personas/` no longer shadows `personas.py`), and the duplicated
+  repo-root `seeds/` was deleted - the bundled copy is the only copy, so the byte-sync tests
+  are retired.
+
+### Fixed
+- **Web dashboard: project header rows now align to the centered content column.** The chip
+  row's inline margin shorthand zeroed the `#view>*` auto-centering margins, and the tab bar's
+  `inline-flex` display escaped them entirely - both rows hugged the viewport edge while the
+  title and body sat in the column.
+- **Web dashboard accessibility + polish pass (impeccable review).** Keyboard access for the
+  primary surfaces (sidebar nav is real buttons; project rows and approach cards are focusable
+  and Enter/Space-activatable; settings inputs gained programmatic labels; toasts announce via
+  live regions; the run log is a `role="log"`). Hash routing (`#projects`, `#project/<id>`):
+  refresh and back/forward now keep your place, and the tab title follows the view. The
+  primary button's label color is a themed token with a contrast guard in `applyWebTheme()` -
+  a named palette can no longer produce an unreadable button (starry-night went from ~1.3:1
+  to 15.9:1). A finished run now shows a "Open the piece" completion banner instead of only a
+  log line. Also: the Projects poll repaints only when data changes (no more 6s flicker),
+  timeline timestamps lifted to AA contrast, trend-chart clarity line recolored away from
+  evidence, banner side-stripe dropped (tint + icon carry the state; design.md updated),
+  progress bar animates transform instead of width, motion/z-index tokens applied, chart axis
+  text raised from 8px, reading measure centered, truncated activity reasons get an ellipsis.
+
 ## [0.2.1] - 2026-07-17
 
 ### Added

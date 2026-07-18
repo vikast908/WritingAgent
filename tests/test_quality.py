@@ -498,14 +498,16 @@ def test_preferences_recorded_and_fed_to_learner(tmp_brain, fake_llm, monkeypatc
 
 
 def test_models_yaml_nodes_are_selectable_in_shell():
-    """Every node routed in models.yaml must be selectable via the shell `/model` command
-    (`shell._NODES`), or the documented per-agent override - e.g. routing the `judge`/
-    `verifier` cross-family - is silently rejected as an 'unknown agent'."""
+    """Every node routed in the SHIPPED models.yaml (the bundled default every user
+    starts from) must be selectable via the shell `/model` command (`shell._NODES`),
+    or the documented per-agent override - e.g. routing the `judge`/`verifier`
+    cross-family - is silently rejected as an 'unknown agent'."""
     import yaml
 
     from writingagent import shell
-    from writingagent.config import _MODELS
-    routed = set((yaml.safe_load(_MODELS.read_text(encoding="utf-8")) or {}).get("nodes", {}))
+    from writingagent.config import _BUNDLED
+    routed = set((yaml.safe_load((_BUNDLED / "models.yaml").read_text(encoding="utf-8"))
+                  or {}).get("nodes", {}))
     assert {"judge", "verifier"} <= set(shell._NODES)        # the new quality nodes
     missing = routed - set(shell._NODES)
     assert not missing, f"models.yaml nodes not selectable via /model: {sorted(missing)}"

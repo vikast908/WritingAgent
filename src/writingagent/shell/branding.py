@@ -241,15 +241,14 @@ def _key_warning(settings: Settings | None) -> str:
 
 
 def _write_env_key(env_name: str, value: str) -> Path | None:
-    """Apply ``ENV_NAME=value`` live in this process (always) and persist it to the project
-    ``.env`` (the same file the CLI auto-loads on startup) when that file is writable.
+    """Apply ``ENV_NAME=value`` live in this process (always) and persist it to the agent
+    home's ``.env`` (the same file the CLI auto-loads on startup) when it is writable.
 
-    The live set comes FIRST so the key works this session even if persistence fails - for a
-    pip-installed copy ``brain._ROOT`` lives under a read-only site-packages tree, where
-    the write would raise. Returns the .env path on success, or ``None`` when it couldn't be
-    written (the caller tells the user it's session-only)."""
+    The live set comes FIRST so the key works this session even if persistence fails
+    (locked-down home dir, etc.). Returns the .env path on success, or ``None`` when it
+    couldn't be written (the caller tells the user it's session-only)."""
     os.environ[env_name] = value                       # session-live first - never lost
-    env_path = brain._ROOT / ".env"
+    env_path = brain.HOME / ".env"
     line = f"{env_name}={value}"
     try:
         try:

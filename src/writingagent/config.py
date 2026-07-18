@@ -1,4 +1,4 @@
-"""Model routing (config/models.yaml) and engine settings (config/settings.yaml)."""
+"""Model routing (models.yaml) and engine settings (settings.yaml), from <home>/config/."""
 from __future__ import annotations
 
 import dataclasses
@@ -8,12 +8,13 @@ from pathlib import Path
 
 import yaml
 
-_ROOT = Path(__file__).resolve().parents[2]
-_MODELS = _ROOT / "config" / "models.yaml"
-_SETTINGS = _ROOT / "config" / "settings.yaml"
-# Defaults bundled inside the wheel (pip installs have no repo-root config/). models.yaml
-# is copied out to _MODELS on first load so /model edits land in a real, user-editable
-# file. Kept byte-identical to the repo's config/models.yaml by a sync test.
+from . import paths
+
+# User-editable config lives in the agent home (see paths.py), never the install tree.
+_MODELS = paths.HOME / "config" / "models.yaml"
+_SETTINGS = paths.HOME / "config" / "settings.yaml"
+# Defaults bundled inside the wheel. models.yaml is copied out to _MODELS on first
+# load so /model edits land in a real, user-editable file.
 _BUNDLED = Path(__file__).resolve().parent / "resources"
 
 

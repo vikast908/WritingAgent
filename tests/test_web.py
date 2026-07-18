@@ -1,4 +1,4 @@
-"""Smoke tests for the zero-install web demo (web/app.py).
+"""Smoke tests for the zero-install web demo (demo/app.py).
 
 The demo imports gradio lazily (only inside build_ui), so its runtime helpers and the
 streaming generate() run here without gradio installed - exactly how the package treats
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-_APP = Path(__file__).resolve().parent.parent / "web" / "app.py"
+_APP = Path(__file__).resolve().parent.parent / "demo" / "app.py"
 
 
 def _load_app():

@@ -120,6 +120,6 @@ never breaks the genre's rules, invents archaic vocabulary, or leaves the presen
 ## Keeping the skill in sync
 
 The `voices/*.md` files are **generated** from the project's source of truth
-(`src/writingagent/personas.py` + `src/writingagent/personas/*.md`). After adding or editing a
+(`src/writingagent/personas.py` + `src/writingagent/resources/personas/*.md`). After adding or editing a
 persona there, regenerate with `python scripts/build_personas_skill.py` (it rewrites every voice file
 and prints the catalog + register index for this SKILL.md).

@@ -14,13 +14,13 @@ Two ways to run:
   demo routes the run through that provider and produces a genuine article/book.
 
 Deploy as a Hugging Face Space (``sdk: gradio``, ``app_file: app.py``) - see
-``web/README.md``. The package itself never imports gradio; only this file does, and it
+``demo/README.md``. The package itself never imports gradio; only this file does, and it
 imports it lazily so the helpers below stay unit-testable without the dependency.
 
 Run locally::
 
     pip install -e ".[web]"
-    python web/app.py            # then open the printed http://127.0.0.1:7860
+    python demo/app.py            # then open the printed http://127.0.0.1:7860
 """
 from __future__ import annotations
 

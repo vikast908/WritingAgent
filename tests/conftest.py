@@ -9,8 +9,11 @@ def _isolated_settings(tmp_path, monkeypatch):
     personal config/settings.yaml (which is gitignored, so CI already runs on defaults -
     this makes a local run match CI). Pointing _SETTINGS at a non-existent tmp file makes
     load_settings() fall back to Settings(), so a local file with e.g. agentic=true can't
-    change what the suite exercises; save_settings() in a test writes to the tmp file too."""
+    change what the suite exercises; save_settings() in a test writes to the tmp file too.
+    _MODELS is isolated for the same reason (and so the suite never writes the real agent
+    home): load_config() copies the bundled defaults into the tmp file instead."""
     monkeypatch.setattr(config, "_SETTINGS", tmp_path / "settings.yaml")
+    monkeypatch.setattr(config, "_MODELS", tmp_path / "models.yaml")
 
 
 @pytest.fixture(autouse=True)

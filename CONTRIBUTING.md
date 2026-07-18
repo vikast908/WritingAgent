@@ -67,8 +67,8 @@ The suite runs fully offline. Tests that exercise the pipeline use **fake mode**
 output - no network, no key. You can drive the whole app this way too:
 
 ```bash
-WRITINGAGENT_FAKE=1 python writingagent.py new --abstract "test" --pick 1
-WRITINGAGENT_FAKE=1 python writingagent.py run
+WRITINGAGENT_FAKE=1 python -m writingagent new --abstract "test" --pick 1
+WRITINGAGENT_FAKE=1 python -m writingagent run
 ```
 
 ## Linting & formatting
@@ -84,14 +84,14 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
 
 ## Conventions
 
-- **`plan.md`** is the architecture/spec source of truth; **`docs/dev/resume.md`** is the running
-  dev journal (newest entry on top). Durable decisions go in `plan.md`, not `docs/dev/resume.md`.
-- Keep nodes as deterministic, single-purpose LLM calls - see `plan.md` §4. (Self-directing
+- **`docs/plan.md`** is the architecture/spec source of truth; **`docs/dev/resume.md`** is the running
+  dev journal (newest entry on top). Durable decisions go in `docs/plan.md`, not `docs/dev/resume.md`.
+- Keep nodes as deterministic, single-purpose LLM calls - see `docs/plan.md` §4. (Self-directing
   behavior is the **opt-in** agentic controller in `agentic/` (`plan.md` §21), a separate layer -
   don't bake it into a node.)
 - Network/IO is best-effort: degrade gracefully, never crash the pipeline on a fetch error.
-- All numeric thresholds are tunable config (`config/settings.yaml`), not hard-coded.
-- **Editorial design system:** the web dashboard and the TUI both follow `design.md` (repo root) -
+- All numeric thresholds are tunable config (`config/settings.yaml` in the agent home - `$WRITINGAGENT_HOME`, default: the OS user-data dir; see `src/writingagent/paths.py`), not hard-coded.
+- **Editorial design system:** the web dashboard and the TUI both follow `docs/design.md` -
   ink on warm paper, one accent (manuscript red `#a3341f`), the Fraunces display serif, WCAG-AA
   verified. Every value is a token: port to CSS vars for the web app or to a `ui.THEMES` palette for
   the TUI (default `editorial`, "ink & brass"). Named themes recolor, never restructure - match
@@ -108,7 +108,7 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
 
 ## Architecture tour
 
-A 60-second map (full detail in `plan.md` and the README's Architecture section):
+A 60-second map (full detail in `docs/plan.md` and the README's Architecture section):
 
 - `src/writingagent/orchestrator/` - durable on-disk state machine (the brain *is* the checkpoint);
   a package (`common`/`book`/`article`/`review`/`export`/`manage`). `agentic/` is the opt-in
@@ -132,10 +132,10 @@ A 60-second map (full detail in `plan.md` and the README's Architecture section)
 - `registers.py` / `craft.py` / `exemplars.py` / `surgery.py` / `fields.py` - the craft engine:
   genre/register profiles, deterministic craft metrics, few-shot exemplars, surgical
   show-don't-tell / passive passes, and structural templates (`plan.md` §22).
-- `compositor.py` / `personas.py` (+ `personas/*.md`) / `emotions.py` - the layer cascade that
+- `compositor.py` / `personas.py` (+ `resources/personas/*.md`) / `emotions.py` - the layer cascade that
   selects one voice from register ⊃ field ⊃ persona ⊃ emotion ⊃ skills: selectable personas
   (manner) and anti-cliché emotion deny-lists (`plan.md` §23).
-- `gold/*.md` - the per-register genre style corpus (the default "match this" voice exemplar).
+- `resources/gold/*.md` - the per-register genre style corpus (the default "match this" voice exemplar).
   The gold/persona corpora and the register profiles are **tunable data**, not hard-code.
 - `shell/` / `cli/` / `ui.py` - Rich TUI, one-shot CLI (both packages), and the theme registry
   (11 themes: palette + wordmark figlet per theme).

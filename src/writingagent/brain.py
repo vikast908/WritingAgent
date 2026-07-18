@@ -9,14 +9,14 @@ import shutil
 import tempfile
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parents[2]
-# WRITINGAGENT_HOME relocates the writable state (brain + derived index) away from the
-# repo - important when the repo lives in a synced folder (OneDrive/Dropbox): sync
-# adds latency to every atomic write and its file locks can make os.replace fail.
-_HOME = (Path(os.environ["WRITINGAGENT_HOME"]).expanduser()
-         if os.environ.get("WRITINGAGENT_HOME") else _ROOT)
-BRAIN = _HOME / "brain"
-INDEX_DIR = _HOME / ".index"   # derived, gitignored
+from . import paths
+
+# The agent home (see paths.py: $WRITINGAGENT_HOME override, else the OS user-data
+# dir). HOME is re-exported module-level so shell/cli code and tests address it as
+# brain.HOME; BRAIN/INDEX_DIR are patched separately in tests (derived at import).
+HOME = paths.HOME
+BRAIN = HOME / "brain"
+INDEX_DIR = HOME / ".index"   # derived - safe to delete, rebuilt on demand
 
 _SAFE_ID = re.compile(r"[a-z0-9][a-z0-9._-]*\Z")
 

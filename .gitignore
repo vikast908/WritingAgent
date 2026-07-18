@@ -1,38 +1,39 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.env
 .venv/
 venv/
-.index/
+*.egg-info/
+dist/
+build/
+
+# Tooling caches
 .pytest_cache/
 .ruff_cache/
 .coverage
 .coverage.*
 coverage.xml
 htmlcov/
-.claude/
-*.egg-info/
-dist/
-build/
-*.log
-# Generated projects + user data (brain/users/...) and local engine settings - never published
-brain/
-config/settings.yaml
-test_diagram.svg
-reseed.py
 
-# NOTE: the maintainer journals moved to docs/dev/ (resume.md = session log, test.md =
-# verification log) at open-source time. They stay TRACKED (synced across machines via git);
-# plan.md (architecture spec) stays at the repo root.
+# Local environment / editor
+.env
+.claude/
+*.log
 
 # Playwright MCP browser artifacts (CI debugging)
 .playwright-mcp/
 
-# Docs site lives in its OWN nested git repo (remote: vikast908/writingagentdocs)
-# and is committed/managed independently. The WritingAgent repo must NOT track it.
-# Keep this ignore so the two repos stay separate but sit side-by-side on disk.
-/Writing Agents docs/
+# Runtime state (brain/, .index/, config/) lives in the agent home - see
+# src/writingagent/paths.py ($WRITINGAGENT_HOME, default: the OS user-data dir) -
+# so the app never writes into the repo.
+
+# The docs site (website/) is its OWN nested git repo (remote: vikast908/writingagentdocs),
+# committed and deployed (Vercel) independently. Never track it here.
+/website/
 
 # Maintainer session journal - kept local, never published
 docs/dev/resume.md
+
+# Impeccable skill critique snapshots (local tool state)
+.impeccable/

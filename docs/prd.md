@@ -159,7 +159,7 @@ audience - and keep the nonfiction default byte-for-byte so the wedge persona se
   - **Built to run on a *basic* model** (the point), three compensations for weak zero-shot craft:
     (a) **few-shot exemplars** (`exemplars.py`) - humanizer before/after pairs + critic 5-vs-2 score
     anchors (weak models imitate; they don't follow abstractions); (b) a shipped **genre gold corpus**
-    (`gold/*.md`) injected as the *default* style anchor (a weak model imitating a strong paragraph
+    (`resources/gold/*.md`) injected as the *default* style anchor (a weak model imitating a strong paragraph
     beats one told to "write vivid prose"); (c) **genre-aware deterministic craft metrics** (`craft.py`)
     - sentence-rhythm variance, passive/adverb density, Flesch-Kincaid, cliché hits, opening/closing
     weakness, and for fiction filter-verb density / dialogue ratio / said-bookisms / POV-tense / sensory
@@ -185,7 +185,7 @@ audience - and keep the nonfiction default byte-for-byte so the wedge persona se
   - **The cascade** (`compositor.py`): `register ⊃ field ⊃ persona ⊃ emotion ⊃ skills`. Outer layers
     win; upper layers are **single-select** (only skills are multi, already capped + efficacy-gated).
     One place decides what's selected, what's dropped, and **logs why** - it never silently concatenates.
-  - **Personas** (`personas.py` + `personas/*.md`): a **manner** layer (diction, rhythm, device-density)
+  - **Personas** (`personas.py` + `resources/personas/*.md`): a **manner** layer (diction, rhythm, device-density)
     *within* the register's rules. **46 ship** - 18 archetypes (`wry-skeptic`, `warm-mentor`,
     `hard-boiled-minimalist`, `lyrical-maximalist`, `deadpan-technical`, `firebrand-essayist`,
     `lucid-explainer`, `cultural-critic`, `investigative-longform`, `epic-fantasy`, and more) + 28

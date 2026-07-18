@@ -13,9 +13,9 @@
 **One command → a researched, self-critiqued, fact-checked, exported article (or book).** Local-first and **model-agnostic** (any OpenAI-compatible host), on your own key, for cents.
 
 #### ▶ Try it in your browser - no API key needed
-A **[web demo](web/)** runs the whole pipeline behind a simple UI: a **free preview** (placeholder output, $0, no key) shows exactly how a run works, or paste your own key for a real piece. Run the web demo locally with one pip install - `pip install -e ".[web]" && python web/app.py` from a clone - or deploy it as a Hugging Face Space ([guide](web/README.md)).
+A **[web demo](demo/)** runs the whole pipeline behind a simple UI: a **free preview** (placeholder output, $0, no key) shows exactly how a run works, or paste your own key for a real piece. Run the web demo locally with one pip install - `pip install -e ".[web]" && python demo/app.py` from a clone - or deploy it as a Hugging Face Space ([guide](demo/README.md)).
 
-[Try in browser](web/) · [Quickstart](#quickstart) · [Install](#install) · [Why not just prompt ChatGPT?](#why-not-just-prompt-chatgpt) · [Examples](examples/) · [**Docs ↗**](https://docs-writingagent.vercel.app/)
+[Try in browser](demo/) · [Quickstart](#quickstart) · [Install](#install) · [Why not just prompt ChatGPT?](#why-not-just-prompt-chatgpt) · [Examples](examples/) · [**Docs ↗**](https://docs-writingagent.vercel.app/)
 
 </div>
 
@@ -124,10 +124,10 @@ installs nothing and the stdlib fetcher is used) and
 research, DOCX export, D2 diagrams, embeddings) degrades gracefully when its extra
 isn't installed - see the [**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
 
-**Prefer a browser?** A **web demo** (`web/app.py`, in the repo) runs the whole pipeline behind a
+**Prefer a browser?** A **web demo** (`demo/app.py`, in the repo) runs the whole pipeline behind a
 Gradio UI - try it free in fake mode with no key, or paste your own key for a real run. From a clone:
-`pip install -e ".[web]" && python web/app.py`, or deploy it as a Hugging Face Space (see
-[`web/README.md`](web/README.md)).
+`pip install -e ".[web]" && python demo/app.py`, or deploy it as a Hugging Face Space (see
+[`demo/README.md`](demo/README.md)).
 
 ---
 
@@ -367,7 +367,7 @@ Search grounding runs on **DuckDuckGo** (free, keyless, default) or **Firecrawl*
 (`search_provider: firecrawl` + `FIRECRAWL_API_KEY` - also upgrades deep-research page scraping);
 a missing key degrades gracefully to the free path.
 
-**Cost:** the recommended opt-in `cost_mode: budget` (in `config/settings.yaml`; `/set cost_mode
+**Cost:** the recommended opt-in `cost_mode: budget` (in `settings.yaml`; `/set cost_mode
 budget`) pins the spend-heavy knobs - single draft, one revision, 12k context, judgment nodes on the
 flash tier - and **auto-scales** the run's token budget to the piece's size (`budget_for_units` ≈ 25k
 fixed overhead + ~20k per unit) so a full piece finishes instead of pausing mid-way. Setting an
@@ -447,8 +447,8 @@ pytest              # the suite runs fully offline (no API key)
 ```
 
 Issues and PRs welcome - see **[CONTRIBUTING.md](CONTRIBUTING.md)**. The engine spec is in
-[`plan.md`](plan.md) and the UI/design system (the editorial ink-on-paper identity shared by the web
-dashboard and TUI) in [`design.md`](design.md); also [`SECURITY.md`](SECURITY.md) and
+[`docs/plan.md`](docs/plan.md) and the UI/design system (the editorial ink-on-paper identity shared by the web
+dashboard and TUI) in [`docs/design.md`](docs/design.md); also [`SECURITY.md`](SECURITY.md) and
 [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Author

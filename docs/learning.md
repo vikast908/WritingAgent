@@ -124,23 +124,28 @@ Here is the whole project laid out. Top level first, then we go into the importa
 
 ```
 WritingAgent/
-├── writingagent.py                ← the "start button" for the command-line version
-├── src/writingagent/        ← ALL the actual program lives here (see §4.2)
-├── config/                ← settings you can tweak (which AI model, defaults)
-├── brain/                 ← the program's MEMORY — everything it produces (see §5)
-├── seeds/                 ← starter "craft skills" shipped with the project
-├── tests/                 ← ~525 automated checks that prove the code works
-├── examples/              ← real finished pieces, so you can judge output before installing
+├── src/writingagent/      ← ALL the program lives here (see §4.2); run it with
+│   │                        `writing-agent` or `python -m writingagent`
+│   └── resources/         ← shipped data: default model routing, seed skills,
+│                            gold corpus, personas (the ONE copy)
+├── tests/                 ← ~530 automated checks that prove the code works
+├── docs/                  ← all project docs: plan.md (the spec, "the law"),
+│                            design.md, prd.md, roadmap.md, learning.md (THIS file),
+│                            proposals/, dev/ (maintainer journals)
+├── demo/                  ← the browser demo (Gradio, deployable as a HF Space)
+├── examples/              ← real finished pieces, incl. examples/sample-run/
+│                            (a complete sample book with its working files)
 ├── benchmarks/            ← a blind A/B kit to compare quality vs other tools
-├── SampleRun/             ← a complete sample book (manuscript + its working files)
 ├── assets/                ← brand images (logo, banner)
 ├── README.md              ← the front-door "what is this / how to run" doc
-├── plan.md                ← the authoritative engineering spec (the "law")
-├── learning.md            ← THIS file
-├── docs/dev/              ← maintainer journals: resume.md (session log) + test.md (verification log)
-├── PRD.md, CHANGELOG.md, CONTRIBUTING.md, ROADMAP.md, ...  ← supporting docs
+├── CHANGELOG.md, CONTRIBUTING.md, LICENSE, ...  ← standard community files
 └── pyproject.toml         ← the project's "ingredients list" (dependencies, how to install)
 ```
+
+**Where did `brain/` and `config/` go?** They're the program's *output and settings*, not part of
+the project, so they live in your user data folder (the "agent home"): `%LOCALAPPDATA%\writingagent`
+on Windows, `~/Library/Application Support/writingagent` on macOS, `~/.local/share/writingagent` on
+Linux - or wherever `$WRITINGAGENT_HOME` points. The repo stays clean no matter where you run it.
 
 **Why is the code under `src/writingagent/` and not just loose in the folder?** This "src layout" is a
 standard professional convention: it keeps the *program* cleanly separated from the *project's other
@@ -736,7 +741,7 @@ backed by the same engine:
 
 1. **Interactive console (most fun):**
    ```
-   writing-agent           # or: python writingagent.py
+   writing-agent           # or: python -m writingagent
    ```
    You get a themed prompt; type a topic or chat with it; watch the live dashboard as it writes.
 
@@ -837,4 +842,4 @@ fix - and your progress is always saved, so you just run again.
 > whole thing is built to be **transparent, resumable, and self-correcting** - that's the entire point.
 
 *Want the exact rules and thresholds behind any of this? They live in `plan.md`. Want to see real
-output? Look in `examples/` and `SampleRun/`.*
+output? Look in `examples/` and `examples/sample-run/`.*

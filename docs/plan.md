@@ -9,9 +9,9 @@ human when it's unsure, and **learns reusable craft skills per user across many 
 
 > **Implementation status (v1, updated 2026-07-15).** Built in `src/writingagent/` and shipped as an
 > interactive **WRITING AGENT** shell (a themed TUI with slash commands + per-agent model switching)
-> plus a one-shot CLI (`writing-agent` / `python writingagent.py`; see README).
+> plus a one-shot CLI (`writing-agent` / `python -m writingagent`; see README).
 > **Live-validated** on OpenRouter + DeepSeek V4 Pro/Flash: fully autonomous runs completed a book
-> (9-page PDF, captured in `SampleRun/`) and long-form articles (incl. an agentic 6-section run,
+> (9-page PDF, captured in `examples/sample-run/`) and long-form articles (incl. an agentic 6-section run,
 > ~$0.52 / 606k tokens, before the budget cost mode existed).
 >
 > Features beyond the §1–16 spec: **article mode** (parallel section pipeline with editorial angle
@@ -100,7 +100,8 @@ Explicit non-goals for v1 (deferred, not rejected):
 ### 3.3 File layout
 
 ```text
-brain/                              # the git repo ("brain")
+brain/                              # durable memory, in the agent home ($WRITINGAGENT_HOME,
+                                    # else the OS user-data dir - see paths.py)
   users/
     <uid>/                          # per-user scope ("default" unless /user switches it)
       profile.md                    # who the user is (global)
@@ -138,7 +139,7 @@ brain/                              # the git repo ("brain")
           section_NN.md             # intermediate; cleaned up after assembly
           manuscript.md / revision_log.md
           images/
-.index/                             # derived, gitignored: per-project SQLite index (FTS docs +
+.index/                             # derived, disposable (same home): per-project SQLite index (FTS docs +
                                     # canon/graph tables), telemetry JSONL, response + embed caches,
                                     # shell history
 ```
@@ -570,7 +571,7 @@ normalize). Model **slugs are not auto-translated** across hosts - set them per 
 Two surfaces over one engine (plus the markdown brain repo, which is half the UI - read chapters
 and canon in any editor):
 
-- **Interactive shell - the WRITING AGENT TUI.** Run `writing-agent` / `python writingagent.py`
+- **Interactive shell - the WRITING AGENT TUI.** Run `writing-agent` / `python -m writingagent`
   with no command (see the `shell/` package). Themed masthead (gradient-filled ANSI Shadow wordmark; theme
   also sets palette/figlet/glyphs - `ui.THEMES`), a **compact welcome** (START + your projects +
   a status footer - sized so the wordmark is still on screen at the first prompt on a 30-row
@@ -589,7 +590,7 @@ and canon in any editor):
   live, clears fake mode). The welcome leads with one action (`write`) and points the no-key block at
   `/setkey`. **Front door:** the README opens with the zero-install web demo (§18.1) so a writer can
   try the whole flow before any install or key.
-- **One-shot CLI** - `python writingagent.py <command> ...` (same commands), for scripting.
+- **One-shot CLI** - `python -m writingagent <command> ...` (same commands), for scripting.
   Exports print the **absolute** path (the default export dir is the project's brain folder, not the
   cwd) so "where's my file?" is never a guess.
 
@@ -1085,7 +1086,7 @@ one-shot `write()` convenience layered on top.
   docstring states the no-break-within-major contract. Surface is covered by `tests/test_api.py`
   (offline, `WRITINGAGENT_FAKE`).
 
-### 18.1 Zero-install web demo (`web/app.py`)
+### 18.1 Zero-install web demo (`demo/app.py`)
 
 **Why:** the terminal + own-API-key requirement is `PRD.md`'s #1 adoption barrier - a non-developer
 can't try the product at all. A hosted browser demo is the try-before-you-build front door.
@@ -1104,7 +1105,7 @@ live progress, the manuscript, the evidence report, and a `.md` download out.
   through a queue into the Gradio generator so progress is live.
 - **Packaging.** A `[web]` optional extra (gradio only); gradio is imported **lazily** (inside
   `build_ui`) so the runtime helpers stay importable/testable without it (mirrors the `deep` extra).
-  Ships HF-Space deploy files (`web/requirements.txt`, `web/README.md` front-matter). Covered by
+  Ships HF-Space deploy files (`demo/requirements.txt`, `demo/README.md` front-matter). Covered by
   `tests/test_web.py` (offline, incl. a full fake-mode run through the demo).
 - **Caveat (tracked):** `configure_runtime` mutates process-global env, so a public deploy must stay
   single-worker (the Gradio default) or serialize runs; a key-less public deploy needs a server-side
@@ -1651,7 +1652,7 @@ the register's citation convention (`influence` default · `numeric` · `apa` ·
 New tunable settings (all clamped): `register`, `field`, `citation_style` (""=infer/register-default),
 `craft_passes` (bool). Threaded as run-state keys and passed to `nodes.write_*/critique_*/cohesion_edit`
 and `humanizer.humanize` via a `register` argument (default `None` ⇒ unchanged). New files:
-`registers.py`, `craft.py`, `exemplars.py`, `surgery.py`, `fields.py`, `gold/*.md`,
+`registers.py`, `craft.py`, `exemplars.py`, `surgery.py`, `fields.py`, `resources/gold/*.md`,
 `tests/test_craft_engine.py`. Edited: `slop.py`, `humanizer.py`, `polish.py`, `prompts.py`, `nodes.py`,
 `config.py`, `brain.py`, `pyproject.toml` (package-data), `orchestrator/{common,book,article,review}.py`.
 
@@ -1685,7 +1686,7 @@ break it. Upper layers are **single-select** (one register, one field, one perso
 skills are multi, and they were already capped + efficacy-gated (§8). `compositor.py` is the one place
 that decides what is selected, what is dropped, and **logs why** - it never silently concatenates.
 
-### 23.2 Personas - `personas.py` + `personas/*.md`
+### 23.2 Personas - `personas.py` + `resources/personas/*.md`
 
 A persona is a **manner** layer: it flavors diction, rhythm, device-density, and stance *within* the
 register's rules. Each ships a **signature card** (the manner nudge) + an **exemplar** (original
@@ -1731,7 +1732,7 @@ manner guidance for the *writer*; the critic already enforces the register and t
 
 New tunable settings (clamped against the known sets): `persona`, `emotion` (both ""=none). Stored in
 run-state (`_base_run_state`, so both modes) and read by the writer sites via the compositor. New files:
-`personas.py`, `emotions.py`, `compositor.py`, `personas/*.md`, `tests/test_compositor.py`. Edited:
+`personas.py`, `emotions.py`, `compositor.py`, `resources/personas/*.md`, `tests/test_compositor.py`. Edited:
 `config.py`, `craft.py` (emotion clichés), `pyproject.toml` (package-data), `orchestrator/{common,book,
 article,review}.py`.
 
@@ -1819,7 +1820,7 @@ auto seo+promote (when `auto_promote`) + md/html export.
 Files: `webui/server.py` (API + jobs), `webui/static/index.html` (the SPA, no build step),
 `cli` command `web` (`--port`, `--no-browser`), package-data glob in pyproject. Tests:
 `tests/test_webui.py` (API shape, run-to-done flow, SSE close, artifact-traversal guard,
-settings clamp, model-file isolation). The old Gradio demo (`web/app.py`) is untouched - it
+settings clamp, model-file isolation). The old Gradio demo (`demo/app.py`) is untouched - it
 remains the zero-install marketing demo; this is the working surface.
 
 ---
@@ -1851,11 +1852,10 @@ remains the zero-install marketing demo; this is the working surface.
   exports all six formats, exposes register/persona/emotion as None-default dropdowns, adds the
   Rejected tab and the restyle control. No proprietary fonts vendored - serif display with
   system-stack fallbacks.
-- **Shipped defaults bundled in the wheel (2026-07-17).** Pip installs used to get no
-  `config/models.yaml` (so no per-node routing and **no fallback model**) and no `seeds/`
-  (`seed-skills` installed 0). `src/writingagent/resources/` now bundles both as package-data:
-  `load_config()` **copies models.yaml out to `config/models.yaml` on first run** (so `/model`
-  edits land in a real, editable file; read-only installs fall back to reading the bundle),
-  and `seed_builtin()` reads the bundled seeds when the repo-root `seeds/` is absent. The
-  bundled copies are pinned byte-identical to the repo originals by sync tests
-  (`tests/test_bundled_resources.py`) - edit the root files, then re-copy into `resources/`.
+- **Shipped defaults bundled in the wheel (2026-07-17; single-sourced 2026-07-18).**
+  `src/writingagent/resources/` is the ONE home for shipped data (models.yaml, seed skills,
+  gold corpus, personas): `load_config()` **copies models.yaml out to `<home>/config/models.yaml`
+  on first run** (so `/model` edits land in a real, editable file; read-only homes fall back to
+  reading the bundle), and `seed_builtin()` installs the bundled seeds into the user's brain
+  library. The agent home is `$WRITINGAGENT_HOME`, else the OS user-data dir (`paths.py`) -
+  runtime state never lives in the repo or install tree.

@@ -24,7 +24,7 @@ from pathlib import Path
 
 from . import registers
 
-_DIR = Path(__file__).resolve().parent / "personas"
+_DIR = Path(__file__).resolve().parent / "resources" / "personas"
 
 
 @dataclass(frozen=True)
