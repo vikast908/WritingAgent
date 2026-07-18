@@ -100,7 +100,8 @@ Explicit non-goals for v1 (deferred, not rejected):
 ### 3.3 File layout
 
 ```text
-brain/                              # the git repo ("brain")
+brain/                              # durable memory, in the agent home ($WRITINGAGENT_HOME,
+                                    # else the OS user-data dir - see paths.py)
   users/
     <uid>/                          # per-user scope ("default" unless /user switches it)
       profile.md                    # who the user is (global)
@@ -138,7 +139,7 @@ brain/                              # the git repo ("brain")
           section_NN.md             # intermediate; cleaned up after assembly
           manuscript.md / revision_log.md
           images/
-.index/                             # derived, gitignored: per-project SQLite index (FTS docs +
+.index/                             # derived, disposable (same home): per-project SQLite index (FTS docs +
                                     # canon/graph tables), telemetry JSONL, response + embed caches,
                                     # shell history
 ```
