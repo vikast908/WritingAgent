@@ -120,9 +120,11 @@ class Settings:
     max_revisions: int = 2
     consolidate_every: int = 5
     use_researcher: bool = True              # web grounding per unit - off means citations are unverifiable
-    search_provider: str = "duckduckgo"      # web search backend: duckduckgo (free, default) | firecrawl
-    #                                          (needs FIRECRAWL_API_KEY; also switches deep-research page
-    #                                          scraping to Firecrawl). Missing key degrades to duckduckgo.
+    search_provider: str = "duckduckgo"      # web search backend: duckduckgo (free, default) | firecrawl |
+    #                                          tavily | brave | serpapi | exa | parallel. Keyed providers read
+    #                                          their key from env (see .env.example); a missing key or any
+    #                                          error degrades to duckduckgo (search never blocks a run).
+    #                                          firecrawl additionally switches deep-research scraping to Firecrawl.
     deep_research: bool = False               # multi-source fetch+synthesize (needs use_researcher; plan §15)
     divergent_drafts: int = 2                # first-attempt drafts at varied temps; critic picks best (1 = off)
     divergent_skeletons: bool = False        # draft the N variants SHORT (skeleton), judge, expand only the winner
@@ -344,7 +346,12 @@ def _clamp_settings(s: Settings) -> Settings:
         s.mode = "article"
     if s.cost_mode not in ("standard", "budget"):
         s.cost_mode = "standard"
-    if s.search_provider not in ("duckduckgo", "firecrawl"):
+    try:
+        from . import search as _search
+        _providers = _search.PROVIDERS
+    except Exception:  # noqa: BLE001 - never let a validation import break load_settings
+        _providers = ("duckduckgo", "firecrawl", "tavily", "brave", "serpapi", "exa", "parallel")
+    if s.search_provider not in _providers:
         s.search_provider = "duckduckgo"
     if s.agentic_policy not in ("default", "llm", "trace"):
         s.agentic_policy = "default"

@@ -935,7 +935,7 @@ async function renderSkills(){
 async function renderSettings(){
   await refreshState();
   const opts=S.options||{};
-  const dropdowns={register:opts.registers,persona:opts.personas,emotion:opts.emotions,citation_style:opts.citation_styles};
+  const dropdowns={register:opts.registers,persona:opts.personas,emotion:opts.emotions,citation_style:opts.citation_styles,search_provider:opts.search_providers};
   const GROUPS=[['run',['mode','num_chapters','num_sections','max_revisions','consolidate_every','autonomous',
       'divergent_drafts','divergent_skeletons','tournament_judge','min_insight','skill_duels','skill_distill']],
     ['research & truth',['use_researcher','search_provider','deep_research','verify_claims','verify_excerpt_chars',

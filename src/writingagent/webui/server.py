@@ -165,13 +165,14 @@ def _project_overview(uid: str) -> list[dict]:
 def _options() -> dict:
     """Selectable option lists for the Settings dropdowns + restyle (register/persona/
     emotion) and the export format set."""
-    from .. import emotions, personas, registers
+    from .. import emotions, personas, registers, search
     return {
         "registers": list(registers.names()),
         "personas": list(personas.names()),
         "emotions": list(emotions.names()),
         "export_formats": ["pdf", "epub", "html", "docx", "txt", "md"],
         "citation_styles": ["influence", "numeric", "apa", "mla", "chicago", "ap", "none"],
+        "search_providers": list(search.PROVIDERS),
     }
 
 

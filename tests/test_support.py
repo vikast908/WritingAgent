@@ -130,6 +130,68 @@ def test_build_query_truncates_to_200():
     assert "second" not in q   # only the first sentence of purpose is used
 
 
+# ── keyed search backends (tavily / brave / serpapi / exa / parallel) ───────────
+def _fake_urlopen(payload):
+    import io
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+    return lambda req, timeout=0: _Resp(json.dumps(payload).encode())
+
+
+def test_keyed_backends_parse_their_response_shapes(online, monkeypatch):
+    cases = {
+        "tavily": ("TAVILY_API_KEY", search._tavily_search,
+                   {"results": [{"title": "T", "url": "https://t/1", "content": "c"}]},
+                   "https://t/1", "c"),
+        "brave": ("BRAVE_API_KEY", search._brave_search,
+                  {"web": {"results": [{"title": "B", "url": "https://b/1", "description": "d"}]}},
+                  "https://b/1", "d"),
+        "serpapi": ("SERPAPI_API_KEY", search._serpapi_search,
+                    {"organic_results": [{"title": "S", "link": "https://s/1", "snippet": "n"}]},
+                    "https://s/1", "n"),
+        "exa": ("EXA_API_KEY", search._exa_search,
+                {"results": [{"title": "E", "url": "https://e/1", "text": "x"}]},
+                "https://e/1", "x"),
+        "parallel": ("PARALLEL_API_KEY", search._parallel_search,
+                     {"results": [{"title": "P", "url": "https://p/1", "excerpts": ["ex1", "ex2"]}]},
+                     "https://p/1", "ex1 ex2"),
+    }
+    for name, (env, fn, payload, url, snip) in cases.items():
+        monkeypatch.setenv(env, "k-" + name)
+        monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen(payload))
+        out = fn("q", 5)
+        assert out and out[0].url == url and out[0].snippet == snip, name
+
+
+def test_provider_degrades_when_keyed_provider_has_no_key(online, monkeypatch):
+    from writingagent.config import Settings
+    for name, env in [("tavily", "TAVILY_API_KEY"), ("brave", "BRAVE_API_KEY"),
+                      ("serpapi", "SERPAPI_API_KEY"), ("exa", "EXA_API_KEY"),
+                      ("parallel", "PARALLEL_API_KEY")]:
+        monkeypatch.delenv(env, raising=False)
+        monkeypatch.setattr("writingagent.config.load_settings",
+                            lambda n=name: Settings(search_provider=n))
+        assert search.provider() == "duckduckgo", name
+
+
+def test_web_search_falls_back_to_ddgs_when_backend_empty(online, monkeypatch):
+    """A selected keyed backend that yields nothing falls back to DuckDuckGo."""
+    from writingagent.config import Settings
+    monkeypatch.setenv("TAVILY_API_KEY", "k")
+    monkeypatch.setattr("writingagent.config.load_settings",
+                        lambda: Settings(search_provider="tavily"))
+    monkeypatch.setattr(search, "_tavily_search", lambda q, n: [])   # backend yields nothing
+    monkeypatch.setattr(search, "_ddgs",
+                        lambda: _FakeDDGS(rows=[{"title": "D", "href": "https://d", "body": "b"}]))
+    out = search.web_search("fallback-query", max_results=3)
+    assert out == [search.SearchResult(title="D", url="https://d", snippet="b")]
+
+
 # ── images ─────────────────────────────────────────────────────────────────────
 class _FakeHTTPResponse:
     def __init__(self, payload):

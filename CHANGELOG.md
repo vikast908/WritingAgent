@@ -6,6 +6,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Five more web-search backends, all configurable and host-agnostic.** `search_provider`
+  now accepts `tavily`, `brave`, `serpapi`, `exa`, and `parallel` alongside the existing
+  `duckduckgo` (keyless default) and `firecrawl`. Each keyed backend reads its own env key
+  (see `.env.example`); a missing key or any error degrades to DuckDuckGo so search never
+  blocks a run. `search.py` is now a pluggable backend registry; the dashboard exposes the
+  provider as a dropdown.
+
+### Changed
+- **Web dashboard: the live-run view now shows the agent working** - a phase pipeline stepper,
+  a "now doing X" heartbeat line (drafting / critiquing / revising / researching / verifying /
+  humanizing / assembling / learning) with a live spinner, and the latest critic verdict as a
+  chip - replacing the raw log dump.
+- **Web + TUI design pass (Emil Kowalski's craft lens).** Press feedback on every button; page
+  fade only on view change (not tab clicks or polls); toast exits; origin-aware dropdowns;
+  delayed tooltips; titles instead of slugs in project lists; pre-flight confirms on
+  token-spending actions; grouped settings with tips; keyboard view-nav; copy fixes. TUI: the
+  full masthead prints once a day (repeat launches get the one-line wordmark); `DIM` lifted for
+  readable secondary text on dark terminals.
+
 ## [0.3.0] - 2026-07-18
 
 ### Changed
