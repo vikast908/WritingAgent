@@ -257,12 +257,16 @@ def _apply_setting(field: str, value) -> Settings:
     valid = {f.name: f for f in dataclasses.fields(Settings)}
     if field not in valid:
         raise ValueError(f"unknown setting '{field}'")
-    cur = getattr(s, field)
-    if isinstance(cur, bool):
+    # Coerce by the field's DECLARED type (its default), never the current runtime value:
+    # a value corrupted to the wrong type (e.g. default_user saved as an int) must not make
+    # every future write coerce the same wrong way.
+    fld = valid[field]
+    declared = fld.default if fld.default is not dataclasses.MISSING else getattr(s, field)
+    if isinstance(declared, bool):
         value = value if isinstance(value, bool) else str(value).lower() in ("1", "true", "yes", "on")
-    elif isinstance(cur, int):
+    elif isinstance(declared, int):
         value = int(value)
-    elif isinstance(cur, float):
+    elif isinstance(declared, float):
         value = float(value)
     else:
         value = str(value)

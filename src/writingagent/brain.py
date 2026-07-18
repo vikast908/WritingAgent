@@ -31,8 +31,10 @@ def slugify(text: str) -> str:
 
 
 def is_safe_id(s: str) -> bool:
-    """A project/user id that stays within the brain dir (no traversal, no abs path)."""
-    return bool(s) and ".." not in s and _SAFE_ID.fullmatch(s) is not None
+    """A project/user id that stays within the brain dir (no traversal, no abs path).
+    Non-string input (e.g. a settings value YAML parsed as an int) is simply unsafe,
+    not a crash."""
+    return isinstance(s, str) and bool(s) and ".." not in s and _SAFE_ID.fullmatch(s) is not None
 
 
 def _atomic_write(path: Path, text: str) -> None:

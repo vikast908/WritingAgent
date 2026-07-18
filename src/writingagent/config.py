@@ -354,6 +354,11 @@ def _clamp_settings(s: Settings) -> Settings:
     baffling runtime behavior (e.g. min_insight: 99 makes every unit fail the gate forever,
     a negative max_revisions breaks the loop range). Clamps in place and returns `s` -
     never raises, so a run degrades rather than refusing to start."""
+    # default_user is a filesystem-safe id; a bad value (e.g. YAML-parsed as an int, or an
+    # unsafe string) heals to "default" instead of crashing everything that uses the uid.
+    from . import brain
+    if not brain.is_safe_id(s.default_user):
+        s.default_user = "default"
     s.num_chapters = max(1, s.num_chapters)
     s.num_sections = max(1, s.num_sections)
     s.max_revisions = max(0, s.max_revisions)

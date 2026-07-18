@@ -23,6 +23,18 @@ def test_clamp_normalizes_enums():
     assert s.mode == "article" and s.agentic_policy == "default"
 
 
+def test_default_user_heals_from_corruption():
+    """A default_user corrupted to a non-safe value (e.g. YAML-parsed as an int, or an
+    unsafe string) heals to 'default' instead of crashing everything that uses the uid."""
+    from writingagent import brain
+    assert brain.is_safe_id(1234) is False          # robust to a non-str, no TypeError
+    s = Settings()
+    s.default_user = 1234                            # simulate the corrupted-int case
+    assert _clamp_settings(s).default_user == "default"
+    assert _clamp_settings(Settings(default_user="bad id!")).default_user == "default"
+    assert _clamp_settings(Settings(default_user="vikas")).default_user == "vikas"
+
+
 def test_clamp_image_source_is_a_validated_ordered_list():
     # unknown tokens dropped, order + case normalized, valid ones kept
     assert _clamp_settings(Settings(image_source="PIXABAY, wikimedia, junk")).image_source == "pixabay,wikimedia"
