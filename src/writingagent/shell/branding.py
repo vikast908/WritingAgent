@@ -367,6 +367,35 @@ def _first_run_setup(console, settings) -> None:
         _out(console, f"[dim]{cp.name} selected (saved) — add its key anytime with /setkey[/]")
 
 
+def _masthead_side(cfg, settings, warn: str = ""):
+    """The block that sits to the RIGHT of the wordmark on a wide terminal (or just beneath it
+    on a narrower one): the tagline, the live stack line, and a short GET STARTED command list -
+    so the empty space beside the big wordmark carries the commands instead of wasting rows.
+
+    Returns (renderable, width) - the caller uses the width to decide side-by-side vs stacked."""
+    from rich.console import Group
+    from rich.table import Table
+    from rich.text import Text
+    rows = (
+        ('write --abstract "…"', "one command"),
+        ("new → run → export", "step by step"),
+        ("/help · /theme · /model", "& more"),
+    )
+    cmds = Table(box=None, show_header=False, padding=(0, 3, 0, 0), pad_edge=False)
+    cmds.add_column(style=f"bold {GOLD}", no_wrap=True)
+    cmds.add_column(style=DIM, no_wrap=True)
+    for cmd, desc in rows:
+        cmds.add_row(cmd, desc)
+    tagline, stack = "an autonomous writing studio", _stack_label(cfg, settings)
+    parts = [Text(tagline, style=f"italic {INK}"), Text(stack, style=DIM),
+             Text(""), Text("GET STARTED", style=f"bold {GOLD}"), cmds]
+    if warn:
+        parts += [Text(""), Text(warn, style=f"bold {ERR}")]
+    cmds_w = max(len(c) for c, _ in rows) + 3 + max(len(d) for _, d in rows)
+    width = max(len(tagline), len(stack), cmds_w, len(warn))
+    return Group(*parts), width
+
+
 def _banner(console, cfg: ModelConfig | None = None, settings: Settings | None = None) -> None:
     lines = _wordmark()
     if not console:
@@ -374,30 +403,42 @@ def _banner(console, cfg: ModelConfig | None = None, settings: Settings | None =
         print("an autonomous writing studio - books, articles & more")
         return
     from rich.padding import Padding
+    from rich.table import Table
     from rich.text import Text
-    pad = (0, 0, 0, 2)   # left-aligned with a 2-col indent
-    # Narrow terminal: the figlet masthead would wrap into noise - drop to a one-line
+    pad = (0, 0, 0, 2)   # a 2-col left indent - the banner sits on the left, not centered
+    # Narrow terminal: the big figlet masthead would wrap into noise - drop to a one-line
     # wordmark so the banner still reads (and the wordmark stays on screen). On any
     # terminal with room, the big ASCII masthead is the welcome - it's the studio's
-    # first impression, worth the vertical spend every launch.
+    # first impression, worth the vertical spend, and it prints every launch.
     warn = _key_warning(settings)
-    if (console.size.width or 80) < 60:
+    mark_w = max((len(ln) for ln in lines), default=0)   # widest figlet row
+    width = console.size.width or 80
+    if width < max(60, mark_w + 4):   # would the big mark wrap? then compact one-liner
         console.print()
         console.print(Padding(Text(f"{_NIB} WRITING AGENT", style=f"bold {GOLD}"), pad))
         console.print(Padding(Text(_stack_label(cfg, settings), style=DIM), pad))
         if warn:
             console.print(Padding(Text(warn, style=f"bold {ERR}"), pad))
+        console.print(Padding(Text('write --abstract "…" to start · /help for commands', style=DIM), pad))
         console.print()
         return
+    # The big gradient wordmark on the LEFT, framed top and bottom by a flame rule. When the
+    # terminal is wide enough for the command column to sit beside it without wrapping we do
+    # exactly that (saves a screenful of rows); otherwise the same block stacks beneath it.
+    side, side_w = _masthead_side(cfg, settings, warn)
     console.print()
     console.print(_flame_rule(console))
     console.print()
-    console.print(Padding(_flame_text(lines), pad))
-    console.print(Padding(Text("an autonomous writing studio - books, articles & more",
-                               style=f"italic {INK}"), pad))
-    console.print(Padding(Text(_stack_label(cfg, settings), style=DIM), pad))
-    if warn:
-        console.print(Padding(Text(warn, style=f"bold {ERR}"), pad))
+    if width >= mark_w + 6 + side_w:
+        row = Table(box=None, show_header=False, padding=0, pad_edge=False)
+        row.add_column(vertical="top")
+        row.add_column(vertical="middle")          # centre the commands against the tall wordmark
+        row.add_row(_flame_text(lines), Padding(side, (0, 0, 0, 6)))
+        console.print(Padding(row, pad))
+    else:
+        console.print(Padding(_flame_text(lines), pad))
+        console.print()
+        console.print(Padding(side, pad))
     console.print()
     console.print(_flame_rule(console))
 
@@ -565,22 +606,7 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
             ("/setkey", f"paste your {env} once — saved to .env, real runs turn on"),
         ])
 
-    # ── Start here ──────────────────────────────────────────────────────────────
-    _section(console, "START")
-    unit = "section" if is_article else "chapter"
-    start_rows = [
-        ("write --abstract \"...\"", f"{_SYM('star')} one command — answer a few questions, then it "
-                                     "researches, writes & self-edits the whole piece (press m to pause & steer)"),
-    ]
-    if not projects:
-        example = ("How Python async/await actually works" if is_article
-                   else "A thriller set on Mars in 2089")
-        start_rows.append(("try it", f'write --abstract "{example}"'))
-        start_rows.append(("step by step", "[dim]new → run → export · see /help[/]"))
-    else:
-        start_rows.append(("new --abstract \"...\"", f"step-by-step — outline → `run` (write · "
-                                                     f"critique · humanise per {unit}) → `export`"))
-    _cmd_table(console, start_rows)
+    # The START commands moved up into the masthead (beside the wordmark) - see _masthead_side.
 
     # ── Projects ──────────────────────────────────────────────────────────────
     if projects:

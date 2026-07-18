@@ -37,7 +37,7 @@ ON_CLR = "#5aa07f"   # sage green - feature on / done (semantic)
 OFF_CLR = "grey50"   # feature off
 FLEURON = "❧"
 STOPS = ("#a3341f", "#c65038", "#e58a3a", "#f5c25c")   # wordmark gradient - manuscript red → lit red → ember → hot gold
-FONT = "ansi_shadow"                        # wordmark figlet face
+FONT = "colossal"                           # wordmark figlet face - big, chunky banner block
 WORDS = ("WRITING", "AGENT")                # wordmark words (case matters per face)
 SHEAR = False                               # italic lean (block faces only)
 
