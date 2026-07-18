@@ -132,7 +132,18 @@ h1,h2,h3{font-family:var(--serif);font-weight:540;letter-spacing:-.01em}
 
 /* layout */
 #side{width:216px;min-width:216px;background:var(--sidebar);display:flex;flex-direction:column;
-  border-right:1px solid var(--hair)}
+  border-right:1px solid var(--hair);transition:width var(--dur-base) var(--ease-out),min-width var(--dur-base) var(--ease-out)}
+#sideToggle{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border-radius:var(--r-sm);color:var(--fg-3);flex:none;margin-left:-4px}
+#sideToggle:hover{background:var(--fill-2);color:var(--fg)}
+/* collapsed sidebar (manual toggle) → icon rail; same visual as the narrow-screen rail */
+body.side-collapsed #side{width:56px;min-width:56px}
+body.side-collapsed .brand{padding:16px 0 12px;text-align:center}
+body.side-collapsed .brand .mark{justify-content:center;gap:0}
+body.side-collapsed .brand .wm,body.side-collapsed .brand .sub{display:none}
+body.side-collapsed #nav{padding:6px 8px}
+body.side-collapsed #nav .item{justify-content:center;padding:9px 0;gap:0}
+body.side-collapsed #nav .nlbl{display:none}
+body.side-collapsed .foot{display:none}
 .brand{padding:20px 20px 16px}
 .brand .mark{display:inline-flex;align-items:center;gap:9px}
 .brand .sq{width:24px;height:24px;border-radius:var(--r-sm);background:#17171a;color:#faf8f4;
@@ -152,7 +163,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:540;letter-spacing:-.01em}
 #crumb{font-size:12px;color:var(--fg-3)}
 #topbar .spacer{flex:1}
 #view{flex:1;overflow:auto;padding:24px 26px 60px}
-#view>*{max-width:1200px;margin:0 auto}
+#view>*{max-width:768px;margin:0 auto}   /* every view shares one focused 768px column */
 #view::-webkit-scrollbar,#log::-webkit-scrollbar{width:9px}
 #view::-webkit-scrollbar-thumb,#log::-webkit-scrollbar-thumb{background:var(--stroke-soft);border-radius:5px}
 
@@ -205,8 +216,7 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .approach .t .n{color:var(--accent);margin-right:6px}
 .approach .s{color:var(--fg-2);font-size:13px}.approach .s.muted{color:var(--fg-3);font-size:12.5px;margin-top:2px}
 
-/* memory manager — a focused, centered column (forms shouldn't sprawl edge-to-edge) */
-#view>.memview{max-width:780px;margin:0 auto}
+/* memory manager — forms shouldn't sprawl (shares the global 768px column) */
 .memview textarea{min-height:170px}
 .tabwrap{margin-bottom:18px}
 .hint{margin-bottom:11px}
@@ -248,7 +258,6 @@ textarea.mono{font-family:var(--mono);font-size:12px;line-height:1.6}
 @media (prefers-reduced-motion:reduce){.disc-panel,.disc .chev{transition:none}}
 
 /* studio — centered compose surface: heading + outer card holding the field + actions */
-#view>.hero{max-width:768px}   /* beat #view>* (1200) — focused compose column */
 .hero{margin:0 auto;text-align:center;padding-top:clamp(40px,12vh,120px)}
 .hero.compact{padding-top:28px}
 .hero-h{font-family:var(--serif);font-size:clamp(27px,3.4vw,34px);font-weight:500;letter-spacing:-.01em;line-height:1.1;color:var(--fg);text-wrap:balance}
@@ -463,6 +472,7 @@ input.err,textarea.err,.csel.err .csel-btn{border-color:var(--red)!important}
 </aside>
 <main id="main">
   <div id="topbar">
+    <button id="sideToggle" data-tip="Toggle sidebar" aria-label="Toggle sidebar" onclick="toggleSide()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg></button>
     <span id="crumb"></span><span class="spacer"></span>
     <div id="runbadge" role="button" tabindex="0" aria-label="a run is live — open Live run" onclick="go('run')"><span class="dot"></span><span id="runbadgeTxt">running</span></div>
     <span id="themeSelWrap" data-tip="appearance"></span>
@@ -1365,6 +1375,8 @@ async function saveSetting(name){
 async function saveModel(node,btn){const el=btn.parentElement.querySelector('[data-n]');
   try{await api('/api/models',{node,slug:el.value});toast(flabel(node)+' model set to '+el.value);}catch(e){toast(e.message,1)}}
 
+function toggleSide(){const on=document.body.classList.toggle('side-collapsed');try{localStorage.setItem('sideCollapsed',on?'1':'');}catch(e){}}
+try{if(localStorage.getItem('sideCollapsed'))document.body.classList.add('side-collapsed');}catch(e){}   // restore the last state
 refreshState().then(()=>location.hash?applyHash():render());   /* theme change is handled by the custom-select cb (applyWebTheme) */
 setInterval(()=>{if(view!=='projects')return;refreshState().then(()=>{   // re-render only when the
   const snap=JSON.stringify(S.projects);                                       // data changed - a blind
