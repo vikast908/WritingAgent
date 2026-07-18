@@ -443,6 +443,47 @@ def _feat_row(label: str, enabled: bool, desc: str) -> tuple[str, str]:
     return (indicator, desc)
 
 
+def _projects_table(console, uid: str, projects: list[tuple[str, str]]) -> None:
+    """A clean, aligned, numbered project list: # · title (real title, truncated) · type ·
+    status. Titles (not slugs) read cleanly and survive narrow widths (ellipsis, no wrap);
+    the number matches the project picker so selection stays one keystroke away."""
+    from rich.table import Table
+    from rich.text import Text
+
+    from ..brain import ArticlePaths, BookPaths
+    t = Table(box=None, show_header=False, padding=(0, 3, 0, 3), pad_edge=False)
+    t.add_column(justify="right", style=DIM, no_wrap=True)                         # index
+    t.add_column(style=f"bold {GOLD}", no_wrap=True, max_width=52, overflow="ellipsis")  # title
+    t.add_column(style=DIM, no_wrap=True)                                          # type
+    t.add_column(no_wrap=True)                                                     # status
+    for i, (pid, ptype) in enumerate(projects[:9], 1):
+        status = Text()
+        try:
+            paths = ArticlePaths(pid, uid) if ptype == "article" else BookPaths(pid, uid)
+            st = brain.read_json(paths.run_state) or {}
+            title = st.get("title")
+            if not title:   # the rendered title lives in the outline/plan, not run_state
+                src = paths.outline_json if ptype == "article" else paths.book_plan
+                title = (brain.read_json(src) or {}).get("title") if ptype == "article" else None
+            title = title or pid
+            if ptype == "article":
+                unit, cur, tot = "sec", st.get("current_section", "?"), st.get("num_sections", "?")
+            else:
+                unit, cur, tot = "ch", st.get("current_chapter", "?"), st.get("num_chapters", "?")
+            phase = st.get("phase", "-")
+            if st.get("pending_review"):
+                status.append("⚠ review  ", style=f"bold {ERR}")
+            status.append(phase, style=ON_CLR if phase == "done" else (GOLD if phase not in ("-", "") else DIM))
+            status.append(f"  {unit} {cur}/{tot}", style=DIM)
+        except Exception:
+            title = pid
+            status = Text("-", style=DIM)
+        t.add_row(str(i), title, ptype, status)
+    console.print(t)
+    if len(projects) > 9:
+        console.print(Text(f"      … +{len(projects) - 9} more  ·  /books to list all", style=DIM))
+
+
 def _book_status_rows(uid: str, projects: list[tuple[str, str]]) -> list[tuple[str, str]]:
     from ..brain import ArticlePaths, BookPaths
     rows = []
@@ -560,7 +601,7 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     # ── Projects ──────────────────────────────────────────────────────────────
     if projects:
         _section(console, "YOUR PROJECTS")
-        _cmd_table(console, _book_status_rows(uid, projects))
+        _projects_table(console, uid, projects)
 
     # ── Footer ────────────────────────────────────────────────────────────────
     console.print()
