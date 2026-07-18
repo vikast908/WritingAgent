@@ -476,13 +476,13 @@ input.err,textarea.err,.csel.err .csel-btn{border-color:var(--red)!important}
   <div class="brand">
     <div class="mark">
       <button type="button" class="sq tipdown" onclick="expandSide()" data-tip="Open sidebar" aria-label="Open sidebar">¶</button>
-      <span class="wm">Writing Agent</span>
+      <span class="wm" id="brandName">Writing Agent</span>
       <button type="button" class="sidecollapse tipdown" onclick="toggleSide()" data-tip="Collapse sidebar" aria-label="Collapse sidebar">«</button>
     </div>
-    <div class="kicker sub">Studio · local</div>
+    <div class="kicker sub">Writing Agent</div>
   </div>
   <nav id="nav"></nav>
-  <div class="foot"><span id="userTag"></span><br>127.0.0.1 · local · private</div>
+  <div class="foot"><span id="userTag" hidden></span>127.0.0.1 · local · private</div>
 </aside>
 <main id="main">
   <div id="topbar">
@@ -742,6 +742,8 @@ let view='studio',viewArg=null,_projSnap='';
 async function refreshState(){
   S=await api('/api/state');
   $('#userTag').textContent=S.user;
+  const nm=String(S.user||'').replace(/[-_]+/g,' ').replace(/\b\w/g,c=>c.toUpperCase()).trim();
+  const bn=$('#brandName');if(bn)bn.textContent=nm||'Writing Agent';   // wordmark = the user's name
   buildThemeSelect();
   if(S.active_job&&!RUN.es)attachJob(S.active_job.id,S.active_job.project);
 }
