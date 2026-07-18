@@ -4,7 +4,7 @@ Where Writing Agent is going. This is a direction, not a promise - priorities sh
 feedback. The authoritative spec is [`plan.md`](plan.md); this file is the short "what's next".
 
 ## Now / near-term
-- **On PyPI:** `pip install writing-agent` is live (0.3.0), published via the OIDC release workflow
+- **On PyPI:** `pip install writing-agent` is live (0.3.1), published via the OIDC release workflow
   (`.github/workflows/release.yml`).
 - **Provider reach:** first-party **Anthropic**, **Perplexity**, **Cerebras**, **SambaNova**, and
   **AWS Bedrock / Azure OpenAI via gateway** all ship now (`providers.py`). No blessed default - the

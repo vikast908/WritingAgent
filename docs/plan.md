@@ -574,11 +574,15 @@ Two surfaces over one engine (plus the markdown brain repo, which is half the UI
 and canon in any editor):
 
 - **Interactive shell - the WRITING AGENT TUI.** Run `writing-agent` / `python -m writingagent`
-  with no command (see the `shell/` package). Themed masthead (gradient-filled ANSI Shadow wordmark; theme
-  also sets palette/figlet/glyphs - `ui.THEMES`), a **compact welcome** (START + your projects +
-  a status footer - sized so the wordmark is still on screen at the first prompt on a 30-row
-  terminal; the full command list lives under `/help`, the feature board under `/features`; a
-  red warning fires when `WRITINGAGENT_FAKE` is set so test mode can't silently eat real runs),
+  with no command (see the `shell/` package). Themed masthead - a big gradient-filled figlet wordmark
+  (default face `colossal`; the editorial gradient sweeps manuscript-red → ember → hot-gold, framed top
+  and bottom by a mirrored flame rule; the theme also sets palette/figlet/glyphs - `ui.THEMES`). The
+  wordmark sits on the **left**; on a wide terminal a **GET STARTED** command column sits beside it
+  (`write` · `new → run → export` · `/help·/theme·/model`), stacking beneath it on a narrower one and
+  collapsing to a one-line wordmark when the big mark would wrap. It prints **every launch**. Then a
+  **compact welcome** (your projects + a status footer; the full command list lives under `/help`, the
+  feature board under `/features`; a red warning fires when `WRITINGAGENT_FAKE` is set so test mode
+  can't silently eat real runs),
   live run dashboard (progress, stage, tokens vs budget, USD cost), `/dashboard` telemetry
   rollup, autocomplete + persistent history, and a `❧ <model>` prompt. No bottom toolbar (it
   read as noise; state lives in the prompt prefix + welcome footer). Type commands directly (no
@@ -671,7 +675,8 @@ surfaces via the prompt suffix and the escalation picker (the bottom toolbar was
   alternatives) and export failures that say why + how to recover (file locked / missing optional dep).
 - **Accessibility**: `WRITINGAGENT_A11Y` line-mode (no in-place Live redraw - append-only full-sentence
   status for screen readers), `WRITINGAGENT_REDUCED_MOTION` (static stages, no spinner), a one-line
-  wordmark on narrow (<60-col) terminals, and `NO_COLOR` / `--plain` honored throughout.
+  wordmark when a terminal is too narrow for the big mark, an ASCII fallback (`WRITINGAGENT_ASCII` or
+  a non-UTF stdout), and `NO_COLOR` / `--plain` honored throughout.
 - **Proactive key check**: the banner warns when the active provider has no API key (before the first
   call fails); `WRITINGAGENT_PROVIDER` now syncs `settings.provider` so the masthead is accurate.
 - **Progressive help**: `/help <topic>` shows only the matching commands.
@@ -694,7 +699,7 @@ surfaces via the prompt suffix and the escalation picker (the bottom toolbar was
 - **Reading time** is prose-only - fenced code and the references list are excluded
   (`polish.read_time_min`, `READ_WPM`), so technical pieces no longer over-state "N min read".
 - **Version** is single-sourced from `writingagent.__version__` (pyproject derives it via
-  `dynamic`/`attr`); the TUI imports it. Currently **0.2.0**.
+  `dynamic`/`attr`); the TUI imports it. Currently **0.3.1**.
 
 ---
 
@@ -1784,10 +1789,12 @@ nothing is posted to any platform.
 
 ### 24.3 Search providers (`search_provider`)
 
-`duckduckgo` (default, free, keyless) or `firecrawl` (needs `FIRECRAWL_API_KEY`): Firecrawl serves
-both the search API and - when selected - the deep-research page scrape (markdown), ahead of the
-Scrapo/stdlib chain. A missing key or a failed Firecrawl call degrades to DuckDuckGo/stdlib; search
-still never blocks a run. Disk cache is keyed by provider.
+A pluggable backend **registry** (`search.py`): `duckduckgo` (default, free, keyless), `firecrawl`,
+`tavily`, `brave`, `serpapi`, `exa`, and `parallel` - each keyed backend reads its own env key (see
+`.env.example`); the dashboard exposes the choice as a dropdown. Firecrawl serves both the search API
+and - when selected - the deep-research page scrape (markdown), ahead of the Scrapo/stdlib chain. A
+missing key or any backend error degrades to DuckDuckGo/stdlib, so search never blocks a run. Disk
+cache is keyed by provider.
 
 ---
 
@@ -1819,11 +1826,28 @@ cost attribution required no per-node plumbing. `telemetry.summarize` grew `by_n
 a page refresh reattaches to the live job. A finished web `write` runs the same tail as the CLI:
 auto seo+promote (when `auto_promote`) + md/html export.
 
+**Redesign - Editorial Design System v3.0.0 (0.3.1).** The SPA was rebuilt around `docs/design.md`
+v3: one **768px centered content column** everywhere, manuscript-red accent, Fraunces serif, square
+surfaces. *Studio* is now a single-card composer (topic field + an **Advanced settings** pill for
+per-piece voice/SEO overrides + **Propose angles**); labels are plain English (no snake_case)
+throughout. *Settings* **auto-save on change**, carry inline descriptions, filter by mode-relevance,
+and gained a **Keys** tab that sets and verifies API keys (chat + image providers) - and the server
+now loads `.env` on startup so keys added there survive a restart. A **Memory** workspace manages the
+five memory types (profile, skills with trust status, standing preferences, watch-list, voice
+exemplars - `GET`/`POST /api/memory`). The **live-run** view shows the agent working: a phase pipeline
+stepper, a "now doing X" heartbeat, a critic-verdict chip, an incremental log, and a 3×3 HDR
+grid-spinner. *Telemetry* leads with a full-width tokens-over-time chart (angle-only runs are labelled
+"angle proposals"). **Copy for Medium / Substack / X** (`GET /api/share`,
+`export.markdown_to_share_html`) yields paste-ready HTML with images inlined and SVG diagrams
+rasterized to PNG, plus a plain-text X thread. The sidebar is collapsible (the pilcrow logo reopens
+it) and its wordmark is the user's own name; nav is inline SVG icons; each of the 11 themes carries a
+deliberate per-theme display font.
+
 Files: `webui/server.py` (API + jobs), `webui/static/index.html` (the SPA, no build step),
 `cli` command `web` (`--port`, `--no-browser`), package-data glob in pyproject. Tests:
 `tests/test_webui.py` (API shape, run-to-done flow, SSE close, artifact-traversal guard,
-settings clamp, model-file isolation). The old Gradio demo (`demo/app.py`) is untouched - it
-remains the zero-install marketing demo; this is the working surface.
+settings clamp, model-file isolation, memory ops, `/api/share`). The old Gradio demo
+(`demo/app.py`) is untouched - it remains the zero-install marketing demo; this is the working surface.
 
 ---
 

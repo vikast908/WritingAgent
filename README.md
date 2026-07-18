@@ -2,7 +2,6 @@
 
 <img src="assets/writing-agent-banner.svg" alt="Writing Agent - a self-correcting, autonomous writing system that turns a topic into a publication-ready manuscript" width="860">
 
-[![PyPI](https://img.shields.io/pypi/v/writing-agent?style=flat-square)](https://pypi.org/project/writing-agent/)
 [![Docs](https://img.shields.io/badge/docs-docs--writingagent.vercel.app-6f9ed9?style=flat-square)](https://docs-writingagent.vercel.app/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://www.python.org/)
 [![Platforms](https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-informational?style=flat-square)](https://docs-writingagent.vercel.app/installation/)
@@ -61,8 +60,8 @@ Extras, from-source installs, and host setup: [installation guide ↗](https://d
 - **Durable** - plain markdown + JSON on disk; kill a run mid-flight and `run` resumes
   exactly where it stopped
 - **Ships, not just writes** - 6 export formats (pdf · epub · html · docx · txt · md),
-  self-laying-out diagrams, an on-page SEO audit, and a promo pack (X thread, LinkedIn
-  post, headlines)
+  self-laying-out diagrams, free-licensed or AI-generated images, an on-page SEO audit, a
+  promo pack (X thread, LinkedIn, headlines), and one-paste **Copy for Medium / Substack / X**
 
 ## Four ways to use it
 
@@ -70,7 +69,7 @@ Extras, from-source installs, and host setup: [installation guide ↗](https://d
 |---|---|
 | **TUI** - `writing-agent` | The interactive studio: chat in plain English, slash commands, live run view, 11 themes |
 | **CLI** - `writing-agent <cmd>` | One-shot commands (`write`, `run`, `export`, `seo`, `promote`, ...) for scripting |
-| **Dashboard** - `writing-agent web` | Local control room on `127.0.0.1:8787` - commission runs, live logs, per-agent cost, evals |
+| **Dashboard** - `writing-agent web` | Local control room on `127.0.0.1:8787` - commission runs, live logs, per-agent cost, evals, memory, copy-to-publish |
 | **Web demo** - [`demo/`](demo/) | Standalone Gradio page (`:7860`) to try or host - free fake-mode preview, or bring a key |
 
 There's also an embeddable Python API - see [docs ↗](https://docs-writingagent.vercel.app/project/api/).

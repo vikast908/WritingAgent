@@ -213,7 +213,7 @@ that choice matters so much.
 |---|---|
 | `search.py` | A quick **web search** to gather facts for a section. |
 | `deep_research.py` | A **deeper researcher** that fetches and reads full pages from multiple sources. |
-| `images.py` | Fetches relevant **photos** from Wikimedia Commons (free, properly licensed). |
+| `images.py` | Fetches relevant **photos** from free-licensed sources (Openverse, Wikimedia, and optional keyed providers), or **generates** one with an image model. |
 | `diagram.py` | **Draws diagrams** as clean SVG vector images when no good photo exists (for technical pieces). |
 | `cache.py` | Remembers expensive results (searches, etc.) so it doesn't pay for the same thing twice. |
 

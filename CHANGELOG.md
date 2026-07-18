@@ -6,15 +6,38 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-19
+
 ### Added
+- **Web dashboard: a Memory workspace.** The sidebar's Memory section now surfaces and manages all
+  five kinds of memory the writer accumulates - the author **profile**, learned **skills** (with
+  trust status: trusted / candidate / retired), standing **preferences**, the **watch-list**, and
+  **voice** exemplars - each viewable and add/edit/deletable from the browser (`GET`/`POST
+  /api/memory`), the same stores the TUI and the run pipeline read.
+- **Copy for Medium / Substack / X.** One click on a finished piece copies it **paste-ready**:
+  platform HTML with every image inlined and every SVG diagram rasterized to a PNG data URI (so it
+  survives a paste into a draft with no cleanup), plus a plain-text X thread. Backed by `GET
+  /api/share` and a new `export.markdown_to_share_html()` that reuses the export inliner.
+- **Multi-source, free-licensed images.** `image_source` now takes a comma-separated list over a
+  backend **registry** (`images.py`): **openverse** and **wikimedia** (keyless), plus **pixabay**,
+  **pexels**, and **unsplash** (each keyed via its own env var). Sources are tried in order with
+  honest per-source attribution; the dashboard picks them with a multi-select. Default
+  `openverse,wikimedia`.
+- **Per-piece voice & SEO overrides, and a `random` voice.** Studio and `new` can override persona,
+  emotion, register, field, and citation-style **per commission** (not only via global config), and
+  each of those accepts **`random`** (pick one per piece). A per-piece SEO keyword threads into the
+  writer up front.
+- **API keys, set and verified in the browser.** Settings gained a **Keys** tab - paste a host's
+  key, test it live, and it's written to `.env`; the dashboard now loads `.env` on startup so keys
+  added this way persist across restarts (chat and image providers alike).
 - **The agent learns the user, not just its own critic.** Every review/revise correction is now
   accumulated into a durable, cross-run, user-scoped preferences file (`prefs/preferences.md`),
   deduplicated and reinforced (a repeated request gains a `×N` count and rises). The learner is
   fed these standing preferences, so "the user keeps asking for X" turns into a learned skill /
   watch-item that steers future writing before the critic or the user has to catch it again.
   Gated by `learn_preferences` (default on); surfaced in the dashboard's Skills view.
-- **Image generation with any image-capable model.** Beyond the existing Wikimedia Commons
-  fetch, `image_source: generate` makes section/chapter illustrations with a text-to-image
+- **Image generation with any image-capable model.** Beyond the free-licensed fetch sources
+  above, `image_source: generate` makes section/chapter illustrations with a text-to-image
   model via the host's OpenAI-compatible `/images/generations` endpoint. `image_model` picks
   the slug (e.g. `gpt-image-1`, `dall-e-3`); `image_provider` optionally routes image-gen to a
   different host than chat. Generated images carry honest "AI-generated" attribution (never a
@@ -27,6 +50,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   provider as a dropdown.
 
 ### Changed
+- **Web dashboard redesign - the Editorial Design System v3.0.0.** The SPA was rebuilt around a
+  single **768px centered content column**, manuscript-red accent, Fraunces serif, and square
+  surfaces. Studio is a single-card composer (topic + an **Advanced settings** pill for per-piece
+  overrides + **Propose angles**); every label is plain English (no `snake_case`); Settings
+  **auto-save on change**, carry inline descriptions, and hide options irrelevant to the current
+  mode. The sidebar is collapsible (the pilcrow logo reopens it) and its wordmark is the user's own
+  name; nav is a clean inline-SVG icon set; Telemetry leads with a full-width tokens-over-time chart;
+  each of the 11 themes carries a deliberate display font.
+- **TUI masthead + welcome, rebuilt.** A big `colossal` figlet wordmark with a brightened flame
+  gradient (manuscript-red → ember → hot-gold, framed by a mirrored flame rule), **left-aligned**
+  with a **GET STARTED** command column beside it on a wide terminal (stacking beneath on a narrow
+  one). It now prints on **every launch** (the once-a-day gate was dropped). The welcome's project
+  list is numbered, titled, and aligned; the status line shows the live key/connection state;
+  `delete` states its scope and asks you to type `delete` to confirm; a crash restores the terminal;
+  there's an ASCII fallback (`WRITINGAGENT_ASCII` or a non-UTF stdout) and a manuscript-red + pilcrow
+  brand.
+- **The author profile now steers the writing.** The dashboard's Profile is threaded into every run's
+  intake as an "AUTHOR CONTEXT" block (who the piece is for and by) - it shaped only the byline before.
 - **Token efficiency: budget mode now engages the prompt cache.** Telemetry over real runs
   showed prompt tokens are ~63-69% of a run's spend while the provider's prompt cache was
   engaging on as little as 10% of them (OpenRouter routes DeepSeek across upstreams and its
@@ -38,14 +79,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   don't trip the pause before a piece finishes.
 - **Web dashboard: the live-run view now shows the agent working** - a phase pipeline stepper,
   a "now doing X" heartbeat line (drafting / critiquing / revising / researching / verifying /
-  humanizing / assembling / learning) with a live spinner, and the latest critic verdict as a
-  chip - replacing the raw log dump.
+  humanizing / assembling / learning) with a 3×3 HDR grid-spinner, and the latest critic verdict as
+  a chip - replacing the raw log dump.
 - **Web + TUI design pass (Emil Kowalski's craft lens).** Press feedback on every button; page
   fade only on view change (not tab clicks or polls); toast exits; origin-aware dropdowns;
   delayed tooltips; titles instead of slugs in project lists; pre-flight confirms on
-  token-spending actions; grouped settings with tips; keyboard view-nav; copy fixes. TUI: the
-  full masthead prints once a day (repeat launches get the one-line wordmark); `DIM` lifted for
-  readable secondary text on dark terminals.
+  token-spending actions; grouped settings with tips; keyboard view-nav; copy fixes. TUI: `DIM`
+  lifted for readable secondary text on dark terminals (the masthead itself was rebuilt - see above).
+
+### Fixed
+- **A bad `default_user` no longer breaks every settings write.** A username set to a non-string
+  (e.g. `1234`) crashed `is_safe_id` (`argument of type 'int' is not iterable`) and every subsequent
+  save; `is_safe_id` now guards its type, settings are coerced to the field's declared type on write,
+  and a corrupted value heals back to `default`.
+- **The web dashboard's SPA header rows no longer overlap.** A margin shorthand on `#view > *` had
+  zeroed the vertical margins that separate the header from the first content row; switched to
+  `margin-inline` so the column stays centered without collapsing the gap.
 
 ## [0.3.0] - 2026-07-18
 

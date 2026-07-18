@@ -635,13 +635,28 @@ combobox/listbox keyboard and ARIA contract. **Error state** below.
   horizontally within its own frame - never clipped**, with a themed scrollbar.
 - **ReadingView** - the hero prose surface: measure + reading spec + drop cap.
 
-### Brand mark & Loader
+### Brand mark, Masthead & Loaders
 - **BrandMark** - the **pilcrow `¶`** in Fraunces on an ink tile (`full` radius),
   identical light/dark. The favicon is the documented `xs`-radius exception.
   Sidebar header and TUI banner use the standard mark. No substitute logo.
-- **Loader - the Caret** - a blinking `▍` (accent), optionally with a live
-  word/token counter for long operations. “Loading…” is not displayed visually,
+- **TUI masthead** - a big gradient figlet wordmark (default face `colossal`), the
+  editorial gradient sweeping manuscript-red → ember → hot-gold (`ui.STOPS`) and
+  framed top and bottom by a mirrored flame rule. It sits on the **left**; on a wide
+  terminal a GET STARTED command column sits beside it (stacking beneath on a narrow
+  one, collapsing to a one-line wordmark when the mark would wrap), and it prints
+  **every launch**. The gradient stops and figlet face are per-theme; a fallback face
+  chain preserves the mark if a theme's font is unavailable.
+- **Loader - the Caret** - a blinking `▍` (accent) for view/content loading,
+  optionally with a live word/token counter. “Loading…” is never shown visually,
   but an equivalent localized status is always available to assistive technology.
+- **Loader - the live-run grid spinner** - the dashboard's "now running" activity
+  indicator is a **3×3 grid of rounded cells**: a comet lights the 8-cell outer ring
+  clockwise (staggered `animation-delay`s) with a white-hot **HDR bloom** head
+  (accent + white + a layered box-shadow glow) trailing into the accent; the centre
+  cell stays a dim core. Done = a solid green grid; idle = a static dim grid;
+  reduced-motion = a static legible grid. Pure CSS, brand-colored via
+  `--accent`/`--green`; the warm comet deliberately echoes the TUI masthead's flame
+  gradient (one identity across surfaces).
 
 ## Overlays
 

@@ -32,12 +32,14 @@ own machine. A few properties are worth understanding:
   prompt - spoof-resistant markers plus a standing instruction that the block is never
   instructions. A hostile page cannot direct the writer, but no fence is perfect: review
   research-grounded output before publishing.
-- **Network:** the only outbound calls are to (1) your **configured model host** (any of the
-  23 in `providers.py` - the one you pick); (2) **DuckDuckGo** for keyless web search, plus
-  full page fetches from arbitrary web hosts when `deep_research` is enabled (SSRF-guarded,
-  robots-respecting); (3) **Wikimedia Commons** image search for illustrated content; (4) the
-  optional **Firecrawl** search/scrape backend, only when you opt in with `FIRECRAWL_API_KEY`
-  set (`search_provider: firecrawl`); and (5) **mermaid.ink**, used only during export to
+- **Network:** the only outbound calls are to (1) your **configured model host** (any of those
+  in `providers.py` - the one you pick), which also serves optional **image generation**
+  (`image_source: generate`); (2) your **web-search backend** - **DuckDuckGo** by default
+  (keyless), or an opt-in keyed backend (`tavily`, `brave`, `serpapi`, `exa`, `parallel`,
+  `firecrawl`), plus full page fetches from arbitrary web hosts when `deep_research` is enabled
+  (SSRF-guarded, robots-respecting); (3) **free-licensed image search** - **Openverse** and
+  **Wikimedia Commons** by default, plus the opt-in keyed sources **Pixabay**, **Pexels**, and
+  **Unsplash** when you set their keys; and (4) **mermaid.ink**, used only during export to
   render Mermaid diagrams to PNG. All manuscript data stays on disk locally.
 - **Telemetry stays local:** per-call usage records (model, tokens, cost, latency) are
   written only to `.index/telemetry/` on your machine - nothing is sent anywhere.
