@@ -562,8 +562,9 @@ viewport edge (collision) - a documented gap in the reference impl.
   vs error (error text in `error`). Auto-dismiss (~3s; ~6s for errors); × to
   close; announced via a live region. One at a time; queue extras.
 - **Banner** - persistent, in-flow, full-width: `info` / `success` / `warning` /
-  `error`, each a 10% tinted background + a 3px left accent bar + icon + message
-  + optional action. For state that must stay visible (quota, degraded mode).
+  `error`, each a 12% tinted background + icon + message + optional action (the
+  tint and icon carry the state; no accent side-bar - stripes read as decoration).
+  For state that must stay visible (quota, degraded mode).
 - **Alert (inline)** - a compact banner scoped to a section or form.
 - **Badge** - small count/label pill (`accent-muted` + accent, `label-caps`).
 - **Status dot** - 7px `full` dot: success/warning/error/accent (e.g. a live-run

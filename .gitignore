@@ -34,3 +34,6 @@ htmlcov/
 
 # Maintainer session journal - kept local, never published
 docs/dev/resume.md
+
+# Impeccable skill critique snapshots (local tool state)
+.impeccable/

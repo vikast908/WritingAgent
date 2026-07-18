@@ -33,6 +33,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   row's inline margin shorthand zeroed the `#view>*` auto-centering margins, and the tab bar's
   `inline-flex` display escaped them entirely - both rows hugged the viewport edge while the
   title and body sat in the column.
+- **Web dashboard accessibility + polish pass (impeccable review).** Keyboard access for the
+  primary surfaces (sidebar nav is real buttons; project rows and approach cards are focusable
+  and Enter/Space-activatable; settings inputs gained programmatic labels; toasts announce via
+  live regions; the run log is a `role="log"`). Hash routing (`#projects`, `#project/<id>`):
+  refresh and back/forward now keep your place, and the tab title follows the view. The
+  primary button's label color is a themed token with a contrast guard in `applyWebTheme()` -
+  a named palette can no longer produce an unreadable button (starry-night went from ~1.3:1
+  to 15.9:1). A finished run now shows a "Open the piece" completion banner instead of only a
+  log line. Also: the Projects poll repaints only when data changes (no more 6s flicker),
+  timeline timestamps lifted to AA contrast, trend-chart clarity line recolored away from
+  evidence, banner side-stripe dropped (tint + icon carry the state; design.md updated),
+  progress bar animates transform instead of width, motion/z-index tokens applied, chart axis
+  text raised from 8px, reading measure centered, truncated activity reasons get an ellipsis.
 
 ## [0.2.1] - 2026-07-17
 

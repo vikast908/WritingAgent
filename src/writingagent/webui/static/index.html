@@ -68,10 +68,10 @@ a:hover{text-decoration:underline}
 
 /* controls */
 button{font:inherit;font-size:12.5px;color:var(--fg);background:transparent;border:none;
-  border-radius:var(--r-sm);padding:7px 13px;cursor:pointer;transition:background .12s,color .12s}
+  border-radius:var(--r-sm);padding:7px 13px;cursor:pointer;transition:background var(--dur-fast),color var(--dur-fast)}
 button:hover{background:var(--fill)}
-button.primary{background:var(--blue-2);color:#fff}
-button.primary:hover{background:var(--blue)}
+button.primary{background:var(--accent-fill);color:var(--on-accent)}
+button.primary:hover{background:var(--accent-fill-hover)}
 button.secondary{background:var(--fill);color:var(--accent)}
 button.text{padding:4px 6px;color:var(--accent)}
 button.text:hover{background:transparent;text-decoration:underline}
@@ -109,13 +109,13 @@ h1,h2,h3{font-family:var(--serif);font-weight:540;letter-spacing:-.01em}
 .csel-btn{display:inline-flex;align-items:center;gap:9px;justify-content:space-between;width:100%;
   background:var(--surface);border:1px solid var(--stroke-soft);border-radius:var(--r-sm);
   padding:7px 10px;min-width:130px;color:var(--fg);font:inherit;font-size:13px;cursor:pointer;
-  box-shadow:inset 0 1px 1px color-mix(in srgb,#000 6%,transparent);transition:border-color .12s}
+  box-shadow:inset 0 1px 1px color-mix(in srgb,#000 6%,transparent);transition:border-color var(--dur-fast)}
 .csel-btn:hover{border-color:var(--stroke)}
 .csel.open .csel-btn{border-color:var(--accent)}
 .csel-btn .csel-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.csel-btn .chev{color:var(--fg-3);font-size:9px;transition:transform .15s}
+.csel-btn .chev{color:var(--fg-3);font-size:9px;transition:transform var(--dur-fast)}
 .csel.open .csel-btn .chev{transform:rotate(180deg)}
-.csel-menu{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;z-index:60;
+.csel-menu{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;z-index:var(--z-dropdown);
   background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-page),0 0 0 1px var(--hair);
   padding:4px;max-height:280px;overflow:auto;display:none}
 .csel.open .csel-menu{display:block;animation:pop .12s ease-out}
@@ -136,7 +136,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:540;letter-spacing:-.01em}
 .brand .wm{font-family:var(--serif);font-weight:520;font-size:17px;letter-spacing:0}
 .brand .sub{margin-top:6px;font-size:11px}
 #nav{flex:1;padding:6px 10px}
-#nav .item{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:var(--r-sm);
+#nav .item{display:flex;width:100%;text-align:left;align-items:center;gap:10px;padding:8px 11px;border-radius:var(--r-sm);
   cursor:pointer;color:var(--fg-2);font-size:13px;margin-bottom:1px}
 #nav .item:hover{background:var(--fill-2)}
 #nav .item.on{background:var(--fill);color:var(--accent);font-weight:500}
@@ -194,7 +194,7 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 
 /* studio approach picker */
-.approach{cursor:pointer;padding:13px 15px;border-radius:var(--r-md);border:1px solid var(--hair);margin-bottom:9px;transition:border-color .12s,background .12s}
+.approach{cursor:pointer;padding:13px 15px;border-radius:var(--r-md);border:1px solid var(--hair);margin-bottom:9px;transition:border-color var(--dur-fast),background var(--dur-fast)}
 .approach:hover{border-color:var(--stroke)}
 .approach.sel{border-color:var(--accent);background:var(--fill-2)}
 .approach .t{font-weight:600;font-size:14.5px;margin-bottom:3px}
@@ -205,7 +205,7 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 #log{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-card);
   padding:13px 15px;font-family:var(--mono);font-size:12px;line-height:1.6;height:360px;overflow:auto;white-space:pre-wrap;color:var(--fg-2)}
 .bar{height:5px;background:var(--fill-2);border-radius:9999px;overflow:hidden;margin:12px 0 6px}
-.bar i{display:block;height:100%;background:var(--blue-2);transition:width .5s}
+.bar i{display:block;height:100%;width:100%;background:var(--blue-2);transform-origin:left;transition:transform var(--dur-slow) var(--ease-out)}
 
 /* activity timeline */
 .tl{border-left:1.5px solid var(--stroke);margin-left:5px;padding-left:20px}
@@ -215,11 +215,11 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .tl .ev.res::before{border-color:var(--coral);background:var(--coral)}
 .tl .ev.good::before{border-color:var(--green);background:var(--green)}
 .tl .ev.bad::before{border-color:var(--red);background:var(--red)}
-.tl .when{font-family:var(--mono);font-size:10.5px;color:var(--fg-4)}
+.tl .when{font-family:var(--mono);font-size:10.5px;color:var(--fg-3)}
 .tl .body{font-size:13.5px;margin-top:2px}
 
 /* charts */
-svg.spark{display:block}.axt{font-family:var(--mono);font-size:8px;fill:var(--fg-3)}
+svg.spark{display:block}.axt{font-family:var(--mono);font-size:9.5px;fill:var(--fg-3)}
 .hbars{display:flex;flex-direction:column;gap:7px}
 .hbar{display:grid;grid-template-columns:130px 1fr 90px;align-items:center;gap:11px;font-size:12.5px}
 .hbar .hbar-l{font-family:var(--mono);font-size:11px;color:var(--fg-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -230,7 +230,7 @@ svg.spark{display:block}.axt{font-family:var(--mono);font-size:8px;fill:var(--fg
 .legend span::before{content:'';display:inline-block;width:9px;height:2px;margin-right:6px;vertical-align:middle;background:currentColor}
 
 /* rendered markdown */
-.md{font-family:var(--serif);font-size:16px;line-height:1.62;max-width:66ch}
+.md{font-family:var(--serif);font-size:16px;line-height:1.62;max-width:66ch;margin-inline:auto}
 .md.read>p:first-of-type::first-letter{float:left;font-family:var(--serif);font-size:3.1em;line-height:.82;font-weight:560;padding:.04em .1em 0 0;color:var(--accent)}
 .md h1{font-size:22px;margin:16px 0 8px}.md h2{font-size:18px;margin:16px 0 8px;color:var(--fg)}.md h3{font-size:15px;margin:12px 0 6px}
 .md p{margin:8px 0}.md li{margin:3px 0 3px 20px}
@@ -264,7 +264,7 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 @keyframes caret{0%,49%{opacity:1}50%,100%{opacity:0}}
 
 /* modal overlay (design.md: shadow-nous + hairline, Esc + × to close) */
-.scrim{position:fixed;inset:0;z-index:400;background:color-mix(in srgb,#000 32%,transparent);
+.scrim{position:fixed;inset:0;z-index:var(--z-scrim);background:color-mix(in srgb,#000 32%,transparent);
   display:grid;place-items:center;animation:fade .12s ease-out}
 .modal{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-page),0 0 0 1px var(--hair);
   padding:20px 22px;max-width:440px;width:calc(100% - 40px);animation:pop .14s ease-out}
@@ -276,7 +276,7 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 .copybar{display:flex;justify-content:flex-end;margin-bottom:8px}
 
 .toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border-radius:var(--r-lg);
-  box-shadow:var(--shadow-page),0 0 0 1px var(--hair);padding:11px 16px;z-index:300;max-width:440px;font-size:13.5px;animation:pop .16s ease-out}
+  box-shadow:var(--shadow-page),0 0 0 1px var(--hair);padding:11px 16px;z-index:var(--z-overlay);max-width:440px;font-size:13.5px;animation:pop .16s ease-out}
 .toast.err{color:var(--red)}
 #runbadge{display:none;align-items:center;gap:8px;padding:4px 12px;border-radius:9999px;background:var(--fill);
   cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--accent)}
@@ -291,17 +291,18 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 /* ── design.md conformance: semantic tokens, notifications, states, tooltip ── */
 :root{
   --info:#3f6f78; --on-accent:#faf8f4;
+  --accent-fill:var(--blue-2); --accent-fill-hover:var(--blue);
   --border:var(--stroke); --border-strong:color-mix(in srgb,var(--accent) 26%,color-mix(in srgb,var(--fg) 14%,transparent));
   --focus-ring:var(--accent);
   --dur-fast:120ms; --dur-base:180ms; --dur-slow:300ms; --ease-out:cubic-bezier(.16,1,.3,1);
   --z-dropdown:200; --z-overlay:300; --z-scrim:400; --z-modal:401; --z-tooltip:500;
 }
-@media(prefers-color-scheme:dark){:root:not([data-theme]){--info:#5a97a2}}
-:root[data-theme="dark"]{--info:#5a97a2}
+@media(prefers-color-scheme:dark){:root:not([data-theme]){--info:#5a97a2;--accent-fill:var(--blue);--accent-fill-hover:#993a26}}
+:root[data-theme="dark"]{--info:#5a97a2;--accent-fill:var(--blue);--accent-fill-hover:#993a26}
 /* banners — persistent in-flow notifications (10% tint + 3px accent bar + icon) */
 .banner{display:flex;gap:10px;align-items:flex-start;padding:10px 13px;margin:0 0 14px;
-  border-left:3px solid var(--bnc,var(--info));background:color-mix(in srgb,var(--bnc,var(--info)) 10%,transparent);
-  font-size:13px;color:var(--fg-2);border-radius:0 var(--r-sm) var(--r-sm) 0}
+  background:color-mix(in srgb,var(--bnc,var(--info)) 12%,transparent);
+  font-size:13px;color:var(--fg-2);border-radius:var(--r-sm)}
 .banner .bi{color:var(--bnc,var(--info));font-weight:700;line-height:1.5;flex:none}
 .banner.info{--bnc:var(--info)} .banner.success{--bnc:var(--green)}
 .banner.warning{--bnc:var(--orange)} .banner.error{--bnc:var(--red)}
@@ -348,6 +349,7 @@ async function api(path,body){
   return d;
 }
 function toast(msg,err){const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=msg;
+  t.setAttribute('role',err?'alert':'status');
   document.body.appendChild(t);setTimeout(()=>t.remove(),err?6000:3200);}
 /* banner — persistent in-flow notification (design.md Notifications). kind: info|success|warning|error */
 const banner=(kind,html)=>`<div class="banner ${kind}"><span class="bi">${({info:'ⓘ',success:'✓',warning:'▲',error:'✕'}[kind])||'ⓘ'}</span><div>${html}</div></div>`;
@@ -425,7 +427,7 @@ function trend(series,{w=340,h=128,pad=18}={}){
   const X=i=>pad+(n>1?i*(w-2*pad)/(n-1):(w-2*pad)/2),Y=v=>h-pad-((v-1)/4)*(h-2*pad);
   let grid='';for(let g=1;g<=5;g++){const y=Y(g).toFixed(1);
     grid+=`<line x1="${pad}" y1="${y}" x2="${w-pad}" y2="${y}" stroke="var(--hair)" stroke-width="1"/><text x="3" y="${(+y+3)}" class="axt">${g}</text>`;}
-  const col={insight:'var(--blue-2)',clarity:'var(--coral)',structure:'var(--green)',evidence:'var(--orange)'};
+  const col={insight:'var(--blue-2)',clarity:'var(--info)',structure:'var(--green)',evidence:'var(--orange)'};
   const paths=series.map(s=>{const c=col[s.key]||'var(--fg-3)';
     const pts=s.points.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
     return `<polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.7" vector-effect="non-scaling-stroke"/>`
@@ -465,6 +467,8 @@ document.addEventListener('click',e=>{
   cselClose();
 });
 document.addEventListener('keydown',e=>{
+  if((e.key==='Enter'||e.key===' ')&&e.target instanceof Element&&e.target.hasAttribute('data-kb')){
+    e.preventDefault();e.target.click();return;}   // keyboard-activate rows/cards (design.md: no mouse required)
   const open=document.querySelector('.csel.open');
   if(!open){return;}
   const opts=[...open.querySelectorAll('.csel-opt')];let i=opts.findIndex(o=>o.classList.contains('hl'));
@@ -478,7 +482,15 @@ document.addEventListener('keydown',e=>{
    (the same catalog the TUI uses, sent as S.themes). A named theme recolors the current
    flat editorial layout — same structure, different hue — deriving the full token set from the
    palette's 9 colors, with a per-theme dark background tinted from its structural RULE hue. */
-const TVARS=['--bg','--surface','--sidebar','--fg','--accent','--blue','--blue-2','--coral','--ok','--err','--orange','--red'];
+const TVARS=['--bg','--surface','--sidebar','--fg','--accent','--blue','--blue-2','--coral','--ok','--err','--orange','--red',
+             '--accent-fill','--accent-fill-hover','--on-accent'];
+function _lum(h){h=h.replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');
+  const v=[0,2,4].map(i=>parseInt(h.substr(i,2),16)/255).map(c=>c<=.03928?c/12.92:Math.pow((c+.055)/1.055,2.4));
+  return .2126*v[0]+.7152*v[1]+.0722*v[2];}
+function _cr(a,b){const x=_lum(a),y=_lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
+function _mixHex(a,b,t){a=a.replace('#','');b=b.replace('#','');
+  const c=i=>Math.round(parseInt(a.substr(i,2),16)*(1-t)+parseInt(b.substr(i,2),16)*t).toString(16).padStart(2,'0');
+  return '#'+c(0)+c(2)+c(4);}
 function applyWebTheme(id){
   const h=document.documentElement,r=h.style;
   TVARS.forEach(v=>r.removeProperty(v));
@@ -495,6 +507,12 @@ function applyWebTheme(id){
       set('--bg',`color-mix(in srgb, ${rule} 15%, #07070a)`);
       set('--surface',`color-mix(in srgb, ${rule} 24%, #101016)`);
       set('--sidebar',`color-mix(in srgb, ${rule} 10%, #050507)`);
+      /* theming contract (design.md): the primary-button label must stay readable on ANY palette */
+      let fill=p.gold_hi||p.gold||'#a3341f';
+      let txt=_cr(fill,'#101010')>=_cr(fill,'#faf8f4')?'#101010':'#faf8f4';
+      for(let i=0;i<6&&_cr(fill,txt)<4.5;i++)fill=_mixHex(fill,txt==='#faf8f4'?'#000000':'#ffffff',.15);
+      set('--accent-fill',fill);set('--on-accent',txt);
+      set('--accent-fill-hover',_mixHex(fill,txt==='#faf8f4'?'#000000':'#ffffff',.14));
     }
   }else h.removeAttribute('data-theme');   // system (auto light/dark)
   localStorage.setItem('wa-theme',id);
@@ -511,7 +529,7 @@ let S={user:'default',options:{},settings:[],models:{},projects:[],active_job:nu
 let RUN={job:null,project:null,log:[],state:null,es:null,status:null};
 const NAV=[['studio','Studio','✎'],['projects','Projects','▤'],['run','Live run','▶'],
            ['telemetry','Telemetry','◔'],['skills','Skills','◈'],['settings','Settings','⚙']];
-let view='studio',viewArg=null;
+let view='studio',viewArg=null,_projSnap='';
 
 async function refreshState(){
   S=await api('/api/state');
@@ -519,10 +537,19 @@ async function refreshState(){
   buildThemeSelect();
   if(S.active_job&&!RUN.es)attachJob(S.active_job.id,S.active_job.project);
 }
-function go(v,arg){view=v;viewArg=arg;render();const el=$('#view');if(el)el.scrollTop=0;}
+function go(v,arg){const h=arg?v+'/'+encodeURIComponent(arg):v;
+  if(location.hash.slice(1)!==h){location.hash=h;return;}   // onhashchange renders
+  view=v;viewArg=arg;render();const el=$('#view');if(el)el.scrollTop=0;}
+const VIEWS=['studio','projects','run','telemetry','skills','settings','project'];
+function applyHash(){const[v,arg]=location.hash.slice(1).split('/');
+  view=VIEWS.includes(v)?v:'studio';viewArg=arg?decodeURIComponent(arg):null;
+  render();const el=$('#view');if(el)el.scrollTop=0;}
+window.addEventListener('hashchange',applyHash);
 function nav(){
-  $('#nav').innerHTML=NAV.map(([id,label,ic])=>`<div class="item ${view===id?'on':''}" onclick="go('${id}')"><span class="ic">${ic}</span>${label}</div>`).join('');
+  $('#nav').innerHTML=NAV.map(([id,label,ic])=>`<button type="button" class="item ${view===id?'on':''}" onclick="go('${id}')"><span class="ic">${ic}</span>${label}</button>`).join('');
   $('#crumb').textContent={studio:'new piece',projects:'your work',run:'live run',telemetry:'cost · evals · traces',skills:'learned craft',settings:'setup'}[view]||'';
+  document.title='Writing Agent — '+({studio:'Studio',projects:'Projects',run:'Live run',telemetry:'Telemetry',
+    skills:'Skills',settings:'Settings',project:viewArg||'Project'}[view]||'Studio');
 }
 function head(kicker,title,desc){return `<div class="head"><div class="kicker">${kicker}</div><h2>${title}</h2>${desc?`<div class="desc">${desc}</div>`:''}</div>`;}
 function optSel(id,list,cur,noneLabel){return sel(id,list||[],cur,{none:noneLabel||'None'});}
@@ -573,7 +600,7 @@ function renderStudio(){
 }
 function renderApproaches(){
   return `<div class="section"><div class="lbl">Choose an angle</div>
-  ${PLAN.approaches.map((a,i)=>`<div class="approach ${i===PLAN.sel?'sel':''}" onclick="PLAN.sel=${i};render()">
+  ${PLAN.approaches.map((a,i)=>`<div class="approach ${i===PLAN.sel?'sel':''}" tabindex="0" data-kb onclick="PLAN.sel=${i};render()">
     <div class="t"><span class="n">${a.index}</span>${esc(a.title)}</div><div class="s">${esc(a.summary)}</div>
     ${a.hook?`<div class="s muted">hook — ${esc(a.hook)}</div>`:''}${a.audience?`<div class="s muted">for — ${esc(a.audience)}</div>`:''}</div>`).join('')}
   <button class="primary" style="margin-top:6px" onclick="doStart()">Begin the run</button></div>`;
@@ -595,19 +622,23 @@ function renderRun(){$('#view').innerHTML=head('Live','Run')+'<div id="runWrap">
 function renderRunInner(){
   const w=$('#runWrap');if(!w)return;const st=RUN.state||{};
   const total=st.num_sections||st.num_chapters||0,done=st.committed||0,pct=total?Math.round(100*done/total):(RUN.status==='done'?100:0);
-  w.innerHTML=`<div class="card">${RUN.job?`<div class="row">
+  const doneBanner=(RUN.status==='done'&&RUN.project)?`<div class="banner success"><span class="bi">✓</span>
+    <div style="flex:1">Finished — <b>${esc(RUN.project)}</b> is ready to read.</div>
+    <button class="primary" onclick="go('project','${RUN.project}')">Open the piece →</button></div>`:'';
+  w.innerHTML=doneBanner+`<div class="card">${RUN.job?`<div class="row">
     <span class="chip ${RUN.status==='running'?'blue':RUN.status==='done'?'ok':RUN.status==='error'?'err':''}">${RUN.status}</span>
     <span class="chip">${esc(RUN.project||'starting…')}</span><span class="chip">phase · ${esc(st.phase||'…')}</span>
     <span class="chip">${done}/${total||'?'} committed</span>${st.pending_review?'<span class="chip err">review pending</span>':''}
     <span class="spacer"></span>${RUN.status==='running'?'<button onclick="pauseRun()">Pause</button>':''}
     ${RUN.project?`<button class="secondary" onclick="go('project','${RUN.project}')">Open project</button>`:''}</div>
-    <div class="bar"><i style="width:${pct}%"></i></div><div id="log">${esc(RUN.log.join('\n'))||'· awaiting first line…'}</div>`
+    <div class="bar"><i style="transform:scaleX(${(pct/100).toFixed(3)})"></i></div><div id="log" role="log">${esc(RUN.log.join('\n'))||'· awaiting first line…'}</div>`
     :'<div class="muted">No live run. Start one in the Studio, or resume from Projects.</div>'}</div>`;
   const lg=$('#log');if(lg)lg.scrollTop=lg.scrollHeight;
 }
 /* projects */
 function renderProjects(){
-  const rows=S.projects.map(p=>`<tr class="click" onclick="go('project','${p.id}')">
+  _projSnap=JSON.stringify(S.projects);
+  const rows=S.projects.map(p=>`<tr class="click" tabindex="0" data-kb onclick="go('project','${p.id}')">
     <td>${esc(p.id)}</td><td class="muted">${p.mode}</td>
     <td><span class="chip ${p.phase==='done'?'ok':p.pending_review?'err':'blue'}">${esc(p.phase)}</span>${p.agentic?'<span class="chip blue">agentic</span>':''}</td>
     <td class="num">${p.committed}/${p.total_units??'?'}</td><td class="num">${fmtK(p.words)}</td></tr>`).join('');
@@ -683,7 +714,7 @@ function pjActivity(){
     let line;
     if(r.scope==='unit-outcome')line=`<b>${esc(r.unit)}</b> — ${r.first_pass?'approved first pass':'revised'} · insight ${r.insight??'?'}/5`;
     else if(r.scope==='run-result')line=`<b>run</b> chose <span class="chip blue">${esc(r.action)}</span> ${r.unit?'on '+esc(r.unit):''} ${r.dim?'· weakest: '+esc(r.dim):''} ${r.result?'· '+esc(r.result):''}`;
-    else line=`<b>${esc(r.unit||'run')}</b> → <span class="chip blue">${esc(r.action)}</span> ${r.reason?esc(String(r.reason).slice(0,150)):''} ${r.query?'<span class="muted">« '+esc(String(r.query).slice(0,80))+' »</span>':''} ${r.result?'<span class="muted">'+esc(String(r.result))+'</span>':''}`;
+    else line=`<b>${esc(r.unit||'run')}</b> → <span class="chip blue">${esc(r.action)}</span> ${r.reason?esc(String(r.reason).slice(0,150))+(String(r.reason).length>150?'…':''):''} ${r.query?'<span class="muted">« '+esc(String(r.query).slice(0,80))+(String(r.query).length>80?'…':'')+' »</span>':''} ${r.result?'<span class="muted">'+esc(String(r.result))+'</span>':''}`;
     const cost=(r.scope==='unit-outcome'&&uc[r.unit])?` <span class="chip">${fmt$(uc[r.unit].co)} · ${fmtK(uc[r.unit].tk)} tok</span>`:'';
     return `<div class="ev ${cls}"><div class="when">${esc((r.ts||'').replace('T',' ').slice(0,19))}</div><div class="body">${line}${cost}</div></div>`;}).join('');
   $('#pjBody').innerHTML=`<div class="section"><div class="lbl">agent activity — every decision, joined with per-unit cost</div><div class="tl">${evs}</div></div>`;
@@ -728,7 +759,7 @@ function pjExport(){
   <div class="section"><div class="lbl">export the manuscript</div>
     <div class="row">${fmts.map(f=>`<button class="secondary" onclick="projectAction('export',{format:'${f}'})">${f}</button>`).join('')}</div>
     <div class="muted small" style="margin-top:8px">Writes the file into the project folder (same as the TUI).</div></div>
-  <div class="section"><div class="lbl">rewrite in a different voice (deepseek-v4-flash · facts preserved)</div>
+  <div class="section"><div class="lbl">rewrite in a different voice (facts preserved)</div>
     <div class="row" style="margin-bottom:10px">
       ${optSel('rsReg',regs,'','Style: none')}${optSel('rsPer',pers,'','Persona: none')}${optSel('rsEmo',emos,'','Emotion: none')}
       <button class="primary" onclick="doRestyle()">Rewrite</button></div>
@@ -805,21 +836,23 @@ async function renderSettings(){
     if(dropdowns[f.name])inp=sel(cid,dropdowns[f.name],String(f.value),{none:'None'});
     else if(f.type==='bool')inp=sel(cid,[{value:'true',label:'true'},{value:'false',label:'false'}],String(!!f.value));
     else inp=`<input id="${cid}" value="${esc(f.value)}">`;
-    return `<div class="settingrow"><label>${f.name}</label>${inp}<button class="text" onclick="saveSetting('${f.name}')">set</button></div>`;}).join('');
-  const nodes=Object.entries(S.models.nodes||{}).map(([n,m])=>`<div class="settingrow"><label>${n}</label><input data-n="${n}" value="${esc(m)}"><button class="text" onclick="saveModel('${n}',this)">set</button></div>`).join('');
+    return `<div class="settingrow"><label for="${cid}">${f.name}</label>${inp}<button class="text" onclick="saveSetting('${f.name}')">set</button></div>`;}).join('');
+  const nodes=Object.entries(S.models.nodes||{}).map(([n,m])=>`<div class="settingrow"><label for="mdl-${n}">${n}</label><input id="mdl-${n}" data-n="${n}" value="${esc(m)}"><button class="text" onclick="saveModel('${n}',this)">set</button></div>`).join('');
   $('#view').innerHTML=head('Setup','Settings')+`<div class="grid2">
     <div class="section"><div class="lbl">engine settings</div>
-      <div class="muted small" style="margin-bottom:10px">writes config/settings.yaml (same file the TUI's /set edits); clamped server-side. Appearance is a separate browser preference (top-right).</div>${rows}</div>
+      <div class="muted small" style="margin-bottom:10px">writes settings.yaml in the agent home (same file the TUI's /set edits); clamped server-side. Appearance is a separate browser preference (top-right).</div>${rows}</div>
     <div class="section"><div class="lbl">model routing</div>
-      <div class="settingrow"><label>default</label><input data-n="default" value="${esc(S.models.default)}"><button class="text" onclick="saveModel('default',this)">set</button></div>${nodes}</div></div>`;
+      <div class="settingrow"><label for="mdl-default">default</label><input id="mdl-default" data-n="default" value="${esc(S.models.default)}"><button class="text" onclick="saveModel('default',this)">set</button></div>${nodes}</div></div>`;
 }
 async function saveSetting(name){
   try{await api('/api/settings',{field:name,value:ctrlVal('st-'+name)});toast(name+' saved');}catch(e){toast(e.message,1)}}
 async function saveModel(node,btn){const el=btn.parentElement.querySelector('[data-n]');
   try{await api('/api/models',{node,slug:el.value});toast(node+' → '+el.value);}catch(e){toast(e.message,1)}}
 
-refreshState().then(render);   /* theme change is handled by the custom-select cb (applyWebTheme) */
-setInterval(()=>{if(view==='projects')refreshState().then(()=>{if(view==='projects')render();});},6000);
+refreshState().then(()=>location.hash?applyHash():render());   /* theme change is handled by the custom-select cb (applyWebTheme) */
+setInterval(()=>{if(view!=='projects')return;refreshState().then(()=>{   // re-render only when the
+  const snap=JSON.stringify(S.projects);                                       // data changed - a blind
+  if(view==='projects'&&snap!==_projSnap){_projSnap=snap;render();}});},6000); // repaint replays the fade
 </script>
 </body>
 </html>
