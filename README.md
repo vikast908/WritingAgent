@@ -13,7 +13,9 @@
 **One command → a researched, self-critiqued, fact-checked, exported article (or book).** Local-first and **model-agnostic** (any OpenAI-compatible host), on your own key, for cents.
 
 #### ▶ Try it in your browser - no API key needed
-A **[web demo](demo/)** runs the whole pipeline behind a simple UI: a **free preview** (placeholder output, $0, no key) shows exactly how a run works, or paste your own key for a real piece. Run the web demo locally with one pip install - `pip install -e ".[web]" && python demo/app.py` from a clone - or deploy it as a Hugging Face Space ([guide](demo/README.md)).
+The **[web demo](demo/)** runs the whole pipeline behind a simple Gradio UI: a **free preview** (placeholder output, $0, no key) shows exactly how a run works, or paste your own key for a real piece. It's the zero-terminal way in - deploy it as a Hugging Face Space, or run it locally from a clone with `pip install -e ".[web]" && python demo/app.py` (opens `http://127.0.0.1:7860`). Guide: [`demo/README.md`](demo/README.md).
+
+> **Two web surfaces, don't confuse them.** The **web demo** above is a standalone try-it page you host or deploy. The **[local dashboard](#the-web-dashboard)** (`writing-agent web`) ships inside every install and is your control room - commission runs, live logs, per-agent cost, evals, and settings on `127.0.0.1:8787`.
 
 [Try in browser](demo/) · [Quickstart](#quickstart) · [Install](#install) · [Why not just prompt ChatGPT?](#why-not-just-prompt-chatgpt) · [Examples](examples/) · [**Docs ↗**](https://docs-writingagent.vercel.app/)
 
@@ -39,8 +41,8 @@ production layer).
 - **Proof, not vibes** - every article ships an [**evidence report**](#evidence-report-proof-not-vibes): the argument it makes + every source ranked by influence (0–100)
 - **Figures that lay themselves out** - the model authors a diagram *spec*; a layout engine places it so labels never overflow
 - **Use it your way** - interactive TUI, one-shot CLI, a **local web dashboard** (`writing-agent web` - run pieces from the browser with live logs, per-agent cost, traces, and evals), or an embeddable Python API
-- **Self-correcting *and* (optionally) self-directing** - the default pipeline self-corrects via fixed quality gates; flip on **agentic mode** and an LLM *controller* takes the wheel, choosing the next move both per unit (gather research / read canon before drafting) and over the whole piece (draft, reoutline, revise, consolidate, repair, produce, learn, escalate, done) - and the writer can call tools *mid-draft*. Off by default, with the fixed pipeline as a byte-identical fallback (see [Self-directing mode](#self-directing-mode-opt-in))
-- **Model-agnostic - your model, your choice** - no blessed default: run on any OpenAI-compatible host (OpenAI, Anthropic, DeepSeek, Gemini, Groq, Perplexity, OpenRouter, AWS Bedrock/Azure via gateway, local Ollama/LM Studio, …), picked in the first-run wizard or `/provider`, with per-node models swappable via `/model`; everything is plain markdown + JSON on disk; kill a run and it resumes exactly where it stopped; a global `fallback` model keeps an unattended run alive if a tier has an outage
+- **Self-correcting *and* (optionally) self-directing** - the default pipeline self-corrects via fixed quality gates. Flip on **agentic mode** and an LLM *controller* takes the wheel, choosing the next move per unit (gather research / read canon before drafting) and over the whole piece (draft, reoutline, revise, consolidate, repair, produce, learn, escalate, done), and the writer can call tools *mid-draft*. Off by default, with the fixed pipeline as a byte-identical fallback (see [Self-directing mode](#self-directing-mode-opt-in))
+- **Model-agnostic - your model, your choice** - no blessed default. Run on any OpenAI-compatible host (OpenAI, Anthropic, DeepSeek, Gemini, Groq, Perplexity, OpenRouter, AWS Bedrock/Azure via gateway, local Ollama/LM Studio, …), picked in the first-run wizard or `/provider`, with per-node models swappable via `/model`. Everything is plain markdown + JSON on disk, so kill a run and it resumes exactly where it stopped; a global `fallback` model keeps an unattended run alive if a tier has an outage
 - **Promotes, not just writes** - after the piece is done, `seo` audits it against on-page fundamentals (keyword placement, description, headings, readability) and names its keywords + hashtags, and `promote` repurposes it into an X thread, LinkedIn post, newsletter teaser, TL;DR, and 5 A/B headlines - the HTML export ships SEO/OG/Twitter meta tags (see [Promote it](#promote-it---seo-x-threads-linkedin))
 - **Cheap when you want it** - the recommended opt-in `/set cost_mode budget` pins the spend-heavy knobs and routes the judgment nodes to the flash tier, auto-scaling the token budget to the piece's size so a full article still finishes (the default `cost_mode` is `standard`)
 
@@ -124,10 +126,14 @@ installs nothing and the stdlib fetcher is used) and
 research, DOCX export, D2 diagrams, embeddings) degrades gracefully when its extra
 isn't installed - see the [**installation guide ↗**](https://docs-writingagent.vercel.app/installation/).
 
-**Prefer a browser?** A **web demo** (`demo/app.py`, in the repo) runs the whole pipeline behind a
-Gradio UI - try it free in fake mode with no key, or paste your own key for a real run. From a clone:
-`pip install -e ".[web]" && python demo/app.py`, or deploy it as a Hugging Face Space (see
-[`demo/README.md`](demo/README.md)).
+**Prefer a browser?** Two options, and they're different things:
+
+- **The web demo** (`demo/app.py`, in the repo) - a standalone Gradio try-it page you host or deploy.
+  Free in fake mode with no key, or paste your own key for a real run. From a clone:
+  `pip install -e ".[web]" && python demo/app.py` (opens `:7860`), or deploy it as a Hugging Face
+  Space (see [`demo/README.md`](demo/README.md)).
+- **The local dashboard** (`writing-agent web`) - built into every install, no extra deps; commission
+  and watch real runs on `127.0.0.1:8787`. See [The web dashboard](#the-web-dashboard).
 
 ---
 
@@ -245,7 +251,7 @@ appended.
 `craft_passes`, `persona`, `emotion`. All clamped to their known sets; leave them empty and the agent
 infers sensible defaults and behaves exactly as before.
 
-> Spec: `plan.md` §22 (the craft engine) and §23 (the compositor). Validated across **531 tests**
+> Spec: `docs/plan.md` §22 (the craft engine) and §23 (the compositor). Validated across **531 tests**
 > (1 skipped), ruff-clean, on Linux · macOS · Windows × Python 3.10–3.13.
 
 ---
