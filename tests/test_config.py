@@ -86,6 +86,29 @@ def test_cost_mode_standard_is_noop():
     assert cfg2 is cfg and s2 is s and notes == []
 
 
+def test_cost_mode_budget_engages_prompt_cache_for_deepseek_default():
+    """Budget mode auto-pins the DeepSeek upstream so the prompt cache engages (prompt
+    tokens are the majority of spend; unpinned they largely miss the cache)."""
+    from writingagent.config import apply_cost_mode
+    cfg = ModelConfig({"default": "deepseek/deepseek-v4-pro",
+                       "fallback": "deepseek/deepseek-v4-flash"})
+    _, s2, notes = apply_cost_mode(cfg, Settings(cost_mode="budget"))
+    assert s2.openrouter_providers == "DeepSeek"
+    assert any("cache-pin" in n for n in notes)
+
+
+def test_cost_mode_cache_pin_respects_user_value_and_non_deepseek_default():
+    from writingagent.config import apply_cost_mode
+    # a user's explicit pin is never overridden
+    _, s2, _ = apply_cost_mode(ModelConfig({"default": "deepseek/deepseek-v4-pro"}),
+                               Settings(cost_mode="budget", openrouter_providers="Together"))
+    assert s2.openrouter_providers == "Together"
+    # a non-DeepSeek default stays unpinned (the pin is DeepSeek-cache specific)
+    _, s3, _ = apply_cost_mode(ModelConfig({"default": "openai/gpt-5"}),
+                               Settings(cost_mode="budget"))
+    assert s3.openrouter_providers == ""
+
+
 def test_cost_mode_budget_never_loosens_a_leaner_user_value():
     from writingagent.config import apply_cost_mode
     s = Settings(cost_mode="budget", divergent_drafts=1, max_revisions=0,

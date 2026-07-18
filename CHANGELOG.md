@@ -27,6 +27,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   provider as a dropdown.
 
 ### Changed
+- **Token efficiency: budget mode now engages the prompt cache.** Telemetry over real runs
+  showed prompt tokens are ~63-69% of a run's spend while the provider's prompt cache was
+  engaging on as little as 10% of them (OpenRouter routes DeepSeek across upstreams and its
+  automatic cache only fires when the upstream is pinned). Budget mode now auto-pins the
+  DeepSeek upstream when the default model is DeepSeek and nothing is pinned (fallbacks stay
+  on; no-op off OpenRouter or for other defaults; a user's own pin is respected), and applies
+  it at run start - a large cut to the dominant cost. The budget overhead allowance was also
+  raised (25k → 35k) so the produce/learn/SEO tail and the agentic controller's extra calls
+  don't trip the pause before a piece finishes.
 - **Web dashboard: the live-run view now shows the agent working** - a phase pipeline stepper,
   a "now doing X" heartbeat line (drafting / critiquing / revising / researching / verifying /
   humanizing / assembling / learning) with a live spinner, and the latest critic verdict as a

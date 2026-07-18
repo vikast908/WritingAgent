@@ -120,6 +120,9 @@ def run(cfg: ModelConfig, uid: str, book_id: str, *, force: bool = False,
     # so a long-lived host (TUI/web) can't interleave two runs' token accounting.
     from ..config import apply_cost_mode, budget_for_units
     cfg, settings, cost_notes = apply_cost_mode(cfg, load_settings())
+    # Apply the run's (possibly budget-adjusted) cache pin now, so the prompt cache engages
+    # for THIS run. In standard mode this re-applies the user's own value (a no-op).
+    llm.configure_openrouter_providers(getattr(settings, "openrouter_providers", "") or "")
     # Scale the run token budget by the project's unit count so a full piece finishes
     # (budget mode) unless the user pinned an explicit hard cap. Read the count from the
     # already-persisted run_state; default 6 if it can't be read yet.

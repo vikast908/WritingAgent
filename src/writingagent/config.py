@@ -194,8 +194,10 @@ class Settings:
     num_sections: int = 6        # default section count for articles
     theme: str = "editorial"     # TUI color theme (see ui.THEMES; /theme to switch)
     provider: str = "openrouter" # model host (see providers.py; /provider to switch)
-    openrouter_providers: str = ""  # comma-separated OpenRouter upstreams to pin (e.g. "DeepSeek")
-    #                                 so DeepSeek's prompt cache engages; "" = OpenRouter default routing
+    openrouter_providers: str = ""  # comma-separated OpenRouter upstreams to pin (e.g. "DeepSeek") so
+    #                                 DeepSeek's prompt cache engages; "" = OpenRouter default routing.
+    #                                 Budget mode auto-pins this for a DeepSeek default (see apply_cost_mode);
+    #                                 setting it explicitly engages the cache in standard mode too.
     export_dir: str = ""         # default save folder for exports ("" = each project's own folder; /path)
     strip_inline_citations: bool = True   # remove [N] markers from prose; sourcing lives only in end References
     rank_references: bool = True          # final References scored by influence (0-100), dated, sorted high->low
@@ -237,8 +239,9 @@ BUDGET_MAX_CONTEXT_CHARS = 12_000
 # The run token budget scales with unit count (so a full article FINISHES instead of
 # pausing mid-way, the "cap not working" complaint), unless the user pins an explicit
 # max_run_tokens (a hard ceiling that always wins). ~20k/unit + fixed overhead for the
-# thesis/outline/produce/seo/promote/learn tail. Both tunable.
-BUDGET_OVERHEAD_TOKENS = 25_000
+# thesis/outline/produce/seo/promote/learn tail (and the agentic controller's extra calls,
+# measured ~40k on a real agentic run - hence the headroom). Both tunable.
+BUDGET_OVERHEAD_TOKENS = 35_000
 
 
 def budget_for_units(settings: Settings, units: int) -> int:
@@ -290,6 +293,17 @@ def apply_cost_mode(cfg: ModelConfig, settings: Settings):
                 cfg2.set_node(node, flash)
                 notes.append(f"{node}->{flash.rsplit('/', 1)[-1]}")
         cfg = cfg2
+    # Engage the provider's prompt cache. Prompt tokens are ~65% of a run's spend (measured),
+    # but on OpenRouter DeepSeek's automatic context cache only fires when the upstream is
+    # pinned - an unpinned run was seen caching just 10% of its prompt tokens, paying full
+    # price on the dominant cost. If the default model is a DeepSeek slug and nothing is
+    # pinned, pin it (fallbacks stay on): a large, safe efficiency win. No-op off OpenRouter
+    # or for a non-DeepSeek default; a user's own pin is always respected.
+    if not (getattr(s, "openrouter_providers", "") or "").strip():
+        vendor = cfg.default.split("/", 1)[0].strip().lower() if "/" in cfg.default else ""
+        if vendor == "deepseek":
+            s.openrouter_providers = "DeepSeek"
+            notes.append("cache-pin=DeepSeek")
     return cfg, s, notes
 
 
