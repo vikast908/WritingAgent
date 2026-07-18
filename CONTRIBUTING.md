@@ -132,10 +132,10 @@ A 60-second map (full detail in `docs/plan.md` and the README's Architecture sec
 - `registers.py` / `craft.py` / `exemplars.py` / `surgery.py` / `fields.py` - the craft engine:
   genre/register profiles, deterministic craft metrics, few-shot exemplars, surgical
   show-don't-tell / passive passes, and structural templates (`plan.md` §22).
-- `compositor.py` / `personas.py` (+ `personas/*.md`) / `emotions.py` - the layer cascade that
+- `compositor.py` / `personas.py` (+ `resources/personas/*.md`) / `emotions.py` - the layer cascade that
   selects one voice from register ⊃ field ⊃ persona ⊃ emotion ⊃ skills: selectable personas
   (manner) and anti-cliché emotion deny-lists (`plan.md` §23).
-- `gold/*.md` - the per-register genre style corpus (the default "match this" voice exemplar).
+- `resources/gold/*.md` - the per-register genre style corpus (the default "match this" voice exemplar).
   The gold/persona corpora and the register profiles are **tunable data**, not hard-code.
 - `shell/` / `cli/` / `ui.py` - Rich TUI, one-shot CLI (both packages), and the theme registry
   (11 themes: palette + wordmark figlet per theme).

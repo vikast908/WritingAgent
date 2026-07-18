@@ -1651,7 +1651,7 @@ the register's citation convention (`influence` default · `numeric` · `apa` ·
 New tunable settings (all clamped): `register`, `field`, `citation_style` (""=infer/register-default),
 `craft_passes` (bool). Threaded as run-state keys and passed to `nodes.write_*/critique_*/cohesion_edit`
 and `humanizer.humanize` via a `register` argument (default `None` ⇒ unchanged). New files:
-`registers.py`, `craft.py`, `exemplars.py`, `surgery.py`, `fields.py`, `gold/*.md`,
+`registers.py`, `craft.py`, `exemplars.py`, `surgery.py`, `fields.py`, `resources/gold/*.md`,
 `tests/test_craft_engine.py`. Edited: `slop.py`, `humanizer.py`, `polish.py`, `prompts.py`, `nodes.py`,
 `config.py`, `brain.py`, `pyproject.toml` (package-data), `orchestrator/{common,book,article,review}.py`.
 
@@ -1685,7 +1685,7 @@ break it. Upper layers are **single-select** (one register, one field, one perso
 skills are multi, and they were already capped + efficacy-gated (§8). `compositor.py` is the one place
 that decides what is selected, what is dropped, and **logs why** - it never silently concatenates.
 
-### 23.2 Personas - `personas.py` + `personas/*.md`
+### 23.2 Personas - `personas.py` + `resources/personas/*.md`
 
 A persona is a **manner** layer: it flavors diction, rhythm, device-density, and stance *within* the
 register's rules. Each ships a **signature card** (the manner nudge) + an **exemplar** (original
@@ -1731,7 +1731,7 @@ manner guidance for the *writer*; the critic already enforces the register and t
 
 New tunable settings (clamped against the known sets): `persona`, `emotion` (both ""=none). Stored in
 run-state (`_base_run_state`, so both modes) and read by the writer sites via the compositor. New files:
-`personas.py`, `emotions.py`, `compositor.py`, `personas/*.md`, `tests/test_compositor.py`. Edited:
+`personas.py`, `emotions.py`, `compositor.py`, `resources/personas/*.md`, `tests/test_compositor.py`. Edited:
 `config.py`, `craft.py` (emotion clichés), `pyproject.toml` (package-data), `orchestrator/{common,book,
 article,review}.py`.
 

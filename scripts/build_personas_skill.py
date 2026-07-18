@@ -17,7 +17,7 @@ from writingagent import personas  # noqa: E402
 
 SKILL = ROOT / ".claude" / "skills" / "writing-personas"
 VOICES = SKILL / "voices"
-EXEMPLAR_DIR = ROOT / "src" / "writingagent" / "personas"
+EXEMPLAR_DIR = ROOT / "src" / "writingagent" / "resources" / "personas"
 
 
 def exemplar_body(p) -> str:

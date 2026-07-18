@@ -80,14 +80,14 @@ version = { attr = "writingagent.__version__" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-# Ship the gold-corpus (registers.gold_exemplars) and persona (personas.block) exemplars
-# plus the web dashboard's SPA inside the wheel; they are data, not modules, so
-# packages.find alone would drop them. resources/ bundles the shipped defaults
-# (models.yaml routing incl. the fallback model, and the 13 seed skills) so pip
-# installs get them too - models.yaml is copied out on first run; seeds are read
-# in place. Both are kept in sync with the repo-root config/ and seeds/ by tests.
-writingagent = ["gold/*.md", "personas/*.md", "webui/static/*.html",
-                "resources/models.yaml", "resources/seeds/skills/*.md"]
+# resources/ is the single home for all shipped data: the gold corpus
+# (registers.gold_exemplars), persona exemplars (personas.block), the default
+# model routing (copied out to the user config on first run), and the 13 seed
+# skills (read in place). The webui SPA ships alongside its server. Data, not
+# modules - packages.find alone would drop them.
+writingagent = ["resources/gold/*.md", "resources/personas/*.md",
+                "resources/models.yaml", "resources/seeds/skills/*.md",
+                "webui/static/*.html"]
 
 [tool.ruff]
 line-length = 110

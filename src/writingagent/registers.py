@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-_GOLD = Path(__file__).resolve().parent / "gold"
+_GOLD = Path(__file__).resolve().parent / "resources" / "gold"
 
 
 # Craft-metric keys (see craft.py). Surfaced to the critic as computed evidence; the
