@@ -161,3 +161,49 @@ def test_watch_block_framing():
     assert "BLOCKING" in nodes._watch_block("p - why", True)
     assert "advisory" in nodes._watch_block("p - why", False)
     assert nodes._watch_block(None, True) is None
+
+
+# ── learned reader preferences (durable, reinforced, cross-run) ──────────────────
+def test_record_preference_dedupes_reinforces_and_caps(tmp_brain):
+    """A repeat correction increments a count and surfaces; the list is capped newest-first."""
+    brain.record_preference("u", "stop hedging")
+    brain.record_preference("u", "use shorter sentences")
+    brain.record_preference("u", "Stop  hedging")          # same guidance (norm/case) -> reinforce
+    text = brain.user_preferences_text("u")
+    assert "- stop hedging  ×2" in text                    # reinforced with a count
+    assert text.splitlines()[0].startswith("- stop hedging")  # moved to the front
+    assert "use shorter sentences" in text
+    # cap: only the newest _PREF_CAP survive
+    for i in range(brain._PREF_CAP + 5):
+        brain.record_preference("u", f"pref number {i}")
+    kept = [ln for ln in brain.user_preferences_text("u").splitlines() if ln.startswith("- ")]
+    assert len(kept) == brain._PREF_CAP
+
+
+def test_record_preference_ignores_blank(tmp_brain):
+    brain.record_preference("u", "   ")
+    assert brain.user_preferences_text("u") == ""
+
+
+def test_record_instruction_accumulates_user_preference(tmp_brain, monkeypatch):
+    """A user review/revise instruction lands in the durable cross-run preferences (gated on)."""
+    from writingagent import orchestrator
+    from writingagent.config import Settings
+    monkeypatch.setattr("writingagent.config.load_settings",
+                        lambda: Settings(learn_preferences=True))
+    paths = brain.ArticlePaths("prefart", "u")
+    brain.write_json(paths.run_state, {"phase": "sections"})   # makes it an article project
+    orchestrator.record_instruction("u", "prefart", 1, "cut the throat-clearing intros")
+    assert "cut the throat-clearing intros" in brain.user_preferences_text("u")
+
+
+def test_record_instruction_respects_the_gate(tmp_brain, monkeypatch):
+    """learn_preferences=False keeps the instruction out of the durable preferences."""
+    from writingagent import orchestrator
+    from writingagent.config import Settings
+    monkeypatch.setattr("writingagent.config.load_settings",
+                        lambda: Settings(learn_preferences=False))
+    paths = brain.ArticlePaths("noprefart", "u")
+    brain.write_json(paths.run_state, {"phase": "sections"})
+    orchestrator.record_instruction("u", "noprefart", 1, "make it punchier")
+    assert brain.user_preferences_text("u") == ""

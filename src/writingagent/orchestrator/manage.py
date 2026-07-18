@@ -58,6 +58,15 @@ def delete_book(uid: str, book_id: str) -> None:
 
 
 def record_instruction(uid: str, book_id: str, n: int, instruction: str) -> None:
+    # A user correction is the strongest signal of the user's taste - accumulate it into
+    # durable cross-run memory (the learner distills it into skills + watch items). Gated,
+    # best-effort: it must never block recording the instruction itself.
+    try:
+        from ..config import load_settings
+        if getattr(load_settings(), "learn_preferences", True):
+            brain.record_preference(uid, instruction)
+    except Exception:  # noqa: BLE001
+        pass
     art = ArticlePaths(book_id, uid)
     if art.run_state.exists():
         brain.append_text(art.instruction_of(n), instruction)

@@ -699,8 +699,12 @@ def _run_learner(cfg, paths, plan, instructions: str, findings: str, *, log) -> 
     critic findings and build the plan object (a real BookPlan, or an article proxy)."""
     uid = paths.uid
     existing = "\n".join(p.stem for p in brain.skills_dir(uid).glob("*.md"))
+    # The learner's preference signal = the user's durable cross-run corrections (strongest
+    # taste signal) + this project's model-judged signals. Feeding the user's accumulated
+    # preferences here is what turns "the user keeps asking for X" into a learned skill/watch.
+    prefs = "\n".join(x for x in (brain.user_preferences_text(uid), _read_preferences(paths)) if x)
     out = nodes.learn(cfg, plan, instructions, findings, existing,
-                      praised=_praised_passages(uid), preferences=_read_preferences(paths))
+                      praised=_praised_passages(uid), preferences=prefs)
     for prop in out.skills:
         skills_mod.write_skill(uid, prop)
     # MERGE with the existing watch-list instead of overwriting it: the watch-list is

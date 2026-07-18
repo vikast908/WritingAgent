@@ -929,7 +929,8 @@ async function renderSkills(){
   <div class="section"><div class="lbl">learned skills — click to read</div>
     <table><tr><th>skill</th><th>status</th><th class="num">applied</th><th class="num">first-pass</th></tr>
     ${rows||'<tr><td colspan="4" class="muted">none yet</td></tr>'}</table></div>
-  <div class="section"><div class="lbl">watch-list — cross-run failure patterns</div><div class="md small" style="max-width:none">${md(d.watch_list||'_none yet_')}</div></div>`;
+  <div class="section"><div class="lbl">watch-list — cross-run failure patterns</div><div class="md small" style="max-width:none">${md(d.watch_list||'_none yet_')}</div></div>
+  <div class="section"><div class="lbl">your standing preferences — learned from your revisions (×N = how often you've asked)</div><div class="md small" style="max-width:none">${md(d.preferences||'_none yet — your review/revise corrections accumulate here_')}</div></div>`;
 }
 /* settings */
 async function renderSettings(){

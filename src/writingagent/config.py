@@ -136,6 +136,9 @@ class Settings:
     #                                          skill held out and let the critic say if it helped - a true
     #                                          counterfactual (the causal efficacy signal). Opt-in: costs one
     #                                          extra draft on units that still have undecided skills.
+    learn_preferences: bool = True           # accumulate the user's review/revise corrections into a durable
+    #                                          cross-run preferences file; the learner distills them into skills +
+    #                                          watch items so the agent follows the user's tastes on the next run.
     skill_distill: bool = False              # after learning, retire near-duplicate skills (keep the best-scoring
     #                                          one) so retrieval stays sharp. Safe only once duels give real
     #                                          scores, so off by default. Non-destructive (sets status only).

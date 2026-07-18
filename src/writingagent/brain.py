@@ -77,6 +77,58 @@ def watch_list(uid: str = "default") -> Path:
     return user_dir(uid) / "prefs" / "watch_list.md"
 
 
+def user_preferences(uid: str = "default") -> Path:
+    """The reader's standing preferences: their own review/revise corrections, accumulated
+    across every project (user scope, not per-piece). The learner distills these into
+    skills + watch items, so the agent follows the user's stated tastes on the next run -
+    the 'slowly becomes like the user' loop (plan §8, §11)."""
+    return user_dir(uid) / "prefs" / "preferences.md"
+
+
+_PREF_CAP = 30   # keep the newest N standing preferences; recurring ones reinforce and stay
+
+
+def record_preference(uid: str = "default", text: str = "") -> None:
+    """Durably record one user correction. A repeat of the same guidance increments its
+    count (reinforcement) and moves it to the front; the list is capped newest-first.
+    Best-effort - a learning breadcrumb must never break the caller."""
+    text = " ".join((text or "").split()).strip()
+    if not text:
+        return
+    try:
+        ensure_user(uid)
+        p = user_preferences(uid)
+        entries: list[list] = []   # [base_text, count], newest first
+        for ln in (read_text(p) or "").splitlines():
+            ln = ln.strip()
+            if not ln.startswith("- "):
+                continue
+            body = ln[2:]
+            m = re.search(r"\s+\(×(\d+)\)\s*$", body)
+            cnt = int(m.group(1)) if m else 1
+            base = (body[: m.start()] if m else body).strip()
+            if base:
+                entries.append([base, cnt])
+        key = text.lower()
+        hit = next((e for e in entries if e[0].lower() == key), None)
+        if hit:
+            hit[1] += 1
+            entries.remove(hit)
+            entries.insert(0, hit)          # reinforce + surface
+        else:
+            entries.insert(0, [text, 1])
+        entries = entries[:_PREF_CAP]
+        out = "\n".join(f"- {b}" + (f"  ×{c}" if c > 1 else "") for b, c in entries)
+        _atomic_write(p, out + "\n")
+    except Exception:  # noqa: BLE001 - never let a learning write break a run
+        pass
+
+
+def user_preferences_text(uid: str = "default") -> str:
+    """The standing-preferences block (empty string when none), for the learner."""
+    return (read_text(user_preferences(uid)) or "").strip()
+
+
 def voice_dir(uid: str = "default") -> Path:
     """Admired writing samples: user-dropped .md/.txt files plus /praise'd passages.
     Injected into writer calls as register to MATCH (showing voice beats describing

@@ -287,7 +287,8 @@ def _skills(uid: str) -> dict:
         for p in sorted(d.glob("*.md")):
             files[p.stem] = p.read_text(encoding="utf-8")
     return {"index": idx, "skills": files,
-            "watch_list": brain.read_text(brain.watch_list(uid)) or ""}
+            "watch_list": brain.read_text(brain.watch_list(uid)) or "",
+            "preferences": brain.user_preferences_text(uid)}
 
 
 # ── Job bodies ─────────────────────────────────────────────────────────────────

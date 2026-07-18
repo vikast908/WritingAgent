@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The agent learns the user, not just its own critic.** Every review/revise correction is now
+  accumulated into a durable, cross-run, user-scoped preferences file (`prefs/preferences.md`),
+  deduplicated and reinforced (a repeated request gains a `×N` count and rises). The learner is
+  fed these standing preferences, so "the user keeps asking for X" turns into a learned skill /
+  watch-item that steers future writing before the critic or the user has to catch it again.
+  Gated by `learn_preferences` (default on); surfaced in the dashboard's Skills view.
 - **Image generation with any image-capable model.** Beyond the existing Wikimedia Commons
   fetch, `image_source: generate` makes section/chapter illustrations with a text-to-image
   model via the host's OpenAI-compatible `/images/generations` endpoint. `image_model` picks
