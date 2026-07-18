@@ -906,8 +906,22 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"ok": True})
 
 
+def _load_env() -> None:
+    """Load API keys from the agent home's .env (and a dev-checkout .env in the CWD) into the
+    process — the same thing the CLI does — so the dashboard picks up keys written by the Keys
+    tab / setkey even when it's launched directly (not via the console script), and after a
+    restart. No override: an already-set environment variable wins."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv()                       # nearest .env from the CWD (dev checkouts)
+    load_dotenv(brain.HOME / ".env")    # the agent home (written by setkey); no override
+
+
 def serve(port: int = 8787, *, open_browser: bool = True, log=print) -> None:
     """Start the dashboard on 127.0.0.1:`port` (blocking). Ctrl-C to stop."""
+    _load_env()                         # so real runs work with a key from .env, not just live
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     httpd.daemon_threads = True
     url = f"http://127.0.0.1:{httpd.server_address[1]}"
