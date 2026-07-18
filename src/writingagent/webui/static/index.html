@@ -247,25 +247,31 @@ textarea.mono{font-family:var(--mono);font-size:12px;line-height:1.6}
 @media (max-width:560px){.disc .disc-note{display:none}}
 @media (prefers-reduced-motion:reduce){.disc-panel,.disc .chev{transition:none}}
 
-/* studio — centered compose surface (chat-composer feel: tall box, submit bottom-right) */
-#view>.hero{max-width:560px}   /* beat #view>* (1200) — keep the composer focused, not full-width */
-.hero{margin:0 auto;text-align:center;padding-top:clamp(48px,20vh,200px)}
+/* studio — centered compose surface: heading + outer card holding the field + actions */
+#view>.hero{max-width:768px}   /* beat #view>* (1200) — focused compose column */
+.hero{margin:0 auto;text-align:center;padding-top:clamp(40px,12vh,120px)}
 .hero.compact{padding-top:28px}
-.composer{display:flex;align-items:flex-end;gap:10px;padding:12px 12px 12px 18px;text-align:left;
-  background:var(--surface);border:1px solid var(--stroke-soft);border-radius:16px;box-shadow:var(--shadow-card);
-  transition:border-color var(--dur-fast),box-shadow var(--dur-fast)}
-.composer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--fill)}
-.composer-in{flex:1;min-width:0;min-height:66px;border:none;background:transparent;box-shadow:none;resize:none;color:var(--fg);
-  font-family:var(--sans);font-size:15px;line-height:1.5;padding:0;max-height:260px;overflow-y:auto}
-.composer-in:hover{border:none}
-.composer-in:focus{outline:none}
-.composer-in::placeholder{color:var(--fg-4)}
-.composer-btn{flex:none;white-space:nowrap;padding:10px 18px}
-.disc-center{width:auto;justify-content:flex-end;margin:12px 2px 0 auto;color:var(--fg-3)}
-.disc-center:hover{color:var(--fg-2)}
-.disc-center .disc-t{font-weight:500}
-.disc.disc-center[aria-expanded="true"] .chev{transform:rotate(180deg)}
-.advcard{max-width:660px;margin:14px auto 0;text-align:left;background:var(--surface);
+.hero-h{font-family:var(--serif);font-size:clamp(27px,3.4vw,34px);font-weight:500;letter-spacing:-.01em;line-height:1.1;color:var(--fg);text-wrap:balance}
+.hero-sub{color:var(--fg-3);font-size:15px;margin-top:9px}
+.composer-card{margin-top:26px;text-align:left;padding:14px;border-radius:16px;
+  background:color-mix(in srgb,var(--accent) 3%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--accent) 15%,var(--hair));box-shadow:var(--shadow-card)}
+.composer-field{width:100%;min-height:150px;resize:vertical;color:var(--fg);
+  background:var(--surface);border:1px solid var(--stroke-soft);border-radius:12px;box-shadow:none;
+  font-family:var(--sans);font-size:15px;line-height:1.55;padding:14px 16px}
+.composer-field:hover{border-color:var(--stroke)}
+.composer-field:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--fill)}
+.composer-field::placeholder{color:var(--fg-4)}
+.composer-actions{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
+.advtoggle{display:inline-flex;align-items:center;gap:8px;padding:9px 15px;border-radius:9999px;
+  background:var(--surface);border:1px solid var(--stroke-soft);color:var(--fg-2);font-size:13px;font-weight:500}
+.advtoggle:hover{border-color:var(--stroke);color:var(--fg)}
+.advtoggle .ico{flex:none;color:var(--fg-3)}
+.advtoggle .chev{font-size:9px;color:var(--fg-4);transition:transform var(--dur-base) var(--ease-out)}
+.advtoggle[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.composer-go{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;padding:10px 20px;border-radius:9px;font-weight:500}
+.composer-go .go-arrow{font-size:15px;line-height:1}
+.advcard{max-width:768px;margin:14px auto 0;text-align:left;background:var(--surface);
   border:1px solid var(--hair);border-radius:14px;padding:20px 22px}
 .advrow{display:flex;gap:16px}
 .advfield{display:flex;flex-direction:column;gap:6px;margin-bottom:15px}
@@ -726,7 +732,7 @@ function applyHash(){const[v,arg]=location.hash.slice(1).split('/');
 window.addEventListener('hashchange',applyHash);
 function nav(){
   $('#nav').innerHTML=NAV.map(([id,label,ic])=>`<button type="button" class="item ${view===id?'on':''}" onclick="go('${id}')" data-tip="${label}"><span class="ic">${ic}</span><span class="nlbl">${label}</span></button>`).join('');
-  $('#crumb').textContent={studio:'new topic',projects:'your work',run:'live run',telemetry:'cost · evals · traces',memory:'what it remembers',settings:'setup'}[view]||'';
+  $('#crumb').textContent={studio:'New topic',projects:'your work',run:'live run',telemetry:'cost · evals · traces',memory:'what it remembers',settings:'setup'}[view]||'';
   document.title='Writing Agent — '+({studio:'Studio',projects:'Projects',run:'Live run',telemetry:'Telemetry',
     memory:'Memory',settings:'Settings',project:viewArg||'Project'}[view]||'Studio');
 }
@@ -804,14 +810,19 @@ function renderStudio(){
   const has=PLAN.approaches.length;
   $('#view').innerHTML=`
   <div class="hero${has?' compact':''}">
-    <div class="composer" id="composer">
-      <textarea id="topic" class="composer-in" rows="3" placeholder="Describe the topic…"
-        oninput="PLAN.topic=this.value;autogrow(this)"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doPlan()}">${esc(PLAN.topic)}</textarea>
-      <button class="primary composer-btn" onclick="doPlan()" ${PLAN.planning?'disabled':''}>${PLAN.planning?'proposing…':'Propose angles'}</button>
+    <h1 class="hero-h">What would you like to explore?</h1>
+    <div class="hero-sub">Describe your topic, question, or idea.</div>
+    <div class="composer-card" id="composer">
+      <textarea id="topic" class="composer-field" rows="4" placeholder="Describe your topic, question, or idea…"
+        oninput="PLAN.topic=this.value"
+        onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();doPlan()}">${esc(PLAN.topic)}</textarea>
+      <div class="composer-actions">
+        <button type="button" class="advtoggle" id="advBtn" aria-expanded="${PLAN.adv?'true':'false'}" aria-controls="advPanel" onclick="toggleAdv()">
+          <svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="10" cy="8" r="2.3" fill="var(--surface)"/><circle cx="15" cy="16" r="2.3" fill="var(--surface)"/></svg>
+          <span>Advanced settings</span><span class="chev">▾</span></button>
+        <button class="primary composer-go" onclick="doPlan()" ${PLAN.planning?'disabled':''}>${PLAN.planning?'proposing…':'Propose angles'}<span class="go-arrow">→</span></button>
+      </div>
     </div>
-    <button type="button" class="disc disc-center" id="advBtn" aria-expanded="${PLAN.adv?'true':'false'}" aria-controls="advPanel" onclick="toggleAdv()">
-      <span class="chev">▾</span><span class="disc-t">Advanced settings</span></button>
     <div class="disc-panel${PLAN.adv?' open':''}" id="advPanel"><div class="disc-inner"><div class="advcard">
       <div class="advrow">
         <div class="advfield"><span class="advlbl">${flabel('mode')}</span>${sel('mode',['article','book'],g('mode')==='book'?'book':'article')}</div>
@@ -827,10 +838,8 @@ function renderStudio(){
     </div></div></div>
   </div>
   <div id="approaches">${has?renderApproaches():''}</div>`;
-  autogrow($('#topic'));
   if(PLAN.adv){const inner=$('#advPanel')?.querySelector('.disc-inner');if(inner)inner.style.overflow='visible';}  // keep re-renders' open panel dropdown-safe
 }
-function autogrow(el){if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,200)+'px';}
 function toggleAdv(){PLAN.adv=!PLAN.adv;
   const p=$('#advPanel'),inner=p&&p.querySelector('.disc-inner'),btn=$('#advBtn');
   if(!p)return;
