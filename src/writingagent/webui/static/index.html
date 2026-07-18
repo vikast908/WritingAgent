@@ -336,6 +336,10 @@ textarea.mono{font-family:var(--mono);font-size:12px;line-height:1.6}
 
 /* charts */
 svg.spark{display:block}.axt{font-family:var(--mono);font-size:9.5px;fill:var(--fg-3)}
+.tokchart{width:100%;height:190px;display:block}
+.tokchart .tg{stroke:var(--hair);vector-effect:non-scaling-stroke}
+.tokchart .tf{fill:var(--accent);opacity:.10}
+.tokchart .tl2{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
 .hbars{display:flex;flex-direction:column;gap:7px}
 .hbar{display:grid;grid-template-columns:130px 1fr 90px;align-items:center;gap:11px;font-size:12.5px}
 .hbar .hbar-l{font-family:var(--mono);font-size:11px;color:var(--fg-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -580,6 +584,19 @@ function spark(vals,{w=150,h=34,pad=3}={}){
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none">
     <polygon points="${pad},${h-pad} ${line} ${w-pad},${h-pad}" fill="var(--blue-2)" opacity=".13"/>
     <polyline points="${line}" fill="none" stroke="var(--blue-2)" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function tokchart(vals){   // full-width cumulative-tokens area chart (Telemetry hero)
+  vals=(vals||[]).filter(v=>typeof v==='number');
+  if(vals.length<2)return `<div class="lbl">tokens over time</div><div class="muted small" style="padding:14px 2px">Not enough calls yet to chart.</div>`;
+  const W=1000,H=190,pt=14,pb=10,mx=Math.max(...vals)||1,n=vals.length;
+  const X=i=>i*W/(n-1),Y=v=>pt+(1-v/mx)*(H-pt-pb);
+  const pts=vals.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  const grid=[0,.25,.5,.75,1].map(f=>{const y=(pt+(1-f)*(H-pt-pb)).toFixed(1);return `<line x1="0" y1="${y}" x2="${W}" y2="${y}" class="tg"/>`;}).join('');
+  return `<div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:10px">
+      <span class="lbl" style="margin:0">tokens over time</span>
+      <span class="muted small">cumulative · ${fmtK(vals[n-1])} over ${n} calls</span></div>
+    <svg class="tokchart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="cumulative tokens over time">
+      ${grid}<polygon points="0,${H-pb} ${pts} ${W},${H-pb}" class="tf"/><polyline points="${pts}" class="tl2"/></svg>`;
 }
 function hbars(rows){
   rows=(rows||[]).filter(r=>r.val>0);if(!rows.length)return '<div class="muted small">no data yet</div>';
@@ -1141,11 +1158,11 @@ async function renderTelemetry(){
     <div class="cell"><div class="k">llm calls</div><div class="v">${t.calls}</div></div>
     <div class="cell"><div class="k">avg latency</div><div class="v">${t.avg_latency_ms}<span class="sub" style="display:inline"> ms</span></div></div>
     <div class="cell"><div class="k">errors</div><div class="v">${t.errors}</div></div>
-    <div class="cell"><div class="k">tokens over time</div><div style="margin-top:6px">${spark(cumToks)||'<span class="muted small">—</span>'}</div></div>
   </div>
+  <div class="section">${tokchart(cumToks)}</div>
   <div class="section"><div class="lbl">per session run — newest first</div>
     <table><tr><th>run id</th><th>project</th><th class="num">calls</th><th class="num">tokens</th><th class="num">cost</th></tr>
-    ${runs.map(([rid,proj,c,tk,co])=>`<tr><td class="num small">${esc(rid)}</td><td>${esc(proj)}</td><td class="num">${c}</td><td class="num">${fmtK(tk)}</td><td class="num">${fmt$(co)}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">no runs recorded</td></tr>'}</table></div>
+    ${runs.map(([rid,proj,c,tk,co])=>`<tr><td class="num small">${esc(rid)}</td><td>${proj&&proj!=='-'?esc(proj):`<span class="muted" data-tip="calls made before a project exists — proposing editorial angles">angle proposals</span>`}</td><td class="num">${c}</td><td class="num">${fmtK(tk)}</td><td class="num">${fmt$(co)}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">no runs recorded</td></tr>'}</table></div>
   ${teleTables(d.summary,d.records)}`;
 }
 function teleTables(sum,records){
