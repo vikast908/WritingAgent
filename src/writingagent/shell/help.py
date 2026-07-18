@@ -92,7 +92,7 @@ _FEATURE_KEYS = [
     ("use_researcher",    "researcher",  "web search per unit - real facts + inline citations"),
     ("deep_research",     "deep search", "multi-query fan-out + full-page fetch (needs researcher)"),
     ("use_embeddings",    "embeddings",  "semantic skill retrieval (all-MiniLM-L6-v2, local)"),
-    ("use_images",        "images",      "Wikimedia Commons images for illustrated content"),
+    ("use_images",        "images",      "free-licensed images (openverse, wikimedia, …) or generate; see /set image_source"),
     ("article_cohesion",  "cohesion",    "whole-article smoothing pass before References"),
     ("tournament_judge",  "tournament",  "best-of-N judge: pick the strongest divergent draft"),
     ("verify_claims",     "verify",      "check each cited claim against its source"),
