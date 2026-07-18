@@ -564,6 +564,18 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
         if not state.get("use_images"):
             return None
         from .. import images as img_mod
+        # image_source=generate: try an image model first (non-fiction genres only - a
+        # generated illustration in a novel chapter is as wrong as a concept diagram).
+        if state.get("image_source") == "generate" and _NONFICTION_RE.search(plan.genre or ""):
+            prompt = (f'A clean, professional editorial illustration for a chapter titled '
+                      f'"{blueprint.title}". {blueprint.purpose or ""} '
+                      f'No text, captions, or watermarks in the image.')
+            gen = img_mod.generate_image(
+                blueprint.title, prompt, paths.root / "images" / f"ch{n:02d}_gen.png",
+                model=state.get("image_model", ""),
+                provider_id=state.get("image_provider", ""), log=log)
+            if gen:
+                return [gen.to_markdown("1")]
         query = f"{blueprint.title} {blueprint.purpose} {plan.genre}"
         fetched = img_mod.search_wikimedia(query, max_results=2)
         if fetched:

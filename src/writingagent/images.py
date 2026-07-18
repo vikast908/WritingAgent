@@ -42,11 +42,17 @@ class ImageResult:
     author: str
     license: str
     description: str
+    generated: bool = False   # True = made by an image model (different caption/attribution)
 
     def to_markdown(self, figure_label: str = "") -> str:
         prefix = f"Figure {figure_label}: " if figure_label else ""
-        bare_title = _md_text(self.title.removeprefix("File:"))
         desc = _md_text(self.description)
+        if self.generated:
+            # AI-generated illustrations carry their own honest attribution, not a
+            # Wikimedia source line (which would be a false provenance claim).
+            return (f"![{desc}]({_md_url(self.url)})\n"
+                    f"*{prefix}{desc}. AI-generated illustration ({_md_text(self.author)}).*")
+        bare_title = _md_text(self.title.removeprefix("File:"))
         author = _md_text(self.author)
         lic = _md_text(self.license)
         return (
@@ -124,3 +130,65 @@ def search_wikimedia(query: str, max_results: int = 3) -> list[ImageResult]:
         return results[:max_results]
     except Exception:  # noqa: BLE001 - network errors are non-fatal
         return []
+
+
+# ── Image generation via any image-capable model (plan §2) ──────────────────────
+def _image_provider(provider_id: str = ""):
+    """The host to run image generation on: a named provider, else the active LLM host.
+    Both go through the same OpenAI-compatible client, so any host that exposes an
+    /images/generations endpoint works - the tool is not tied to one vendor."""
+    from . import llm, providers
+    if provider_id:
+        pid = providers.resolve(provider_id)
+        p = providers.REGISTRY.get(pid)
+        if p is not None:
+            return p
+    return llm.active_provider()
+
+
+def generate_image(caption: str, prompt: str, out_path, *, model: str = "",
+                   provider_id: str = "", size: str = "1024x1024", log=None) -> ImageResult | None:
+    """Text-to-image via the OpenAI-compatible images endpoint of the configured (or a
+    named) host. Writes the image to `out_path` and returns an ImageResult, or None on
+    any failure / in fake mode / when no model is set - the caller then falls back to a
+    Wikimedia fetch, then an SVG diagram. Best-effort: image gen never blocks a run.
+    """
+    import os
+    if os.getenv("WRITINGAGENT_FAKE", "").lower() in ("1", "true", "yes"):
+        return None
+    model = (model or "").strip()
+    if not model:
+        return None
+    try:
+        import base64
+
+        from openai import OpenAI
+
+        from . import providers
+        p = _image_provider(provider_id)
+        base = providers.base_url_for(p)
+        if not base:
+            return None
+        key = providers.api_key_for(p)
+        client = OpenAI(base_url=base, api_key=key or "not-needed",
+                        default_headers=dict(getattr(p, "headers", {})) or None, timeout=120)
+        resp = client.images.generate(model=model, prompt=prompt, size=size, n=1)
+        datum = resp.data[0]
+        raw = None
+        b64 = getattr(datum, "b64_json", None)
+        if b64:
+            raw = base64.b64decode(b64)
+        elif getattr(datum, "url", None):
+            import urllib.request
+            with urllib.request.urlopen(datum.url, timeout=30) as r:  # noqa: S310 - model-returned URL
+                raw = r.read()
+        if not raw:
+            return None
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(raw)
+        if log:
+            log(f"   generated image -> {out_path.name} ({model})")
+        return ImageResult(url=f"images/{out_path.name}", title=caption, author=model,
+                           license="AI-generated", description=caption, generated=True)
+    except Exception:  # noqa: BLE001 - generation is best-effort; the caller falls back
+        return None

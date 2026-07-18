@@ -327,3 +327,46 @@ def test_cosine_similarity_values():
     assert embeddings.cosine([1.0, 0.0], [0.0, 1.0]) == pytest.approx(0.0)
     assert embeddings.cosine([0.0, 0.0], [1.0, 0.0]) == 0.0   # zero vector guarded
     assert embeddings.cosine([1.0, 1.0], [1.0, 0.0]) == pytest.approx(0.7071, abs=1e-3)
+
+
+# ── image generation (any image-capable model, OpenAI-compatible endpoint) ──────
+def test_generate_image_writes_bytes_and_attributes(tmp_path, monkeypatch):
+    import base64
+
+    from writingagent import images, providers
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
+    monkeypatch.setattr(images, "_image_provider",
+                        lambda pid="": types.SimpleNamespace(headers={}))
+    monkeypatch.setattr(providers, "base_url_for", lambda p: "https://host/v1")
+    monkeypatch.setattr(providers, "api_key_for", lambda p: "k")
+
+    png_b64 = base64.b64encode(b"\x89PNG-bytes").decode()
+
+    class _Imgs:
+        def generate(self, **kw):
+            assert kw["model"] == "gpt-image-1" and kw["prompt"]
+            return types.SimpleNamespace(data=[types.SimpleNamespace(b64_json=png_b64, url=None)])
+
+    class _Client:
+        def __init__(self, **kw):
+            self.images = _Imgs()
+    fake = types.ModuleType("openai")
+    fake.OpenAI = _Client
+    monkeypatch.setitem(sys.modules, "openai", fake)
+
+    out = tmp_path / "images" / "s1.png"
+    res = images.generate_image("A caption", "a prompt", out, model="gpt-image-1")
+    assert res and res.generated
+    assert out.exists() and out.read_bytes() == b"\x89PNG-bytes"
+    md = res.to_markdown("1")
+    assert "images/s1.png" in md and "AI-generated" in md and "gpt-image-1" in md
+    assert "Wikimedia" not in md   # generated images must not claim a Commons source
+
+
+def test_generate_image_degrades_without_model_or_in_fake_mode(tmp_path, monkeypatch):
+    from writingagent import images
+    monkeypatch.delenv("WRITINGAGENT_FAKE", raising=False)
+    assert images.generate_image("c", "p", tmp_path / "x.png", model="") is None
+    monkeypatch.setenv("WRITINGAGENT_FAKE", "1")
+    assert images.generate_image("c", "p", tmp_path / "x.png", model="gpt-image-1") is None
+    assert not (tmp_path / "x.png").exists()

@@ -173,6 +173,7 @@ def _options() -> dict:
         "export_formats": ["pdf", "epub", "html", "docx", "txt", "md"],
         "citation_styles": ["influence", "numeric", "apa", "mla", "chicago", "ap", "none"],
         "search_providers": list(search.PROVIDERS),
+        "image_sources": ["wikimedia", "generate"],
     }
 
 

@@ -935,11 +935,11 @@ async function renderSkills(){
 async function renderSettings(){
   await refreshState();
   const opts=S.options||{};
-  const dropdowns={register:opts.registers,persona:opts.personas,emotion:opts.emotions,citation_style:opts.citation_styles,search_provider:opts.search_providers};
+  const dropdowns={register:opts.registers,persona:opts.personas,emotion:opts.emotions,citation_style:opts.citation_styles,search_provider:opts.search_providers,image_source:opts.image_sources};
   const GROUPS=[['run',['mode','num_chapters','num_sections','max_revisions','consolidate_every','autonomous',
       'divergent_drafts','divergent_skeletons','tournament_judge','min_insight','skill_duels','skill_distill']],
     ['research & truth',['use_researcher','search_provider','deep_research','verify_claims','verify_excerpt_chars',
-      'watch_blocking','use_images','diagram_engine','table_read','table_read_revise','escalate_below_confidence','escalate_on_contradiction']],
+      'watch_blocking','use_images','image_source','image_model','image_provider','diagram_engine','table_read','table_read_revise','escalate_below_confidence','escalate_on_contradiction']],
     ['voice & craft',['register','field','citation_style','persona','emotion','humanize','craft_passes','article_cohesion',
       'book_cohesion','strip_inline_citations','rank_references','use_embeddings','seo_keyword','auto_promote']],
     ['cost & limits',['cost_mode','max_run_tokens','budget_tokens_per_unit','max_context_chars','request_timeout']],
@@ -952,6 +952,9 @@ async function renderSettings(){
     max_revisions:'critique-and-revise loops allowed per section',
     min_insight:'critic insight score (1-5) required to approve; 0 turns the gate off',
     use_researcher:'web grounding per unit - off means citations cannot be verified',
+    image_source:'wikimedia = fetch free-licensed stock; generate = make one with an image model',
+    image_model:'image-gen model slug (e.g. gpt-image-1, dall-e-3); needed for image_source=generate',
+    image_provider:'host for image gen (blank = the main provider); lets chat and images use different hosts',
     deep_research:'multi-source fetch + synthesis; slower, richer sourcing',
     verify_claims:'checks each cited claim against its source; unsupported claims block',
     humanize:'rewrites each unit to strip AI tells',craft_passes:'surgical show-dont-tell and de-passive passes',

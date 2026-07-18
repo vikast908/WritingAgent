@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Image generation with any image-capable model.** Beyond the existing Wikimedia Commons
+  fetch, `image_source: generate` makes section/chapter illustrations with a text-to-image
+  model via the host's OpenAI-compatible `/images/generations` endpoint. `image_model` picks
+  the slug (e.g. `gpt-image-1`, `dall-e-3`); `image_provider` optionally routes image-gen to a
+  different host than chat. Generated images carry honest "AI-generated" attribution (never a
+  false Commons source line), and any failure falls back to the fetch, then an SVG diagram.
 - **Five more web-search backends, all configurable and host-agnostic.** `search_provider`
   now accepts `tavily`, `brave`, `serpapi`, `exa`, and `parallel` alongside the existing
   `duckduckgo` (keyless default) and `firecrawl`. Each keyed backend reads its own env key

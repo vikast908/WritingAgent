@@ -163,7 +163,14 @@ class Settings:
     book_cohesion: bool = True               # book: deterministic cross-chapter repetition report
     #                                          after assembly (detector, not a rewriter - a full
     #                                          10-chapter rewrite is impractical/lossy; D-008)
-    use_images: bool = True                  # fetch Wikimedia Commons images (non-fiction/illustrated)
+    use_images: bool = True                  # include images at all (non-fiction/illustrated); off = no figures
+    image_source: str = "wikimedia"          # "wikimedia" (fetch free-licensed stock) | "generate" (a text-to-
+    #                                          image model). generate is tried first when selected; on any
+    #                                          failure it falls back to the Wikimedia fetch, then an SVG diagram.
+    image_model: str = ""                    # image-gen model slug (e.g. gpt-image-1, dall-e-3, an OpenRouter
+    #                                          image model). "" disables generation even if image_source=generate.
+    image_provider: str = ""                 # host that serves image generation ("" = the main `provider`), so
+    #                                          chat can run on one host and image-gen on another (any OpenAI-compatible)
     diagram_engine: str = "auto"             # diagram renderer: auto (= builtin) | d2 (explicit opt-in, D2+ELK) | builtin
     use_embeddings: bool = False             # semantic skill retrieval (requires sentence-transformers)
     request_timeout: float = 60.0           # per-LLM-request network timeout (seconds)
@@ -353,6 +360,8 @@ def _clamp_settings(s: Settings) -> Settings:
         _providers = ("duckduckgo", "firecrawl", "tavily", "brave", "serpapi", "exa", "parallel")
     if s.search_provider not in _providers:
         s.search_provider = "duckduckgo"
+    if s.image_source not in ("wikimedia", "generate"):
+        s.image_source = "wikimedia"
     if s.agentic_policy not in ("default", "llm", "trace"):
         s.agentic_policy = "default"
     # Register / field / citation-style: validate against the known sets; an unknown value
