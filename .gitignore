@@ -37,3 +37,6 @@ docs/dev/resume.md
 
 # Impeccable skill critique snapshots (local tool state)
 .impeccable/
+
+# Local export output (relative export_dir default lands here; not source)
+Downloads/
