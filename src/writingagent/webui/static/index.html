@@ -242,6 +242,38 @@ textarea.mono{font-family:var(--mono);font-size:12px;line-height:1.6}
 @media (max-width:560px){.disc .disc-note{display:none}}
 @media (prefers-reduced-motion:reduce){.disc-panel,.disc .chev{transition:none}}
 
+/* studio — centered "commission" composer (a focused, uncluttered compose surface) */
+.hero{max-width:660px;margin:0 auto;text-align:center;padding-top:clamp(20px,9vh,92px)}
+.hero.compact{padding-top:22px}
+.hero .kicker{margin-bottom:11px}
+.hero-title{font-family:var(--serif);font-size:clamp(38px,6vw,54px);font-weight:600;letter-spacing:-.02em;line-height:1.04}
+.hero-sub{color:var(--fg-3);font-size:14.5px;margin-top:12px}
+.composer{display:flex;align-items:center;gap:10px;margin-top:32px;padding:6px 6px 6px 18px;text-align:left;
+  background:var(--surface);border:1px solid var(--stroke-soft);border-radius:16px;box-shadow:var(--shadow-card);
+  transition:border-color var(--dur-fast),box-shadow var(--dur-fast)}
+.composer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--fill)}
+.composer-in{flex:1;min-width:0;min-height:0;border:none;background:transparent;box-shadow:none;resize:none;color:var(--fg);
+  font-family:var(--sans);font-size:15px;line-height:1.5;padding:12px 0;max-height:200px;overflow-y:auto}
+.composer-in:hover{border:none}
+.composer-in:focus{outline:none}
+.composer-in::placeholder{color:var(--fg-4)}
+.composer-btn{flex:none;white-space:nowrap;padding:10px 18px}
+.disc-center{width:auto;justify-content:center;margin:18px auto 0;color:var(--fg-3)}
+.disc-center:hover{color:var(--fg-2)}
+.disc-center .disc-t{font-weight:500}
+.disc.disc-center[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.advcard{max-width:660px;margin:14px auto 0;text-align:left;background:var(--surface);
+  border:1px solid var(--hair);border-radius:14px;padding:20px 22px}
+.advrow{display:flex;gap:16px}
+.advfield{display:flex;flex-direction:column;gap:6px;margin-bottom:15px}
+.advcard>.advfield:last-child{margin-bottom:0}
+.advrow .advfield{flex:1;margin-bottom:15px}
+.advgrid .advfield{margin-bottom:0}
+.advlbl{font-size:12.5px;color:var(--fg-2);font-weight:500}
+.advlbl .muted{font-weight:400;font-size:11px}
+.advfield input,.advfield textarea,.advfield .csel{width:100%}
+.advnote{text-align:center;color:var(--fg-4);font-size:11.5px;margin-top:2px}
+
 /* live log */
 #log{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-card);
   padding:13px 15px;font-family:var(--mono);font-size:12px;line-height:1.6;height:360px;overflow:auto;white-space:pre-wrap;color:var(--fg-2)}
@@ -302,7 +334,7 @@ svg.spark{display:block}.axt{font-family:var(--mono);font-size:9.5px;fill:var(--
 .svgwrap{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-card);padding:12px;margin:8px 0}
 
 .settingrow{display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--hair)}
-.settingrow label{width:210px;font-family:var(--mono);font-size:12px;color:var(--fg-2)}
+.settingrow label{width:210px;font-size:13px;color:var(--fg-2)}
 .settingrow input,.settingrow .csel{width:220px}
 .settingrow.imgrow{align-items:flex-start}
 .settingrow.imgrow label{padding-top:6px}
@@ -665,6 +697,30 @@ function nav(){
     skills:'Skills',settings:'Settings',project:viewArg||'Project'}[view]||'Studio');
 }
 function head(kicker,title,desc){return `<div class="head"><div class="kicker">${kicker}</div><h2>${title}</h2>${desc?`<div class="desc">${desc}</div>`:''}</div>`;}
+/* Human-friendly names for settings + fields (never show raw snake_case to the user). Anything
+   not listed falls back to a de-underscored, capitalized form. */
+const LABELS={
+  mode:'Format',num_chapters:'Chapters',num_sections:'Sections',max_revisions:'Max revisions',
+  consolidate_every:'Consolidate every',autonomous:'Autonomous (no review pauses)',divergent_drafts:'Divergent drafts',
+  divergent_skeletons:'Divergent skeletons',tournament_judge:'Tournament judge',min_insight:'Minimum insight',
+  skill_duels:'Skill duels',skill_distill:'Skill distill',
+  use_researcher:'Web research',search_provider:'Search provider',deep_research:'Deep research',
+  verify_claims:'Verify claims',verify_excerpt_chars:'Verify excerpt length',watch_blocking:'Watch-list blocking',
+  use_images:'Use images',image_source:'Image sources',image_model:'Image model',image_provider:'Image host',
+  diagram_engine:'Diagram engine',table_read:'Table read',table_read_revise:'Table read (on revise)',
+  escalate_below_confidence:'Escalate below confidence',escalate_on_contradiction:'Escalate on contradiction',
+  register:'Register',field:'Structure',citation_style:'Citation style',persona:'Persona',emotion:'Emotion',
+  humanize:'Humanize',craft_passes:'Craft passes',article_cohesion:'Article cohesion pass',book_cohesion:'Book cohesion pass',
+  strip_inline_citations:'Strip inline citations',rank_references:'Rank references',use_embeddings:'Semantic retrieval',
+  seo_keyword:'SEO keyword',auto_promote:'Auto SEO + promo pack',
+  cost_mode:'Cost mode',max_run_tokens:'Max run tokens',budget_tokens_per_unit:'Budget tokens per unit',
+  max_context_chars:'Max context characters',request_timeout:'Request timeout',
+  agentic:'Agentic mode',agentic_policy:'Agentic policy',agentic_controller_model:'Controller model',
+  agentic_max_unit_steps:'Max steps per unit',agentic_factcheck_panel:'Fact-check panel',
+  agentic_inline_tools:'Inline tools',agentic_critique_panel:'Critique panel',
+  default_user:'Default user',provider:'Model host',openrouter_providers:'OpenRouter upstream',
+  export_dir:'Export folder',theme:'Theme'};
+function flabel(n){return LABELS[n]||String(n).replace(/_/g,' ').replace(/^\w/,c=>c.toUpperCase());}
 function optSel(id,list,cur,noneLabel){return sel(id,list||[],cur,{none:noneLabel||'None'});}
 
 /* live run */
@@ -697,35 +753,42 @@ let PLAN={topic:'',mode:null,approaches:[],sel:0,planning:false,intake:'',seo:''
 function renderStudio(){
   const g=n=>(S.settings.find(f=>f.name===n)||{}).value;
   const o=S.options||{};
-  const vsel=(n,list)=>`<div style="display:flex;flex-direction:column;gap:4px">
-    <span class="small muted" style="text-transform:none">${n}</span>
+  const vsel=(n,list)=>`<div class="advfield">
+    <span class="advlbl">${flabel(n)}</span>
     ${sel('sv-'+n,['random',...(list||[])],PLAN.overrides[n]||'',{none:'default',cb:v=>{PLAN.overrides[n]=v;}})}</div>`;
-  $('#view').innerHTML=head('Commission','New piece','The agent proposes editorial angles, then researches, drafts, self-critiques, and assembles — streamed live.')+`
-  ${banner('info','<b>Real mode.</b> Runs use your API keys and spend tokens — nothing is posted anywhere; SEO and promo only edit local files.')}
-  <div class="card section">
-    <div class="row" style="margin-bottom:11px">
-      <input id="topic" style="flex:1;min-width:300px" placeholder="Topic or abstract" value="${esc(PLAN.topic)}" oninput="PLAN.topic=this.value">
-      ${sel('mode',['article','book'],g('mode')==='book'?'book':'article')}
-      <input id="units" type="number" min="1" style="width:78px" placeholder="units">
-      <button class="primary" onclick="doPlan()" ${PLAN.planning?'disabled':''}>${PLAN.planning?'proposing…':'Propose angles'}</button>
+  const has=PLAN.approaches.length;
+  $('#view').innerHTML=`
+  <div class="hero${has?' compact':''}">
+    <div class="kicker">Commission</div>
+    <h1 class="hero-title">New piece</h1>
+    <div class="hero-sub">Enter a topic and the agent will propose editorial angles.</div>
+    <div class="composer" id="composer">
+      <textarea id="topic" class="composer-in" rows="1" placeholder="Describe the topic…"
+        oninput="PLAN.topic=this.value;autogrow(this)"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doPlan()}">${esc(PLAN.topic)}</textarea>
+      <button class="primary composer-btn" onclick="doPlan()" ${PLAN.planning?'disabled':''}>${PLAN.planning?'proposing…':'Propose angles'}</button>
     </div>
-    <textarea id="intake" placeholder="Optional requirements — audience, tone, must-includes, target length…" oninput="PLAN.intake=this.value">${esc(PLAN.intake)}</textarea>
-    <button type="button" class="disc" id="advBtn" aria-expanded="${PLAN.adv?'true':'false'}" aria-controls="advPanel" onclick="toggleAdv()">
-      <span class="chev">▸</span><span class="disc-t">Advanced — tune this piece</span>
-      <span class="disc-note">optional; blank inherits your Settings defaults</span></button>
-    <div class="disc-panel${PLAN.adv?' open':''}" id="advPanel"><div class="disc-inner"><div class="advbody">
-      <div class="advgrid">${vsel('persona',o.personas)}${vsel('emotion',o.emotions)}${vsel('register',o.registers)}${vsel('field',o.fields)}${vsel('citation_style',o.citation_styles)}</div>
-      <input id="sv-seo" class="advseo" placeholder="SEO keyword — the term you want THIS piece to rank for (optional)" value="${esc(PLAN.seo)}" oninput="PLAN.seo=this.value">
+    <button type="button" class="disc disc-center" id="advBtn" aria-expanded="${PLAN.adv?'true':'false'}" aria-controls="advPanel" onclick="toggleAdv()">
+      <span class="chev">▾</span><span class="disc-t">Advanced settings</span></button>
+    <div class="disc-panel${PLAN.adv?' open':''}" id="advPanel"><div class="disc-inner"><div class="advcard">
+      <div class="advrow">
+        <div class="advfield"><span class="advlbl">${flabel('mode')}</span>${sel('mode',['article','book'],g('mode')==='book'?'book':'article')}</div>
+        <div class="advfield"><span class="advlbl">Units <span class="muted">optional</span></span><input id="units" type="number" min="1" placeholder="auto"></div>
+      </div>
+      <div class="advfield"><span class="advlbl">Requirements <span class="muted">optional</span></span>
+        <textarea id="intake" placeholder="Audience, tone, must-includes, target length…" oninput="PLAN.intake=this.value">${esc(PLAN.intake)}</textarea></div>
+      <div class="advfield"><span class="advlbl">This piece <span class="muted">blank inherits your Settings defaults</span></span>
+        <div class="advgrid">${vsel('persona',o.personas)}${vsel('emotion',o.emotions)}${vsel('register',o.registers)}${vsel('field',o.fields)}${vsel('citation_style',o.citation_styles)}</div></div>
+      <div class="advfield"><span class="advlbl">${flabel('seo_keyword')} <span class="muted">optional</span></span>
+        <input id="sv-seo" placeholder="The search term you want this piece to rank for" value="${esc(PLAN.seo)}" oninput="PLAN.seo=this.value"></div>
+      <div class="advnote">Real mode · runs use your API keys · nothing is posted anywhere</div>
     </div></div></div>
-    <div class="row small muted" style="margin-top:13px">
-      <span class="chip ${g('cost_mode')==='budget'?'blue':''}">cost: ${esc(g('cost_mode')||'standard')}</span>
-      <span class="chip ${g('agentic')?'blue':''}">${g('agentic')?'agentic':'fixed pipeline'}</span>
-      <span>runs autonomously · nothing is posted anywhere</span>
-    </div>
   </div>
-  <div id="approaches">${PLAN.approaches.length?renderApproaches():''}</div>`;
+  <div id="approaches">${has?renderApproaches():''}</div>`;
+  autogrow($('#topic'));
   if(PLAN.adv){const inner=$('#advPanel')?.querySelector('.disc-inner');if(inner)inner.style.overflow='visible';}  // keep re-renders' open panel dropdown-safe
 }
+function autogrow(el){if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,200)+'px';}
 function toggleAdv(){PLAN.adv=!PLAN.adv;
   const p=$('#advPanel'),inner=p&&p.querySelector('.disc-inner'),btn=$('#advBtn');
   if(!p)return;
@@ -1167,7 +1230,7 @@ function setRow(f){
   else if(f.type==='bool')inp=sel(cid,[{value:'true',label:'true'},{value:'false',label:'false'}],String(!!f.value));
   else inp=`<input id="${cid}" value="${esc(f.value)}">`;
   const tip=SET_TIPS[f.name]?` data-tip="${esc(SET_TIPS[f.name])}"`:'';
-  return `<div class="settingrow"><label for="${cid}"${tip}>${f.name}</label>${inp}<button class="text" onclick="saveSetting('${f.name}')">set</button></div>`;
+  return `<div class="settingrow"><label for="${cid}"${tip}>${flabel(f.name)}</label>${inp}<button class="text" onclick="saveSetting('${f.name}')">set</button></div>`;
 }
 // image_source: pick any number of sources; click order is priority (first hit wins). The
 // chosen list lives in a hidden input so the shared saveSetting('image_source') reads it.
@@ -1178,7 +1241,7 @@ function imgSrcRow(f){
   const cur=String(f.value||'').split(',').map(s=>s.trim()).filter(Boolean);
   const tip=SET_TIPS.image_source?` data-tip="${esc(SET_TIPS.image_source)}"`:'';
   const chips=all.map(s=>`<button type="button" class="imgchip${cur.includes(s)?' on':''}" data-src="${s}" onclick="toggleImgSrc('${s}')">${s}</button>`).join('');
-  return `<div class="settingrow imgrow"><label${tip}>image_source</label>
+  return `<div class="settingrow imgrow"><label${tip}>${flabel('image_source')}</label>
     <div style="flex:1;min-width:0">
       <div class="imgchips" id="imgchips">${chips}</div>
       <div class="small muted" id="imgorder" style="margin-top:7px">${_imgOrderText(cur)}</div>
@@ -1198,9 +1261,9 @@ function renderSetBody(){
   const el=$('#setBody');if(!el)return;
   if(SETTAB==='keys')return renderKeys(el);
   if(SETTAB==='models'){
-    const nodes=Object.entries(S.models.nodes||{}).map(([n,m])=>`<div class="settingrow"><label for="mdl-${n}">${n}</label><input id="mdl-${n}" data-n="${n}" value="${esc(m)}"><button class="text" onclick="saveModel('${n}',this)">set</button></div>`).join('');
+    const nodes=Object.entries(S.models.nodes||{}).map(([n,m])=>`<div class="settingrow"><label for="mdl-${n}">${flabel(n)}</label><input id="mdl-${n}" data-n="${n}" value="${esc(m)}"><button class="text" onclick="saveModel('${n}',this)">set</button></div>`).join('');
     el.innerHTML=`<div class="section"><div class="muted small" style="margin-bottom:12px">per-node model slugs (OpenRouter-style <code>vendor/model</code>, or a bare slug on a first-party host). Set the host + its key in the App and API keys tabs.</div>
-      <div class="settingrow"><label for="mdl-default">default</label><input id="mdl-default" data-n="default" value="${esc(S.models.default)}"><button class="text" onclick="saveModel('default',this)">set</button></div>${nodes}</div>`;
+      <div class="settingrow"><label for="mdl-default">Default</label><input id="mdl-default" data-n="default" value="${esc(S.models.default)}"><button class="text" onclick="saveModel('default',this)">set</button></div>${nodes}</div>`;
     return;}
   const g=SET_GROUPS[SETTAB];if(!g)return;
   const byName=Object.fromEntries(S.settings.map(f=>[f.name,f]));
@@ -1241,14 +1304,15 @@ async function saveSetting(name){
     const f=(r.settings||[]).find(x=>x.name===name);
     const av=f?String(f.value):sent;
     const gen=String(((r.settings||[]).find(x=>x.name==='image_source')||{}).value||'').split(',').includes('generate');
-    if(name==='theme'&&av){applyWebTheme('theme:'+av);buildThemeSelect();toast('theme → '+av);}  // apply to the web live + sync the top-right
-    else if(name==='image_model'&&!av&&gen)toast('generate needs an image_model — while it’s empty, images fall back to Wikimedia',1);
-    else if(av==='')toast(name+' cleared');                       // empty is valid for most fields; say so honestly
-    else if(av!==String(sent))toast(name+' adjusted to '+av);     // server clamped it (e.g. min_insight 99 → 5)
-    else toast(name+' saved');
+    const L=flabel(name);
+    if(name==='theme'&&av){applyWebTheme('theme:'+av);buildThemeSelect();toast('Theme set to '+av);}  // apply to the web live + sync the top-right
+    else if(name==='image_model'&&!av&&gen)toast('“Generate” needs an image model — until you set one, images fall back to the stock sources',1);
+    else if(av==='')toast(L+' cleared');                          // empty is valid for most fields; say so honestly
+    else if(av!==String(sent))toast(L+' adjusted to '+av);        // server clamped it (e.g. Minimum insight 99 → 5)
+    else toast(L+' saved');
   }catch(e){toast(e.message,1)}}
 async function saveModel(node,btn){const el=btn.parentElement.querySelector('[data-n]');
-  try{await api('/api/models',{node,slug:el.value});toast(node+' → '+el.value);}catch(e){toast(e.message,1)}}
+  try{await api('/api/models',{node,slug:el.value});toast(flabel(node)+' model set to '+el.value);}catch(e){toast(e.message,1)}}
 
 refreshState().then(()=>location.hash?applyHash():render());   /* theme change is handled by the custom-select cb (applyWebTheme) */
 setInterval(()=>{if(view!=='projects')return;refreshState().then(()=>{   // re-render only when the
