@@ -632,7 +632,7 @@ async function renderProject(){
 function renderProjectInner(){
   const st=PJ.data.status||{},tabs=['overview','activity','evals','artifacts','rejected','export','cost'];
   $('#view').innerHTML=head((st.mode||'piece')+' · '+(st.phase==='done'?'finished':'in progress'),PJ.id)+`
-  <div class="row" style="margin:-6px 0 16px">
+  <div class="row" style="margin:-6px auto 16px"><!-- keep left/right auto: #view>* centers the 1200px column -->
     <span class="chip ${st.phase==='done'?'ok':'blue'}">${esc(st.phase||'?')}</span>
     <span class="chip">${st.committed||0}/${st.num_sections||st.num_chapters||'?'} committed</span>
     ${PJ.data.has_trace?'<span class="chip blue">agentic trace</span>':''}
@@ -642,7 +642,8 @@ function renderProjectInner(){
     <button class="secondary" onclick="projectAction('seo')">SEO</button>
     <button class="secondary" onclick="projectAction('promote')">Promote</button>
     <button class="danger" onclick="delProject()">Delete</button></div>
-  <div class="seg" style="margin-bottom:18px">${tabs.map(t=>`<button class="${PJ.tab===t?'on':''}" onclick="PJ.tab='${t}';renderProjectInner()">${t}</button>`).join('')}</div>
+  <div style="margin-bottom:18px"><!-- block wrapper: .seg is inline-flex, which #view>*'s auto margins can't align to the column -->
+    <div class="seg">${tabs.map(t=>`<button class="${PJ.tab===t?'on':''}" onclick="PJ.tab='${t}';renderProjectInner()">${t}</button>`).join('')}</div></div>
   <div id="pjBody"></div>`;
   ({overview:pjOverview,activity:pjActivity,evals:pjEvals,artifacts:pjArtifacts,rejected:pjRejected,export:pjExport,cost:pjCost}[PJ.tab])();
 }
