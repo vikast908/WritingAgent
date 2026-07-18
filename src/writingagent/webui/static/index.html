@@ -202,7 +202,9 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .approach .t .n{color:var(--accent);margin-right:6px}
 .approach .s{color:var(--fg-2);font-size:13px}.approach .s.muted{color:var(--fg-3);font-size:12.5px;margin-top:2px}
 
-/* memory manager — expandable items (skills/voice), pref rows, empty states */
+/* memory manager — a focused, centered column (forms shouldn't sprawl edge-to-edge) */
+#view>.memview{max-width:780px;margin:0 auto}
+.memview textarea{min-height:170px}
 .tabwrap{margin-bottom:18px}
 .hint{margin-bottom:11px}
 .memitem{border:1px solid var(--hair);border-radius:var(--r-md);margin-bottom:9px;overflow:hidden;transition:border-color var(--dur-fast)}
@@ -1094,9 +1096,9 @@ function teleTables(sum,records){
 let MEMTAB='skills',MEM=null;
 const MEMTABS=[['skills','Skills'],['preferences','Preferences'],['watch','Watch-list'],['voice','Voice'],['profile','Profile']];
 async function renderMemory(){
-  $('#view').innerHTML=head('Craft','Memory','Everything the agent remembers about you — so each piece sounds more like you than the last. Manage all five kinds here.')+`
+  $('#view').innerHTML=`<div class="memview">`+head('Craft','Memory','Everything the agent remembers about you — so each piece sounds more like you than the last. Manage all five kinds here.')+`
     <div class="tabwrap"><div class="seg" id="memTabs">${MEMTABS.map(([t,l])=>`<button type="button" class="${MEMTAB===t?'on':''}" data-mt="${t}" onclick="switchMemTab('${t}')">${l}</button>`).join('')}</div></div>
-    <div id="memBody">${loadingHTML()}</div>`;
+    <div id="memBody">${loadingHTML()}</div></div>`;
   try{MEM=await api('/api/memory');}catch(e){const el=$('#memBody');if(el)el.innerHTML=`<div class="card">✗ ${esc(e.message)}</div>`;return;}
   renderMemBody();
 }
@@ -1142,7 +1144,7 @@ function memPrefDelete(i){const p=(MEM.preferences||[])[i];if(!p)return;memOp({k
 
 function memWatch(){return `<div class="section"><div class="lbl">watch-list — cross-run failure patterns the agent avoids</div>
   <div class="muted small hint">The agent appends a pattern here when the same mistake recurs across runs, then checks new drafts against it. Edit freely; saving an empty box clears it.</div>
-  <textarea id="mem-watch" class="mono" style="min-height:240px">${esc(MEM.watch_list||'')}</textarea>
+  <textarea id="mem-watch" class="mono">${esc(MEM.watch_list||'')}</textarea>
   <div class="row memadd"><button type="button" class="primary" onclick="memWatchSave()">Save watch-list</button></div></div>`;
 }
 function memWatchSave(){const t=$('#mem-watch');if(t)memOp({kind:'watch',text:t.value},'watch-list saved');}
@@ -1157,7 +1159,7 @@ function memVoice(){const rows=MEM.voice||[];
   return `<div class="section"><div class="lbl">voice exemplars — writing the agent matches</div>${list}
     <div class="memnew"><div class="lbl">add an exemplar</div>
       <input id="mem-voice-title" placeholder="Title (optional)">
-      <textarea id="mem-voice-text" placeholder="Paste a paragraph or two of prose whose voice you want the agent to emulate…" style="min-height:150px"></textarea>
+      <textarea id="mem-voice-text" placeholder="Paste a paragraph or two of prose whose voice you want the agent to emulate…"></textarea>
       <div class="row memadd"><button type="button" class="primary" onclick="memVoiceAdd()">Save exemplar</button></div></div></div>`;
 }
 function memVoiceAdd(){const t=$('#mem-voice-text'),ti=$('#mem-voice-title');const v=t?t.value.trim():'';
@@ -1168,7 +1170,7 @@ async function memVoiceDelete(i){const v=(MEM.voice||[])[i];if(!v)return;
 
 function memProfile(){return `<div class="section"><div class="lbl">profile — who you are, in your own words</div>
   <div class="muted small hint">Standing context the agent keeps in mind for every piece: your background, expertise, who you write for, anything it should always know. Saving an empty box clears it.</div>
-  <textarea id="mem-profile" style="min-height:240px">${esc(MEM.profile||'')}</textarea>
+  <textarea id="mem-profile">${esc(MEM.profile||'')}</textarea>
   <div class="row memadd"><button type="button" class="primary" onclick="memProfileSave()">Save profile</button></div></div>`;
 }
 function memProfileSave(){const t=$('#mem-profile');if(t)memOp({kind:'profile',text:t.value},'profile saved');}
