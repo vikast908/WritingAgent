@@ -699,7 +699,7 @@ surfaces via the prompt suffix and the escalation picker (the bottom toolbar was
 - **Reading time** is prose-only - fenced code and the references list are excluded
   (`polish.read_time_min`, `READ_WPM`), so technical pieces no longer over-state "N min read".
 - **Version** is single-sourced from `writingagent.__version__` (pyproject derives it via
-  `dynamic`/`attr`); the TUI imports it. Currently **0.3.1**.
+  `dynamic`/`attr`); the TUI imports it. Currently **0.4.0**.
 
 ---
 
@@ -1826,7 +1826,7 @@ cost attribution required no per-node plumbing. `telemetry.summarize` grew `by_n
 a page refresh reattaches to the live job. A finished web `write` runs the same tail as the CLI:
 auto seo+promote (when `auto_promote`) + md/html export.
 
-**Redesign - Editorial Design System v3.0.0 (0.3.1).** The SPA was rebuilt around `docs/design.md`
+**Redesign - Editorial Design System v3.0.0 (0.4.0).** The SPA was rebuilt around `docs/design.md`
 v3: one **768px centered content column** everywhere, manuscript-red accent, Fraunces serif, square
 surfaces. *Studio* is now a single-card composer (topic field + an **Advanced settings** pill for
 per-piece voice/SEO overrides + **Propose angles**); labels are plain English (no snake_case)
