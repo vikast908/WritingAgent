@@ -120,6 +120,8 @@ h1,h2,h3{font-family:var(--serif);font-weight:540;letter-spacing:-.01em}
   background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-page),0 0 0 1px var(--hair);
   padding:4px;max-height:280px;overflow:auto;display:none}
 .csel.open .csel-menu{display:block;transform-origin:top;animation:menupop .12s var(--ease-out)}
+.csel.up .csel-menu{top:auto;bottom:calc(100% + 4px)}
+.csel.up.open .csel-menu{transform-origin:bottom}
 .csel-opt{padding:6px 10px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;white-space:nowrap;color:var(--fg-2);
   display:flex;align-items:center;gap:8px}
 .csel-opt:hover{background:var(--fill)}
@@ -244,23 +246,20 @@ textarea.mono{font-family:var(--mono);font-size:12px;line-height:1.6}
 @media (max-width:560px){.disc .disc-note{display:none}}
 @media (prefers-reduced-motion:reduce){.disc-panel,.disc .chev{transition:none}}
 
-/* studio — centered "commission" composer (a focused, uncluttered compose surface) */
-.hero{max-width:660px;margin:0 auto;text-align:center;padding-top:clamp(20px,9vh,92px)}
-.hero.compact{padding-top:22px}
-.hero .kicker{margin-bottom:11px}
-.hero-title{font-family:var(--serif);font-size:clamp(38px,6vw,54px);font-weight:600;letter-spacing:-.02em;line-height:1.04}
-.hero-sub{color:var(--fg-3);font-size:14.5px;margin-top:12px}
-.composer{display:flex;align-items:center;gap:10px;margin-top:32px;padding:6px 6px 6px 18px;text-align:left;
+/* studio — centered compose surface (chat-composer feel: tall box, submit bottom-right) */
+.hero{max-width:660px;margin:0 auto;text-align:center;padding-top:clamp(48px,20vh,200px)}
+.hero.compact{padding-top:28px}
+.composer{display:flex;align-items:flex-end;gap:10px;padding:12px 12px 12px 18px;text-align:left;
   background:var(--surface);border:1px solid var(--stroke-soft);border-radius:16px;box-shadow:var(--shadow-card);
   transition:border-color var(--dur-fast),box-shadow var(--dur-fast)}
 .composer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--fill)}
-.composer-in{flex:1;min-width:0;min-height:0;border:none;background:transparent;box-shadow:none;resize:none;color:var(--fg);
-  font-family:var(--sans);font-size:15px;line-height:1.5;padding:12px 0;max-height:200px;overflow-y:auto}
+.composer-in{flex:1;min-width:0;min-height:66px;border:none;background:transparent;box-shadow:none;resize:none;color:var(--fg);
+  font-family:var(--sans);font-size:15px;line-height:1.5;padding:0;max-height:260px;overflow-y:auto}
 .composer-in:hover{border:none}
 .composer-in:focus{outline:none}
 .composer-in::placeholder{color:var(--fg-4)}
 .composer-btn{flex:none;white-space:nowrap;padding:10px 18px}
-.disc-center{width:auto;justify-content:center;margin:18px auto 0;color:var(--fg-3)}
+.disc-center{width:auto;justify-content:flex-end;margin:12px 2px 0 auto;color:var(--fg-3)}
 .disc-center:hover{color:var(--fg-2)}
 .disc-center .disc-t{font-weight:500}
 .disc.disc-center[aria-expanded="true"] .chev{transform:rotate(180deg)}
@@ -348,12 +347,29 @@ svg.spark{display:block}.axt{font-family:var(--mono);font-size:9.5px;fill:var(--
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
 @media(max-width:880px){.grid2{grid-template-columns:1fr}}
 
-/* number inputs: drop the OS spinner (kept the field, lost the mismatched chrome) */
-input[type=number]{appearance:textfield;-moz-appearance:textfield}
-input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+/* native number spinners kept (design system §Inputs: discoverable + keyboard-operable) */
 
 /* wide content scrolls in its own container (design.md: never break the page) */
 .scroll-x{overflow-x:auto;max-width:100%}
+/* markdown tables (design.md known gap: were showing raw pipes) — sans, hairline rows, scroll if wide */
+.mdtable{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:13px;margin:2px 0}
+.mdtable th,.mdtable td{text-align:left;padding:7px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+.mdtable th{font-weight:600;color:var(--fg-2);white-space:nowrap}
+.mdtable tbody tr:last-child td{border-bottom:none}
+
+/* responsive: collapse the sidebar to an icon rail below the md breakpoint (design.md §Layout) */
+@media(max-width:880px){
+  #side{width:56px;min-width:56px}
+  .brand{padding:16px 0 12px;text-align:center}
+  .brand .mark{justify-content:center;gap:0}
+  .brand .wm,.brand .sub{display:none}
+  #nav{padding:6px 8px}
+  #nav .item{justify-content:center;padding:9px 0;gap:0}
+  #nav .nlbl{display:none}
+  .foot{display:none}
+  #view{padding:20px 16px 48px}
+  #topbar{padding:0 16px}
+}
 
 /* keyboard-highlighted option in a custom select */
 .csel-opt.hl{background:var(--fill)}
@@ -496,13 +512,23 @@ function confirmModal({title,body='',confirmLabel='Confirm',danger=false,require
   });
 }
 function md(src){
-  const lines=String(src||'').split('\n');let out=[],inCode=false,inList=false;
+  const lines=String(src||'').split('\n');let out=[],inList=false;
   const inline=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
     .replace(/(^|[^*])\*([^*]+)\*/g,'$1<i>$2</i>').replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
-  for(const ln of lines){
-    if(ln.trim().startsWith('```')){out.push(inCode?'</code></pre>':'<pre><code>');inCode=!inCode;continue;}
-    if(inCode){out.push(esc(ln)+'\n');continue;}
-    const cl=()=>{if(inList){out.push('</ul>');inList=false;}};
+  const cl=()=>{if(inList){out.push('</ul>');inList=false;}};
+  const isSep=s=>/^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(s);   // | --- | --- |
+  const cells=s=>s.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+  for(let i=0;i<lines.length;i++){
+    const ln=lines[i];
+    if(ln.trim().startsWith('```')){cl();const body=[];i++;
+      while(i<lines.length&&!lines[i].trim().startsWith('```')){body.push(esc(lines[i]));i++;}
+      out.push('<pre><code>'+body.join('\n')+'\n</code></pre>');continue;}
+    // GFM table: a pipe row immediately followed by a |---|---| separator
+    if(ln.includes('|')&&i+1<lines.length&&isSep(lines[i+1])){
+      cl();const head=cells(ln);i++;const rows=[];
+      while(i+1<lines.length&&lines[i+1].includes('|')&&lines[i+1].trim()){rows.push(cells(lines[i+1]));i++;}
+      out.push('<div class="scroll-x"><table class="mdtable"><thead><tr>'+head.map(c=>`<th>${inline(c)}</th>`).join('')+'</tr></thead><tbody>'
+        +rows.map(r=>'<tr>'+head.map((_,j)=>`<td>${inline(r[j]||'')}</td>`).join('')+'</tr>').join('')+'</tbody></table></div>');continue;}
     const h=ln.match(/^(#{1,4}) (.*)/);
     if(h){cl();out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`);continue;}
     if(/^\s*[-*] /.test(ln)||/^\s*\d+\. /.test(ln)){if(!inList){out.push('<ul>');inList=true;}out.push('<li>'+inline(ln.replace(/^\s*(?:[-*]|\d+\.) /,''))+'</li>');continue;}
@@ -511,7 +537,7 @@ function md(src){
     if(/^> /.test(ln)){out.push('<blockquote>'+inline(ln.slice(2))+'</blockquote>');continue;}
     out.push(ln.trim()?'<p>'+inline(ln)+'</p>':'');
   }
-  if(inCode)out.push('</code></pre>');if(inList)out.push('</ul>');
+  if(inList)out.push('</ul>');
   return out.join('');
 }
 /* charts */
@@ -562,8 +588,11 @@ function sel(id,options,current,{none=null,cb=null}={}){
 function selVal(id){const e=document.getElementById(id);return e?(e.dataset.value||''):'';}
 function ctrlVal(id){const e=document.getElementById(id);if(!e)return'';return e.classList.contains('csel')?(e.dataset.value||''):e.value;}
 function cselClose(){document.querySelectorAll('.csel.open').forEach(x=>{
-  x.classList.remove('open');x.querySelector('.csel-btn').setAttribute('aria-expanded','false');
+  x.classList.remove('open','up');x.querySelector('.csel-btn').setAttribute('aria-expanded','false');
   x.querySelectorAll('.csel-opt.hl').forEach(o=>o.classList.remove('hl'));});}
+function cselFlip(c){const menu=c.querySelector('.csel-menu');if(!menu)return;   // open upward if there's no room below
+  const r=c.getBoundingClientRect(),mh=menu.offsetHeight,below=innerHeight-r.bottom,above=r.top;
+  c.classList.toggle('up',below<mh+16&&above>below);}
 function cselPick(opt){const id=opt.dataset.cselopt,c=document.getElementById(id);
   c.dataset.value=opt.dataset.val;c.querySelector('.csel-lbl').textContent=opt.textContent;
   c.querySelectorAll('.csel-opt').forEach(x=>{x.classList.toggle('on',x===opt);x.setAttribute('aria-selected',x===opt);});
@@ -571,7 +600,7 @@ function cselPick(opt){const id=opt.dataset.cselopt,c=document.getElementById(id
 document.addEventListener('click',e=>{
   const btn=e.target.closest('.csel-btn'),opt=e.target.closest('.csel-opt');
   if(btn){const c=btn.parentElement,wasOpen=c.classList.contains('open');cselClose();
-    if(!wasOpen){c.classList.add('open');btn.setAttribute('aria-expanded','true');
+    if(!wasOpen){c.classList.add('open');btn.setAttribute('aria-expanded','true');cselFlip(c);
       const on=c.querySelector('.csel-opt.on')||c.querySelector('.csel-opt');if(on)on.classList.add('hl');}
     return;}
   if(opt){cselPick(opt);return;}
@@ -693,10 +722,10 @@ function applyHash(){const[v,arg]=location.hash.slice(1).split('/');
   render();const el=$('#view');if(el)el.scrollTop=0;}
 window.addEventListener('hashchange',applyHash);
 function nav(){
-  $('#nav').innerHTML=NAV.map(([id,label,ic])=>`<button type="button" class="item ${view===id?'on':''}" onclick="go('${id}')"><span class="ic">${ic}</span>${label}</button>`).join('');
-  $('#crumb').textContent={studio:'new piece',projects:'your work',run:'live run',telemetry:'cost · evals · traces',skills:'learned craft',settings:'setup'}[view]||'';
+  $('#nav').innerHTML=NAV.map(([id,label,ic])=>`<button type="button" class="item ${view===id?'on':''}" onclick="go('${id}')" data-tip="${label}"><span class="ic">${ic}</span><span class="nlbl">${label}</span></button>`).join('');
+  $('#crumb').textContent={studio:'new topic',projects:'your work',run:'live run',telemetry:'cost · evals · traces',memory:'what it remembers',settings:'setup'}[view]||'';
   document.title='Writing Agent — '+({studio:'Studio',projects:'Projects',run:'Live run',telemetry:'Telemetry',
-    skills:'Skills',settings:'Settings',project:viewArg||'Project'}[view]||'Studio');
+    memory:'Memory',settings:'Settings',project:viewArg||'Project'}[view]||'Studio');
 }
 function head(kicker,title,desc){return `<div class="head"><div class="kicker">${kicker}</div><h2>${title}</h2>${desc?`<div class="desc">${desc}</div>`:''}</div>`;}
 /* Human-friendly names for settings + fields (never show raw snake_case to the user). Anything
@@ -761,11 +790,8 @@ function renderStudio(){
   const has=PLAN.approaches.length;
   $('#view').innerHTML=`
   <div class="hero${has?' compact':''}">
-    <div class="kicker">Commission</div>
-    <h1 class="hero-title">New piece</h1>
-    <div class="hero-sub">Enter a topic and the agent will propose editorial angles.</div>
     <div class="composer" id="composer">
-      <textarea id="topic" class="composer-in" rows="1" placeholder="Describe the topic…"
+      <textarea id="topic" class="composer-in" rows="3" placeholder="Describe the topic…"
         oninput="PLAN.topic=this.value;autogrow(this)"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doPlan()}">${esc(PLAN.topic)}</textarea>
       <button class="primary composer-btn" onclick="doPlan()" ${PLAN.planning?'disabled':''}>${PLAN.planning?'proposing…':'Propose angles'}</button>
