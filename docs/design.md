@@ -193,10 +193,10 @@ components:
   popover:             { backgroundColor: "{colors.surface}", shadow: "{elevation.shadow-page}", edge: "{colors.stroke-hair}", rounded: "{rounded.lg}" }
   tooltip:             { backgroundColor: "{colors.ink}", textColor: "{colors.paper}", rounded: "{rounded.sm}", typography: "{typography.ui-sans}" }
   toast:               { backgroundColor: "{colors.surface}", shadow: "{elevation.shadow-page}", edge: "{colors.stroke-hair}", rounded: "{rounded.lg}", errorText: "{colors.error}" }
-  banner-info:         { backgroundColor: "color-mix(in srgb,{colors.info} 10%,transparent)", accentBar: "{colors.info}", textColor: "{colors.text-primary}" }
-  banner-success:      { backgroundColor: "color-mix(in srgb,{colors.success} 10%,transparent)", accentBar: "{colors.success}" }
-  banner-warning:      { backgroundColor: "color-mix(in srgb,{colors.warning} 10%,transparent)", accentBar: "{colors.warning}" }
-  banner-error:        { backgroundColor: "color-mix(in srgb,{colors.error} 10%,transparent)", accentBar: "{colors.error}" }
+  banner-info:         { backgroundColor: "color-mix(in srgb,{colors.info} 10%,transparent)", textColor: "{colors.text-primary}" }
+  banner-success:      { backgroundColor: "color-mix(in srgb,{colors.success} 10%,transparent)" }
+  banner-warning:      { backgroundColor: "color-mix(in srgb,{colors.warning} 10%,transparent)" }
+  banner-error:        { backgroundColor: "color-mix(in srgb,{colors.error} 10%,transparent)" }
   badge:               { backgroundColor: "{colors.accent-muted}", textColor: "{colors.accent}", rounded: "{rounded.full}", typography: "{typography.label-caps}" }
   status-dot:          { size: "7px", rounded: "{rounded.full}", colors: "success/warning/error/accent" }
   chip:                { backgroundColor: "color-mix(in srgb,{colors.accent} 5%,transparent)", textColor: "{colors.text-secondary}", rounded: "{rounded.sm}", typography: "{typography.ui-mono}" }

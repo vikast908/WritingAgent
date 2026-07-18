@@ -481,7 +481,7 @@ framework-independent. Don't let LangGraph tempt nodes into being more agentic t
 
 ### 12.1 Model routing (per node)
 
-Each node's model is configured in `config/models.yaml` (a default plus per-node overrides).
+Each node's model is configured in `config/models.yaml` in the agent home (a default plus per-node overrides).
 
 ```yaml
 # config/models.yaml - OpenRouter slugs
@@ -1619,7 +1619,7 @@ keeps em-dashes where the register treats them as voice.
 - **Few-shot, not just rules** (`exemplars.py`): before/after pairs in the surgical humanizer and
   **score anchors** (a 5 vs a 2 per dimension) in the critic. Weak models imitate; they don't follow
   abstractions. Stable, so they sit in the (cached) system prompt.
-- **Gold corpus** (`gold/<register>.md`, shipped as package-data): a genre-tagged "match this"
+- **Gold corpus** (`resources/gold/<register>.md`, shipped as package-data): a genre-tagged "match this"
   exemplar injected through the voice-exemplar slot by **default** (`brain.style_exemplars` = user
   voice if any, else the register's gold). A weak model imitating a strong paragraph beats one told
   to "write vivid prose."

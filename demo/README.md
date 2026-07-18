@@ -13,7 +13,7 @@ license: mit
 
 A browser front-end over the Writing Agent pipeline, so anyone can try it without a
 terminal, a Python install, or an API key. It lowers the single biggest adoption barrier
-in `PRD.md`: "you must be comfortable with a CLI and your own key."
+in [`docs/prd.md`](../docs/prd.md): "you must be comfortable with a CLI and your own key."
 
 ## What it does
 

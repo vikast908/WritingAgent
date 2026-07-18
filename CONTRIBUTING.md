@@ -87,7 +87,7 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
 - **`docs/plan.md`** is the architecture/spec source of truth; **`docs/dev/resume.md`** is the running
   dev journal (newest entry on top). Durable decisions go in `docs/plan.md`, not `docs/dev/resume.md`.
 - Keep nodes as deterministic, single-purpose LLM calls - see `docs/plan.md` §4. (Self-directing
-  behavior is the **opt-in** agentic controller in `agentic/` (`plan.md` §21), a separate layer -
+  behavior is the **opt-in** agentic controller in `agentic/` (`docs/plan.md` §21), a separate layer -
   don't bake it into a node.)
 - Network/IO is best-effort: degrade gracefully, never crash the pipeline on a fetch error.
 - All numeric thresholds are tunable config (`config/settings.yaml` in the agent home - `$WRITINGAGENT_HOME`, default: the OS user-data dir; see `src/writingagent/paths.py`), not hard-coded.
@@ -95,7 +95,7 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
   ink on warm paper, one accent (manuscript red `#a3341f`), the Fraunces display serif, WCAG-AA
   verified. Every value is a token: port to CSS vars for the web app or to a `ui.THEMES` palette for
   the TUI (default `editorial`, "ink & brass"). Named themes recolor, never restructure - match
-  `design.md` rather than hand-picking colors.
+  `docs/design.md` rather than hand-picking colors.
 - Cross-platform: use `pathlib`, avoid shelling out, and don't assume a POSIX or Windows path
   layout. CI runs the suite on all three OSes - keep it green.
 
@@ -112,7 +112,7 @@ A 60-second map (full detail in `docs/plan.md` and the README's Architecture sec
 
 - `src/writingagent/orchestrator/` - durable on-disk state machine (the brain *is* the checkpoint);
   a package (`common`/`book`/`article`/`review`/`export`/`manage`). `agentic/` is the opt-in
-  self-directing controller layered over it (`plan.md` §21).
+  self-directing controller layered over it (`docs/plan.md` §21).
 - `nodes.py` / `prompts.py` / `schemas.py` - the LLM nodes, their prompts (incl. the
   `wrap_untrusted` injection fence), and structured outputs.
 - `llm.py` - model-host client (OpenAI-compatible, works with any of the 23 hosts): retry/backoff,
@@ -131,10 +131,10 @@ A 60-second map (full detail in `docs/plan.md` and the README's Architecture sec
   time; no build step and no bundler. It calls the same engine facade as the TUI/CLI.
 - `registers.py` / `craft.py` / `exemplars.py` / `surgery.py` / `fields.py` - the craft engine:
   genre/register profiles, deterministic craft metrics, few-shot exemplars, surgical
-  show-don't-tell / passive passes, and structural templates (`plan.md` §22).
+  show-don't-tell / passive passes, and structural templates (`docs/plan.md` §22).
 - `compositor.py` / `personas.py` (+ `resources/personas/*.md`) / `emotions.py` - the layer cascade that
   selects one voice from register ⊃ field ⊃ persona ⊃ emotion ⊃ skills: selectable personas
-  (manner) and anti-cliché emotion deny-lists (`plan.md` §23).
+  (manner) and anti-cliché emotion deny-lists (`docs/plan.md` §23).
 - `resources/gold/*.md` - the per-register genre style corpus (the default "match this" voice exemplar).
   The gold/persona corpora and the register profiles are **tunable data**, not hard-code.
 - `shell/` / `cli/` / `ui.py` - Rich TUI, one-shot CLI (both packages), and the theme registry

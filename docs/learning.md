@@ -192,7 +192,7 @@ Think of the orchestrator as the **director on a film set**: it doesn't act, wri
 | `schemas.py` | The **exact shape** each worker's answer must take (e.g. a critique must have a verdict, a confidence number, a list of blocking issues). | Forcing structured answers (not free text) means the program can *act on* the answer reliably instead of guessing. |
 | `llm.py` | The **universal adapter** that actually sends a request to an AI model and gets the answer back. Handles retries, cost tracking, caching, and fixing malformed answers. | "LLM" = Large Language Model = the AI (like the engine behind ChatGPT). One adapter means the rest of the code never worries about provider details. |
 | `providers.py` | The **registry of AI hosts** it can talk to (OpenRouter, DeepSeek, local Ollama, etc.). | So you can switch which company's AI powers the system with one setting. |
-| `config.py` + `config/models.yaml` + `config/settings.yaml` | Which **AI model** each worker uses, and all the tunable knobs (revision limits, whether research is on, etc.). | Different jobs need different muscle: see §6. Putting it in editable files means no coding to change behaviour. |
+| `config.py` | The **config loader** that reads runtime model choices and tunable knobs (revision limits, whether research is on, etc.). The actual settings (`models.yaml`, `settings.yaml`) live in the agent home, with shipped defaults in `src/writingagent/resources/`. | Different jobs need different muscle: see §6. Putting it in editable files means no coding to change behaviour. |
 
 #### Group D - The memory (what it remembers and produces)
 
@@ -314,7 +314,7 @@ on top of the plain files, not a replacement for them.
 
 ## 6. Why different jobs use different AI models (and what that saves you)
 
-Look at `config/models.yaml` and you'll see each worker is assigned a model "tier":
+Look at `config/models.yaml` (in the agent home, or the shipped default in `src/writingagent/resources/models.yaml`) and you'll see each worker is assigned a model "tier":
 
 - **Pro (high-power) models** go to the jobs that need real judgment: the **Planner** (sets the whole
   piece's DNA), the **Writer** (prose quality), the **Critic/Judge/Verifier** (honest evaluation), the

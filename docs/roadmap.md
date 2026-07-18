@@ -26,7 +26,7 @@ feedback. The authoritative spec is [`plan.md`](plan.md); this file is the short
 - **Trained agentic policy** with enough trace-corpus volume for the learned controller to bite.
 
 ## Good first issues
-Great places to start contributing (see [`CONTRIBUTING.md`](CONTRIBUTING.md)):
+Great places to start contributing (see [`CONTRIBUTING.md`](../CONTRIBUTING.md)):
 - Add a provider to `providers.py` (one registry entry) + its signup URL + `.env.example` line.
 - Add a `register` profile (`registers.py`) or a public-domain `persona` (`personas.py`) with an
   original-pastiche exemplar.
