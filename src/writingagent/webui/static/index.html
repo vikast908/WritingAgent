@@ -958,7 +958,7 @@ function renderRunInner(){
     const done=RUN.status==='done',err=RUN.status==='error';
     const db=(done&&RUN.project)?`<div class="banner success"><span class="bi">✓</span>
       <div style="flex:1">Finished — <b>${esc(RUN.project)}</b> is ready to read.</div>
-      <button class="primary" onclick="go('project','${RUN.project}')">Open the piece →</button></div>`:'';
+      <button class="primary" onclick="openPiece('${RUN.project}')">Read the piece →</button></div>`:'';
     w.innerHTML=db+`<div class="card">
       <div class="row" style="margin-bottom:14px">
         <span class="chip ${RUN.status==='running'?'blue':done?'ok':err?'err':''}">${RUN.status}</span>
@@ -1006,6 +1006,7 @@ function renderProjects(){
 }
 /* project detail */
 let PJ={id:null,data:null,tab:'overview',artifact:null,artText:'',trace:[],evals:null,tele:null,rejected:null};
+let _pjOpenTo=null;   // deep-link: open a project straight to a document (e.g. the manuscript)
 async function renderProject(){
   const pid=viewArg||PJ.id;if(pid!==PJ.id)PJ={id:pid,tab:'overview',artifact:null,artText:'',trace:[],evals:null,tele:null,rejected:null};
   $('#view').innerHTML=loadingHTML();
@@ -1017,7 +1018,11 @@ async function renderProject(){
     PJ.trace=tr.records;PJ.evals=ev;PJ.tele=te;PJ.rejected=rj;
   }catch(e){$('#view').innerHTML=`<div class="card">✗ ${esc(e.message)}</div>`;return;}
   renderProjectInner();
+  if(_pjOpenTo==='manuscript'){_pjOpenTo=null;readPiece();}   // honor "Open the piece" / "Read"
 }
+function openPiece(pid){_pjOpenTo='manuscript';go('project',pid);}   // from the run-done banner
+function readPiece(){switchTab('artifacts');   // show the written piece as readable prose
+  if((PJ.data?.artifacts||[]).includes('manuscript'))loadArtifact('manuscript');}
 function renderProjectInner(){
   const st=PJ.data.status||{},tabs=['overview','activity','evals','artifacts','rejected','export','cost'];
   $('#view').innerHTML=head((st.mode||'piece')+' · '+(st.phase==='done'?'finished':'in progress'),PJ.data.title||PJ.id)+`
@@ -1027,7 +1032,8 @@ function renderProjectInner(){
     <span class="chip">${st.committed||0}/${st.num_sections||st.num_chapters||'?'} committed</span>
     ${PJ.data.has_trace?'<span class="chip blue" data-tip="this run kept a log of every controller decision - see Activity">decision log</span>':''}
     <span class="spacer"></span>
-    <button class="primary" onclick="resumeProject()">${st.phase==='done'?'Re-run':'Run / resume'}</button>
+    ${st.phase==='done'?`<button class="primary" onclick="readPiece()">Read</button>`:''}
+    <button class="${st.phase==='done'?'secondary':'primary'}" onclick="resumeProject()">${st.phase==='done'?'Re-run':'Run / resume'}</button>
     <button class="secondary" data-tip="critic scores each section 1-5 · uses your API key" onclick="projectAction('evaluate')">Eval</button>
     <button class="secondary" data-tip="on-page audit + keyword pack · uses your API key" onclick="projectAction('seo')">SEO</button>
     <button class="secondary" data-tip="X thread, LinkedIn post, headlines · uses your API key" onclick="projectAction('promote')">Promote</button>
