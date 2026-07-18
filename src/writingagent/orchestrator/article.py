@@ -402,23 +402,26 @@ def _section_fetch(cfg, paths: ArticlePaths, outline, state, n, log) -> dict:
             return None
         from .. import images as img_mod
         ctx = getattr(section, "purpose", "") or getattr(section, "heading", "")
-        # image_source=generate: make one with an image model first; any failure falls
-        # through to the Wikimedia fetch, then to an SVG diagram (the original chain).
-        if state.get("image_source") == "generate":
-            prompt = (f'A clean, professional editorial illustration for a section titled '
-                      f'"{section.heading}" in a piece about {outline.title}. {ctx} '
-                      f'No text, captions, or watermarks in the image.')
-            gen = img_mod.generate_image(
-                section.heading, prompt, paths.images / f"section_{n:02d}_gen.png",
-                model=state.get("image_model", ""),
-                provider_id=state.get("image_provider", ""), log=log)
-            if gen:
-                return [gen.to_markdown("1")]
-        got = img_mod.search_wikimedia(f"{section.heading} {outline.title}", max_results=2)
-        if got:
-            log(f"   fetched {len(got)} image(s) from Wikimedia Commons")
-            return [r.to_markdown(str(i + 1)) for i, r in enumerate(got)]
-        # No image - generate an SVG diagram instead
+        query = f"{section.heading} {outline.title}"
+        # Try each configured source in order (generate | a fetch provider); first hit wins,
+        # then an SVG diagram is the universal fallback.
+        for src in img_mod.parse_sources(state.get("image_source", "")):
+            if src == "generate":
+                prompt = (f'A clean, professional editorial illustration for a section titled '
+                          f'"{section.heading}" in a piece about {outline.title}. {ctx} '
+                          f'No text, captions, or watermarks in the image.')
+                gen = img_mod.generate_image(
+                    section.heading, prompt, paths.images / f"section_{n:02d}_gen.png",
+                    model=state.get("image_model", ""),
+                    provider_id=state.get("image_provider", ""), log=log)
+                if gen:
+                    return [gen.to_markdown("1")]
+            else:
+                got = img_mod.fetch_source(src, query, max_results=2)
+                if got:
+                    log(f"   fetched {len(got)} image(s) from {img_mod.source_label(src)}")
+                    return [r.to_markdown(str(i + 1)) for i, r in enumerate(got)]
+        # Nothing produced an image - generate an SVG diagram instead
         return _svg_diagram_figure(
             cfg, label=section.heading, context=ctx,
             engine=state.get("diagram_engine", "auto"),

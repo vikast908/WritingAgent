@@ -262,6 +262,66 @@ def test_search_wikimedia_network_error_returns_empty(monkeypatch):
     assert images.search_wikimedia("anything") == []
 
 
+# ── multi-source image selection ────────────────────────────────────────────────
+def test_image_sources_and_parse_sources():
+    srcs = images.image_sources()
+    assert "generate" in srcs and "openverse" in srcs and "wikimedia" in srcs
+    # ordered, deduped, case-insensitive; unknown tokens dropped; user order preserved
+    assert images.parse_sources("PIXABAY, openverse , bogus  openverse") == ["pixabay", "openverse"]
+    assert images.parse_sources("nope,zzz") == []
+    assert images.source_label("generate") == "an image model"
+    assert images.source_needs_key("pexels") == "PEXELS_API_KEY"
+    assert images.source_needs_key("openverse") == ""
+
+
+def test_fetch_source_unknown_and_keyless_missing_key(monkeypatch):
+    monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
+    assert images.fetch_source("does-not-exist", "x", 2) == []
+    assert images.fetch_source("pixabay", "x", 2) == []          # keyed, no key -> []
+
+
+_OPENVERSE = {"results": [{"url": "https://ov/img.jpg", "title": "Coast at dawn",
+                           "creator": "Ann", "license": "by", "license_version": "2.0"}]}
+_PIXABAY = {"hits": [{"largeImageURL": "https://px/i.jpg", "user": "Bob", "tags": "beach, sky"}]}
+_PEXELS = {"photos": [{"src": {"large": "https://pex/p.jpg"}, "photographer": "Cy", "alt": "A beach"}]}
+_UNSPLASH = {"results": [{"urls": {"regular": "https://un/u.jpg"},
+                          "user": {"name": "Dee"}, "alt_description": "a beach"}]}
+
+
+def test_keyed_and_keyless_backends_parse_and_attribute(monkeypatch):
+    """Each provider maps its own response shape to an ImageResult with the right
+    source + license, and to_markdown carries the attribution (not always 'Wikimedia')."""
+    monkeypatch.setenv("PIXABAY_API_KEY", "k")
+    monkeypatch.setenv("PEXELS_API_KEY", "k")
+    monkeypatch.setenv("UNSPLASH_ACCESS_KEY", "k")
+
+    def fake_json(url, *, headers=None, timeout=10):
+        if "openverse" in url:
+            return _OPENVERSE
+        if "pixabay" in url:
+            return _PIXABAY
+        if "pexels" in url:
+            return _PEXELS
+        if "unsplash" in url:
+            return _UNSPLASH
+        return {}
+    monkeypatch.setattr(images, "_img_http_json", fake_json)
+
+    ov = images.fetch_source("openverse", "coast", 2)[0]
+    assert ov.source == "Openverse" and ov.license == "CC BY 2.0" and ov.author == "Ann"
+    assert "via Openverse" in ov.to_markdown("1")
+    assert images.fetch_source("pixabay", "beach", 2)[0].license == "Pixabay License"
+    assert images.fetch_source("pexels", "beach", 2)[0].license == "Pexels License"
+    assert images.fetch_source("unsplash", "beach", 2)[0].source == "Unsplash"
+
+
+def test_fetch_source_swallows_backend_errors(monkeypatch):
+    def boom(url, *, headers=None, timeout=10):
+        raise OSError("down")
+    monkeypatch.setattr(images, "_img_http_json", boom)
+    assert images.fetch_source("openverse", "x", 2) == []       # error -> [] (next source tried)
+
+
 def test_fetch_info_empty_titles_skips_api():
     """No titles -> [] without any network call."""
     assert images._fetch_info([]) == []

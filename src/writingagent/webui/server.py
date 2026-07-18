@@ -165,7 +165,7 @@ def _project_overview(uid: str) -> list[dict]:
 def _options() -> dict:
     """Selectable option lists for the Settings dropdowns + restyle (register/persona/
     emotion) and the export format set - every enum setting becomes a dropdown."""
-    from .. import emotions, fields, personas, providers, registers, search
+    from .. import emotions, fields, images, personas, providers, registers, search
     return {
         "registers": list(registers.names()),
         "personas": list(personas.names()),
@@ -174,7 +174,7 @@ def _options() -> dict:
         "export_formats": ["pdf", "epub", "html", "docx", "txt", "md"],
         "citation_styles": ["influence", "numeric", "apa", "mla", "chicago", "ap", "none"],
         "search_providers": list(search.PROVIDERS),
-        "image_sources": ["wikimedia", "generate"],
+        "image_sources": list(images.image_sources()),
         "modes": ["article", "book"],
         "cost_modes": ["standard", "budget"],
         "agentic_policies": ["default", "llm", "trace"],
@@ -190,22 +190,25 @@ def _mask(v: str) -> str:
 
 
 def _key_envs() -> set[str]:
-    """Every env var the UI is allowed to write - the model hosts' + search backends' key
-    vars. A setkey request for anything outside this set is rejected (no arbitrary env writes)."""
-    from .. import providers, search
+    """Every env var the UI is allowed to write - the model hosts', search backends', and
+    keyed image sources' key vars. A setkey for anything outside this set is rejected."""
+    from .. import images, providers, search
     envs: set[str] = set()
     for p in providers._PROVIDERS:
         envs.update(p.key_env)
     for b in search._BACKENDS.values():
         envs.add(b.key_env)
+    for ib in images._IMG_BACKENDS.values():
+        if ib.key_env:
+            envs.add(ib.key_env)
     return envs
 
 
 def _keys_payload() -> dict:
-    """Masked key status for every model host + keyed search provider, for the Keys tab."""
+    """Masked key status for every model host + keyed search + keyed image provider."""
     import os
 
-    from .. import providers, search
+    from .. import images, providers, search
     hosts = []
     for p in providers._PROVIDERS:
         if p.local or p.id in ("custom", "bedrock", "azure") or not p.key_env:
@@ -218,7 +221,15 @@ def _keys_payload() -> dict:
         val = os.getenv(b.key_env, "")
         searches.append({"id": name, "name": name, "env": b.key_env,
                          "set": bool(val), "masked": _mask(val)})
-    return {"hosts": hosts, "search": searches}
+    # only the keyed image sources need a row; openverse/wikimedia are keyless
+    imgs = []
+    for name, ib in images._IMG_BACKENDS.items():
+        if not ib.key_env:
+            continue
+        val = os.getenv(ib.key_env, "")
+        imgs.append({"id": name, "name": ib.label, "env": ib.key_env,
+                     "set": bool(val), "masked": _mask(val)})
+    return {"hosts": hosts, "search": searches, "images": imgs}
 
 
 def _themes() -> dict:
@@ -855,6 +866,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"ok": False, "detail": "no key set"})
                 res = b.fn("connectivity test", 1)
                 return self._json({"ok": True, "detail": f"reached it - {len(res)} result(s)"})
+            if kind == "image":
+                from .. import images
+                ib = images._IMG_BACKENDS.get(pid)
+                if not ib:
+                    return self._json({"ok": False, "detail": "unknown image source"})
+                if ib.key_env and not os.getenv(ib.key_env):
+                    return self._json({"ok": False, "detail": "no key set"})
+                res = images.fetch_source(pid, "landscape", 1)
+                return self._json({"ok": True, "detail": f"reached it - {len(res)} image(s)"})
             from openai import OpenAI
 
             from .. import providers

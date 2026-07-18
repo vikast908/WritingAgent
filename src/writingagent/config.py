@@ -167,9 +167,10 @@ class Settings:
     #                                          after assembly (detector, not a rewriter - a full
     #                                          10-chapter rewrite is impractical/lossy; D-008)
     use_images: bool = True                  # include images at all (non-fiction/illustrated); off = no figures
-    image_source: str = "wikimedia"          # "wikimedia" (fetch free-licensed stock) | "generate" (a text-to-
-    #                                          image model). generate is tried first when selected; on any
-    #                                          failure it falls back to the Wikimedia fetch, then an SVG diagram.
+    image_source: str = "openverse,wikimedia"  # ordered comma list of free-licensed sources to try, first hit
+    #                                          wins: openverse, wikimedia (keyless), pixabay, pexels, unsplash
+    #                                          (keyed), generate (a text-to-image model). Falls back to an SVG
+    #                                          diagram if none produce. See images.image_sources().
     image_model: str = ""                    # image-gen model slug (e.g. gpt-image-1, dall-e-3, an OpenRouter
     #                                          image model). "" disables generation even if image_source=generate.
     image_provider: str = ""                 # host that serves image generation ("" = the main `provider`), so
@@ -377,8 +378,16 @@ def _clamp_settings(s: Settings) -> Settings:
         _providers = ("duckduckgo", "firecrawl", "tavily", "brave", "serpapi", "exa", "parallel")
     if s.search_provider not in _providers:
         s.search_provider = "duckduckgo"
-    if s.image_source not in ("wikimedia", "generate"):
-        s.image_source = "wikimedia"
+    # image_source is an ordered comma list of known sources; drop unknown tokens and
+    # fall back to the keyless default if nothing valid remains. Lazy import (no cycle:
+    # images doesn't import config at module scope).
+    try:
+        from . import images as _images
+        _srcs = _images.parse_sources(s.image_source)
+        s.image_source = ",".join(_srcs) if _srcs else "openverse,wikimedia"
+    except Exception:  # noqa: BLE001 - never let this validation break load_settings
+        if not s.image_source:
+            s.image_source = "openverse,wikimedia"
     if s.agentic_policy not in ("default", "llm", "trace"):
         s.agentic_policy = "default"
     # Register / field / citation-style: validate against the known sets; an unknown value

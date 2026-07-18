@@ -17,8 +17,10 @@ human when it's unsure, and **learns reusable craft skills per user across many 
 > Features beyond the §1–16 spec: **article mode** (parallel section pipeline with editorial angle
 > picker, flat `articles/<id>/` layout, inline citations + sources.json); **`write` one-shot flow**
 > (upfront interview → fully autonomous run → exported file, §15.3); **humanizer** pass (strips
-> AI tells, 11 rules); **SVG diagram fallback** (LLM-generated `<svg>` when Wikimedia returns nothing,
-> saved to `images/`); **6 export formats** (pdf · epub · html · docx · txt · md; interactive picker);
+> AI tells, 11 rules); **multi-source free-licensed images** (`image_source` = ordered list over
+> openverse · wikimedia [keyless] · pixabay · pexels · unsplash [keyed] · generate, first hit wins)
+> with an **SVG diagram fallback** (LLM-generated `<svg>` when none return an image, saved to `images/`);
+> **6 export formats** (pdf · epub · html · docx · txt · md; interactive picker);
 > **deep multi-source researcher** (§15.2) with **duckduckgo/firecrawl search providers**;
 > **11 TUI themes** (palette + wordmark figlet per theme, `/theme`); **production guards** (run token
 > budget kill-switch, per-call JSONL telemetry + `/dashboard`, untrusted-web-content fencing -

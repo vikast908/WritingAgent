@@ -23,6 +23,15 @@ def test_clamp_normalizes_enums():
     assert s.mode == "article" and s.agentic_policy == "default"
 
 
+def test_clamp_image_source_is_a_validated_ordered_list():
+    # unknown tokens dropped, order + case normalized, valid ones kept
+    assert _clamp_settings(Settings(image_source="PIXABAY, wikimedia, junk")).image_source == "pixabay,wikimedia"
+    # nothing valid -> the keyless default
+    assert _clamp_settings(Settings(image_source="zzz")).image_source == "openverse,wikimedia"
+    # the shipped default is itself valid and untouched
+    assert _clamp_settings(Settings()).image_source == "openverse,wikimedia"
+
+
 def test_clamp_leaves_valid_settings_untouched():
     s = _clamp_settings(Settings(min_insight=3, max_revisions=2, divergent_drafts=2,
                                  escalate_below_confidence=0.5, mode="book",

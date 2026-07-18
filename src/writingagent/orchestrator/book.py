@@ -568,26 +568,30 @@ def _chapter_fetch(cfg, paths, plan, toc, state, n, log) -> dict:
         if not state.get("use_images"):
             return None
         from .. import images as img_mod
-        # image_source=generate: try an image model first (non-fiction genres only - a
-        # generated illustration in a novel chapter is as wrong as a concept diagram).
-        if state.get("image_source") == "generate" and _NONFICTION_RE.search(plan.genre or ""):
-            prompt = (f'A clean, professional editorial illustration for a chapter titled '
-                      f'"{blueprint.title}". {blueprint.purpose or ""} '
-                      f'No text, captions, or watermarks in the image.')
-            gen = img_mod.generate_image(
-                blueprint.title, prompt, paths.root / "images" / f"ch{n:02d}_gen.png",
-                model=state.get("image_model", ""),
-                provider_id=state.get("image_provider", ""), log=log)
-            if gen:
-                return [gen.to_markdown("1")]
+        # Generated illustrations and SVG concept diagrams belong only in non-fiction-ish
+        # chapters (either dropped into a novel chapter is always wrong); stock fetches are
+        # fine for any genre.
+        nonfiction = bool(_NONFICTION_RE.search(plan.genre or ""))
         query = f"{blueprint.title} {blueprint.purpose} {plan.genre}"
-        fetched = img_mod.search_wikimedia(query, max_results=2)
-        if fetched:
-            log(f"   fetched {len(fetched)} image(s) from Wikimedia Commons")
-            return [r.to_markdown(str(i + 1)) for i, r in enumerate(fetched)]
-        # No Wikimedia image: generate an SVG diagram - but only for non-fiction-ish
-        # genres. A "concept diagram" dropped into a novel chapter is always wrong.
-        if not _NONFICTION_RE.search(plan.genre or ""):
+        for src in img_mod.parse_sources(state.get("image_source", "")):
+            if src == "generate":
+                if not nonfiction:
+                    continue
+                prompt = (f'A clean, professional editorial illustration for a chapter titled '
+                          f'"{blueprint.title}". {blueprint.purpose or ""} '
+                          f'No text, captions, or watermarks in the image.')
+                gen = img_mod.generate_image(
+                    blueprint.title, prompt, paths.root / "images" / f"ch{n:02d}_gen.png",
+                    model=state.get("image_model", ""),
+                    provider_id=state.get("image_provider", ""), log=log)
+                if gen:
+                    return [gen.to_markdown("1")]
+            else:
+                fetched = img_mod.fetch_source(src, query, max_results=2)
+                if fetched:
+                    log(f"   fetched {len(fetched)} image(s) from {img_mod.source_label(src)}")
+                    return [r.to_markdown(str(i + 1)) for i, r in enumerate(fetched)]
+        if not nonfiction:
             return None
         return _svg_diagram_figure(
             cfg, label=blueprint.title, context=blueprint.purpose or "",
