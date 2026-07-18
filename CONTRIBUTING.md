@@ -84,14 +84,14 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
 
 ## Conventions
 
-- **`plan.md`** is the architecture/spec source of truth; **`docs/dev/resume.md`** is the running
-  dev journal (newest entry on top). Durable decisions go in `plan.md`, not `docs/dev/resume.md`.
-- Keep nodes as deterministic, single-purpose LLM calls - see `plan.md` §4. (Self-directing
+- **`docs/plan.md`** is the architecture/spec source of truth; **`docs/dev/resume.md`** is the running
+  dev journal (newest entry on top). Durable decisions go in `docs/plan.md`, not `docs/dev/resume.md`.
+- Keep nodes as deterministic, single-purpose LLM calls - see `docs/plan.md` §4. (Self-directing
   behavior is the **opt-in** agentic controller in `agentic/` (`plan.md` §21), a separate layer -
   don't bake it into a node.)
 - Network/IO is best-effort: degrade gracefully, never crash the pipeline on a fetch error.
 - All numeric thresholds are tunable config (`config/settings.yaml`), not hard-coded.
-- **Editorial design system:** the web dashboard and the TUI both follow `design.md` (repo root) -
+- **Editorial design system:** the web dashboard and the TUI both follow `docs/design.md` -
   ink on warm paper, one accent (manuscript red `#a3341f`), the Fraunces display serif, WCAG-AA
   verified. Every value is a token: port to CSS vars for the web app or to a `ui.THEMES` palette for
   the TUI (default `editorial`, "ink & brass"). Named themes recolor, never restructure - match
@@ -108,7 +108,7 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
 
 ## Architecture tour
 
-A 60-second map (full detail in `plan.md` and the README's Architecture section):
+A 60-second map (full detail in `docs/plan.md` and the README's Architecture section):
 
 - `src/writingagent/orchestrator/` - durable on-disk state machine (the brain *is* the checkpoint);
   a package (`common`/`book`/`article`/`review`/`export`/`manage`). `agentic/` is the opt-in
