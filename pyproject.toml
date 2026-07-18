@@ -56,10 +56,10 @@ deep = [
   "scrapo-ai>=0.10 ; python_version >= '3.11'",
   "playwright>=1.40 ; python_version >= '3.11'",
 ]
-# Zero-install web demo (web/app.py). A small Gradio front-end over the public
+# Zero-install web demo (demo/app.py). A small Gradio front-end over the public
 # Agent/Project facade: paste a topic, watch the pipeline run live, read the piece
 # plus its evidence report - try it free in fake mode with no API key. Deployable
-# as a Hugging Face Space (see web/README.md) so non-developers can try it in a
+# as a Hugging Face Space (see demo/README.md) so non-developers can try it in a
 # browser. The package itself never imports gradio; only the demo does.
 web = [
   "gradio>=4.0",
@@ -125,7 +125,7 @@ branch = true
 
 [tool.coverage.report]
 # The dev journal / demo entrypoints aren't part of the library's covered surface.
-omit = ["*/webui/*", "*/web/*"]
+omit = ["*/webui/*", "*/demo/*"]
 exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "if __name__ == .__main__.:"]
 
 [build-system]

@@ -36,7 +36,7 @@ default and not exposed in this demo.
 
 ```bash
 pip install -e ".[web]"     # from the repo root
-python web/app.py           # open the printed http://127.0.0.1:7860
+python demo/app.py           # open the printed http://127.0.0.1:7860
 ```
 
 ## Deploy as a Hugging Face Space

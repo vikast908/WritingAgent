@@ -11,7 +11,7 @@ human when it's unsure, and **learns reusable craft skills per user across many 
 > interactive **WRITING AGENT** shell (a themed TUI with slash commands + per-agent model switching)
 > plus a one-shot CLI (`writing-agent` / `python writingagent.py`; see README).
 > **Live-validated** on OpenRouter + DeepSeek V4 Pro/Flash: fully autonomous runs completed a book
-> (9-page PDF, captured in `SampleRun/`) and long-form articles (incl. an agentic 6-section run,
+> (9-page PDF, captured in `examples/sample-run/`) and long-form articles (incl. an agentic 6-section run,
 > ~$0.52 / 606k tokens, before the budget cost mode existed).
 >
 > Features beyond the §1–16 spec: **article mode** (parallel section pipeline with editorial angle
@@ -1085,7 +1085,7 @@ one-shot `write()` convenience layered on top.
   docstring states the no-break-within-major contract. Surface is covered by `tests/test_api.py`
   (offline, `WRITINGAGENT_FAKE`).
 
-### 18.1 Zero-install web demo (`web/app.py`)
+### 18.1 Zero-install web demo (`demo/app.py`)
 
 **Why:** the terminal + own-API-key requirement is `PRD.md`'s #1 adoption barrier - a non-developer
 can't try the product at all. A hosted browser demo is the try-before-you-build front door.
@@ -1104,7 +1104,7 @@ live progress, the manuscript, the evidence report, and a `.md` download out.
   through a queue into the Gradio generator so progress is live.
 - **Packaging.** A `[web]` optional extra (gradio only); gradio is imported **lazily** (inside
   `build_ui`) so the runtime helpers stay importable/testable without it (mirrors the `deep` extra).
-  Ships HF-Space deploy files (`web/requirements.txt`, `web/README.md` front-matter). Covered by
+  Ships HF-Space deploy files (`demo/requirements.txt`, `demo/README.md` front-matter). Covered by
   `tests/test_web.py` (offline, incl. a full fake-mode run through the demo).
 - **Caveat (tracked):** `configure_runtime` mutates process-global env, so a public deploy must stay
   single-worker (the Gradio default) or serialize runs; a key-less public deploy needs a server-side
@@ -1819,7 +1819,7 @@ auto seo+promote (when `auto_promote`) + md/html export.
 Files: `webui/server.py` (API + jobs), `webui/static/index.html` (the SPA, no build step),
 `cli` command `web` (`--port`, `--no-browser`), package-data glob in pyproject. Tests:
 `tests/test_webui.py` (API shape, run-to-done flow, SSE close, artifact-traversal guard,
-settings clamp, model-file isolation). The old Gradio demo (`web/app.py`) is untouched - it
+settings clamp, model-file isolation). The old Gradio demo (`demo/app.py`) is untouched - it
 remains the zero-install marketing demo; this is the working surface.
 
 ---

@@ -132,7 +132,7 @@ WritingAgent/
 ├── tests/                 ← ~525 automated checks that prove the code works
 ├── examples/              ← real finished pieces, so you can judge output before installing
 ├── benchmarks/            ← a blind A/B kit to compare quality vs other tools
-├── SampleRun/             ← a complete sample book (manuscript + its working files)
+├── examples/sample-run/             ← a complete sample book (manuscript + its working files)
 ├── assets/                ← brand images (logo, banner)
 ├── README.md              ← the front-door "what is this / how to run" doc
 ├── plan.md                ← the authoritative engineering spec (the "law")
@@ -837,4 +837,4 @@ fix - and your progress is always saved, so you just run again.
 > whole thing is built to be **transparent, resumable, and self-correcting** - that's the entire point.
 
 *Want the exact rules and thresholds behind any of this? They live in `plan.md`. Want to see real
-output? Look in `examples/` and `SampleRun/`.*
+output? Look in `examples/` and `examples/sample-run/`.*
