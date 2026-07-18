@@ -974,7 +974,8 @@ async function renderSettings(){
     register:'genre profile: rules, structure, exemplars',persona:'voice manner layered over the register'};
   const rowFor=f=>{
     let inp;const cid='st-'+f.name;
-    if(dropdowns[f.name])inp=sel(cid,dropdowns[f.name],String(f.value),{none:'None'});
+    if(dropdowns[f.name])inp=sel(cid,dropdowns[f.name],String(f.value),
+      (f.name==='search_provider'||f.name==='image_source')?{}:{none:'None'});   // required enums have no "None"
     else if(f.type==='bool')inp=sel(cid,[{value:'true',label:'true'},{value:'false',label:'false'}],String(!!f.value));
     else inp=`<input id="${cid}" value="${esc(f.value)}">`;
     const tip=TIPS[f.name]?` data-tip="${esc(TIPS[f.name])}"`:'';
