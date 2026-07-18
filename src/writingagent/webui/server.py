@@ -383,7 +383,14 @@ def _job_start(job: Job, payload: dict) -> None:
     uid = payload.get("user") or _uid()
     mode = payload.get("mode") or load_settings().mode
     log = _job_log(job, uid)
-    agent = api.Agent(user=uid)
+    # Per-piece overrides from the Studio form (voice + SEO keyword) - applied to THIS run's
+    # settings only, so a specific piece can differ from the global defaults. Whitelisted.
+    _PIECE = {"register", "field", "citation_style", "persona", "emotion", "seo_keyword"}
+    overrides = {k: v for k, v in (payload.get("overrides") or {}).items()
+                 if k in _PIECE and isinstance(v, str) and v.strip()}
+    if overrides:
+        log("overrides for this piece: " + ", ".join(f"{k}={v}" for k, v in overrides.items()))
+    agent = api.Agent(user=uid, **overrides)
     raw = payload.get("approach") or {}
     schema = S.ArticleAngle if mode == "article" else S.Direction
     approach = api.Approach(index=1, title=raw.get("title", ""),

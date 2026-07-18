@@ -644,24 +644,35 @@ function render(){const vc=view!==_lastView;_lastView=view;
   nav();({studio:renderStudio,projects:renderProjects,project:renderProject,
   run:renderRun,telemetry:renderTelemetry,skills:renderSkills,settings:renderSettings}[view]||renderStudio)();}
 
-/* studio */
-let PLAN={topic:'',mode:null,approaches:[],sel:0,planning:false};
+/* studio — topic + optional per-piece overrides (voice + SEO), bound to PLAN so re-renders
+   don't wipe them. Blank overrides inherit your Settings defaults. */
+let PLAN={topic:'',mode:null,approaches:[],sel:0,planning:false,intake:'',seo:'',overrides:{}};
 function renderStudio(){
   const g=n=>(S.settings.find(f=>f.name===n)||{}).value;
+  const o=S.options||{};
+  const vsel=(n,list)=>`<div style="display:flex;flex-direction:column;gap:4px">
+    <span class="small muted" style="text-transform:none">${n}</span>
+    ${sel('sv-'+n,['random',...(list||[])],PLAN.overrides[n]||'',{none:'default',cb:v=>{PLAN.overrides[n]=v;}})}</div>`;
   $('#view').innerHTML=head('Commission','New piece','The agent proposes editorial angles, then researches, drafts, self-critiques, and assembles — streamed live.')+`
   ${banner('info','<b>Real mode.</b> Runs use your API keys and spend tokens — nothing is posted anywhere; SEO and promo only edit local files.')}
   <div class="card section">
     <div class="row" style="margin-bottom:11px">
-      <input id="topic" style="flex:1;min-width:300px" placeholder="Topic or abstract" value="${esc(PLAN.topic)}">
+      <input id="topic" style="flex:1;min-width:300px" placeholder="Topic or abstract" value="${esc(PLAN.topic)}" oninput="PLAN.topic=this.value">
       ${sel('mode',['article','book'],g('mode')==='book'?'book':'article')}
       <input id="units" type="number" min="1" style="width:78px" placeholder="units">
       <button class="primary" onclick="doPlan()" ${PLAN.planning?'disabled':''}>${PLAN.planning?'proposing…':'Propose angles'}</button>
     </div>
-    <textarea id="intake" placeholder="Optional requirements — audience, tone, must-includes, target length…"></textarea>
-    <div class="row small muted" style="margin-top:9px">
+    <textarea id="intake" placeholder="Optional requirements — audience, tone, must-includes, target length…" oninput="PLAN.intake=this.value">${esc(PLAN.intake)}</textarea>
+    <div class="lbl" style="margin-top:15px">this piece <span class="muted" style="text-transform:none;font-weight:400;letter-spacing:0">— optional; blank inherits your Settings defaults</span></div>
+    <div class="row" style="gap:14px;margin-top:9px">
+      ${vsel('persona',o.personas)}${vsel('emotion',o.emotions)}${vsel('register',o.registers)}${vsel('field',o.fields)}${vsel('citation_style',o.citation_styles)}
+    </div>
+    <div class="row" style="margin-top:11px">
+      <input id="sv-seo" style="flex:1;min-width:300px" placeholder="SEO keyword — the search term you want THIS piece to rank for (optional)" value="${esc(PLAN.seo)}" oninput="PLAN.seo=this.value">
+    </div>
+    <div class="row small muted" style="margin-top:11px">
       <span class="chip ${g('cost_mode')==='budget'?'blue':''}">cost: ${esc(g('cost_mode')||'standard')}</span>
       <span class="chip ${g('agentic')?'blue':''}">${g('agentic')?'agentic':'fixed pipeline'}</span>
-      ${g('seo_keyword')?`<span class="chip blue">seo: ${esc(g('seo_keyword'))}</span>`:''}
       <span>runs autonomously · nothing is posted anywhere</span>
     </div>
   </div>
@@ -669,13 +680,15 @@ function renderStudio(){
 }
 function renderApproaches(){
   return `<div class="section"><div class="lbl">Choose an angle</div>
-  ${PLAN.approaches.map((a,i)=>`<div class="approach ${i===PLAN.sel?'sel':''}" tabindex="0" data-kb onclick="PLAN.sel=${i};render()">
+  ${PLAN.approaches.map((a,i)=>`<div class="approach ${i===PLAN.sel?'sel':''}" tabindex="0" data-kb onclick="selectApproach(${i})">
     <div class="t"><span class="n">${a.index}</span>${esc(a.title)}</div><div class="s">${esc(a.summary)}</div>
     ${a.hook?`<div class="s muted">hook — ${esc(a.hook)}</div>`:''}${a.audience?`<div class="s muted">for — ${esc(a.audience)}</div>`:''}</div>`).join('')}
   <button class="primary" style="margin-top:6px" onclick="doStart()">Begin the run</button></div>`;
 }
+function selectApproach(i){PLAN.sel=i;   // toggle in place, never re-render (would wipe the form inputs)
+  document.querySelectorAll('#approaches .approach').forEach((el,j)=>el.classList.toggle('sel',j===i));}
 async function doPlan(){
-  PLAN.topic=$('#topic').value.trim();PLAN.mode=selVal('mode')||'article';
+  PLAN.topic=($('#topic')?.value||'').trim();PLAN.mode=selVal('mode')||'article';
   if(!PLAN.topic)return toast('give it a topic first',1);
   PLAN.planning=true;render();
   try{const d=await api('/api/plan',{topic:PLAN.topic,mode:PLAN.mode});PLAN.approaches=d.approaches;PLAN.sel=0;}catch(e){toast(e.message,1)}
@@ -683,7 +696,9 @@ async function doPlan(){
 }
 async function doStart(){
   try{const a=PLAN.approaches[PLAN.sel];
-    const d=await api('/api/start',{topic:PLAN.topic,mode:PLAN.mode,units:$('#units')?.value||'',intake:$('#intake')?.value||'',approach:a.raw});
+    const ov={};['persona','emotion','register','field','citation_style'].forEach(n=>{if(PLAN.overrides[n])ov[n]=PLAN.overrides[n];});
+    if((PLAN.seo||'').trim())ov.seo_keyword=PLAN.seo.trim();
+    const d=await api('/api/start',{topic:PLAN.topic,mode:PLAN.mode,units:$('#units')?.value||'',intake:PLAN.intake||'',approach:a.raw,overrides:ov});
     attachJob(d.job,null);go('run');}catch(e){toast(e.message,1)}
 }
 /* live run */
