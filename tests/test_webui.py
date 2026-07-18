@@ -190,6 +190,41 @@ def test_review_records_instruction(server):
         ArticlePaths(pid, "default").instruction_of(1)) or "")
 
 
+# ── Memory view: read the five memory types + manage each ────────────────────────
+def test_memory_get_and_mutations(server):
+    from writingagent import skills as skmod
+    skmod.seed_builtin("default")                       # some skills to manage
+    m = _get(server, "/api/memory")
+    assert {"profile", "skills", "skill_bodies", "watch_list", "preferences", "voice"} <= set(m)
+    assert m["skills"] and all("status" in s for s in m["skills"])
+    # profile + watch-list are free-text saves; a blank value clears
+    _post(server, "/api/memory", {"kind": "profile", "text": "a senior dev who likes concrete examples"})
+    assert "concrete examples" in _get(server, "/api/memory")["profile"]
+    # preferences: add, reinforce-count survives, delete
+    _post(server, "/api/memory", {"kind": "pref", "op": "add", "text": "cut hedging"})
+    assert any(p["text"] == "cut hedging" for p in _get(server, "/api/memory")["preferences"])
+    _post(server, "/api/memory", {"kind": "pref", "op": "delete", "text": "cut hedging"})
+    assert not any(p["text"] == "cut hedging" for p in _get(server, "/api/memory")["preferences"])
+    # voice add + delete round-trips
+    _post(server, "/api/memory", {"kind": "voice", "op": "add", "title": "Sample", "text": "crisp prose here"})
+    voice = _get(server, "/api/memory")["voice"]
+    assert voice and voice[0]["name"].endswith(".md")
+    _post(server, "/api/memory", {"kind": "voice", "op": "delete", "name": voice[0]["name"]})
+    assert _get(server, "/api/memory")["voice"] == []
+    # skill status flips are persisted (frontmatter is the source of truth)
+    name = _get(server, "/api/memory")["skills"][0]["name"]
+    _post(server, "/api/memory", {"kind": "skill", "op": "status", "name": name, "status": "retired"})
+    got = next(s for s in _get(server, "/api/memory")["skills"] if s["name"] == name)
+    assert got["status"] == "retired"
+
+
+def test_memory_bad_request_is_400(server):
+    # a delete for something that isn't there is a clean 400, not a 500
+    with pytest.raises(urllib.error.HTTPError) as ei:
+        _post(server, "/api/memory", {"kind": "pref", "op": "delete", "text": "never added"})
+    assert ei.value.code == 400
+
+
 # ── Telemetry per-agent attribution (set via ModelConfig.model_for) ──────────
 def test_telemetry_records_carry_node(tmp_brain, fake_llm):
     # fake mode skips _log_call, so check the seam directly: model_for tags the thread

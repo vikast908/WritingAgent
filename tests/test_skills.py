@@ -207,3 +207,72 @@ def test_record_instruction_respects_the_gate(tmp_brain, monkeypatch):
     brain.write_json(paths.run_state, {"phase": "sections"})
     orchestrator.record_instruction("u", "noprefart", 1, "make it punchier")
     assert brain.user_preferences_text("u") == ""
+
+
+# ── Memory management (the Memory view: manual edits to each memory type) ────────
+def test_list_and_delete_preference(tmp_brain):
+    """Structured rows for the UI, and a case-insensitive delete-by-text."""
+    brain.record_preference("u", "alpha note")
+    brain.record_preference("u", "beta note")
+    brain.record_preference("u", "alpha note")            # reinforce -> ×2, moves to front
+    assert {r["text"]: r["count"] for r in brain.list_preferences("u")} == {
+        "alpha note": 2, "beta note": 1}
+    assert brain.delete_preference("u", "ALPHA NOTE") is True   # case-insensitive
+    assert [r["text"] for r in brain.list_preferences("u")] == ["beta note"]
+    assert brain.delete_preference("u", "not there") is False
+
+
+def test_reinforced_count_survives_round_trip(tmp_brain):
+    """A reinforced ×N line parses back to its count (regression: the read regex once
+    required parens the writer never wrote, so counts reset to 1 on the next record)."""
+    for _ in range(3):
+        brain.record_preference("u", "same note")
+    assert brain.list_preferences("u") == [{"text": "same note", "count": 3}]
+
+
+def test_voice_exemplar_add_list_delete(tmp_brain):
+    name = brain.add_voice_exemplar("u", "My Sample", "A crisp paragraph of prose.")
+    assert name == "my-sample.md"
+    rows = brain.list_voice("u")
+    assert len(rows) == 1 and rows[0]["name"] == "my-sample.md"
+    assert "crisp paragraph" in rows[0]["text"] and rows[0]["chars"] > 0
+    assert brain.add_voice_exemplar("u", "x", "   ") is None      # blank text -> no-op
+    # delete is basename-only: a traversal path resolves to a non-existent basename
+    assert brain.delete_voice_exemplar("u", "../../etc/passwd") is False
+    assert brain.delete_voice_exemplar("u", "my-sample.md") is True
+    assert brain.list_voice("u") == []
+
+
+def test_add_voice_exemplar_never_clobbers(tmp_brain):
+    """Two exemplars with the same title get distinct files (…-2.md), not one overwrite."""
+    a = brain.add_voice_exemplar("u", "Same", "first paragraph here")
+    b = brain.add_voice_exemplar("u", "Same", "second paragraph here")
+    assert a != b and len(brain.list_voice("u")) == 2
+
+
+def test_set_skill_status_writes_frontmatter(tmp_brain):
+    skmod.write_skill("u", _prop("switch"))
+    assert skmod.set_skill_status("u", "switch", "trusted") is True
+    assert skmod.list_skills("u")[0]["status"] == "trusted"
+    assert skmod.set_skill_status("u", "ghost", "trusted") is False   # unknown -> False
+    import pytest
+    with pytest.raises(ValueError):
+        skmod.set_skill_status("u", "switch", "bogus")               # invalid status
+
+
+def test_set_skill_status_inserts_a_missing_line(tmp_brain):
+    """A hand-written skill with no status: line still takes the change (no silent no-op)."""
+    brain.ensure_user("u")
+    p = brain.skills_dir("u") / "manual.md"
+    p.write_text("---\nname: manual\n---\n\nbody\n", encoding="utf-8")
+    assert skmod.set_skill_status("u", "manual", "retired") is True
+    assert retrieval._parse_frontmatter(p.read_text(encoding="utf-8"))["status"] == "retired"
+
+
+def test_delete_skill_removes_file_and_index(tmp_brain):
+    skmod.write_skill("u", _prop("doomed"))
+    skmod.record_chapter("u", ["doomed"], True)
+    assert skmod.delete_skill("u", "doomed") is True
+    assert skmod.list_skills("u") == []
+    assert "doomed" not in skmod.load_index("u")["skills"]
+    assert skmod.delete_skill("u", "doomed") is False                # already gone

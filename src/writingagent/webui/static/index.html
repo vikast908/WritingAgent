@@ -202,6 +202,46 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .approach .t .n{color:var(--accent);margin-right:6px}
 .approach .s{color:var(--fg-2);font-size:13px}.approach .s.muted{color:var(--fg-3);font-size:12.5px;margin-top:2px}
 
+/* memory manager — expandable items (skills/voice), pref rows, empty states */
+.tabwrap{margin-bottom:18px}
+.hint{margin-bottom:11px}
+.memitem{border:1px solid var(--hair);border-radius:var(--r-md);margin-bottom:9px;overflow:hidden;transition:border-color var(--dur-fast)}
+.memitem:hover{border-color:var(--stroke)}
+.memhead{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}
+.memhead .mname{font-weight:600;font-size:14px}
+.memhead .mstat{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--fg-3);white-space:nowrap}
+.memhead .chev{color:var(--fg-4);font-size:11px;transition:transform var(--dur-base) var(--ease-out)}
+.membody{padding:12px 14px 15px;border-top:1px solid var(--hair)}
+.memact{display:flex;align-items:center;gap:10px;margin-top:13px}
+.memrow{display:flex;align-items:center;gap:9px;padding:9px 2px;border-bottom:1px solid var(--hair)}
+.memrow:last-of-type{border-bottom:none}
+.memrow .mtext{flex:1;font-size:13.5px;color:var(--fg)}
+.iconbtn{width:22px;height:22px;border-radius:6px;color:var(--fg-4);font-size:15px;line-height:1;flex:none;transition:color var(--dur-fast),background var(--dur-fast)}
+.iconbtn:hover{color:var(--red);background:color-mix(in srgb,var(--red) 12%,transparent)}
+.memadd{margin-top:14px}
+.memadd input{flex:1}
+.memnew{margin-top:18px;padding-top:16px;border-top:1px solid var(--hair)}
+.memnew input,.memnew textarea{width:100%;margin-bottom:8px}
+textarea.mono{font-family:var(--mono);font-size:12px;line-height:1.6}
+.memempty{text-align:center;padding:34px 20px;color:var(--fg-3)}
+.memempty .t{font-weight:600;color:var(--fg-2);margin-bottom:6px;font-size:14px}
+.memempty .s{font-size:13px;max-width:520px;margin:0 auto;line-height:1.55}
+
+/* disclosure — the Studio "Advanced" reveal; grid-rows 0fr→1fr animates height cleanly */
+.disc{display:flex;align-items:center;gap:8px;width:100%;margin-top:14px;padding:8px 2px;text-align:left;color:var(--fg-2);font-size:12.5px;font-weight:500}
+.disc:hover{color:var(--fg);background:transparent}
+.disc .chev{color:var(--fg-4);font-size:10px;transition:transform var(--dur-base) var(--ease-out)}
+.disc[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.disc .disc-note{margin-left:auto;color:var(--fg-4);font-weight:400;font-size:11.5px}
+.disc-panel{display:grid;grid-template-rows:0fr;transition:grid-template-rows var(--dur-base) var(--ease-out)}
+.disc-panel.open{grid-template-rows:1fr}
+.disc-inner{overflow:hidden;min-height:0}
+.advbody{padding-top:13px}
+.advgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:13px}
+.advseo{width:100%;margin-top:13px}
+@media (max-width:560px){.disc .disc-note{display:none}}
+@media (prefers-reduced-motion:reduce){.disc-panel,.disc .chev{transition:none}}
+
 /* live log */
 #log{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-card);
   padding:13px 15px;font-family:var(--mono);font-size:12px;line-height:1.6;height:360px;overflow:auto;white-space:pre-wrap;color:var(--fg-2)}
@@ -501,7 +541,7 @@ document.addEventListener('keydown',e=>{
   const tg=(e.target.tagName||'').toLowerCase();
   if(tg!=='input'&&tg!=='textarea'&&tg!=='select'&&!e.metaKey&&!e.ctrlKey&&!e.altKey){
     if(e.key==='g'){_gAt=Date.now();}
-    else if(_gAt&&Date.now()-_gAt<900){const m={s:'studio',p:'projects',r:'run',t:'telemetry',k:'skills',',':'settings'};
+    else if(_gAt&&Date.now()-_gAt<900){const m={s:'studio',p:'projects',r:'run',t:'telemetry',k:'memory',m:'memory',',':'settings'};
       if(m[e.key]){go(m[e.key]);e.preventDefault();}_gAt=0;}
   }
   if((e.key==='Enter'||e.key===' ')&&e.target instanceof Element&&e.target.hasAttribute('data-kb')){
@@ -594,7 +634,7 @@ function buildThemeSelect(){
 let S={user:'default',options:{},settings:[],models:{},projects:[],active_job:null};
 let RUN={job:null,project:null,log:[],state:null,es:null,status:null};
 const NAV=[['studio','Studio','✎'],['projects','Projects','▤'],['run','Live run','▶'],
-           ['telemetry','Telemetry','◔'],['skills','Skills','◈'],['settings','Settings','⚙']];
+           ['telemetry','Telemetry','◔'],['memory','Memory','◈'],['settings','Settings','⚙']];
 let view='studio',viewArg=null,_projSnap='';
 
 async function refreshState(){
@@ -606,7 +646,7 @@ async function refreshState(){
 function go(v,arg){const h=arg?v+'/'+encodeURIComponent(arg):v;
   if(location.hash.slice(1)!==h){location.hash=h;return;}   // onhashchange renders
   view=v;viewArg=arg;render();const el=$('#view');if(el)el.scrollTop=0;}
-const VIEWS=['studio','projects','run','telemetry','skills','settings','project'];
+const VIEWS=['studio','projects','run','telemetry','memory','settings','project'];
 function applyHash(){const[v,arg]=location.hash.slice(1).split('/');
   view=VIEWS.includes(v)?v:'studio';viewArg=arg?decodeURIComponent(arg):null;
   render();const el=$('#view');if(el)el.scrollTop=0;}
@@ -642,11 +682,11 @@ let _lastView=null;
 function render(){const vc=view!==_lastView;_lastView=view;
   const vEl=$('#view');if(vEl)vEl.classList.toggle('vt',vc);   // fade on view change only - tabs/polls repaint silently
   nav();({studio:renderStudio,projects:renderProjects,project:renderProject,
-  run:renderRun,telemetry:renderTelemetry,skills:renderSkills,settings:renderSettings}[view]||renderStudio)();}
+  run:renderRun,telemetry:renderTelemetry,memory:renderMemory,settings:renderSettings}[view]||renderStudio)();}
 
 /* studio — topic + optional per-piece overrides (voice + SEO), bound to PLAN so re-renders
    don't wipe them. Blank overrides inherit your Settings defaults. */
-let PLAN={topic:'',mode:null,approaches:[],sel:0,planning:false,intake:'',seo:'',overrides:{}};
+let PLAN={topic:'',mode:null,approaches:[],sel:0,planning:false,intake:'',seo:'',overrides:{},adv:false};
 function renderStudio(){
   const g=n=>(S.settings.find(f=>f.name===n)||{}).value;
   const o=S.options||{};
@@ -663,20 +703,30 @@ function renderStudio(){
       <button class="primary" onclick="doPlan()" ${PLAN.planning?'disabled':''}>${PLAN.planning?'proposing…':'Propose angles'}</button>
     </div>
     <textarea id="intake" placeholder="Optional requirements — audience, tone, must-includes, target length…" oninput="PLAN.intake=this.value">${esc(PLAN.intake)}</textarea>
-    <div class="lbl" style="margin-top:15px">this piece <span class="muted" style="text-transform:none;font-weight:400;letter-spacing:0">— optional; blank inherits your Settings defaults</span></div>
-    <div class="row" style="gap:14px;margin-top:9px">
-      ${vsel('persona',o.personas)}${vsel('emotion',o.emotions)}${vsel('register',o.registers)}${vsel('field',o.fields)}${vsel('citation_style',o.citation_styles)}
-    </div>
-    <div class="row" style="margin-top:11px">
-      <input id="sv-seo" style="flex:1;min-width:300px" placeholder="SEO keyword — the search term you want THIS piece to rank for (optional)" value="${esc(PLAN.seo)}" oninput="PLAN.seo=this.value">
-    </div>
-    <div class="row small muted" style="margin-top:11px">
+    <button type="button" class="disc" id="advBtn" aria-expanded="${PLAN.adv?'true':'false'}" aria-controls="advPanel" onclick="toggleAdv()">
+      <span class="chev">▸</span><span class="disc-t">Advanced — tune this piece</span>
+      <span class="disc-note">optional; blank inherits your Settings defaults</span></button>
+    <div class="disc-panel${PLAN.adv?' open':''}" id="advPanel"><div class="disc-inner"><div class="advbody">
+      <div class="advgrid">${vsel('persona',o.personas)}${vsel('emotion',o.emotions)}${vsel('register',o.registers)}${vsel('field',o.fields)}${vsel('citation_style',o.citation_styles)}</div>
+      <input id="sv-seo" class="advseo" placeholder="SEO keyword — the term you want THIS piece to rank for (optional)" value="${esc(PLAN.seo)}" oninput="PLAN.seo=this.value">
+    </div></div></div>
+    <div class="row small muted" style="margin-top:13px">
       <span class="chip ${g('cost_mode')==='budget'?'blue':''}">cost: ${esc(g('cost_mode')||'standard')}</span>
       <span class="chip ${g('agentic')?'blue':''}">${g('agentic')?'agentic':'fixed pipeline'}</span>
       <span>runs autonomously · nothing is posted anywhere</span>
     </div>
   </div>
   <div id="approaches">${PLAN.approaches.length?renderApproaches():''}</div>`;
+  if(PLAN.adv){const inner=$('#advPanel')?.querySelector('.disc-inner');if(inner)inner.style.overflow='visible';}  // keep re-renders' open panel dropdown-safe
+}
+function toggleAdv(){PLAN.adv=!PLAN.adv;
+  const p=$('#advPanel'),inner=p&&p.querySelector('.disc-inner'),btn=$('#advBtn');
+  if(!p)return;
+  if(btn)btn.setAttribute('aria-expanded',PLAN.adv?'true':'false');
+  if(inner)inner.style.overflow='hidden';        // clip during the slide (both directions)
+  if(PLAN.adv){p.classList.add('open');          // once expanded, free the dropdowns so menus aren't clipped
+    setTimeout(()=>{if(PLAN.adv&&inner)inner.style.overflow='visible';},210);
+  }else{p.classList.remove('open');}
 }
 function renderApproaches(){
   return `<div class="section"><div class="lbl">Choose an angle</div>
@@ -968,23 +1018,90 @@ function teleTables(sum,records){
     ${(sum.by_unit&&sum.by_unit.length>1)?`<div class="section"><div class="lbl">per unit (loop)</div>${tbl(sum.by_unit,'unit')}</div>`:`<div class="section"><div class="lbl">per model</div>${tbl(sum.by_model,'model')}</div>`}</div>
     <div class="section"><div class="lbl">recent calls</div><div class="scroll-x"><table><tr><th>time</th><th>agent</th><th>unit</th><th>model</th><th class="num">tokens</th><th class="num">cost</th><th class="num">latency</th><th></th></tr>${recent}</table></div></div>`;
 }
-/* skills */
-async function renderSkills(){
-  $('#view').innerHTML=head('Craft','Skills & watch-list')+loadingHTML();
-  let d;try{d=await api('/api/skills');}catch(e){$('#view').innerHTML=head('Craft','Skills & watch-list')+`<div class="card">✗ ${esc(e.message)}</div>`;return;}
-  const idx=d.index?.skills||{};
-  const rows=Object.keys(d.skills).map(name=>{const m=idx[name]||{};
-    return `<tr class="click" onclick="var e=document.getElementById('sk-${name}');e.style.display=e.style.display==='none'?'':'none'">
-      <td>${esc(name)}</td><td><span class="chip ${m.status==='trusted'?'ok':m.status==='retired'?'err':'blue'}">${esc(m.status||'candidate')}</span></td>
-      <td class="num">${m.applied||0}</td><td class="num">${m.first_pass||0}</td></tr>
-      <tr id="sk-${name}" style="display:none"><td colspan="4"><div class="md small" style="max-width:none">${md(d.skills[name])}</div></td></tr>`;}).join('');
-  $('#view').innerHTML=head('Craft','Skills & watch-list')+`
-  <div class="section"><div class="lbl">learned skills — click to read</div>
-    <table><tr><th>skill</th><th>status</th><th class="num">applied</th><th class="num">first-pass</th></tr>
-    ${rows||'<tr><td colspan="4" class="muted">none yet</td></tr>'}</table></div>
-  <div class="section"><div class="lbl">watch-list — cross-run failure patterns</div><div class="md small" style="max-width:none">${md(d.watch_list||'_none yet_')}</div></div>
-  <div class="section"><div class="lbl">your standing preferences — learned from your revisions (×N = how often you've asked)</div><div class="md small" style="max-width:none">${md(d.preferences||'_none yet — your review/revise corrections accumulate here_')}</div></div>`;
+/* memory — the five things the agent remembers about you, each manageable. The through-line
+   is "the agent slowly becomes you": skills it learned, preferences you keep asking for,
+   mistakes it must avoid, your voice, and who you are. */
+let MEMTAB='skills',MEM=null;
+const MEMTABS=[['skills','Skills'],['preferences','Preferences'],['watch','Watch-list'],['voice','Voice'],['profile','Profile']];
+async function renderMemory(){
+  $('#view').innerHTML=head('Craft','Memory','Everything the agent remembers about you — so each piece sounds more like you than the last. Manage all five kinds here.')+`
+    <div class="tabwrap"><div class="seg" id="memTabs">${MEMTABS.map(([t,l])=>`<button type="button" class="${MEMTAB===t?'on':''}" data-mt="${t}" onclick="switchMemTab('${t}')">${l}</button>`).join('')}</div></div>
+    <div id="memBody">${loadingHTML()}</div>`;
+  try{MEM=await api('/api/memory');}catch(e){const el=$('#memBody');if(el)el.innerHTML=`<div class="card">✗ ${esc(e.message)}</div>`;return;}
+  renderMemBody();
 }
+function switchMemTab(t){MEMTAB=t;document.querySelectorAll('#memTabs button').forEach(b=>b.classList.toggle('on',b.dataset.mt===t));renderMemBody();}
+function renderMemBody(){const el=$('#memBody');if(!el||!MEM)return;
+  el.innerHTML=({skills:memSkills,preferences:memPrefs,watch:memWatch,voice:memVoice,profile:memProfile}[MEMTAB]||memSkills)();}
+async function memReload(){try{MEM=await api('/api/memory');}catch(e){return toast(e.message,1);}renderMemBody();}
+async function memOp(payload,okMsg){try{await api('/api/memory',payload);if(okMsg)toast(okMsg);await memReload();}catch(e){toast(e.message,1)}}
+function memToggle(id){const b=document.getElementById('mk-'+id),c=document.getElementById('mkchev-'+id);
+  if(!b)return;const open=b.style.display!=='none';b.style.display=open?'none':'';if(c)c.style.transform=open?'':'rotate(180deg)';}
+const _stripFm=t=>String(t||'').replace(/^﻿?---[\s\S]*?\n---\s*/,'');   // hide skill frontmatter in the reader
+function memEmpty(title,body){return `<div class="section"><div class="memempty"><div class="t">${esc(title)}</div><div class="s">${esc(body)}</div></div></div>`;}
+
+function memSkills(){const rows=MEM.skills||[];
+  if(!rows.length)return memEmpty('No learned skills yet','As the agent writes and self-critiques, it distills a reusable technique whenever the same note keeps recurring — then A/B-tests each one against its own absence. Trusted skills won their duels; retired ones lost.');
+  const items=rows.map((s,i)=>{const sc=s.status==='trusted'?'ok':s.status==='retired'?'err':'blue';
+    return `<div class="memitem"><div class="memhead" onclick="memToggle('${i}')">
+        <span class="mname">${esc(s.name)}</span><span class="chip ${sc}">${esc(s.status)}</span>
+        <span class="mstat">applied ${s.applied} · duel ${s.duels?Math.round(s.duel_wr*100)+'%':'—'}</span>
+        <span class="chev" id="mkchev-${i}">▾</span></div>
+      <div class="membody" id="mk-${i}" style="display:none">
+        <div class="md small" style="max-width:none">${md(_stripFm(MEM.skill_bodies[s.name]))}</div>
+        <div class="memact"><span class="small muted">status</span>
+          ${sel('mkst-'+i,['candidate','trusted','retired'],s.status,{cb:v=>memSkillStatus(i,v)})}
+          <button type="button" class="text danger" onclick="memSkillDelete(${i})">delete</button></div></div></div>`;}).join('');
+  return `<div class="section"><div class="lbl">learned skills — click to read, retire, or delete</div>${items}</div>`;
+}
+function memSkillStatus(i,v){const s=(MEM.skills||[])[i];if(!s||v===s.status)return;memOp({kind:'skill',op:'status',name:s.name,status:v},s.name+' → '+v);}
+async function memSkillDelete(i){const s=(MEM.skills||[])[i];if(!s)return;
+  if(!await confirmModal({title:'Delete skill?',danger:true,confirmLabel:'Delete permanently',body:`This removes <b>${esc(s.name)}</b> and its history for good. To keep it out of retrieval but reversible, set it <i>retired</i> instead.`}))return;
+  memOp({kind:'skill',op:'delete',name:s.name},'deleted '+s.name);}
+
+function memPrefs(){const rows=MEM.preferences||[];
+  const list=rows.length?rows.map((p,i)=>`<div class="memrow"><span class="mtext">${esc(p.text)}</span>
+      ${p.count>1?`<span class="chip" title="you've asked ${p.count}×">×${p.count}</span>`:''}
+      <button type="button" class="iconbtn" title="forget this" onclick="memPrefDelete(${i})">×</button></div>`).join('')
+    :`<div class="memempty"><div class="t">Nothing yet</div><div class="s">Your review and revise corrections accumulate here, and the agent follows them on the next run. ×N shows how often you've asked — the more you repeat a note, the harder it sticks.</div></div>`;
+  return `<div class="section"><div class="lbl">standing preferences — what you keep asking for</div>${list}
+    <div class="row memadd"><input id="mem-pref" placeholder="Add a preference — e.g. “never open with a rhetorical question”" onkeydown="if(event.key==='Enter')memPrefAdd()"><button type="button" class="primary" onclick="memPrefAdd()">Add</button></div></div>`;
+}
+function memPrefAdd(){const inp=$('#mem-pref'),v=(inp?inp.value:'').trim();if(!v)return toast('type a preference first',1);memOp({kind:'pref',op:'add',text:v},'added');}
+function memPrefDelete(i){const p=(MEM.preferences||[])[i];if(!p)return;memOp({kind:'pref',op:'delete',text:p.text},'forgotten');}
+
+function memWatch(){return `<div class="section"><div class="lbl">watch-list — cross-run failure patterns the agent avoids</div>
+  <div class="muted small hint">The agent appends a pattern here when the same mistake recurs across runs, then checks new drafts against it. Edit freely; saving an empty box clears it.</div>
+  <textarea id="mem-watch" class="mono" style="min-height:240px">${esc(MEM.watch_list||'')}</textarea>
+  <div class="row memadd"><button type="button" class="primary" onclick="memWatchSave()">Save watch-list</button></div></div>`;
+}
+function memWatchSave(){const t=$('#mem-watch');if(t)memOp({kind:'watch',text:t.value},'watch-list saved');}
+
+function memVoice(){const rows=MEM.voice||[];
+  const list=rows.length?rows.map((v,i)=>`<div class="memitem"><div class="memhead" onclick="memToggle('v${i}')">
+      <span class="mname">${esc(v.name)}</span><span class="mstat">${v.chars.toLocaleString()} chars</span>
+      <span class="chev" id="mkchev-v${i}">▾</span></div>
+    <div class="membody" id="mk-v${i}" style="display:none"><div class="md small" style="max-width:none">${md(v.text)}</div>
+      <div class="memact"><button type="button" class="text danger" onclick="memVoiceDelete(${i})">delete</button></div></div></div>`).join('')
+    :`<div class="memempty"><div class="t">No exemplars yet</div><div class="s">Paste writing you admire — your own or an author's. The writer matches its rhythm and diction instead of a generic register (showing a target beats describing it, especially on a smaller model).</div></div>`;
+  return `<div class="section"><div class="lbl">voice exemplars — writing the agent matches</div>${list}
+    <div class="memnew"><div class="lbl">add an exemplar</div>
+      <input id="mem-voice-title" placeholder="Title (optional)">
+      <textarea id="mem-voice-text" placeholder="Paste a paragraph or two of prose whose voice you want the agent to emulate…" style="min-height:150px"></textarea>
+      <div class="row memadd"><button type="button" class="primary" onclick="memVoiceAdd()">Save exemplar</button></div></div></div>`;
+}
+function memVoiceAdd(){const t=$('#mem-voice-text'),ti=$('#mem-voice-title');const v=t?t.value.trim():'';
+  if(!v)return toast('paste some text first',1);memOp({kind:'voice',op:'add',title:ti?ti.value:'',text:v},'exemplar saved');}
+async function memVoiceDelete(i){const v=(MEM.voice||[])[i];if(!v)return;
+  if(!await confirmModal({title:'Delete exemplar?',danger:true,confirmLabel:'Delete',body:`Remove <b>${esc(v.name)}</b> from your voice exemplars?`}))return;
+  memOp({kind:'voice',op:'delete',name:v.name},'deleted');}
+
+function memProfile(){return `<div class="section"><div class="lbl">profile — who you are, in your own words</div>
+  <div class="muted small hint">Standing context the agent keeps in mind for every piece: your background, expertise, who you write for, anything it should always know. Saving an empty box clears it.</div>
+  <textarea id="mem-profile" style="min-height:240px">${esc(MEM.profile||'')}</textarea>
+  <div class="row memadd"><button type="button" class="primary" onclick="memProfileSave()">Save profile</button></div></div>`;
+}
+function memProfileSave(){const t=$('#mem-profile');if(t)memOp({kind:'profile',text:t.value},'profile saved');}
 /* settings — one tab bar, every enum a dropdown, a Keys tab to set + verify API keys */
 let SETTAB='run';
 const SET_GROUPS={

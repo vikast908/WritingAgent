@@ -141,7 +141,14 @@ def _p_base(idx: dict) -> float:
 
 
 def _set_status(text: str, new: str) -> str:
-    return re.sub(r"(?m)^status:.*$", f"status: {new}", text, count=1)
+    updated, n = re.subn(r"(?m)^status:.*$", f"status: {new}", text, count=1)
+    if n:
+        return updated
+    # No status line in the frontmatter (a hand-written skill): insert one right after
+    # the opening --- so the change actually takes, rather than silently no-op'ing.
+    if text.startswith("---"):
+        return re.sub(r"^---\n", f"---\nstatus: {new}\n", text, count=1)
+    return f"---\nstatus: {new}\n---\n\n{text}"
 
 
 def reconcile(uid: str) -> list[tuple[str, str]]:
@@ -236,6 +243,49 @@ def distill(uid: str) -> list[tuple[str, str]]:
             if lo == i:
                 break
     return retired
+
+
+VALID_STATUS = ("candidate", "trusted", "retired")
+
+
+def _skill_file(uid: str, name: str) -> Path | None:
+    """The .md whose frontmatter name (or filename stem) matches `name`, or None."""
+    sdir = brain.skills_dir(uid)
+    if not sdir.exists():
+        return None
+    for p in sorted(sdir.glob("*.md")):
+        fm = retrieval._parse_frontmatter(p.read_text(encoding="utf-8"))
+        if str(fm.get("name") or p.stem) == name or p.stem == name:
+            return p
+    return None
+
+
+def set_skill_status(uid: str, name: str, status: str) -> bool:
+    """Manually flip a skill's status (candidate/trusted/retired) - a user override of the
+    automatic reconcile/distill machinery. Status lives in the md frontmatter (the source of
+    truth reconcile reads). Returns True if a matching skill was found and written."""
+    if status not in VALID_STATUS:
+        raise ValueError(f"status must be one of {VALID_STATUS}")
+    p = _skill_file(uid, name)
+    if p is None:
+        return False
+    brain.write_text(p, _set_status(p.read_text(encoding="utf-8"), status))
+    return True
+
+
+def delete_skill(uid: str, name: str) -> bool:
+    """Permanently remove a skill: delete its md file and drop its index stats. Returns
+    True if a matching skill was found. (Prefer set_skill_status('retired') to keep history;
+    delete is for junk the user never wants retrieved or reinstated.)"""
+    p = _skill_file(uid, name)
+    if p is None:
+        return False
+    real_name = str(retrieval._parse_frontmatter(p.read_text(encoding="utf-8")).get("name") or p.stem)
+    p.unlink(missing_ok=True)
+    idx = load_index(uid)
+    if idx["skills"].pop(real_name, None) is not None or idx["skills"].pop(name, None) is not None:
+        save_index(uid, idx)
+    return True
 
 
 def list_skills(uid: str) -> list[dict]:

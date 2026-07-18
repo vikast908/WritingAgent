@@ -88,6 +88,28 @@ def user_preferences(uid: str = "default") -> Path:
 _PREF_CAP = 30   # keep the newest N standing preferences; recurring ones reinforce and stay
 
 
+def _parse_preferences(uid: str) -> list[list]:
+    """Read preferences.md into [base_text, count] rows in on-disk (newest-first) order."""
+    entries: list[list] = []
+    for ln in (read_text(user_preferences(uid)) or "").splitlines():
+        ln = ln.strip()
+        if not ln.startswith("- "):
+            continue
+        body = ln[2:]
+        # match both "×N" (what we write) and a legacy "(×N)" form
+        m = re.search(r"\s+\(?×(\d+)\)?\s*$", body)
+        cnt = int(m.group(1)) if m else 1
+        base = (body[: m.start()] if m else body).strip()
+        if base:
+            entries.append([base, cnt])
+    return entries
+
+
+def _write_preferences(uid: str, entries: list[list]) -> None:
+    out = "\n".join(f"- {b}" + (f"  ×{c}" if c > 1 else "") for b, c in entries)
+    _atomic_write(user_preferences(uid), (out + "\n") if out else "")
+
+
 def record_preference(uid: str = "default", text: str = "") -> None:
     """Durably record one user correction. A repeat of the same guidance increments its
     count (reinforcement) and moves it to the front; the list is capped newest-first.
@@ -97,18 +119,7 @@ def record_preference(uid: str = "default", text: str = "") -> None:
         return
     try:
         ensure_user(uid)
-        p = user_preferences(uid)
-        entries: list[list] = []   # [base_text, count], newest first
-        for ln in (read_text(p) or "").splitlines():
-            ln = ln.strip()
-            if not ln.startswith("- "):
-                continue
-            body = ln[2:]
-            m = re.search(r"\s+\(×(\d+)\)\s*$", body)
-            cnt = int(m.group(1)) if m else 1
-            base = (body[: m.start()] if m else body).strip()
-            if base:
-                entries.append([base, cnt])
+        entries = _parse_preferences(uid)
         key = text.lower()
         hit = next((e for e in entries if e[0].lower() == key), None)
         if hit:
@@ -117,9 +128,7 @@ def record_preference(uid: str = "default", text: str = "") -> None:
             entries.insert(0, hit)          # reinforce + surface
         else:
             entries.insert(0, [text, 1])
-        entries = entries[:_PREF_CAP]
-        out = "\n".join(f"- {b}" + (f"  ×{c}" if c > 1 else "") for b, c in entries)
-        _atomic_write(p, out + "\n")
+        _write_preferences(uid, entries[:_PREF_CAP])
     except Exception:  # noqa: BLE001 - never let a learning write break a run
         pass
 
@@ -127,6 +136,24 @@ def record_preference(uid: str = "default", text: str = "") -> None:
 def user_preferences_text(uid: str = "default") -> str:
     """The standing-preferences block (empty string when none), for the learner."""
     return (read_text(user_preferences(uid)) or "").strip()
+
+
+def list_preferences(uid: str = "default") -> list[dict]:
+    """The standing preferences as structured rows, for the Memory UI."""
+    return [{"text": b, "count": c} for b, c in _parse_preferences(uid)]
+
+
+def delete_preference(uid: str = "default", text: str = "") -> bool:
+    """Drop one standing preference by its text (case-insensitive). Returns True if removed."""
+    key = " ".join((text or "").split()).strip().lower()
+    if not key:
+        return False
+    entries = _parse_preferences(uid)
+    kept = [e for e in entries if e[0].lower() != key]
+    if len(kept) == len(entries):
+        return False
+    _write_preferences(uid, kept)
+    return True
 
 
 def voice_dir(uid: str = "default") -> Path:
@@ -174,6 +201,51 @@ def style_exemplars(uid: str = "default", register: str | None = None,
         return user
     from . import registers
     return registers.gold_exemplars(register, max_chars=min(max_chars, 1200))
+
+
+def list_voice(uid: str = "default") -> list[dict]:
+    """The voice exemplar files as {name, chars, text} rows, for the Memory UI."""
+    d = voice_dir(uid)
+    if not d.exists():
+        return []
+    rows = []
+    for p in sorted(list(d.glob("*.md")) + list(d.glob("*.txt"))):
+        text = read_text(p) or ""
+        rows.append({"name": p.name, "chars": len(text), "text": text})
+    return rows
+
+
+def add_voice_exemplar(uid: str = "default", title: str = "", text: str = "") -> str | None:
+    """Save a pasted writing sample as a voice exemplar (a .md file the writer matches).
+    The filename is slugified from the title (or a stable hash of the text). Returns the
+    stored filename, or None when there's no text to save."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    slug = slugify(title) if title.strip() else "sample-" + hashlib.sha1(text.encode("utf-8")).hexdigest()[:6]
+    d = voice_dir(uid)
+    d.mkdir(parents=True, exist_ok=True)
+    name = f"{slug}.md"
+    n = 2
+    while (d / name).exists():          # never clobber an existing exemplar
+        name = f"{slug}-{n}.md"
+        n += 1
+    body = (f"# {title.strip()}\n\n{text}" if title.strip() else text)
+    _atomic_write(d / name, body.rstrip() + "\n")
+    return name
+
+
+def delete_voice_exemplar(uid: str = "default", name: str = "") -> bool:
+    """Delete one voice exemplar by filename. Basename-only (no path traversal). Returns
+    True if the file existed and was removed."""
+    name = Path(name or "").name          # strip any directory components
+    if not name or name.startswith("."):
+        return False
+    p = voice_dir(uid) / name
+    if not p.exists():
+        return False
+    p.unlink(missing_ok=True)
+    return True
 
 
 # ── Book scope ───────────────────────────────────────────────────────────────

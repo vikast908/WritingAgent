@@ -322,17 +322,81 @@ def _evals(uid: str, pid: str) -> dict:
             "eval_report": brain.read_text(p.root / "eval_report.md") or ""}
 
 
-def _skills(uid: str) -> dict:
+def _memory(uid: str) -> dict:
+    """Everything the agent remembers about one user, for the Memory view: the five
+    memory types (profile, learned skills, watch-list, standing preferences, voice
+    exemplars) with the stats and bodies the UI needs to display and manage them."""
+    from .. import retrieval
     from .. import skills as skills_mod
-    idx = skills_mod.load_index(uid)
-    files = {}
+    rows = skills_mod.list_skills(uid)          # name/status/stats, frontmatter-accurate
+    bodies = {}                                 # name -> full md, keyed to match rows[].name
     d = brain.skills_dir(uid)
     if d.exists():
         for p in sorted(d.glob("*.md")):
-            files[p.stem] = p.read_text(encoding="utf-8")
-    return {"index": idx, "skills": files,
-            "watch_list": brain.read_text(brain.watch_list(uid)) or "",
-            "preferences": brain.user_preferences_text(uid)}
+            text = p.read_text(encoding="utf-8")
+            fm = retrieval._parse_frontmatter(text)
+            bodies[str(fm.get("name") or p.stem)] = text
+    return {
+        "profile": brain.read_text(brain.user_profile(uid)) or "",
+        "skills": rows,
+        "skill_bodies": bodies,
+        "watch_list": brain.read_text(brain.watch_list(uid)) or "",
+        "preferences": brain.list_preferences(uid),
+        "voice": brain.list_voice(uid),
+    }
+
+
+def _memory_op(uid: str, body: dict) -> dict:
+    """Mutate one memory item. Dispatched on (kind, op); every branch is a small, explicit
+    write so the Memory UI can add/edit/delete without a generic file-write surface."""
+    from .. import skills as skills_mod
+    kind = body.get("kind", "")
+    op = body.get("op", "")
+    text = body.get("text", "")
+    if kind == "profile":                        # free-text markdown; blank clears
+        if text.strip():
+            brain.write_text(brain.user_profile(uid), text)
+        else:
+            brain.user_profile(uid).unlink(missing_ok=True)
+        return {"ok": True}
+    if kind == "watch":
+        if text.strip():
+            brain.write_text(brain.watch_list(uid), text)
+        else:
+            brain.watch_list(uid).unlink(missing_ok=True)
+        return {"ok": True}
+    if kind == "pref":
+        if op == "add":
+            brain.record_preference(uid, text)
+        elif op == "delete":
+            if not brain.delete_preference(uid, text):
+                raise ValueError("preference not found")
+        else:
+            raise ValueError(f"unknown pref op: {op}")
+        return {"ok": True}
+    if kind == "skill":
+        name = body.get("name", "")
+        if op == "status":
+            if not skills_mod.set_skill_status(uid, name, body.get("status", "")):
+                raise ValueError("skill not found")
+        elif op == "delete":
+            if not skills_mod.delete_skill(uid, name):
+                raise ValueError("skill not found")
+        else:
+            raise ValueError(f"unknown skill op: {op}")
+        return {"ok": True}
+    if kind == "voice":
+        if op == "add":
+            name = brain.add_voice_exemplar(uid, body.get("title", ""), text)
+            if not name:
+                raise ValueError("paste some text to save an exemplar")
+            return {"ok": True, "name": name}
+        if op == "delete":
+            if not brain.delete_voice_exemplar(uid, body.get("name", "")):
+                raise ValueError("exemplar not found")
+            return {"ok": True}
+        raise ValueError(f"unknown voice op: {op}")
+    raise ValueError(f"unknown memory kind: {kind}")
 
 
 # ── Job bodies ─────────────────────────────────────────────────────────────────
@@ -519,8 +583,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(_evals(q.get("user") or _uid(), q.get("project", "")))
             if route == "/api/telemetry":
                 return self._telemetry(q)
-            if route == "/api/skills":
-                return self._json(_skills(q.get("user") or _uid()))
+            if route == "/api/memory":
+                return self._json(_memory(q.get("user") or _uid()))
             if route == "/api/keys":
                 return self._json(_keys_payload())
             if route == "/api/events":
@@ -711,9 +775,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._testkey(body)
             if route == "/api/delete":
                 return self._delete(body)
+            if route == "/api/memory":
+                return self._json(_memory_op(body.get("user") or _uid(), body))
             return self._err("not found", 404)
         except RuntimeError as e:       # job already running
             self._err(str(e), 409)
+        except ValueError as e:         # a bad/rejected request (e.g. memory validation)
+            self._err(str(e), 400)
         except Exception as e:  # noqa: BLE001
             self._err(f"{type(e).__name__}: {e}", 500)
 
