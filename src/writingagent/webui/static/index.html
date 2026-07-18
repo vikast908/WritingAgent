@@ -697,7 +697,7 @@ function renderRunInner(){
   // animate continuously through the stream instead of restarting on every log event.
   const key=RUN.job+'|'+RUN.status;
   if(RUN._shell!==key){
-    RUN._shell=key;RUN._pipe='';
+    RUN._shell=key;RUN._pipe='';RUN._logN=0;
     const done=RUN.status==='done',err=RUN.status==='error';
     const db=(done&&RUN.project)?`<div class="banner success"><span class="bi">✓</span>
       <div style="flex:1">Finished — <b>${esc(RUN.project)}</b> is ready to read.</div>
@@ -725,7 +725,16 @@ function renderRunInner(){
   const act=RUN.status==='running'?runActivity(RUN.log):(RUN.status==='done'?{lbl:'Finished',sub:'',ok:1}:{lbl:RUN.status,sub:''});
   const now=$('#rnNow');if(now){now.className='nowline'+(act.work?'':(act.ok?' ok':' idle'));
     $('#rnNowLbl').textContent=act.lbl;$('#rnNowSub').textContent=act.sub||'';}
-  const lg=$('#log');if(lg){const txt=esc(RUN.log.join('\n'))||'· awaiting first line…';if(lg.innerHTML!==txt){lg.innerHTML=txt;lg.scrollTop=lg.scrollHeight;}}
+  // Append only the new lines (textContent, not innerHTML) - O(delta) per event instead of
+  // re-escaping the whole log, and no HTML-injection surface.
+  const lg=$('#log');if(lg){
+    if(RUN.log.length<RUN._logN){lg.textContent=RUN.log.join('\n');}          // log shrank (new job)
+    else if(RUN.log.length>RUN._logN){
+      if(!RUN._logN)lg.textContent=RUN.log.join('\n');                        // first real lines: replace placeholder
+      else lg.appendChild(document.createTextNode('\n'+RUN.log.slice(RUN._logN).join('\n')));
+    }else if(!RUN._logN&&!lg.textContent){lg.textContent='· awaiting first line…';}
+    RUN._logN=RUN.log.length;lg.scrollTop=lg.scrollHeight;
+  }
 }
 /* projects */
 function renderProjects(){
