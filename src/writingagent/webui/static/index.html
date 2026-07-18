@@ -223,8 +223,11 @@ td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabu
 .memitem{border:1px solid var(--hair);border-radius:var(--r-md);margin-bottom:9px;overflow:hidden;transition:border-color var(--dur-fast)}
 .memitem:hover{border-color:var(--stroke)}
 .memhead{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}
-.memhead .mname{font-weight:600;font-size:14px}
-.memhead .mstat{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--fg-3);white-space:nowrap}
+.memhead .mname{flex:none;font-weight:600;font-size:14px}
+.memhead .msum{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg-3);font-size:12.5px}
+.memhead .mstat{flex:none;font-family:var(--mono);font-size:11px;color:var(--fg-3);white-space:nowrap}
+.memitem.dim{opacity:.58}
+.memitem.dim:hover{opacity:1}
 .memhead .chev{color:var(--fg-4);font-size:11px;transition:transform var(--dur-base) var(--ease-out)}
 .membody{padding:12px 14px 15px;border-top:1px solid var(--hair)}
 .memact{display:flex;align-items:center;gap:10px;margin-top:13px}
@@ -262,16 +265,17 @@ textarea.mono{font-family:var(--mono);font-size:12px;line-height:1.6}
 .hero.compact{padding-top:28px}
 .hero-h{font-family:var(--serif);font-size:clamp(27px,3.4vw,34px);font-weight:500;letter-spacing:-.01em;line-height:1.1;color:var(--fg);text-wrap:balance}
 .hero-sub{color:var(--fg-3);font-size:15px;margin-top:9px}
-.composer-card{margin-top:26px;text-align:left;padding:14px;border-radius:16px;
-  background:color-mix(in srgb,var(--accent) 3%,var(--surface));
-  border:1px solid color-mix(in srgb,var(--accent) 15%,var(--hair));box-shadow:var(--shadow-card)}
-.composer-field{width:100%;min-height:150px;resize:vertical;color:var(--fg);
-  background:var(--surface);border:1px solid var(--stroke-soft);border-radius:12px;box-shadow:none;
-  font-family:var(--sans);font-size:15px;line-height:1.55;padding:14px 16px}
-.composer-field:hover{border-color:var(--stroke)}
-.composer-field:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--fill)}
+/* one frame: the card IS the input surface; the field is borderless, actions sit below a hairline */
+.composer-card{margin-top:26px;text-align:left;padding:16px 18px;border-radius:16px;
+  background:var(--surface);border:1px solid var(--stroke-soft);box-shadow:var(--shadow-card);
+  transition:border-color var(--dur-fast),box-shadow var(--dur-fast)}
+.composer-card:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--fill)}
+.composer-field{width:100%;min-height:120px;max-height:340px;resize:none;overflow-y:auto;color:var(--fg);
+  background:transparent;border:none;box-shadow:none;
+  font-family:var(--sans);font-size:15px;line-height:1.55;padding:2px 0}
+.composer-field:hover,.composer-field:focus{border:none;box-shadow:none;outline:none}
 .composer-field::placeholder{color:var(--fg-4)}
-.composer-actions{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
+.composer-actions{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--hair)}
 .advtoggle{display:inline-flex;align-items:center;gap:8px;padding:9px 15px;border-radius:9999px;
   background:var(--surface);border:1px solid var(--stroke-soft);color:var(--fg-2);font-size:13px;font-weight:500}
 .advtoggle:hover{border-color:var(--stroke);color:var(--fg)}
@@ -351,11 +355,13 @@ svg.spark{display:block}.axt{font-family:var(--mono);font-size:9.5px;fill:var(--
 .md img,.svgwrap svg{max-width:100%;height:auto}
 .svgwrap{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-card);padding:12px;margin:8px 0}
 
-.settingrow{display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--hair)}
-.settingrow label{width:210px;font-size:13px;color:var(--fg-2)}
-.settingrow input,.settingrow .csel{width:220px}
-.settingrow.imgrow{align-items:flex-start}
-.settingrow.imgrow label{padding-top:6px}
+.settingrow{display:flex;align-items:flex-start;gap:24px;padding:13px 0;border-bottom:1px solid var(--hair)}
+.setmeta{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.setmeta label{font-size:13.5px;color:var(--fg);font-weight:500}
+.setdesc{font-size:12px;color:var(--fg-3);line-height:1.45;max-width:62ch}
+.setctl{flex:none;width:230px;padding-top:1px}
+.setctl input,.setctl .csel{width:100%}
+.imgrow .imgchips{margin-top:9px}
 .imgchips{display:flex;flex-wrap:wrap;gap:6px}
 .imgchip{padding:5px 12px;border:1px solid var(--hair);border-radius:9999px;font-family:var(--mono);font-size:11.5px;color:var(--fg-3);background:transparent;transition:color var(--dur-fast),border-color var(--dur-fast),background var(--dur-fast)}
 .imgchip:hover{border-color:var(--stroke);color:var(--fg-2)}
@@ -821,7 +827,7 @@ function renderStudio(){
   $('#view').innerHTML=`
   <div class="hero${has?' compact':''}">
     <h1 class="hero-h">What would you like to explore?</h1>
-    <div class="hero-sub">Describe your topic, question, or idea.</div>
+    <div class="hero-sub">Start with a topic — the agent proposes angles, then researches, drafts, and self-critiques.</div>
     <div class="composer-card" id="composer">
       <textarea id="topic" class="composer-field" rows="4" placeholder="Describe your topic, question, or idea…"
         oninput="PLAN.topic=this.value"
@@ -1171,22 +1177,30 @@ function memToggle(id){const b=document.getElementById('mk-'+id),c=document.getE
 const _stripFm=t=>String(t||'').replace(/^﻿?---[\s\S]*?\n---\s*/,'');   // hide skill frontmatter in the reader
 function memEmpty(title,body){return `<div class="section"><div class="memempty"><div class="t">${esc(title)}</div><div class="s">${esc(body)}</div></div></div>`;}
 
-function memSkills(){const rows=MEM.skills||[];
-  if(!rows.length)return memEmpty('No learned skills yet','As the agent writes and self-critiques, it distills a reusable technique whenever the same note keeps recurring — then A/B-tests each one against its own absence. Trusted skills won their duels; retired ones lost.');
-  const items=rows.map((s,i)=>{const sc=s.status==='trusted'?'ok':s.status==='retired'?'err':'blue';
-    return `<div class="memitem"><div class="memhead" onclick="memToggle('${i}')">
+let SKROWS=[];   // the displayed (sorted) skills; row handlers index into this, not raw MEM.skills
+function _skillSummary(body){const t=_stripFm(body);
+  const m=t.match(/##\s*When to apply\s*\n+([^\n#]+)/i);
+  const s=(m?m[1]:t.replace(/^#.*$/gm,' ')).trim().replace(/\s+/g,' ');
+  return s.length>96?s.slice(0,94).trimEnd()+'…':s;}
+function memSkills(){
+  const order={trusted:0,candidate:1,retired:2};   // trusted first, retired last (scannable)
+  SKROWS=[...(MEM.skills||[])].sort((a,b)=>(order[a.status]??1)-(order[b.status]??1)||a.name.localeCompare(b.name));
+  if(!SKROWS.length)return memEmpty('No learned skills yet','As the agent writes and self-critiques, it distills a reusable technique whenever the same note keeps recurring — then A/B-tests each one against its own absence. Trusted skills won their duels; retired ones lost.');
+  const items=SKROWS.map((s,i)=>{const sc=s.status==='trusted'?'ok':s.status==='retired'?'err':'blue';
+    const stat=`used ${s.applied}×`+(s.duels?` · ${Math.round(s.duel_wr*100)}% win-rate`:'');
+    return `<div class="memitem${s.status==='retired'?' dim':''}"><div class="memhead" onclick="memToggle('${i}')">
         <span class="mname">${esc(s.name)}</span><span class="chip ${sc}">${esc(s.status)}</span>
-        <span class="mstat">applied ${s.applied} · duel ${s.duels?Math.round(s.duel_wr*100)+'%':'—'}</span>
-        <span class="chev" id="mkchev-${i}">▾</span></div>
+        <span class="msum">${esc(_skillSummary(MEM.skill_bodies[s.name]))}</span>
+        <span class="mstat">${stat}</span><span class="chev" id="mkchev-${i}">▾</span></div>
       <div class="membody" id="mk-${i}" style="display:none">
         <div class="md small" style="max-width:none">${md(_stripFm(MEM.skill_bodies[s.name]))}</div>
         <div class="memact"><span class="small muted">status</span>
           ${sel('mkst-'+i,['candidate','trusted','retired'],s.status,{cb:v=>memSkillStatus(i,v)})}
           <button type="button" class="text danger" onclick="memSkillDelete(${i})">delete</button></div></div></div>`;}).join('');
-  return `<div class="section"><div class="lbl">learned skills — click to read, retire, or delete</div>${items}</div>`;
+  return `<div class="section"><div class="lbl">learned skills — trusted first · click to read, retire, or delete</div>${items}</div>`;
 }
-function memSkillStatus(i,v){const s=(MEM.skills||[])[i];if(!s||v===s.status)return;memOp({kind:'skill',op:'status',name:s.name,status:v},s.name+' → '+v);}
-async function memSkillDelete(i){const s=(MEM.skills||[])[i];if(!s)return;
+function memSkillStatus(i,v){const s=SKROWS[i];if(!s||v===s.status)return;memOp({kind:'skill',op:'status',name:s.name,status:v},s.name+' → '+v);}
+async function memSkillDelete(i){const s=SKROWS[i];if(!s)return;
   if(!await confirmModal({title:'Delete skill?',danger:true,confirmLabel:'Delete permanently',body:`This removes <b>${esc(s.name)}</b> and its history for good. To keep it out of retrieval but reversible, set it <i>retired</i> instead.`}))return;
   memOp({kind:'skill',op:'delete',name:s.name},'deleted '+s.name);}
 
@@ -1269,7 +1283,41 @@ const SET_TIPS={cost_mode:'budget pins the spend-heavy knobs, routes judges to t
   seo_keyword:'target search keyword woven into the piece from the start (title, opening, headings)',
   auto_promote:'after a run: apply SEO + build a promo pack (local drafts you post yourself; posts nothing)',
   register:'genre profile: rules, structure, exemplars',persona:'voice manner layered over the register',
-  field:'structure template (inverted-pyramid, imrad, how-to, three-act, ...); blank = the register default'};
+  field:'structure template (inverted-pyramid, imrad, how-to, three-act, ...); blank = the register default',
+  mode:'article = one focused piece; book = multi-chapter manuscript',
+  num_chapters:'how many chapters a book run writes',
+  num_sections:'how many sections an article run writes',
+  consolidate_every:'rebuild the running canon/summary every N units so long pieces stay coherent',
+  divergent_skeletons:'draft several outlines and pick the best before writing',
+  tournament_judge:'when drafts compete, an LLM judge picks the winner',
+  skill_duels:'A/B-test each applied skill against its own absence to prove it helps',
+  skill_distill:'retire near-duplicate skills so retrieval stays sharp',
+  verify_excerpt_chars:'how much of each source to fetch when checking a claim',
+  watch_blocking:'a matched watch-list pattern blocks the draft (off = advisory only)',
+  use_images:'include figures/images in non-fiction pieces',
+  diagram_engine:'renderer for generated SVG diagrams (auto = builtin)',
+  table_read:'a full read-through pass that catches cross-section issues',
+  table_read_revise:'also run the table-read on revisions',
+  escalate_below_confidence:'jump to a stronger model when confidence drops below this (0 = never)',
+  escalate_on_contradiction:'escalate when the fact-checker finds a contradiction',
+  citation_style:'how citations are formatted (apa, mla, chicago, numeric, …)',
+  emotion:'emotional tenor layered over the register',
+  article_cohesion:'a final pass that smooths transitions across an article',
+  book_cohesion:'a final pass that smooths transitions across a book',
+  strip_inline_citations:'remove inline [n] markers from the final prose',
+  rank_references:'order the reference list by relevance',
+  use_embeddings:'semantic skill retrieval (needs sentence-transformers installed)',
+  max_context_chars:'cap the context sent per call (lower = cheaper, shorter memory)',
+  request_timeout:'per-request network timeout, in seconds',
+  agentic_policy:'how the agentic controller decides the next action',
+  agentic_controller_model:'model that drives the agentic loop (blank = the default model)',
+  agentic_max_unit_steps:'max controller steps per unit before falling back',
+  agentic_factcheck_panel:'a panel of models cross-checks facts',
+  agentic_inline_tools:'let the writer call tools mid-draft',
+  agentic_critique_panel:'a panel critiques each draft',
+  default_user:'which brain/workspace to use (letters, digits, - . _)',
+  export_dir:'where rendered exports are written (blank = the project folder)',
+  theme:'app color theme — appearance only, saved per browser'};
 function _setDropdowns(){const o=S.options||{};
   const rnd=a=>['random',...(a||[])];   // voice fields also accept "random" = pick one per piece
   return{mode:o.modes,register:rnd(o.registers),field:rnd(o.fields),persona:rnd(o.personas),
@@ -1287,11 +1335,12 @@ function switchSetTab(t){SETTAB=t;document.querySelectorAll('#setTabs button').f
 function setRow(f){
   if(f.name==='image_source')return imgSrcRow(f);   // ordered multi-select, not a single enum
   const d=_setDropdowns();let inp;const cid='st-'+f.name;
-  if(d[f.name])inp=sel(cid,d[f.name],String(f.value),REQ_ENUMS.has(f.name)?{}:{none:'None'});
-  else if(f.type==='bool')inp=sel(cid,[{value:'true',label:'true'},{value:'false',label:'false'}],String(!!f.value));
-  else inp=`<input id="${cid}" value="${esc(f.value)}">`;
-  const tip=SET_TIPS[f.name]?` data-tip="${esc(SET_TIPS[f.name])}"`:'';
-  return `<div class="settingrow"><label for="${cid}"${tip}>${flabel(f.name)}</label>${inp}<button class="text" onclick="saveSetting('${f.name}')">set</button></div>`;
+  const cb=()=>saveSetting(f.name);   // enums/toggles apply the moment you pick — no separate "set"
+  if(d[f.name])inp=sel(cid,d[f.name],String(f.value),{none:REQ_ENUMS.has(f.name)?null:'None',cb});
+  else if(f.type==='bool')inp=sel(cid,[{value:'true',label:'true'},{value:'false',label:'false'}],String(!!f.value),{cb});
+  else inp=`<input id="${cid}" value="${esc(f.value)}" onblur="saveSetting('${f.name}')" onkeydown="if(event.key==='Enter')this.blur()">`;
+  const desc=SET_TIPS[f.name]?`<span class="setdesc">${esc(SET_TIPS[f.name])}</span>`:'';
+  return `<div class="settingrow"><div class="setmeta"><label for="${cid}">${flabel(f.name)}</label>${desc}</div><div class="setctl">${inp}</div></div>`;
 }
 // image_source: pick any number of sources; click order is priority (first hit wins). The
 // chosen list lives in a hidden input so the shared saveSetting('image_source') reads it.
@@ -1300,15 +1349,12 @@ function _imgOrderText(l){return l.length?('tries in order: '+l.join(' → ')):'
 function imgSrcRow(f){
   const all=(S.options||{}).image_sources||[];
   const cur=String(f.value||'').split(',').map(s=>s.trim()).filter(Boolean);
-  const tip=SET_TIPS.image_source?` data-tip="${esc(SET_TIPS.image_source)}"`:'';
+  const desc=SET_TIPS.image_source?`<span class="setdesc">${esc(SET_TIPS.image_source)}</span>`:'';
   const chips=all.map(s=>`<button type="button" class="imgchip${cur.includes(s)?' on':''}" data-src="${s}" onclick="toggleImgSrc('${s}')">${s}</button>`).join('');
-  return `<div class="settingrow imgrow"><label${tip}>${flabel('image_source')}</label>
-    <div style="flex:1;min-width:0">
+  return `<div class="settingrow imgrow"><div class="setmeta"><label>${flabel('image_source')}</label>${desc}
       <div class="imgchips" id="imgchips">${chips}</div>
-      <div class="small muted" id="imgorder" style="margin-top:7px">${_imgOrderText(cur)}</div>
-    </div>
-    <input type="hidden" id="st-image_source" value="${esc(cur.join(','))}">
-    <button class="text" onclick="saveSetting('image_source')">set</button></div>`;
+      <div class="small muted" id="imgorder" style="margin-top:2px">${_imgOrderText(cur)}</div>
+      <input type="hidden" id="st-image_source" value="${esc(cur.join(','))}"></div></div>`;
 }
 function toggleImgSrc(s){
   const hid=$('#st-image_source');if(!hid)return;
@@ -1317,18 +1363,24 @@ function toggleImgSrc(s){
   hid.value=cur.join(',');
   const btn=document.querySelector(`#imgchips [data-src="${s}"]`);if(btn)btn.classList.toggle('on',cur.includes(s));
   const o=$('#imgorder');if(o)o.textContent=_imgOrderText(cur);
+  saveSetting('image_source');   // apply on every toggle — no separate "set"
 }
 function renderSetBody(){
   const el=$('#setBody');if(!el)return;
   if(SETTAB==='keys')return renderKeys(el);
   if(SETTAB==='models'){
-    const nodes=Object.entries(S.models.nodes||{}).map(([n,m])=>`<div class="settingrow"><label for="mdl-${n}">${flabel(n)}</label><input id="mdl-${n}" data-n="${n}" value="${esc(m)}"><button class="text" onclick="saveModel('${n}',this)">set</button></div>`).join('');
+    const mrow=(n,m)=>`<div class="settingrow"><div class="setmeta"><label for="mdl-${n}">${flabel(n)}</label></div><div class="setctl"><input id="mdl-${n}" data-n="${n}" value="${esc(m)}" onblur="saveModel('${n}',this)" onkeydown="if(event.key==='Enter')this.blur()"></div></div>`;
+    const nodes=Object.entries(S.models.nodes||{}).map(([n,m])=>mrow(n,m)).join('');
     el.innerHTML=`<div class="section"><div class="muted small" style="margin-bottom:12px">per-node model slugs (OpenRouter-style <code>vendor/model</code>, or a bare slug on a first-party host). Set the host + its key in the App and API keys tabs.</div>
-      <div class="settingrow"><label for="mdl-default">Default</label><input id="mdl-default" data-n="default" value="${esc(S.models.default)}"><button class="text" onclick="saveModel('default',this)">set</button></div>${nodes}</div>`;
+      ${mrow('default',S.models.default)}${nodes}</div>`;
     return;}
   const g=SET_GROUPS[SETTAB];if(!g)return;
   const byName=Object.fromEntries(S.settings.map(f=>[f.name,f]));
-  el.innerHTML='<div class="section">'+g.names.filter(n=>byName[n]).map(n=>setRow(byName[n])).join('')+'</div>';
+  // hide settings that don't apply to the current format (book-only vs article-only)
+  const mode=(S.settings.find(f=>f.name==='mode')||{}).value;
+  const MODE_ONLY={num_chapters:'book',book_cohesion:'book',consolidate_every:'book',num_sections:'article',article_cohesion:'article'};
+  const relevant=n=>!MODE_ONLY[n]||MODE_ONLY[n]===mode;
+  el.innerHTML='<div class="section">'+g.names.filter(n=>byName[n]&&relevant(n)).map(n=>setRow(byName[n])).join('')+'</div>';
 }
 async function renderKeys(el){
   el.innerHTML=loadingHTML();
@@ -1371,6 +1423,7 @@ async function saveSetting(name){
     else if(av==='')toast(L+' cleared');                          // empty is valid for most fields; say so honestly
     else if(av!==String(sent))toast(L+' adjusted to '+av);        // server clamped it (e.g. Minimum insight 99 → 5)
     else toast(L+' saved');
+    if(name==='mode'&&view==='settings')renderSetBody();          // format change hides/shows book- vs article-only rows
   }catch(e){toast(e.message,1)}}
 async function saveModel(node,btn){const el=btn.parentElement.querySelector('[data-n]');
   try{await api('/api/models',{node,slug:el.value});toast(flabel(node)+' model set to '+el.value);}catch(e){toast(e.message,1)}}
