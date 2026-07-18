@@ -528,16 +528,22 @@ function _cr(a,b){const x=_lum(a),y=_lum(b);return (Math.max(x,y)+.05)/(Math.min
 function _mixHex(a,b,t){a=a.replace('#','');b=b.replace('#','');
   const c=i=>Math.round(parseInt(a.substr(i,2),16)*(1-t)+parseInt(b.substr(i,2),16)*t).toString(16).padStart(2,'0');
   return '#'+c(0)+c(2)+c(4);}
-// A distinct display-font stack per theme (system-available, nothing to download), so a
-// theme changes its TYPOGRAPHY as well as its colour - picked deterministically by name.
-const _THEME_FONTS=[
-  `"Fraunces","Iowan Old Style",Charter,Georgia,serif`,
-  `"Inter","Segoe UI",system-ui,-apple-system,Roboto,sans-serif`,
-  `Georgia,"Times New Roman",Times,serif`,
-  `"Trebuchet MS","Segoe UI",Verdana,sans-serif`,
-  `"Iowan Old Style","Palatino Linotype",Palatino,serif`,
-  `"JetBrains Mono","Cascadia Code","SF Mono",ui-monospace,monospace`];
-function _themeFont(name){let h=0;for(const c of name)h=(h*31+c.charCodeAt(0))>>>0;return _THEME_FONTS[h%_THEME_FONTS.length];}
+// A deliberate display-font stack per theme (system-available, nothing to download), so
+// EVERY theme changes its TYPOGRAPHY as well as its colour, each fitting the palette's mood.
+const _THEME_FONTS={
+  editorial:`"Fraunces","Iowan Old Style",Charter,Georgia,serif`,          // literary serif (default)
+  highcontrast:`"Inter","Segoe UI",system-ui,-apple-system,sans-serif`,     // maximally legible sans
+  kazama:`"JetBrains Mono","Cascadia Code","SF Mono",ui-monospace,monospace`, // hot, technical mono
+  supabase:`"Inter","Segoe UI",system-ui,-apple-system,Roboto,sans-serif`,  // modern dev-tool sans
+  'violet-bloom':`"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif`, // elegant serif
+  't3-chat':`"Trebuchet MS","Segoe UI",system-ui,sans-serif`,               // friendly humanist sans
+  'starry-night':`Georgia,"Times New Roman",Times,serif`,                   // painterly classic serif
+  vercel:`"Inter","Segoe UI",system-ui,-apple-system,sans-serif`,           // minimal geometric sans
+  fallout:`"JetBrains Mono","Cascadia Code",ui-monospace,Consolas,monospace`, // retro terminal mono
+  mimi:`"Trebuchet MS","Segoe UI",Verdana,sans-serif`,                      // soft rounded sans
+  astrovista:`"Iowan Old Style","Palatino Linotype",Palatino,serif`};       // cosmic serif
+const _DEFAULT_FONT=`"Fraunces","Iowan Old Style",Charter,Georgia,serif`;
+function _themeFont(name){return _THEME_FONTS[name]||_DEFAULT_FONT;}
 function applyWebTheme(id){
   const h=document.documentElement,r=h.style;
   TVARS.forEach(v=>r.removeProperty(v));r.removeProperty('--serif');   // reset colour + font to the CSS default
