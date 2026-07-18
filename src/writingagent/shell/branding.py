@@ -367,25 +367,6 @@ def _first_run_setup(console, settings) -> None:
         _out(console, f"[dim]{cp.name} selected (saved) — add its key anytime with /setkey[/]")
 
 
-def _seen_banner_today() -> bool:
-    """True if the full masthead already printed today (and stamp it if not).
-
-    The full figlet banner is a first-impression, not a per-launch tax: launching the
-    shell is the most repeated action in the product, so repeat launches get the
-    one-line wordmark instead. Best-effort - any IO problem just shows the banner."""
-    import datetime
-    try:
-        stamp = brain.INDEX_DIR / "banner_stamp"
-        today = datetime.date.today().isoformat()
-        if stamp.exists() and stamp.read_text(encoding="utf-8").strip() == today:
-            return True
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.write_text(today, encoding="utf-8")
-    except OSError:
-        pass
-    return False
-
-
 def _banner(console, cfg: ModelConfig | None = None, settings: Settings | None = None) -> None:
     lines = _wordmark()
     if not console:
@@ -396,9 +377,11 @@ def _banner(console, cfg: ModelConfig | None = None, settings: Settings | None =
     from rich.text import Text
     pad = (0, 0, 0, 2)   # left-aligned with a 2-col indent
     # Narrow terminal: the figlet masthead would wrap into noise - drop to a one-line
-    # wordmark so the banner still reads (and the wordmark stays on screen).
+    # wordmark so the banner still reads (and the wordmark stays on screen). On any
+    # terminal with room, the big ASCII masthead is the welcome - it's the studio's
+    # first impression, worth the vertical spend every launch.
     warn = _key_warning(settings)
-    if (console.size.width or 80) < 60 or _seen_banner_today():
+    if (console.size.width or 80) < 60:
         console.print()
         console.print(Padding(Text(f"{_NIB} WRITING AGENT", style=f"bold {GOLD}"), pad))
         console.print(Padding(Text(_stack_label(cfg, settings), style=DIM), pad))

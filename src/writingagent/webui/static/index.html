@@ -319,13 +319,34 @@ textarea.mono{font-family:var(--mono);font-size:12px;line-height:1.6}
 .pipe .step.on .dot{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent);animation:pulse 1.3s infinite}
 .pipe .link{flex:1;min-width:14px;height:1.5px;background:var(--hair);margin:0 9px}
 .pipe .link.done{background:var(--green)}
-.nowline{display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:var(--r-md);background:var(--fill-2);margin-bottom:12px}
-.nowline .spin{width:14px;height:14px;border-radius:50%;border:2px solid color-mix(in srgb,var(--accent) 24%,transparent);border-top-color:var(--accent);animation:spin .7s linear infinite;flex:none}
-.nowline.idle .spin{animation:none;border-top-color:color-mix(in srgb,var(--accent) 24%,transparent)}
-.nowline.ok .spin{border:2px solid var(--green);animation:none}
+.nowline{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--r-md);background:var(--fill-2);margin-bottom:12px}
+/* Grid spinner (loaders.wtf "rounded spinner"): a 3×3 grid of rounded cells; a comet of lit
+   cells rotates the outer ring with an HDR bloom (~70% intensity). Brand-warm, CSP-safe, pure CSS. */
+.nowline .gspin{display:grid;grid-template-columns:repeat(3,1fr);gap:3.5px;width:26px;height:26px;flex:none}
+.nowline .gspin i{border-radius:30%;background:color-mix(in srgb,var(--accent) 16%,transparent)}
+/* the 8 perimeter cells sweep clockwise (staggered delays); the centre cell stays a dim core */
+.nowline .gspin i:nth-child(1),.nowline .gspin i:nth-child(2),.nowline .gspin i:nth-child(3),.nowline .gspin i:nth-child(4),
+.nowline .gspin i:nth-child(6),.nowline .gspin i:nth-child(7),.nowline .gspin i:nth-child(8),.nowline .gspin i:nth-child(9){animation:gsweep 1s linear infinite}
+.nowline .gspin i:nth-child(1){animation-delay:0s}
+.nowline .gspin i:nth-child(2){animation-delay:-.125s}
+.nowline .gspin i:nth-child(3){animation-delay:-.25s}
+.nowline .gspin i:nth-child(6){animation-delay:-.375s}
+.nowline .gspin i:nth-child(9){animation-delay:-.5s}
+.nowline .gspin i:nth-child(8){animation-delay:-.625s}
+.nowline .gspin i:nth-child(7){animation-delay:-.75s}
+.nowline .gspin i:nth-child(4){animation-delay:-.875s}
+.nowline.idle .gspin i,.nowline.ok .gspin i{animation:none;box-shadow:none}
+.nowline.ok .gspin i{background:var(--green);box-shadow:0 0 4px color-mix(in srgb,var(--green) 55%,transparent)}
+.nowline.idle .gspin i{background:color-mix(in srgb,var(--accent) 16%,transparent)}
 .nowline .lbl2{font-size:13.5px;color:var(--fg);font-weight:500}
 .nowline .sub2{font-size:11.5px;color:var(--fg-3)}
-@keyframes spin{to{transform:rotate(360deg)}}
+/* HDR comet: a white-hot head (bloom) trailing into a solid glowing accent, fading to a dim base */
+@keyframes gsweep{
+  0%,100%{background:color-mix(in srgb,var(--accent) 16%,transparent);box-shadow:none}
+  9%{background:color-mix(in srgb,var(--accent) 60%,#fff);box-shadow:0 0 4px var(--accent),0 0 11px color-mix(in srgb,var(--accent) 75%,transparent)}
+  26%{background:var(--accent);box-shadow:0 0 5px color-mix(in srgb,var(--accent) 55%,transparent)}
+  46%{background:color-mix(in srgb,var(--accent) 16%,transparent);box-shadow:none}
+}
 
 /* activity timeline */
 .tl{border-left:1.5px solid var(--stroke);margin-left:5px;padding-left:20px}
@@ -443,6 +464,7 @@ svg.spark{display:block}.axt{font-family:var(--mono);font-size:9.5px;fill:var(--
   *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
   .loading .caret{animation:caret 1.05s step-end infinite!important}  /* comprehension aid: opacity-only, 1Hz */
   #runbadge .dot{animation:none!important}
+  .nowline .gspin i{background:color-mix(in srgb,var(--accent) 42%,transparent)!important;box-shadow:none!important}  /* static, legible grid */
 }
 
 /* ── design.md conformance: semantic tokens, notifications, states, tooltip ── */
@@ -981,7 +1003,7 @@ function renderRunInner(){
         ${RUN.status==='running'?'<button onclick="pauseRun()">Pause</button>':''}
         ${RUN.project?`<button class="secondary" onclick="go('project','${RUN.project}')">Open project</button>`:''}</div>
       <div class="pipe" id="rnPipe"></div>
-      <div class="nowline" id="rnNow"><span class="spin"></span><div><div class="lbl2" id="rnNowLbl"></div><div class="sub2" id="rnNowSub"></div></div></div>
+      <div class="nowline" id="rnNow"><span class="gspin" aria-hidden="true">${'<i></i>'.repeat(9)}</span><div><div class="lbl2" id="rnNowLbl"></div><div class="sub2" id="rnNowSub"></div></div></div>
       <div class="bar"><i id="rnBar"></i></div>
       <div id="log" role="log"></div></div>`;
   }
