@@ -81,8 +81,9 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
                 skills_mod.seed_builtin(rest[0])
         _out(console, f"user -> [{GOLD}]{state['uid']}[/]")
     elif name == "config":
-        _out(console, brain.read_text(brain._ROOT / "config" / "models.yaml") or "")
-        _out(console, brain.read_text(brain._ROOT / "config" / "settings.yaml") or "")
+        from .. import config as _config
+        _out(console, brain.read_text(_config._MODELS) or "")
+        _out(console, brain.read_text(_config._SETTINGS) or "")
     elif name == "update":
         msg = " ".join(rest).strip() if rest else ""
         if not msg:

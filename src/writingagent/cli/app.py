@@ -190,7 +190,8 @@ def main() -> None:
             pass
     try:
         from dotenv import load_dotenv
-        load_dotenv(brain._ROOT / ".env")  # anchored to the project, not the current directory
+        load_dotenv()                      # nearest .env from the CWD (dev checkouts)
+        load_dotenv(brain.HOME / ".env")   # the agent home (written by /setkey); no override
     except ImportError:
         pass
 

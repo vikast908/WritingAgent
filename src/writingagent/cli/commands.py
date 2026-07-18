@@ -308,5 +308,6 @@ def cmd_list(args, cfg, settings, uid):
 
 
 def cmd_config(args, cfg, settings, uid):
-    print(brain.read_text(brain._ROOT / "config" / "models.yaml") or "(no models.yaml)")
-    print(brain.read_text(brain._ROOT / "config" / "settings.yaml") or "(no settings.yaml)")
+    from .. import config as _config
+    print(brain.read_text(_config._MODELS) or "(no models.yaml)")
+    print(brain.read_text(_config._SETTINGS) or "(no settings.yaml)")

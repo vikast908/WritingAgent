@@ -90,7 +90,7 @@ A `.pre-commit-config.yaml` is provided - run `pre-commit install` to lint on co
   behavior is the **opt-in** agentic controller in `agentic/` (`plan.md` §21), a separate layer -
   don't bake it into a node.)
 - Network/IO is best-effort: degrade gracefully, never crash the pipeline on a fetch error.
-- All numeric thresholds are tunable config (`config/settings.yaml`), not hard-coded.
+- All numeric thresholds are tunable config (`config/settings.yaml` in the agent home - `$WRITINGAGENT_HOME`, default: the OS user-data dir; see `src/writingagent/paths.py`), not hard-coded.
 - **Editorial design system:** the web dashboard and the TUI both follow `docs/design.md` -
   ink on warm paper, one accent (manuscript red `#a3341f`), the Fraunces display serif, WCAG-AA
   verified. Every value is a token: port to CSS vars for the web app or to a `ui.THEMES` palette for

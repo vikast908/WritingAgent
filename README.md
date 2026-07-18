@@ -367,7 +367,7 @@ Search grounding runs on **DuckDuckGo** (free, keyless, default) or **Firecrawl*
 (`search_provider: firecrawl` + `FIRECRAWL_API_KEY` - also upgrades deep-research page scraping);
 a missing key degrades gracefully to the free path.
 
-**Cost:** the recommended opt-in `cost_mode: budget` (in `config/settings.yaml`; `/set cost_mode
+**Cost:** the recommended opt-in `cost_mode: budget` (in `settings.yaml`; `/set cost_mode
 budget`) pins the spend-heavy knobs - single draft, one revision, 12k context, judgment nodes on the
 flash tier - and **auto-scales** the run's token budget to the piece's size (`budget_for_units` ≈ 25k
 fixed overhead + ~20k per unit) so a full piece finishes instead of pausing mid-way. Setting an
