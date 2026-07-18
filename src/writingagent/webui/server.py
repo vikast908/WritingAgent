@@ -129,6 +129,15 @@ def _paths(uid: str, pid: str):
     return art if art.run_state.exists() else BookPaths(pid, uid)
 
 
+def _title(root) -> str:
+    """The piece's human title (articles: outline.json, books: plan.json) - '' when absent."""
+    for name in ("outline.json", "plan.json"):
+        data = brain.read_json(root / name) or {}
+        if data.get("title"):
+            return str(data["title"])
+    return ""
+
+
 def _project_overview(uid: str) -> list[dict]:
     from .. import orchestrator
     out = []
@@ -142,7 +151,8 @@ def _project_overview(uid: str) -> list[dict]:
                     else ("current_chapter", "num_chapters"))
         ms = brain.read_text(_paths(uid, pid).manuscript) or ""
         out.append({
-            "id": pid, "mode": ptype, "phase": st.get("phase", "?"),
+            "id": pid, "title": _title(_paths(uid, pid).root),
+            "mode": ptype, "phase": st.get("phase", "?"),
             "unit": st.get(cur), "total_units": st.get(tot),
             "committed": st.get("committed", 0),
             "pending_review": bool(st.get("pending_review")),
@@ -529,6 +539,7 @@ class Handler(BaseHTTPRequestHandler):
         state = brain.read_json(p.run_state) or {}
         self._json({
             "id": pid,
+            "title": _title(p.root),
             "status": orchestrator.status(uid, pid),
             "state": state,
             "artifacts": _artifact_list(p.root),

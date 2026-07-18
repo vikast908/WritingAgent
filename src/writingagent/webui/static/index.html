@@ -68,8 +68,9 @@ a:hover{text-decoration:underline}
 
 /* controls */
 button{font:inherit;font-size:12.5px;color:var(--fg);background:transparent;border:none;
-  border-radius:var(--r-sm);padding:7px 13px;cursor:pointer;transition:background var(--dur-fast),color var(--dur-fast)}
+  border-radius:var(--r-sm);padding:7px 13px;cursor:pointer;transition:background var(--dur-fast),color var(--dur-fast),transform 160ms var(--ease-out)}
 button:hover{background:var(--fill)}
+button:active:not(:disabled){transform:scale(.97)}   /* the press answers instantly */
 button.primary{background:var(--accent-fill);color:var(--on-accent)}
 button.primary:hover{background:var(--accent-fill-hover)}
 button.secondary{background:var(--fill);color:var(--accent)}
@@ -118,7 +119,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:540;letter-spacing:-.01em}
 .csel-menu{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;z-index:var(--z-dropdown);
   background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-page),0 0 0 1px var(--hair);
   padding:4px;max-height:280px;overflow:auto;display:none}
-.csel.open .csel-menu{display:block;animation:pop .12s ease-out}
+.csel.open .csel-menu{display:block;transform-origin:top;animation:menupop .12s var(--ease-out)}
 .csel-opt{padding:6px 10px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;white-space:nowrap;color:var(--fg-2);
   display:flex;align-items:center;gap:8px}
 .csel-opt:hover{background:var(--fill)}
@@ -276,17 +277,24 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 .copybar{display:flex;justify-content:flex-end;margin-bottom:8px}
 
 .toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border-radius:var(--r-lg);
+  transition:opacity .15s var(--ease-out),transform .15s var(--ease-out);
   box-shadow:var(--shadow-page),0 0 0 1px var(--hair);padding:11px 16px;z-index:var(--z-overlay);max-width:440px;font-size:13.5px;animation:pop .16s ease-out}
 .toast.err{color:var(--red)}
+.toast.out{opacity:0;transform:translateY(8px)}
 #runbadge{display:none;align-items:center;gap:8px;padding:4px 12px;border-radius:9999px;background:var(--fill);
   cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--accent)}
 #runbadge .dot{width:7px;height:7px;border-radius:50%;background:var(--blue-2);animation:pulse 1.3s infinite}
 #themeSelWrap .csel-btn{min-width:104px;font-size:12px;padding:5px 9px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @keyframes pop{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes menupop{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
-#view>*{animation:fade .2s ease-out}
-@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+#view.vt>*{animation:fade .18s var(--ease-out)}   /* .vt is set only on view changes */
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .loading .caret{animation:caret 1.05s step-end infinite!important}  /* comprehension aid: opacity-only, 1Hz */
+  #runbadge .dot{animation:none!important}
+}
 
 /* ── design.md conformance: semantic tokens, notifications, states, tooltip ── */
 :root{
@@ -313,10 +321,12 @@ input.err,textarea.err,.csel.err .csel-btn{border-color:var(--red)!important}
   background:var(--red);color:#fff;font-size:9px;font-weight:700;flex:none}
 /* themed tooltip (replaces native title=; ink fill, paper text) */
 [data-tip]{position:relative}
-[data-tip]:hover::after,[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);
+[data-tip]::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);
   left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);font-family:var(--sans);font-size:11px;
-  line-height:1.3;white-space:nowrap;padding:4px 8px;border-radius:var(--r-sm);box-shadow:var(--shadow-page);
-  z-index:var(--z-tooltip);pointer-events:none}
+  line-height:1.3;width:max-content;max-width:260px;white-space:normal;padding:4px 8px;border-radius:var(--r-sm);
+  box-shadow:var(--shadow-page);z-index:var(--z-tooltip);pointer-events:none;
+  opacity:0;visibility:hidden;transition:opacity .12s var(--ease-out) 0s,visibility 0s linear .12s}
+[data-tip]:hover::after,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:.3s,.3s}
 </style>
 </head>
 <body>
@@ -326,7 +336,7 @@ input.err,textarea.err,.csel.err .csel-btn{border-color:var(--red)!important}
     <div class="kicker sub">Studio · local</div>
   </div>
   <nav id="nav"></nav>
-  <div class="foot"><span id="userTag"></span><br>127.0.0.1 · offline</div>
+  <div class="foot"><span id="userTag"></span><br>127.0.0.1 · local · private</div>
 </aside>
 <main id="main">
   <div id="topbar">
@@ -350,7 +360,9 @@ async function api(path,body){
 }
 function toast(msg,err){const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=msg;
   t.setAttribute('role',err?'alert':'status');
-  document.body.appendChild(t);setTimeout(()=>t.remove(),err?6000:3200);}
+  document.body.appendChild(t);
+  setTimeout(()=>{t.classList.add('out');t.addEventListener('transitionend',()=>t.remove(),{once:true});
+    setTimeout(()=>t.remove(),240);},err?6000:3200);}   // exit is faster than entry; fallback removal for reduced-motion
 /* banner — persistent in-flow notification (design.md Notifications). kind: info|success|warning|error */
 const banner=(kind,html)=>`<div class="banner ${kind}"><span class="bi">${({info:'ⓘ',success:'✓',warning:'▲',error:'✕'}[kind])||'ⓘ'}</span><div>${html}</div></div>`;
 const loadingHTML=()=>'<span class="loading"><span class="caret">▍</span></span>';
@@ -466,7 +478,14 @@ document.addEventListener('click',e=>{
   if(opt){cselPick(opt);return;}
   cselClose();
 });
+let _gAt=0;   // g-then-key view nav (g s/p/r/t/k/,) - never inside a field
 document.addEventListener('keydown',e=>{
+  const tg=(e.target.tagName||'').toLowerCase();
+  if(tg!=='input'&&tg!=='textarea'&&tg!=='select'&&!e.metaKey&&!e.ctrlKey&&!e.altKey){
+    if(e.key==='g'){_gAt=Date.now();}
+    else if(_gAt&&Date.now()-_gAt<900){const m={s:'studio',p:'projects',r:'run',t:'telemetry',k:'skills',',':'settings'};
+      if(m[e.key]){go(m[e.key]);e.preventDefault();}_gAt=0;}
+  }
   if((e.key==='Enter'||e.key===' ')&&e.target instanceof Element&&e.target.hasAttribute('data-kb')){
     e.preventDefault();e.target.click();return;}   // keyboard-activate rows/cards (design.md: no mouse required)
   const open=document.querySelector('.csel.open');
@@ -572,7 +591,10 @@ function updateBadge(){const b=$('#runbadge');
   if(RUN.job&&RUN.status==='running'){b.style.display='flex';$('#runbadgeTxt').textContent=(RUN.project||'starting')+' · live';}else b.style.display='none';}
 async function pauseRun(){try{await api('/api/pause',{job:RUN.job});toast('pause requested — stops at the next unit boundary');}catch(e){toast(e.message,1)}}
 
-function render(){nav();({studio:renderStudio,projects:renderProjects,project:renderProject,
+let _lastView=null;
+function render(){const vc=view!==_lastView;_lastView=view;
+  const vEl=$('#view');if(vEl)vEl.classList.toggle('vt',vc);   // fade on view change only - tabs/polls repaint silently
+  nav();({studio:renderStudio,projects:renderProjects,project:renderProject,
   run:renderRun,telemetry:renderTelemetry,skills:renderSkills,settings:renderSettings}[view]||renderStudio)();}
 
 /* studio */
@@ -639,7 +661,7 @@ function renderRunInner(){
 function renderProjects(){
   _projSnap=JSON.stringify(S.projects);
   const rows=S.projects.map(p=>`<tr class="click" tabindex="0" data-kb onclick="go('project','${p.id}')">
-    <td>${esc(p.id)}</td><td class="muted">${p.mode}</td>
+    <td>${esc(p.title||p.id)}${p.title?`<div class="muted" style="font-family:var(--mono);font-size:10px">${esc(p.id)}</div>`:''}</td><td class="muted">${p.mode}</td>
     <td><span class="chip ${p.phase==='done'?'ok':p.pending_review?'err':'blue'}">${esc(p.phase)}</span>${p.agentic?'<span class="chip blue">agentic</span>':''}</td>
     <td class="num">${p.committed}/${p.total_units??'?'}</td><td class="num">${fmtK(p.words)}</td></tr>`).join('');
   $('#view').innerHTML=head('Archive','Projects')+`<div class="section"><table><tr><th>project</th><th>mode</th><th>phase</th><th class="num">units</th><th class="num">words</th></tr>
@@ -662,24 +684,37 @@ async function renderProject(){
 }
 function renderProjectInner(){
   const st=PJ.data.status||{},tabs=['overview','activity','evals','artifacts','rejected','export','cost'];
-  $('#view').innerHTML=head((st.mode||'piece')+' · '+(st.phase==='done'?'finished':'in progress'),PJ.id)+`
+  $('#view').innerHTML=head((st.mode||'piece')+' · '+(st.phase==='done'?'finished':'in progress'),PJ.data.title||PJ.id)+`
   <div class="row" style="margin:-6px auto 16px"><!-- keep left/right auto: #view>* centers the 1200px column -->
+    ${PJ.data.title?`<span class="chip" data-tip="the project's folder id">${esc(PJ.id)}</span>`:''}
     <span class="chip ${st.phase==='done'?'ok':'blue'}">${esc(st.phase||'?')}</span>
     <span class="chip">${st.committed||0}/${st.num_sections||st.num_chapters||'?'} committed</span>
-    ${PJ.data.has_trace?'<span class="chip blue">agentic trace</span>':''}
+    ${PJ.data.has_trace?'<span class="chip blue" data-tip="this run kept a log of every controller decision - see Activity">decision log</span>':''}
     <span class="spacer"></span>
     <button class="primary" onclick="resumeProject()">${st.phase==='done'?'Re-run':'Run / resume'}</button>
-    <button class="secondary" onclick="projectAction('evaluate')">Eval</button>
-    <button class="secondary" onclick="projectAction('seo')">SEO</button>
-    <button class="secondary" onclick="projectAction('promote')">Promote</button>
+    <button class="secondary" data-tip="critic scores each section 1-5 · uses your API key" onclick="projectAction('evaluate')">Eval</button>
+    <button class="secondary" data-tip="on-page audit + keyword pack · uses your API key" onclick="projectAction('seo')">SEO</button>
+    <button class="secondary" data-tip="X thread, LinkedIn post, headlines · uses your API key" onclick="projectAction('promote')">Promote</button>
     <button class="danger" onclick="delProject()">Delete</button></div>
   <div style="margin-bottom:18px"><!-- block wrapper: .seg is inline-flex, which #view>*'s auto margins can't align to the column -->
-    <div class="seg">${tabs.map(t=>`<button class="${PJ.tab===t?'on':''}" onclick="PJ.tab='${t}';renderProjectInner()">${t}</button>`).join('')}</div></div>
+    <div class="seg" id="pjTabs">${tabs.map(t=>`<button class="${PJ.tab===t?'on':''}" data-tab="${t}" onclick="switchTab('${t}')">${t}</button>`).join('')}</div></div>
   <div id="pjBody"></div>`;
-  ({overview:pjOverview,activity:pjActivity,evals:pjEvals,artifacts:pjArtifacts,rejected:pjRejected,export:pjExport,cost:pjCost}[PJ.tab])();
+  TABFNS[PJ.tab]();
 }
+const TABFNS={get overview(){return pjOverview},get activity(){return pjActivity},get evals(){return pjEvals},
+  get artifacts(){return pjArtifacts},get rejected(){return pjRejected},get export(){return pjExport},get cost(){return pjCost}};
+function switchTab(tb){PJ.tab=tb;   // only the body re-renders - the header/tabs stay put (no refade)
+  document.querySelectorAll('#pjTabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tb));
+  TABFNS[tb]();}
 async function resumeProject(){try{const d=await api('/api/resume',{project:PJ.id});attachJob(d.job,PJ.id);go('run');}catch(e){toast(e.message,1)}}
-async function projectAction(action,extra){try{const d=await api('/api/action',{project:PJ.id,action,...(extra||{})});attachJob(d.job,PJ.id);toast(action+' started — see Live run');go('run');}catch(e){toast(e.message,1)}}
+const SPENDS={evaluate:['Run the eval?','The critic scores every committed section (one model call each) with your API key.'],
+  seo:['Run the SEO audit?','One or two model calls to name keywords; the on-page checks are local.'],
+  promote:['Build the promo pack?','A few model calls draft the X thread, LinkedIn post, teaser, and headlines.'],
+  restyle:['Rewrite in this voice?','One model call per section, facts preserved; the original stays untouched.']};
+async function projectAction(action,extra){
+  const pf=SPENDS[action];   // slow where the user decides, fast where the system responds
+  if(pf&&!await confirmModal({title:pf[0],body:pf[1],confirmLabel:'Start'}))return;
+  try{const d=await api('/api/action',{project:PJ.id,action,...(extra||{})});attachJob(d.job,PJ.id);toast(action+' started — see Live run');go('run');}catch(e){toast(e.message,1)}}
 async function delProject(){
   const ok=await confirmModal({title:'Delete project?',danger:true,confirmLabel:'Delete permanently',
     requireText:PJ.id,body:`This permanently deletes <b>${esc(PJ.id)}</b> and its index. Type the id to confirm.`});
@@ -757,8 +792,8 @@ function pjExport(){
   const regs=S.options.registers||[],pers=S.options.personas||[],emos=S.options.emotions||[];
   $('#pjBody').innerHTML=`
   <div class="section"><div class="lbl">export the manuscript</div>
-    <div class="row">${fmts.map(f=>`<button class="secondary" onclick="projectAction('export',{format:'${f}'})">${f}</button>`).join('')}</div>
-    <div class="muted small" style="margin-top:8px">Writes the file into the project folder (same as the TUI).</div></div>
+    <div class="row">${fmts.map(f=>`<button class="${f==='pdf'?'primary':'secondary'}" onclick="projectAction('export',{format:'${f}'})">${f}</button>`).join('')}</div>
+    <div class="muted small" style="margin-top:8px">Renders locally - no model calls. Writes into the project folder (same as the TUI).</div></div>
   <div class="section"><div class="lbl">rewrite in a different voice (facts preserved)</div>
     <div class="row" style="margin-bottom:10px">
       ${optSel('rsReg',regs,'','Style: none')}${optSel('rsPer',pers,'','Persona: none')}${optSel('rsEmo',emos,'','Emotion: none')}
@@ -831,12 +866,42 @@ async function renderSettings(){
   await refreshState();
   const opts=S.options||{};
   const dropdowns={register:opts.registers,persona:opts.personas,emotion:opts.emotions,citation_style:opts.citation_styles};
-  const rows=S.settings.map(f=>{
+  const GROUPS=[['run',['mode','num_chapters','num_sections','max_revisions','consolidate_every','autonomous',
+      'divergent_drafts','divergent_skeletons','tournament_judge','min_insight','skill_duels','skill_distill']],
+    ['research & truth',['use_researcher','search_provider','deep_research','verify_claims','verify_excerpt_chars',
+      'watch_blocking','use_images','diagram_engine','table_read','table_read_revise','escalate_below_confidence','escalate_on_contradiction']],
+    ['voice & craft',['register','field','citation_style','persona','emotion','humanize','craft_passes','article_cohesion',
+      'book_cohesion','strip_inline_citations','rank_references','use_embeddings','seo_keyword','auto_promote']],
+    ['cost & limits',['cost_mode','max_run_tokens','budget_tokens_per_unit','max_context_chars','request_timeout']],
+    ['agentic (opt-in)',['agentic','agentic_policy','agentic_controller_model','agentic_max_unit_steps',
+      'agentic_factcheck_panel','agentic_inline_tools','agentic_critique_panel']],
+    ['app',['default_user','provider','openrouter_providers','export_dir','theme']]];
+  const TIPS={cost_mode:'budget pins the spend-heavy knobs and routes judges to the flash tier',
+    autonomous:'never pauses for review - commits the best draft and moves on',
+    divergent_drafts:'N first drafts at varied temperatures; the judge picks the strongest',
+    max_revisions:'critique-and-revise loops allowed per section',
+    min_insight:'critic insight score (1-5) required to approve; 0 turns the gate off',
+    use_researcher:'web grounding per unit - off means citations cannot be verified',
+    deep_research:'multi-source fetch + synthesis; slower, richer sourcing',
+    verify_claims:'checks each cited claim against its source; unsupported claims block',
+    humanize:'rewrites each unit to strip AI tells',craft_passes:'surgical show-dont-tell and de-passive passes',
+    agentic:'an LLM controller picks the next action instead of the fixed pipeline',
+    budget_tokens_per_unit:'budget mode scales the session cap with the piece size',
+    max_run_tokens:'hard ceiling - the run pauses resumably when it hits',
+    register:'genre profile: rules, structure, exemplars',persona:'voice manner layered over the register'};
+  const rowFor=f=>{
     let inp;const cid='st-'+f.name;
     if(dropdowns[f.name])inp=sel(cid,dropdowns[f.name],String(f.value),{none:'None'});
     else if(f.type==='bool')inp=sel(cid,[{value:'true',label:'true'},{value:'false',label:'false'}],String(!!f.value));
     else inp=`<input id="${cid}" value="${esc(f.value)}">`;
-    return `<div class="settingrow"><label for="${cid}">${f.name}</label>${inp}<button class="text" onclick="saveSetting('${f.name}')">set</button></div>`;}).join('');
+    const tip=TIPS[f.name]?` data-tip="${esc(TIPS[f.name])}"`:'';
+    return `<div class="settingrow"><label for="${cid}"${tip}>${f.name}</label>${inp}<button class="text" onclick="saveSetting('${f.name}')">set</button></div>`;};
+  const byName=Object.fromEntries(S.settings.map(f=>[f.name,f]));const seen=new Set();
+  let rows=GROUPS.map(([g,names])=>{
+    const fs=names.filter(nm=>byName[nm]).map(nm=>{seen.add(nm);return rowFor(byName[nm]);}).join('');
+    return fs?`<div class="lbl" style="margin-top:16px">${g}</div>${fs}`:'';}).join('');
+  const rest=S.settings.filter(f=>!seen.has(f.name)).map(rowFor).join('');
+  if(rest)rows+=`<div class="lbl" style="margin-top:16px">other</div>${rest}`;
   const nodes=Object.entries(S.models.nodes||{}).map(([n,m])=>`<div class="settingrow"><label for="mdl-${n}">${n}</label><input id="mdl-${n}" data-n="${n}" value="${esc(m)}"><button class="text" onclick="saveModel('${n}',this)">set</button></div>`).join('');
   $('#view').innerHTML=head('Setup','Settings')+`<div class="grid2">
     <div class="section"><div class="lbl">engine settings</div>

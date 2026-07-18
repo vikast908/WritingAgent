@@ -129,7 +129,7 @@ def _toggle_grid(console, settings: Settings) -> bool:
     rows = [{"key": k, "label": lbl, "desc": d, "on": bool(getattr(settings, k, False))}
             for k, lbl, d in _FEATURE_KEYS]
     sel = {"i": 0}
-    _OFF = "#6b6b6b"   # pt needs hex; ui.OFF_CLR/DIM are Rich names ("grey50"/"grey42")
+    _OFF = "#808080"   # pt needs hex; ui.OFF_CLR/DIM are Rich names ("grey50"/"grey54")
 
     def render():
         frags = [("class:title", f" {_NIB}  FEATURES"),

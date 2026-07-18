@@ -145,7 +145,7 @@ def _make_pt_session(known_commands: set, state: dict, cfg: ModelConfig, setting
     # model/project state lives in the prompt prefix and the welcome footer instead.
     # A pending review still surfaces via the prompt suffix and the escalation picker.)
 
-    _DIM_HEX = "#6b6b6b"  # prompt_toolkit needs hex; Rich's "grey42" ≈ #6b6b6b
+    _DIM_HEX = "#808080"  # prompt_toolkit needs hex; Rich's "grey54" ≈ #808080
     pt_style = Style.from_dict({
         # Completion dropdown
         "completion-menu.completion":                f"bg:#111111 fg:{GOLD}",

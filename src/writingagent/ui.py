@@ -27,7 +27,7 @@ GOLD = "#c9a227"     # primary accent - commands, headings, prompt (gold)
 GOLD_HI = "#e2c65a"  # lit accent - highlights (lit gold)
 INK = "#b0812f"      # brass - tagline / secondary values
 PARCH = "#e6ddc9"    # warm parchment - body text
-DIM = "grey42"       # secondary
+DIM = "grey54"       # secondary
 RULE = "#5c4a2e"     # dark brass - rules / borders
 ERR = "#c23b2b"      # manuscript red - errors (semantic)
 ON_CLR = "#5aa07f"   # sage green - feature on / done (semantic)
@@ -59,7 +59,7 @@ THEMES: dict[str, dict] = {
     ),
     "kazama": dict(
         GOLD="#ff7a18", GOLD_HI="#ffd23f", INK="#d4452f", PARCH="#e8ddd0",
-        DIM="grey42", RULE="#7a1208", ERR="#ff4d3d", ON_CLR="#ffd23f",
+        DIM="grey54", RULE="#7a1208", ERR="#ff4d3d", ON_CLR="#ffd23f",
         OFF_CLR="grey50", FLEURON="❧",
         STOPS=("#e8240c", "#ff7a18", "#ffd23f"),
         FONT="ansi_shadow", WORDS=("WRITING", "AGENT"), SHEAR=True,
@@ -67,7 +67,7 @@ THEMES: dict[str, dict] = {
     ),
     "supabase": dict(
         GOLD="#3ecf8e", GOLD_HI="#7ce8b5", INK="#9fb8ad", PARCH="#cfe5d8",
-        DIM="grey42", RULE="#1f4636", ERR="#e06c75", ON_CLR="#3ecf8e",
+        DIM="grey54", RULE="#1f4636", ERR="#e06c75", ON_CLR="#3ecf8e",
         OFF_CLR="grey50", FLEURON="◆",
         STOPS=("#0c7a4d", "#3ecf8e", "#7ce8b5"),
         FONT="ansi_regular", WORDS=("WRITING", "AGENT"), SHEAR=False,
@@ -75,7 +75,7 @@ THEMES: dict[str, dict] = {
     ),
     "violet-bloom": dict(
         GOLD="#8b5cf6", GOLD_HI="#c4b5fd", INK="#bf7fbf", PARCH="#ded5f2",
-        DIM="grey42", RULE="#3b2a5e", ERR="#e06c75", ON_CLR="#6aaa5c",
+        DIM="grey54", RULE="#3b2a5e", ERR="#e06c75", ON_CLR="#6aaa5c",
         OFF_CLR="grey50", FLEURON="✿",
         STOPS=("#5b21b6", "#8b5cf6", "#c4b5fd"),
         FONT="mono12", WORDS=("Writing", "Agent"), SHEAR=False,
@@ -83,7 +83,7 @@ THEMES: dict[str, dict] = {
     ),
     "t3-chat": dict(
         GOLD="#ec4899", GOLD_HI="#f9a8d4", INK="#a78bfa", PARCH="#f2d9e5",
-        DIM="grey42", RULE="#59243f", ERR="#ff6b6b", ON_CLR="#6aaa5c",
+        DIM="grey54", RULE="#59243f", ERR="#ff6b6b", ON_CLR="#6aaa5c",
         OFF_CLR="grey50", FLEURON="♥",
         STOPS=("#9d174d", "#ec4899", "#f9a8d4"),
         FONT="smblock", WORDS=("WRITING", "AGENT"), SHEAR=False,
@@ -91,7 +91,7 @@ THEMES: dict[str, dict] = {
     ),
     "starry-night": dict(
         GOLD="#ffd86b", GOLD_HI="#ffeaa6", INK="#5b8dd9", PARCH="#cfdcf2",
-        DIM="grey42", RULE="#27355c", ERR="#e06c75", ON_CLR="#6aaa5c",
+        DIM="grey54", RULE="#27355c", ERR="#e06c75", ON_CLR="#6aaa5c",
         OFF_CLR="grey50", FLEURON="✶",
         STOPS=("#1e3a6e", "#5b8dd9", "#ffd86b"),
         FONT="elite", WORDS=("WRITING", "AGENT"), SHEAR=False,
@@ -99,7 +99,7 @@ THEMES: dict[str, dict] = {
     ),
     "vercel": dict(
         GOLD="#ededed", GOLD_HI="#ffffff", INK="#888888", PARCH="#c8c8c8",
-        DIM="grey42", RULE="#333333", ERR="#ff4444", ON_CLR="#50e3c2",
+        DIM="grey54", RULE="#333333", ERR="#ff4444", ON_CLR="#50e3c2",
         OFF_CLR="grey50", FLEURON="▲",
         STOPS=("#555555", "#ededed", "#ffffff"),
         FONT="smmono9", WORDS=("WRITING", "AGENT"), SHEAR=False,
@@ -108,7 +108,7 @@ THEMES: dict[str, dict] = {
     # tweakcn imports (dark variants) - palettes from tweakcn.com/themes/<id>
     "fallout": dict(
         GOLD="#ffcc00", GOLD_HI="#ffe97a", INK="#00ff66", PARCH="#e0d5a0",
-        DIM="grey42", RULE="#5d4a00", ERR="#ff4444", ON_CLR="#00ff66",
+        DIM="grey54", RULE="#5d4a00", ERR="#ff4444", ON_CLR="#00ff66",
         OFF_CLR="grey50", FLEURON="►",
         STOPS=("#8a6d00", "#ffcc00", "#ffe97a"),
         FONT="pagga", WORDS=("WRITING", "AGENT"), SHEAR=False,
@@ -116,7 +116,7 @@ THEMES: dict[str, dict] = {
     ),
     "mimi": dict(
         GOLD="#e4a2b1", GOLD_HI="#fbe2a7", INK="#50afb6", PARCH="#f3e3ea",
-        DIM="grey42", RULE="#324859", ERR="#e06c75", ON_CLR="#6aaa5c",
+        DIM="grey54", RULE="#324859", ERR="#e06c75", ON_CLR="#6aaa5c",
         OFF_CLR="grey50", FLEURON="♡",
         STOPS=("#c67b96", "#e4a2b1", "#fbe2a7"),
         FONT="double_blocky", WORDS=("WRITING", "AGENT"), SHEAR=False,
@@ -124,7 +124,7 @@ THEMES: dict[str, dict] = {
     ),
     "astrovista": dict(
         GOLD="#c14a24", GOLD_HI="#e58a5f", INK="#85a6c7", PARCH="#dfe3e8",
-        DIM="grey42", RULE="#2a3656", ERR="#ef4444", ON_CLR="#6aaa5c",
+        DIM="grey54", RULE="#2a3656", ERR="#ef4444", ON_CLR="#6aaa5c",
         OFF_CLR="grey50", FLEURON="✧",
         STOPS=("#284167", "#c14a24", "#e58a5f"),
         FONT="delta_corps_priest_1", WORDS=("WRITING", "AGENT"), SHEAR=False,
