@@ -2,12 +2,16 @@
 vocabularies, regexes, and the chat system prompt."""
 from __future__ import annotations
 
+import os
 import re
+import sys
 
 __all__ = [
     '_NODES',
     '_EXIT',
     '_MODE_ALIASES',
+    '_ASCII',
+    '_SYM',
     '_NIB',
     '_FLEURON',
     '_MAX_HISTORY',
@@ -31,7 +35,28 @@ _MODE_ALIASES = {
     "op-ed": "article", "oped": "article", "longform": "article", "long-form": "article",
     "story": "book", "novel": "book", "manuscript": "book", "nonfiction": "book",
 }
-_NIB = "¶"             # the brand glyph: the pilcrow (design.md normative brand mark)
+# Unicode has a functional ASCII fallback (TUI principle #14). Forced with WRITINGAGENT_ASCII,
+# else auto-detected from a non-UTF stdout so dumb terminals still align + read correctly.
+def _ascii_mode() -> bool:
+    if os.getenv("WRITINGAGENT_ASCII", "").lower() in ("1", "true", "yes"):
+        return True
+    enc = (getattr(sys.stdout, "encoding", "") or "").lower()
+    return bool(enc) and "utf" not in enc   # only force ASCII when the encoding is KNOWN non-UTF
+
+
+_ASCII = _ascii_mode()
+# Symbol table: (unicode, ascii). _SYM(name) resolves per the active mode.
+_SYMBOLS = {
+    "brand": ("¶", ">"), "star": ("★", "*"), "on": ("●", "[x]"), "off": ("○", "[ ]"),
+    "ok": ("✓", "ok"), "warn": ("⚠", "!"), "bullet": ("·", "-"), "arrow": ("→", "->"),
+    "expanded": ("▾", "v"), "collapsed": ("▸", ">"),
+}
+def _SYM(name: str) -> str:
+    u, a = _SYMBOLS.get(name, ("", ""))
+    return a if _ASCII else u
+
+
+_NIB = _SYM("brand")   # the brand glyph: the pilcrow (¶), or ">" on non-unicode terminals
 _FLEURON = _NIB            # used for the prompt + section/status markers
 _MAX_HISTORY = 8   # max messages kept for multi-turn context (4 user + 4 assistant)
 

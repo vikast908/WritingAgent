@@ -8,7 +8,7 @@ import io
 import re
 import shlex
 
-from .. import brain, ui
+from .. import brain
 from ..config import Settings
 from ..ui import DIM, ERR, GOLD, INK, explain_error
 from ._const import _CODE_BLOCK_RE
@@ -229,15 +229,29 @@ def _dispatch_command(argv: list[str], console, cfg, settings, state, *,
         elif (interactive and first == "delete" and console
               and not getattr(args, "yes", False)):
             book_id = getattr(args, "book_id", None) or state["book"] or ""
-            answer = console.input(
-                f"  [{ERR}]Delete '{book_id}' permanently?[/] [{DIM}][y/N][/] ")
-            if ui.is_affirmative(answer):
+            # State scope + consequences, then type-to-confirm (TUI principle #8: destructive
+            # actions clearly state scope and require deliberate confirmation, not a bare y/N).
+            ptype = dict(brain.list_projects(user)).get(book_id, "article")
+            paths = (brain.ArticlePaths(book_id, user) if ptype == "article"
+                     else brain.BookPaths(book_id, user))
+            st = brain.read_json(paths.run_state) or {}
+            unit = "section" if ptype == "article" else "chapter"
+            n = st.get("num_sections") if ptype == "article" else st.get("num_chapters")
+            title = (brain.read_json(paths.outline_json).get("title")
+                     if ptype == "article" and paths.outline_json.exists() else None) or book_id
+            scope = f"{n} {unit}{'' if n == 1 else 's'}" if n else "all its files"
+            _out(console, f"  [bold {ERR}]Delete “{title}”?[/]")
+            _out(console, f"  [dim]Removes the project, {scope}, and its search index. "
+                          f"This cannot be undone.[/]")
+            answer = console.input(f"  [dim]type[/] [bold {ERR}]delete[/] [dim]to confirm "
+                                   f"(or press Enter to keep):[/] ")
+            if answer.strip().lower() == "delete":
                 args.yes = True
                 commands[args.command](args, cfg, settings, user)
                 if state.get("book") == book_id:
                     state["book"] = None
             else:
-                _out(console, "[dim]aborted[/]")
+                _out(console, "[dim]kept — nothing deleted[/]")
         else:
             commands[args.command](args, cfg, settings, user)
         # After new/write, make the freshly created project active.

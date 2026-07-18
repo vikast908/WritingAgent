@@ -47,6 +47,16 @@ def test_shell_sync_palette_follows_theme():
     assert shell._FLEURON == shell._NIB == "¶"
 
 
+def test_symbols_have_ascii_fallback(monkeypatch):
+    """TUI principle #14: unicode glyphs degrade to functional ASCII on dumb terminals."""
+    from writingagent.shell import _const
+    monkeypatch.setattr(_const, "_ASCII", True)
+    assert _const._SYM("brand") == ">" and _const._SYM("warn") == "!"
+    assert _const._SYM("on") == "[x]" and _const._SYM("off") == "[ ]" and _const._SYM("ok") == "ok"
+    monkeypatch.setattr(_const, "_ASCII", False)
+    assert _const._SYM("brand") == "¶" and _const._SYM("warn") == "⚠"
+
+
 def test_themes_are_visually_distinct():
     """Every theme's accent must be a different hue - no two near-identical."""
     def rgb(h):

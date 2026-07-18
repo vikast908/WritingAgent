@@ -182,6 +182,17 @@ def _apply_provider(llm_mod, settings) -> None:
                 pass
 
 
+def _restore_terminal() -> None:
+    """Best-effort: leave the terminal usable even after a crash — show the cursor, reset text
+    attributes, and exit any alternate screen (TUI principle #18: restore on exit/crash)."""
+    try:
+        if sys.stdout.isatty():
+            sys.stdout.write("\x1b[?25h\x1b[0m\x1b[?1049l")  # show cursor · reset SGR · leave alt-screen
+            sys.stdout.flush()
+    except Exception:
+        pass
+
+
 def main() -> None:
     for _stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252
         try:
@@ -204,8 +215,17 @@ def main() -> None:
     _llm.configure_fallback(cfg.fallback)
     _apply_provider(_llm, settings)
     if len(sys.argv) == 1:  # bare `writing-agent` / `python writingagent.py` -> interactive shell (TUI)
+        import shutil
+        cols, rows = shutil.get_terminal_size((80, 24))
+        if cols < 60 or rows < 12:   # don't render a broken interface (principle #11)
+            print(f"Terminal too small — need at least 60 cols x 12 rows (have {cols} x {rows}).\n"
+                  f"Resize the window, or run non-interactively:  writing-agent write --abstract \"...\"")
+            return
         from ..shell import run_shell
-        run_shell(build_parser(settings), _COMMANDS, cfg, settings)
+        try:
+            run_shell(build_parser(settings), _COMMANDS, cfg, settings)
+        finally:
+            _restore_terminal()   # never leave a broken shell, even on a crash
         return
     args = build_parser(settings).parse_args()
     ui.set_plain(getattr(args, "plain", False))

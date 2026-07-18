@@ -9,7 +9,7 @@ from .. import __version__ as _VERSION
 from .. import brain, ui
 from ..config import ModelConfig, Settings
 from ..ui import DIM, ERR, GOLD, GOLD_HI, INK, OFF_CLR, ON_CLR, PARCH, RULE
-from ._const import _FLEURON, _MARKUP, _NIB
+from ._const import _FLEURON, _MARKUP, _NIB, _SYM
 
 __all__ = [
     '_sync_palette',
@@ -439,7 +439,8 @@ def _cmd_table(console, rows: list[tuple[str, str]]) -> None:
 
 def _feat_row(label: str, enabled: bool, desc: str) -> tuple[str, str]:
     """Return a (indicator, description) row for the features table."""
-    indicator = f"[bold {ON_CLR}]● on [/]  {label}" if enabled else f"[{OFF_CLR}]○ off[/]  {label}"
+    indicator = (f"[bold {ON_CLR}]{_SYM('on')} on [/]  {label}" if enabled
+                 else f"[{OFF_CLR}]{_SYM('off')} off[/]  {label}")
     return (indicator, desc)
 
 
@@ -472,7 +473,7 @@ def _projects_table(console, uid: str, projects: list[tuple[str, str]]) -> None:
                 unit, cur, tot = "ch", st.get("current_chapter", "?"), st.get("num_chapters", "?")
             phase = st.get("phase", "-")
             if st.get("pending_review"):
-                status.append("⚠ review  ", style=f"bold {ERR}")
+                status.append(f"{_SYM('warn')} review  ", style=f"bold {ERR}")
             status.append(phase, style=ON_CLR if phase == "done" else (GOLD if phase not in ("-", "") else DIM))
             status.append(f"  {unit} {cur}/{tot}", style=DIM)
         except Exception:
@@ -541,8 +542,8 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     # canned text with zero indication why (chat replies with the same boilerplate,
     # runs "succeed" with placeholder prose).
     fake = os.getenv("WRITINGAGENT_FAKE", "").lower() in ("1", "true", "yes")
-    fake_msg = ("⚠ FAKE MODE — placeholder output, no real AI calls ($0). Add a key with "
-                "/setkey for real runs (or unset WRITINGAGENT_FAKE).")
+    fake_msg = (f"{_SYM('warn')} FAKE MODE — placeholder output, no real AI calls ($0). Add a key "
+                "with /setkey for real runs (or unset WRITINGAGENT_FAKE).")
 
     if not console:
         if fake:
@@ -585,8 +586,8 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
     _section(console, "START")
     unit = "section" if is_article else "chapter"
     start_rows = [
-        ("write --abstract \"...\"", "★ one command — answer a few questions, then it researches, "
-                                     "writes & self-edits the whole piece (press m to pause & steer)"),
+        ("write --abstract \"...\"", f"{_SYM('star')} one command — answer a few questions, then it "
+                                     "researches, writes & self-edits the whole piece (press m to pause & steer)"),
     ]
     if not projects:
         example = ("How Python async/await actually works" if is_article
@@ -613,6 +614,13 @@ def _welcome(console, cfg: ModelConfig, settings: Settings, uid: str) -> None:
                 style=f"bold {GOLD}" if settings.autonomous else INK)
     foot.append("   pro ", style=DIM)
     foot.append(cfg.model_for("writer").split("/")[-1], style=INK)
+    # key / connection state (principle #9: can the tool actually make real calls right now?)
+    if fake:
+        foot.append("  fake", style=f"bold {ERR}")
+    elif _provider_needs_key(settings):
+        foot.append("  no key", style=f"bold {ERR}")
+    else:
+        foot.append(f"  key {_SYM('ok')}", style=ON_CLR)
     foot.append("   agentic ", style=DIM)
     agentic_on = bool(settings.agentic)
     foot.append("on" if agentic_on else "off",
