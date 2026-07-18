@@ -89,6 +89,14 @@ def start_article(
         intake = (intake.rstrip() + "\n\n" + seo_line) if intake else seo_line
     brain.ensure_user(uid)
     _record_author(uid, author)
+    # Standing author context (Memory -> Profile): threaded into the intake so EVERY piece is
+    # written with the author's background/audience in mind - previously the profile only fed
+    # the byline. Drops a leading `name:` metadata line (that's for authorship, not prose).
+    _prof = (brain.read_text(brain.user_profile(uid)) or "").strip()
+    _prof = "\n".join(_l for _l in _prof.splitlines() if not _l.strip().lower().startswith("name:")).strip()
+    if _prof:
+        _ac = "AUTHOR CONTEXT (keep in mind throughout - who this is for and by): " + " ".join(_prof.split())
+        intake = (intake.rstrip() + "\n\n" + _ac) if intake else _ac
     # Register/field (plan §22): inferred from the editorial angle unless pinned in settings.
     register = registers.infer(chosen.angle if chosen else "", "article",
                                explicit=getattr(settings, "register", ""))

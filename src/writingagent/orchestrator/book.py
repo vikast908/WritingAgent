@@ -78,6 +78,13 @@ def start_book(
         max_revisions = min(max_revisions, settings.max_revisions)  # the arg bakes into state
     brain.ensure_user(uid)
     _record_author(uid, author)
+    # Standing author context (Memory -> Profile): threaded into the intake so EVERY chapter is
+    # written with the author's background/audience in mind (was byline-only before).
+    _prof = (brain.read_text(brain.user_profile(uid)) or "").strip()
+    _prof = "\n".join(_l for _l in _prof.splitlines() if not _l.strip().lower().startswith("name:")).strip()
+    if _prof:
+        _ac = "AUTHOR CONTEXT (keep in mind throughout - who this is for and by): " + " ".join(_prof.split())
+        intake = (intake.rstrip() + "\n\n" + _ac) if intake else _ac
     plan = nodes.planner_expand(cfg, _with_intake(abstract, intake), chosen)
     book_id = book_id_override or brain.slugify(plan.title)
     paths = BookPaths(book_id, uid).ensure()
