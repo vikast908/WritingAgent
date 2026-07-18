@@ -528,14 +528,25 @@ function _cr(a,b){const x=_lum(a),y=_lum(b);return (Math.max(x,y)+.05)/(Math.min
 function _mixHex(a,b,t){a=a.replace('#','');b=b.replace('#','');
   const c=i=>Math.round(parseInt(a.substr(i,2),16)*(1-t)+parseInt(b.substr(i,2),16)*t).toString(16).padStart(2,'0');
   return '#'+c(0)+c(2)+c(4);}
+// A distinct display-font stack per theme (system-available, nothing to download), so a
+// theme changes its TYPOGRAPHY as well as its colour - picked deterministically by name.
+const _THEME_FONTS=[
+  `"Fraunces","Iowan Old Style",Charter,Georgia,serif`,
+  `"Inter","Segoe UI",system-ui,-apple-system,Roboto,sans-serif`,
+  `Georgia,"Times New Roman",Times,serif`,
+  `"Trebuchet MS","Segoe UI",Verdana,sans-serif`,
+  `"Iowan Old Style","Palatino Linotype",Palatino,serif`,
+  `"JetBrains Mono","Cascadia Code","SF Mono",ui-monospace,monospace`];
+function _themeFont(name){let h=0;for(const c of name)h=(h*31+c.charCodeAt(0))>>>0;return _THEME_FONTS[h%_THEME_FONTS.length];}
 function applyWebTheme(id){
   const h=document.documentElement,r=h.style;
-  TVARS.forEach(v=>r.removeProperty(v));
+  TVARS.forEach(v=>r.removeProperty(v));r.removeProperty('--serif');   // reset colour + font to the CSS default
   if(id==='light')h.setAttribute('data-theme','light');
   else if(id==='dark')h.setAttribute('data-theme','dark');
   else if(id&&id.startsWith('theme:')){
     h.setAttribute('data-theme','dark');
-    const p=(S.themes||{})[id.slice(6)];
+    const name=id.slice(6),p=(S.themes||{})[name];
+    r.setProperty('--serif',_themeFont(name));   // theme changes the display/reading font too
     if(p){const set=(k,v)=>{if(v)r.setProperty(k,v);};
       set('--fg',p.parch);
       set('--accent',p.gold_hi||p.gold);set('--blue-2',p.gold_hi||p.gold);set('--blue',p.gold);
@@ -554,11 +565,23 @@ function applyWebTheme(id){
   }else h.removeAttribute('data-theme');   // system (auto light/dark)
   localStorage.setItem('wa-theme',id);
 }
+function onWebThemePick(id){
+  applyWebTheme(id);
+  // Keep the shared `theme` setting in sync when a NAMED palette is chosen, so the web
+  // dashboard and the TUI agree. System/Light/Dark stay browser-local overrides.
+  if(id&&id.startsWith('theme:')){
+    const name=id.slice(6);
+    api('/api/settings',{field:'theme',value:name}).then(r=>{if(r.settings)S.settings=r.settings;}).catch(()=>{});
+  }
+}
 function buildThemeSelect(){
-  const cur=localStorage.getItem('wa-theme')||'system';
+  // Default the web appearance from the shared `theme` setting (so `theme: supabase`
+  // actually shows supabase) unless the browser has its own explicit override.
+  let cur=localStorage.getItem('wa-theme');
+  if(!cur){const t=((S.settings||[]).find(f=>f.name==='theme')||{}).value;cur=t?('theme:'+t):'system';}
   const base=[{value:'system',label:'System'},{value:'light',label:'Light'},{value:'dark',label:'Dark'}];
   const named=Object.keys(S.themes||{}).map(n=>({value:'theme:'+n,label:n}));
-  $('#themeSelWrap').innerHTML=sel('themeSel',[...base,...named],cur,{cb:applyWebTheme});
+  $('#themeSelWrap').innerHTML=sel('themeSel',[...base,...named],cur,{cb:onWebThemePick});
   applyWebTheme(cur);
 }
 
@@ -956,7 +979,7 @@ const SET_GROUPS={
   app:{label:'App',names:['default_user','provider','openrouter_providers','export_dir','theme']}};
 const SETTAB_ORDER=['run','research','voice','cost','agentic','keys','models','app'];
 const SETTAB_LABEL={keys:'API keys',models:'Model routing'};
-const REQ_ENUMS=new Set(['mode','cost_mode','agentic_policy','diagram_engine','provider','search_provider','image_source']);
+const REQ_ENUMS=new Set(['mode','cost_mode','agentic_policy','diagram_engine','provider','search_provider','image_source','theme']);
 const SET_TIPS={cost_mode:'budget pins the spend-heavy knobs, routes judges to the flash tier, and engages the prompt cache',
   autonomous:'never pauses for review - commits the best draft and moves on',
   divergent_drafts:'N first drafts at varied temperatures; the judge picks the strongest',
@@ -980,7 +1003,8 @@ const SET_TIPS={cost_mode:'budget pins the spend-heavy knobs, routes judges to t
   field:'structure template (inverted-pyramid, imrad, how-to, three-act, ...); blank = the register default'};
 function _setDropdowns(){const o=S.options||{};return{mode:o.modes,register:o.registers,field:o.fields,persona:o.personas,
   emotion:o.emotions,citation_style:o.citation_styles,search_provider:o.search_providers,image_source:o.image_sources,
-  cost_mode:o.cost_modes,agentic_policy:o.agentic_policies,diagram_engine:o.diagram_engines,provider:o.providers,image_provider:o.providers};}
+  cost_mode:o.cost_modes,agentic_policy:o.agentic_policies,diagram_engine:o.diagram_engines,provider:o.providers,image_provider:o.providers,
+  theme:Object.keys(S.themes||{})};}
 async function renderSettings(){
   await refreshState();
   $('#view').innerHTML=head('Setup','Settings','Writes settings.yaml in the agent home (same file the TUI /set edits); clamped server-side. Appearance is a separate browser preference, top-right.')+`
@@ -1041,7 +1065,8 @@ async function saveSetting(name){
     const f=(r.settings||[]).find(x=>x.name===name);
     const av=f?String(f.value):sent;
     const gen=((r.settings||[]).find(x=>x.name==='image_source')||{}).value==='generate';
-    if(name==='image_model'&&!av&&gen)toast('generate needs an image_model — while it’s empty, images fall back to Wikimedia',1);
+    if(name==='theme'&&av){applyWebTheme('theme:'+av);buildThemeSelect();toast('theme → '+av);}  // apply to the web live + sync the top-right
+    else if(name==='image_model'&&!av&&gen)toast('generate needs an image_model — while it’s empty, images fall back to Wikimedia',1);
     else if(av==='')toast(name+' cleared');                       // empty is valid for most fields; say so honestly
     else if(av!==String(sent))toast(name+' adjusted to '+av);     // server clamped it (e.g. min_insight 99 → 5)
     else toast(name+' saved');
