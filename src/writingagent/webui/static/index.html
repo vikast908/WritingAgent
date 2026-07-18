@@ -941,60 +941,111 @@ async function renderSkills(){
   <div class="section"><div class="lbl">watch-list — cross-run failure patterns</div><div class="md small" style="max-width:none">${md(d.watch_list||'_none yet_')}</div></div>
   <div class="section"><div class="lbl">your standing preferences — learned from your revisions (×N = how often you've asked)</div><div class="md small" style="max-width:none">${md(d.preferences||'_none yet — your review/revise corrections accumulate here_')}</div></div>`;
 }
-/* settings */
+/* settings — one tab bar, every enum a dropdown, a Keys tab to set + verify API keys */
+let SETTAB='run';
+const SET_GROUPS={
+  run:{label:'Run',names:['mode','num_chapters','num_sections','max_revisions','consolidate_every','autonomous',
+    'divergent_drafts','divergent_skeletons','tournament_judge','min_insight','skill_duels','skill_distill']},
+  research:{label:'Research',names:['use_researcher','search_provider','deep_research','verify_claims','verify_excerpt_chars',
+    'watch_blocking','use_images','image_source','image_model','image_provider','diagram_engine','table_read','table_read_revise','escalate_below_confidence','escalate_on_contradiction']},
+  voice:{label:'Voice & craft',names:['register','field','citation_style','persona','emotion','humanize','craft_passes','article_cohesion',
+    'book_cohesion','strip_inline_citations','rank_references','use_embeddings','seo_keyword','auto_promote']},
+  cost:{label:'Cost',names:['cost_mode','max_run_tokens','budget_tokens_per_unit','max_context_chars','request_timeout']},
+  agentic:{label:'Agentic',names:['agentic','agentic_policy','agentic_controller_model','agentic_max_unit_steps',
+    'agentic_factcheck_panel','agentic_inline_tools','agentic_critique_panel']},
+  app:{label:'App',names:['default_user','provider','openrouter_providers','export_dir','theme']}};
+const SETTAB_ORDER=['run','research','voice','cost','agentic','keys','models','app'];
+const SETTAB_LABEL={keys:'API keys',models:'Model routing'};
+const REQ_ENUMS=new Set(['mode','cost_mode','agentic_policy','diagram_engine','provider','search_provider','image_source']);
+const SET_TIPS={cost_mode:'budget pins the spend-heavy knobs, routes judges to the flash tier, and engages the prompt cache',
+  autonomous:'never pauses for review - commits the best draft and moves on',
+  divergent_drafts:'N first drafts at varied temperatures; the judge picks the strongest',
+  max_revisions:'critique-and-revise loops allowed per section',
+  min_insight:'critic insight score (1-5) required to approve; 0 turns the gate off',
+  use_researcher:'web grounding per unit - off means citations cannot be verified',
+  search_provider:'web-search backend; keyed ones need a key in the API keys tab (DuckDuckGo is keyless)',
+  image_source:'wikimedia = fetch free-licensed stock; generate = make one with an image model',
+  image_model:'image-gen model slug (e.g. gpt-image-1, dall-e-3); needed for image_source=generate',
+  image_provider:'host for image gen (blank = the main provider); lets chat and images use different hosts',
+  deep_research:'multi-source fetch + synthesis; slower, richer sourcing',
+  verify_claims:'checks each cited claim against its source; unsupported claims block',
+  humanize:'rewrites each unit to strip AI tells',craft_passes:'surgical show-dont-tell and de-passive passes',
+  agentic:'an LLM controller picks the next action instead of the fixed pipeline',
+  budget_tokens_per_unit:'budget mode scales the session cap with the piece size',
+  max_run_tokens:'hard ceiling - the run pauses resumably when it hits',
+  provider:'the model host you run on; set its key in the API keys tab',
+  seo_keyword:'target search keyword woven into the piece from the start (title, opening, headings)',
+  auto_promote:'after a run: apply SEO + build a promo pack (local drafts you post yourself; posts nothing)',
+  register:'genre profile: rules, structure, exemplars',persona:'voice manner layered over the register',
+  field:'structure template (inverted-pyramid, imrad, how-to, three-act, ...); blank = the register default'};
+function _setDropdowns(){const o=S.options||{};return{mode:o.modes,register:o.registers,field:o.fields,persona:o.personas,
+  emotion:o.emotions,citation_style:o.citation_styles,search_provider:o.search_providers,image_source:o.image_sources,
+  cost_mode:o.cost_modes,agentic_policy:o.agentic_policies,diagram_engine:o.diagram_engines,provider:o.providers,image_provider:o.providers};}
 async function renderSettings(){
   await refreshState();
-  const opts=S.options||{};
-  const dropdowns={register:opts.registers,persona:opts.personas,emotion:opts.emotions,citation_style:opts.citation_styles,search_provider:opts.search_providers,image_source:opts.image_sources};
-  const GROUPS=[['run',['mode','num_chapters','num_sections','max_revisions','consolidate_every','autonomous',
-      'divergent_drafts','divergent_skeletons','tournament_judge','min_insight','skill_duels','skill_distill']],
-    ['research & truth',['use_researcher','search_provider','deep_research','verify_claims','verify_excerpt_chars',
-      'watch_blocking','use_images','image_source','image_model','image_provider','diagram_engine','table_read','table_read_revise','escalate_below_confidence','escalate_on_contradiction']],
-    ['voice & craft',['register','field','citation_style','persona','emotion','humanize','craft_passes','article_cohesion',
-      'book_cohesion','strip_inline_citations','rank_references','use_embeddings','seo_keyword','auto_promote']],
-    ['cost & limits',['cost_mode','max_run_tokens','budget_tokens_per_unit','max_context_chars','request_timeout']],
-    ['agentic (opt-in)',['agentic','agentic_policy','agentic_controller_model','agentic_max_unit_steps',
-      'agentic_factcheck_panel','agentic_inline_tools','agentic_critique_panel']],
-    ['app',['default_user','provider','openrouter_providers','export_dir','theme']]];
-  const TIPS={cost_mode:'budget pins the spend-heavy knobs and routes judges to the flash tier',
-    autonomous:'never pauses for review - commits the best draft and moves on',
-    divergent_drafts:'N first drafts at varied temperatures; the judge picks the strongest',
-    max_revisions:'critique-and-revise loops allowed per section',
-    min_insight:'critic insight score (1-5) required to approve; 0 turns the gate off',
-    use_researcher:'web grounding per unit - off means citations cannot be verified',
-    image_source:'wikimedia = fetch free-licensed stock; generate = make one with an image model',
-    image_model:'image-gen model slug (e.g. gpt-image-1, dall-e-3); needed for image_source=generate',
-    image_provider:'host for image gen (blank = the main provider); lets chat and images use different hosts',
-    deep_research:'multi-source fetch + synthesis; slower, richer sourcing',
-    verify_claims:'checks each cited claim against its source; unsupported claims block',
-    humanize:'rewrites each unit to strip AI tells',craft_passes:'surgical show-dont-tell and de-passive passes',
-    agentic:'an LLM controller picks the next action instead of the fixed pipeline',
-    budget_tokens_per_unit:'budget mode scales the session cap with the piece size',
-    max_run_tokens:'hard ceiling - the run pauses resumably when it hits',
-    register:'genre profile: rules, structure, exemplars',persona:'voice manner layered over the register'};
-  const rowFor=f=>{
-    let inp;const cid='st-'+f.name;
-    if(dropdowns[f.name])inp=sel(cid,dropdowns[f.name],String(f.value),
-      (f.name==='search_provider'||f.name==='image_source')?{}:{none:'None'});   // required enums have no "None"
-    else if(f.type==='bool')inp=sel(cid,[{value:'true',label:'true'},{value:'false',label:'false'}],String(!!f.value));
-    else inp=`<input id="${cid}" value="${esc(f.value)}">`;
-    const tip=TIPS[f.name]?` data-tip="${esc(TIPS[f.name])}"`:'';
-    return `<div class="settingrow"><label for="${cid}"${tip}>${f.name}</label>${inp}<button class="text" onclick="saveSetting('${f.name}')">set</button></div>`;};
-  const byName=Object.fromEntries(S.settings.map(f=>[f.name,f]));const seen=new Set();
-  let rows=GROUPS.map(([g,names])=>{
-    const fs=names.filter(nm=>byName[nm]).map(nm=>{seen.add(nm);return rowFor(byName[nm]);}).join('');
-    return fs?`<div class="lbl" style="margin-top:16px">${g}</div>${fs}`:'';}).join('');
-  const rest=S.settings.filter(f=>!seen.has(f.name)).map(rowFor).join('');
-  if(rest)rows+=`<div class="lbl" style="margin-top:16px">other</div>${rest}`;
-  const nodes=Object.entries(S.models.nodes||{}).map(([n,m])=>`<div class="settingrow"><label for="mdl-${n}">${n}</label><input id="mdl-${n}" data-n="${n}" value="${esc(m)}"><button class="text" onclick="saveModel('${n}',this)">set</button></div>`).join('');
-  $('#view').innerHTML=head('Setup','Settings')+`<div class="grid2">
-    <div class="section"><div class="lbl">engine settings</div>
-      <div class="muted small" style="margin-bottom:10px">writes settings.yaml in the agent home (same file the TUI's /set edits); clamped server-side. Appearance is a separate browser preference (top-right).</div>${rows}</div>
-    <div class="section"><div class="lbl">model routing</div>
-      <div class="settingrow"><label for="mdl-default">default</label><input id="mdl-default" data-n="default" value="${esc(S.models.default)}"><button class="text" onclick="saveModel('default',this)">set</button></div>${nodes}</div></div>`;
+  $('#view').innerHTML=head('Setup','Settings','Writes settings.yaml in the agent home (same file the TUI /set edits); clamped server-side. Appearance is a separate browser preference, top-right.')+`
+    <div style="margin-bottom:18px"><div class="seg" id="setTabs">${SETTAB_ORDER.map(t=>`<button class="${SETTAB===t?'on':''}" data-st="${t}" onclick="switchSetTab('${t}')">${esc(SETTAB_LABEL[t]||(SET_GROUPS[t]&&SET_GROUPS[t].label)||t)}</button>`).join('')}</div></div>
+    <div id="setBody"></div>`;
+  renderSetBody();
 }
+function switchSetTab(t){SETTAB=t;document.querySelectorAll('#setTabs button').forEach(b=>b.classList.toggle('on',b.dataset.st===t));renderSetBody();}
+function setRow(f){
+  const d=_setDropdowns();let inp;const cid='st-'+f.name;
+  if(d[f.name])inp=sel(cid,d[f.name],String(f.value),REQ_ENUMS.has(f.name)?{}:{none:'None'});
+  else if(f.type==='bool')inp=sel(cid,[{value:'true',label:'true'},{value:'false',label:'false'}],String(!!f.value));
+  else inp=`<input id="${cid}" value="${esc(f.value)}">`;
+  const tip=SET_TIPS[f.name]?` data-tip="${esc(SET_TIPS[f.name])}"`:'';
+  return `<div class="settingrow"><label for="${cid}"${tip}>${f.name}</label>${inp}<button class="text" onclick="saveSetting('${f.name}')">set</button></div>`;
+}
+function renderSetBody(){
+  const el=$('#setBody');if(!el)return;
+  if(SETTAB==='keys')return renderKeys(el);
+  if(SETTAB==='models'){
+    const nodes=Object.entries(S.models.nodes||{}).map(([n,m])=>`<div class="settingrow"><label for="mdl-${n}">${n}</label><input id="mdl-${n}" data-n="${n}" value="${esc(m)}"><button class="text" onclick="saveModel('${n}',this)">set</button></div>`).join('');
+    el.innerHTML=`<div class="section"><div class="muted small" style="margin-bottom:12px">per-node model slugs (OpenRouter-style <code>vendor/model</code>, or a bare slug on a first-party host). Set the host + its key in the App and API keys tabs.</div>
+      <div class="settingrow"><label for="mdl-default">default</label><input id="mdl-default" data-n="default" value="${esc(S.models.default)}"><button class="text" onclick="saveModel('default',this)">set</button></div>${nodes}</div>`;
+    return;}
+  const g=SET_GROUPS[SETTAB];if(!g)return;
+  const byName=Object.fromEntries(S.settings.map(f=>[f.name,f]));
+  el.innerHTML='<div class="section">'+g.names.filter(n=>byName[n]).map(n=>setRow(byName[n])).join('')+'</div>';
+}
+async function renderKeys(el){
+  el.innerHTML=loadingHTML();
+  let k;try{k=await api('/api/keys');}catch(e){el.innerHTML=`<div class="card">✗ ${esc(e.message)}</div>`;return;}
+  const row=(kind,it)=>`<div class="settingrow">
+    <label data-tip="env: ${esc(it.env)}">${esc(it.name)} ${it.set?`<span class="chip ok">set · ${esc(it.masked)}</span>`:'<span class="chip">not set</span>'}</label>
+    <input id="key-${it.env}" type="password" autocomplete="off" placeholder="${it.set?'replace key…':'paste key…'}" style="width:230px">
+    <button class="text" onclick="saveKey('${it.env}')">set</button>
+    <button class="text" onclick="testKey('${kind}','${it.id}','${it.env}')">verify</button>
+    <span class="small" id="kt-${it.env}" style="margin-left:2px"></span></div>`;
+  el.innerHTML=`<div class="section"><div class="lbl">model hosts</div>
+      <div class="muted small" style="margin-bottom:10px">Keys are written to <code>.env</code> in the agent home and shared by the web dashboard and the TUI. Set the key for the host you run on (choose it under App → <code>provider</code>), then <b>verify</b> to confirm it works.</div>
+      ${k.hosts.map(h=>row('host',h)).join('')}</div>
+    <div class="section"><div class="lbl">web search</div>
+      <div class="muted small" style="margin-bottom:10px">Only the provider you pick under Research needs a key; DuckDuckGo is keyless. <b>verify</b> runs one live search.</div>
+      ${k.search.map(s=>row('search',s)).join('')}</div>`;
+}
+async function saveKey(env){
+  const inp=$('#key-'+env);const v=inp?inp.value.trim():'';
+  if(!v)return toast('paste a key first',1);
+  try{await api('/api/setkey',{env,value:v});toast(env+' saved');renderKeys($('#setBody'));}catch(e){toast(e.message,1)}}
+async function testKey(kind,id,env){
+  const s=$('#kt-'+env);if(s){s.textContent='verifying…';s.style.color='var(--fg-3)';}
+  try{const r=await api('/api/testkey',{kind,id});if(s){s.textContent=(r.ok?'✓ ':'✗ ')+r.detail;s.style.color=r.ok?'var(--green)':'var(--red)';}}
+  catch(e){if(s){s.textContent='✗ '+e.message;s.style.color='var(--red)';}}}
 async function saveSetting(name){
-  try{await api('/api/settings',{field:name,value:ctrlVal('st-'+name)});toast(name+' saved');}catch(e){toast(e.message,1)}}
+  const sent=ctrlVal('st-'+name);
+  try{
+    const r=await api('/api/settings',{field:name,value:sent});
+    if(r.settings)S.settings=r.settings;                          // keep the client in sync with the APPLIED value
+    const f=(r.settings||[]).find(x=>x.name===name);
+    const av=f?String(f.value):sent;
+    const gen=((r.settings||[]).find(x=>x.name==='image_source')||{}).value==='generate';
+    if(name==='image_model'&&!av&&gen)toast('generate needs an image_model — while it’s empty, images fall back to Wikimedia',1);
+    else if(av==='')toast(name+' cleared');                       // empty is valid for most fields; say so honestly
+    else if(av!==String(sent))toast(name+' adjusted to '+av);     // server clamped it (e.g. min_insight 99 → 5)
+    else toast(name+' saved');
+  }catch(e){toast(e.message,1)}}
 async function saveModel(node,btn){const el=btn.parentElement.querySelector('[data-n]');
   try{await api('/api/models',{node,slug:el.value});toast(node+' → '+el.value);}catch(e){toast(e.message,1)}}
 

@@ -164,17 +164,61 @@ def _project_overview(uid: str) -> list[dict]:
 
 def _options() -> dict:
     """Selectable option lists for the Settings dropdowns + restyle (register/persona/
-    emotion) and the export format set."""
-    from .. import emotions, personas, registers, search
+    emotion) and the export format set - every enum setting becomes a dropdown."""
+    from .. import emotions, fields, personas, providers, registers, search
     return {
         "registers": list(registers.names()),
         "personas": list(personas.names()),
         "emotions": list(emotions.names()),
+        "fields": list(fields.names()),
         "export_formats": ["pdf", "epub", "html", "docx", "txt", "md"],
         "citation_styles": ["influence", "numeric", "apa", "mla", "chicago", "ap", "none"],
         "search_providers": list(search.PROVIDERS),
         "image_sources": ["wikimedia", "generate"],
+        "modes": ["article", "book"],
+        "cost_modes": ["standard", "budget"],
+        "agentic_policies": ["default", "llm", "trace"],
+        "diagram_engines": ["auto", "d2", "builtin"],
+        "providers": list(providers.names()),
     }
+
+
+def _mask(v: str) -> str:
+    """Show only the last 4 chars of a key, so the UI can confirm what's set without leaking it."""
+    v = v or ""
+    return ("•" * max(0, min(len(v) - 4, 12)) + v[-4:]) if v else ""
+
+
+def _key_envs() -> set[str]:
+    """Every env var the UI is allowed to write - the model hosts' + search backends' key
+    vars. A setkey request for anything outside this set is rejected (no arbitrary env writes)."""
+    from .. import providers, search
+    envs: set[str] = set()
+    for p in providers._PROVIDERS:
+        envs.update(p.key_env)
+    for b in search._BACKENDS.values():
+        envs.add(b.key_env)
+    return envs
+
+
+def _keys_payload() -> dict:
+    """Masked key status for every model host + keyed search provider, for the Keys tab."""
+    import os
+
+    from .. import providers, search
+    hosts = []
+    for p in providers._PROVIDERS:
+        if p.local or p.id in ("custom", "bedrock", "azure") or not p.key_env:
+            continue   # local servers / gateways don't take a single first-party key
+        val = providers.api_key_for(p) or ""
+        hosts.append({"id": p.id, "name": p.name, "env": p.key_env[0],
+                      "set": bool(val), "masked": _mask(val)})
+    searches = []
+    for name, b in search._BACKENDS.items():
+        val = os.getenv(b.key_env, "")
+        searches.append({"id": name, "name": name, "env": b.key_env,
+                         "set": bool(val), "masked": _mask(val)})
+    return {"hosts": hosts, "search": searches}
 
 
 def _themes() -> dict:
@@ -470,6 +514,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._telemetry(q)
             if route == "/api/skills":
                 return self._json(_skills(q.get("user") or _uid()))
+            if route == "/api/keys":
+                return self._json(_keys_payload())
             if route == "/api/events":
                 return self._events(q)
             return self._err("not found", 404)
@@ -652,6 +698,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "settings": _settings_payload(s)})
             if route == "/api/models":
                 return self._models(body)
+            if route == "/api/setkey":
+                return self._setkey(body)
+            if route == "/api/testkey":
+                return self._testkey(body)
             if route == "/api/delete":
                 return self._delete(body)
             return self._err("not found", 404)
@@ -701,6 +751,52 @@ class Handler(BaseHTTPRequestHandler):
             cfg.set_node(node, slug)
         save_config(cfg)
         self._json({"ok": True, "models": cfg.to_dict()})
+
+    def _setkey(self, body: dict) -> None:
+        """Write an API key to .env in the agent home (shared with the TUI). Only known key
+        env vars are accepted - no arbitrary environment writes from the browser."""
+        env = (body.get("env") or "").strip()
+        val = (body.get("value") or "").strip()
+        if env not in _key_envs():
+            return self._err(f"unknown key variable '{env}'", 400)
+        if not val:
+            return self._err("empty key", 400)
+        from ..shell.branding import _write_env_key
+        path = _write_env_key(env, val)   # sets it live AND persists to .env when writable
+        self._json({"ok": True, "env": env, "masked": _mask(val), "persisted": bool(path)})
+
+    def _testkey(self, body: dict) -> None:
+        """Verify a key with a real, cheap probe: a free /models list for a model host, a
+        1-result live search for a search provider. Returns {ok, detail} - never raises."""
+        import os
+        kind, pid = body.get("kind", ""), body.get("id", "")
+        try:
+            if kind == "search":
+                from .. import search
+                b = search._BACKENDS.get(pid)
+                if not b:
+                    return self._json({"ok": False, "detail": "unknown search provider"})
+                if not os.getenv(b.key_env):
+                    return self._json({"ok": False, "detail": "no key set"})
+                res = b.fn("connectivity test", 1)
+                return self._json({"ok": True, "detail": f"reached it - {len(res)} result(s)"})
+            from openai import OpenAI
+
+            from .. import providers
+            p = providers.REGISTRY.get(providers.resolve(pid))
+            if p is None:
+                return self._json({"ok": False, "detail": "unknown host"})
+            key = providers.api_key_for(p)
+            if key is None and not p.local:
+                return self._json({"ok": False, "detail": "no key set"})
+            client = OpenAI(base_url=providers.base_url_for(p), api_key=key or "not-needed",
+                            default_headers=dict(getattr(p, "headers", {})) or None, timeout=15)
+            client.models.list()   # 401 on a bad key; otherwise fine and free (no tokens)
+            return self._json({"ok": True, "detail": "key accepted"})
+        except Exception as e:  # noqa: BLE001 - a failed probe is a result, not a 500
+            msg = str(e)
+            hint = "bad key" if "401" in msg or "auth" in msg.lower() else "no /models probe (key may still be valid)" if "404" in msg else msg[:160]
+            self._json({"ok": False, "detail": hint})
 
     def _delete(self, body: dict) -> None:
         from .. import orchestrator
