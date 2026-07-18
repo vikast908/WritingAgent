@@ -122,6 +122,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:540;letter-spacing:-.01em}
 .csel.open .csel-menu{display:block;transform-origin:top;animation:menupop .12s var(--ease-out)}
 .csel.up .csel-menu{top:auto;bottom:calc(100% + 4px)}
 .csel.up.open .csel-menu{transform-origin:bottom}
+.csel.rt .csel-menu{left:auto;right:0}
 .csel-opt{padding:6px 10px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;white-space:nowrap;color:var(--fg-2);
   display:flex;align-items:center;gap:8px}
 .csel-opt:hover{background:var(--fill)}
@@ -247,7 +248,8 @@ textarea.mono{font-family:var(--mono);font-size:12px;line-height:1.6}
 @media (prefers-reduced-motion:reduce){.disc-panel,.disc .chev{transition:none}}
 
 /* studio — centered compose surface (chat-composer feel: tall box, submit bottom-right) */
-.hero{max-width:660px;margin:0 auto;text-align:center;padding-top:clamp(48px,20vh,200px)}
+#view>.hero{max-width:560px}   /* beat #view>* (1200) — keep the composer focused, not full-width */
+.hero{margin:0 auto;text-align:center;padding-top:clamp(48px,20vh,200px)}
 .hero.compact{padding-top:28px}
 .composer{display:flex;align-items:flex-end;gap:10px;padding:12px 12px 12px 18px;text-align:left;
   background:var(--surface);border:1px solid var(--stroke-soft);border-radius:16px;box-shadow:var(--shadow-card);
@@ -588,11 +590,12 @@ function sel(id,options,current,{none=null,cb=null}={}){
 function selVal(id){const e=document.getElementById(id);return e?(e.dataset.value||''):'';}
 function ctrlVal(id){const e=document.getElementById(id);if(!e)return'';return e.classList.contains('csel')?(e.dataset.value||''):e.value;}
 function cselClose(){document.querySelectorAll('.csel.open').forEach(x=>{
-  x.classList.remove('open','up');x.querySelector('.csel-btn').setAttribute('aria-expanded','false');
+  x.classList.remove('open','up','rt');x.querySelector('.csel-btn').setAttribute('aria-expanded','false');
   x.querySelectorAll('.csel-opt.hl').forEach(o=>o.classList.remove('hl'));});}
-function cselFlip(c){const menu=c.querySelector('.csel-menu');if(!menu)return;   // open upward if there's no room below
-  const r=c.getBoundingClientRect(),mh=menu.offsetHeight,below=innerHeight-r.bottom,above=r.top;
-  c.classList.toggle('up',below<mh+16&&above>below);}
+function cselFlip(c){const menu=c.querySelector('.csel-menu');if(!menu)return;   // keep the menu on-screen
+  const r=c.getBoundingClientRect(),mh=menu.offsetHeight,mw=menu.offsetWidth,below=innerHeight-r.bottom,above=r.top;
+  c.classList.toggle('up',below<mh+16&&above>below);        // flip up when there's no room below
+  c.classList.toggle('rt',r.left+mw>innerWidth-8);}          // right-align when it would overflow the right edge
 function cselPick(opt){const id=opt.dataset.cselopt,c=document.getElementById(id);
   c.dataset.value=opt.dataset.val;c.querySelector('.csel-lbl').textContent=opt.textContent;
   c.querySelectorAll('.csel-opt').forEach(x=>{x.classList.toggle('on',x===opt);x.setAttribute('aria-selected',x===opt);});
@@ -758,14 +761,25 @@ function optSel(id,list,cur,noneLabel){return sel(id,list||[],cur,{none:noneLabe
 function attachJob(jobId,project){
   if(RUN.es)RUN.es.close();
   RUN={job:jobId,project:project,log:[],state:null,es:null,status:'running'};
-  const es=new EventSource('/api/events?job='+jobId);RUN.es=es;
-  es.onmessage=e=>{const ev=JSON.parse(e.data);
-    if(ev.t==='log')RUN.log.push(ev.line);
-    else if(ev.t==='project')RUN.project=ev.project;
-    else if(ev.t==='state')RUN.state=ev.state;
-    else if(ev.t==='done'){RUN.status=ev.status;RUN.log.push(ev.status==='error'?('[x] '+ev.error):('— '+ev.status+' —'));es.close();RUN.es=null;refreshState();}
-    if(view==='run')renderRunInner();updateBadge();};
-  es.onerror=()=>{if(RUN.status==='running')RUN.log.push('· reconnecting…');};
+  let tries=0;                          // exponential backoff: 1s,2s,4s… capped at 30s, give up after 8
+  const connect=()=>{
+    const es=new EventSource('/api/events?job='+jobId);RUN.es=es;
+    es.onmessage=e=>{tries=0;           // a live message means the stream is healthy — reset backoff
+      const ev=JSON.parse(e.data);
+      if(ev.t==='log')RUN.log.push(ev.line);
+      else if(ev.t==='project')RUN.project=ev.project;
+      else if(ev.t==='state')RUN.state=ev.state;
+      else if(ev.t==='done'){RUN.status=ev.status;RUN.log.push(ev.status==='error'?('[x] '+ev.error):('— '+ev.status+' —'));es.close();RUN.es=null;refreshState();}
+      if(view==='run')renderRunInner();updateBadge();};
+    es.onerror=()=>{                     // take over the browser's fixed-interval retry with a backoff
+      es.close();if(RUN.es===es)RUN.es=null;
+      if(RUN.status!=='running')return;
+      if(tries>=8){RUN.log.push('· connection lost — reload the page to resume');if(view==='run')renderRunInner();return;}
+      const delay=Math.min(1000*2**tries,30000);tries++;
+      RUN.log.push(`· reconnecting in ${Math.round(delay/1000)}s…`);if(view==='run')renderRunInner();
+      setTimeout(()=>{if(RUN.job===jobId&&RUN.status==='running')connect();},delay);};
+  };
+  connect();
   updateBadge();
 }
 function updateBadge(){const b=$('#runbadge');
@@ -1159,8 +1173,8 @@ async function memSkillDelete(i){const s=(MEM.skills||[])[i];if(!s)return;
 
 function memPrefs(){const rows=MEM.preferences||[];
   const list=rows.length?rows.map((p,i)=>`<div class="memrow"><span class="mtext">${esc(p.text)}</span>
-      ${p.count>1?`<span class="chip" title="you've asked ${p.count}×">×${p.count}</span>`:''}
-      <button type="button" class="iconbtn" title="forget this" onclick="memPrefDelete(${i})">×</button></div>`).join('')
+      ${p.count>1?`<span class="chip" data-tip="you've asked ${p.count}×">×${p.count}</span>`:''}
+      <button type="button" class="iconbtn" data-tip="forget this" onclick="memPrefDelete(${i})">×</button></div>`).join('')
     :`<div class="memempty"><div class="t">Nothing yet</div><div class="s">Your review and revise corrections accumulate here, and the agent follows them on the next run. ×N shows how often you've asked — the more you repeat a note, the harder it sticks.</div></div>`;
   return `<div class="section"><div class="lbl">standing preferences — what you keep asking for</div>${list}
     <div class="row memadd"><input id="mem-pref" placeholder="Add a preference — e.g. “never open with a rhetorical question”" onkeydown="if(event.key==='Enter')memPrefAdd()"><button type="button" class="primary" onclick="memPrefAdd()">Add</button></div></div>`;

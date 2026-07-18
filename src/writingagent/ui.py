@@ -23,17 +23,20 @@ import re
 # editorial=ink & brass · kazama=flame · supabase=emerald · violet-bloom=purple ·
 # t3-chat=pink · starry-night=indigo+gold · vercel=monochrome · fallout=CRT
 # amber · mimi=rose pastels · astrovista=mars rust.
-GOLD = "#c9a227"     # primary accent - commands, headings, prompt (gold)
-GOLD_HI = "#e2c65a"  # lit accent - highlights (lit gold)
-INK = "#b0812f"      # brass - tagline / secondary values
+# design.md: manuscript red is THE interaction accent; brass is a secondary/decorative
+# counterpoint (the former gold-primary palette is deprecated). The GOLD/INK names are
+# retained (read everywhere) but hold editorial values.
+GOLD = "#a3341f"     # primary accent - manuscript red (commands, headings, prompt)
+GOLD_HI = "#c65038"  # lit accent - highlights (lit manuscript red)
+INK = "#b0812f"      # brass - secondary/decorative counterpoint (tagline, minor values)
 PARCH = "#e6ddc9"    # warm parchment - body text
 DIM = "grey54"       # secondary
 RULE = "#5c4a2e"     # dark brass - rules / borders
-ERR = "#c23b2b"      # manuscript red - errors (semantic)
+ERR = "#c23b2b"      # error red - hotter than the oxblood accent so "delete" ≠ "link" (semantic)
 ON_CLR = "#5aa07f"   # sage green - feature on / done (semantic)
 OFF_CLR = "grey50"   # feature off
 FLEURON = "❧"
-STOPS = ("#8f2a18", "#bf5a2e", "#d9b84a")   # wordmark gradient - oxblood → terracotta → gold
+STOPS = ("#7a2416", "#a3341f", "#c65038")   # wordmark gradient - oxblood → manuscript red → lit red
 FONT = "ansi_shadow"                        # wordmark figlet face
 WORDS = ("WRITING", "AGENT")                # wordmark words (case matters per face)
 SHEAR = False                               # italic lean (block faces only)
@@ -44,7 +47,7 @@ THEMES: dict[str, dict] = {
         DIM=DIM, RULE=RULE, ERR=ERR, ON_CLR=ON_CLR,
         OFF_CLR=OFF_CLR, FLEURON=FLEURON, STOPS=STOPS,
         FONT=FONT, WORDS=WORDS, SHEAR=SHEAR,
-        DESC="ink & brass - manuscript red + gold on parchment, semantic status",
+        DESC="ink & brass - manuscript red accent + brass on parchment, semantic status",
     ),
     "highcontrast": dict(
         # Okabe-Ito palette - distinguishable for all common types of colour-blindness.
@@ -123,10 +126,11 @@ THEMES: dict[str, dict] = {
         DESC="mimi - dusky rose, cream and teal pastels, tiny playful face",
     ),
     "astrovista": dict(
-        GOLD="#c14a24", GOLD_HI="#e58a5f", INK="#85a6c7", PARCH="#dfe3e8",
+        # burnt-sienna rust (kept clear of the manuscript-red default accent)
+        GOLD="#c47036", GOLD_HI="#e0a06a", INK="#85a6c7", PARCH="#dfe3e8",
         DIM="grey54", RULE="#2a3656", ERR="#ef4444", ON_CLR="#6aaa5c",
         OFF_CLR="grey50", FLEURON="✧",
-        STOPS=("#284167", "#c14a24", "#e58a5f"),
+        STOPS=("#284167", "#c47036", "#e0a06a"),
         FONT="delta_corps_priest_1", WORDS=("WRITING", "AGENT"), SHEAR=False,
         DESC="astrovista - mars rust over deep-space navy, sci-fi face",
     ),

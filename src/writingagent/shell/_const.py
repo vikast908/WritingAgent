@@ -31,7 +31,7 @@ _MODE_ALIASES = {
     "op-ed": "article", "oped": "article", "longform": "article", "long-form": "article",
     "story": "book", "novel": "book", "manuscript": "book", "nonfiction": "book",
 }
-_NIB = "✒"             # the brand glyph: a pen nib (matches the logo)
+_NIB = "¶"             # the brand glyph: the pilcrow (design.md normative brand mark)
 _FLEURON = _NIB            # used for the prompt + section/status markers
 _MAX_HISTORY = 8   # max messages kept for multi-turn context (4 user + 4 assistant)
 
