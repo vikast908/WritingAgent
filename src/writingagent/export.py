@@ -447,6 +447,22 @@ def markdown_to_html(md_text: str, out_path, title: str = "Article", base_dir=No
     return out
 
 
+def markdown_to_share_html(md_text: str, base_dir=None) -> str:
+    """The manuscript as a self-contained HTML *body fragment* (no <html>/<head>, no CSS):
+    images inlined as data URIs and SVG diagrams rasterized to PNG, so it can be dropped on
+    the clipboard and pasted into Medium / Substack with formatting + figures intact. Reuses
+    the same pipeline as the HTML export; returns the markup string rather than a file."""
+    import markdown
+    md_text = _preprocess(md_text, diagrams=True, base_dir=Path(base_dir) if base_dir else None)
+    try:
+        body = markdown.markdown(
+            md_text, extensions=["extra", "sane_lists", "codehilite", "fenced_code"])
+    except Exception:
+        body = markdown.markdown(md_text, extensions=["extra", "sane_lists"])
+    body = _sanitize_html(body)
+    return _inline_images(body, Path(base_dir) if base_dir else None)
+
+
 # ── DOCX ─────────────────────────────────────────────────────────────────────
 def markdown_to_docx(md_text: str, out_path, title: str = "Article", base_dir=None) -> Path:
     """Convert Markdown to .docx via pandoc (must be on PATH)."""

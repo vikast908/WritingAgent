@@ -324,6 +324,19 @@ def _trace_records(uid: str, pid: str) -> list[dict]:
         return []
 
 
+def _plain_x_thread(md: str) -> str:
+    """The promo X-thread markdown as paste-ready plain text: drop headers and bold/italic
+    markers, keep the tweets and their separators."""
+    import re
+    out = []
+    for ln in md.splitlines():
+        ln = re.sub(r"^#+\s*", "", ln)                 # markdown headers
+        ln = re.sub(r"\*\*(.+?)\*\*", r"\1", ln)       # **bold**
+        ln = re.sub(r"(?<!\*)\*(?!\*)(.+?)\*", r"\1", ln)  # *italics*
+        out.append(ln)
+    return "\n".join(out).strip()
+
+
 def _evals(uid: str, pid: str) -> dict:
     p = _paths(uid, pid)
     state = brain.read_json(p.run_state) or {}
@@ -602,6 +615,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(_memory(q.get("user") or _uid()))
             if route == "/api/keys":
                 return self._json(_keys_payload())
+            if route == "/api/share":
+                return self._share(q)
             if route == "/api/events":
                 return self._events(q)
             return self._err("not found", 404)
@@ -697,6 +712,30 @@ class Handler(BaseHTTPRequestHandler):
                     f'style="max-width:100%;height:auto" alt="{path.name}">')
             return self._json({"name": q.get("name"), "text": text})
         self._json({"name": q.get("name"), "text": path.read_text(encoding="utf-8")})
+
+    def _share(self, q: dict) -> None:
+        """Platform-ready copy of the finished piece. medium/substack: a self-contained HTML
+        body (images + diagrams inlined) to paste into a draft with formatting intact. x: the
+        promo X-thread as plain text (needs a Promote pass first)."""
+        uid, pid = q.get("user") or _uid(), q.get("project", "")
+        target = (q.get("target") or "medium").lower()
+        p = _paths(uid, pid)
+        title = pid
+        src = getattr(p, "outline_json", None) or getattr(p, "book_plan", None)
+        if src is not None and src.exists():
+            title = (brain.read_json(src) or {}).get("title") or pid
+        if target == "x":
+            xt = brain.read_text(p.root / "promo" / "x-thread.md") or ""
+            if not xt.strip():
+                return self._json({"target": "x", "missing": True,
+                                   "hint": "Run Promote to generate the X thread first."})
+            return self._json({"target": "x", "title": title, "text": _plain_x_thread(xt)})
+        md = brain.read_text(p.manuscript) or ""
+        if not md.strip():
+            return self._err("no manuscript yet — finish the run first", 404)
+        from .. import export
+        html = export.markdown_to_share_html(md, base_dir=str(p.root))
+        self._json({"target": target, "title": title, "html": html, "text": md})
 
     def _rejected(self, q: dict) -> None:
         """Dropped/unused artifacts for review (plan §26): recorded rejects (unused images)

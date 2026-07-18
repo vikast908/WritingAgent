@@ -218,6 +218,22 @@ def test_memory_get_and_mutations(server):
     assert got["status"] == "retired"
 
 
+def test_share_medium_html_and_x_thread(server):
+    pid = _finished_project()
+    # medium/substack: a self-contained HTML body fragment to paste into a draft
+    d = _get(server, f"/api/share?project={pid}&target=medium")
+    assert d["target"] == "medium" and "<" in d["html"] and d["text"].strip()
+    # x with no promo pack yet: missing + a pointer to Promote, not a crash
+    dx = _get(server, f"/api/share?project={pid}&target=x")
+    assert dx.get("missing") is True and "Promote" in dx.get("hint", "")
+
+
+def test_plain_x_thread_strips_markdown():
+    from writingagent.webui.server import _plain_x_thread
+    out = _plain_x_thread("# Thread\n**1/** hook line\nplain *tweet* two")
+    assert "**" not in out and "#" not in out and "1/ hook line" in out
+
+
 def test_memory_bad_request_is_400(server):
     # a delete for something that isn't there is a clean 400, not a 500
     with pytest.raises(urllib.error.HTTPError) as ei:

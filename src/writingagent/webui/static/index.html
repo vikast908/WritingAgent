@@ -1146,6 +1146,12 @@ function pjExport(){
   const fmts=S.options.export_formats||['pdf','epub','html','docx','txt','md'];
   const regs=S.options.registers||[],pers=S.options.personas||[],emos=S.options.emotions||[];
   $('#pjBody').innerHTML=`
+  <div class="section"><div class="lbl">copy for a platform — paste straight in, no cleanup</div>
+    <div class="row">
+      <button class="secondary" onclick="copyFor('medium')">Copy for Medium</button>
+      <button class="secondary" onclick="copyFor('substack')">Copy for Substack</button>
+      <button class="secondary" onclick="copyFor('x')">Copy for X</button></div>
+    <div class="muted small" style="margin-top:8px">Medium &amp; Substack copy rich HTML — headings, formatting, and <b>images + diagrams inlined</b> — so a paste into a new draft matches this piece exactly. X copies your promo thread as plain text (run <b>Promote</b> first).</div></div>
   <div class="section"><div class="lbl">export the manuscript</div>
     <div class="row">${fmts.map(f=>`<button class="${f==='pdf'?'primary':'secondary'}" onclick="projectAction('export',{format:'${f}'})">${f}</button>`).join('')}</div>
     <div class="muted small" style="margin-top:8px">Renders locally - no model calls. Writes into the project folder (same as the TUI).</div></div>
@@ -1162,6 +1168,20 @@ async function doRestyle(){
   const register=selVal('rsReg'),persona=selVal('rsPer'),emotion=selVal('rsEmo');
   if(!register&&!persona&&!emotion)return toast('pick a style, persona, or emotion first',1);
   projectAction('restyle',{register,persona,emotion});
+}
+async function copyFor(target){   // platform-ready copy: rich HTML for Medium/Substack, plain thread for X
+  try{
+    const d=await api(`/api/share?project=${encodeURIComponent(PJ.id)}&target=${target}`);
+    if(d.missing)return toast(d.hint||'nothing to copy yet',1);
+    if(target==='x'){await navigator.clipboard.writeText(d.text||'');return toast('X thread copied — paste into X');}
+    if(navigator.clipboard&&window.ClipboardItem){   // rich HTML + a plain-markdown fallback
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html':new Blob([d.html||''],{type:'text/html'}),
+        'text/plain':new Blob([d.text||''],{type:'text/plain'})})]);
+    }else{await navigator.clipboard.writeText(d.text||'');}
+    const name=target.charAt(0).toUpperCase()+target.slice(1);
+    toast(`Copied for ${name} — paste into a new ${name} draft (formatting + images included)`);
+  }catch(e){toast('copy failed — '+(e.message||e),1);}
 }
 function pjCost(){$('#pjBody').innerHTML=teleTables(PJ.tele?.summary||{totals:{}},PJ.tele?.records||[]);}
 /* telemetry */
