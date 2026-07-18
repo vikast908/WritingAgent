@@ -386,25 +386,53 @@ def _clamp_settings(s: Settings) -> Settings:
     # Lazy import keeps config free of an import cycle (registers/fields don't import config).
     from . import fields as _fields
     from . import registers as _registers
+    # "random" is a valid sentinel for every voice field - resolved to a concrete choice
+    # once at project creation (resolve_random), so the setting can carry it through here.
     if s.register:
         norm = s.register.strip().lower().replace("_", "-")
-        s.register = norm if norm in _registers.names() else ""
+        s.register = norm if (norm == "random" or norm in _registers.names()) else ""
     if s.field:
         norm = s.field.strip().lower()
-        s.field = norm if norm in _fields.names() else ""
+        s.field = norm if (norm == "random" or norm in _fields.names()) else ""
     if s.citation_style:
         norm = s.citation_style.strip().lower()
         s.citation_style = norm if norm in (
-            "influence", "numeric", "apa", "mla", "chicago", "ap", "none") else ""
+            "random", "influence", "numeric", "apa", "mla", "chicago", "ap", "none") else ""
     # Persona / emotion (compositor manner layers, plan §23): validate against the known
     # sets (emotion tolerates aliases via emotions.get); unknown -> "" (= none).
     from . import emotions as _emotions
     from . import personas as _personas
     if s.persona:
         norm = s.persona.strip().lower().replace("_", "-")
-        s.persona = norm if norm in _personas.names() else ""
+        s.persona = norm if (norm == "random" or norm in _personas.names()) else ""
     if s.emotion:
-        s.emotion = s.emotion.strip().lower() if _emotions.get(s.emotion) else ""
+        norm = s.emotion.strip().lower()
+        s.emotion = norm if (norm == "random" or _emotions.get(s.emotion)) else ""
+    return s
+
+
+def resolve_random(settings: Settings) -> Settings:
+    """Replace any voice field set to "random" with a concrete random pick from its set,
+    so each NEW project gets a specific choice - consistent within the piece, varied across
+    pieces. Returns a copy (the caller's object is untouched); non-random values pass through.
+    Called once at project creation, before the pipeline reads register/field/persona/etc."""
+    import random
+
+    from . import emotions as _emotions
+    from . import fields as _fields
+    from . import personas as _personas
+    from . import registers as _registers
+    s = dataclasses.replace(settings)
+    pools = {
+        "register": list(_registers.names()),
+        "field": list(_fields.names()),
+        "persona": list(_personas.names()),
+        "emotion": list(_emotions.names()),
+        "citation_style": ["influence", "numeric", "apa", "mla", "chicago", "ap"],
+    }
+    for name, pool in pools.items():
+        if (getattr(s, name, "") or "").strip().lower() == "random" and pool:
+            setattr(s, name, random.choice(pool))
     return s
 
 

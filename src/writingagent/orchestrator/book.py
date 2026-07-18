@@ -71,8 +71,9 @@ def start_book(
     num_chapters: int, max_revisions: int, autonomous: bool = False,
     humanize: bool | None = None, intake: str | None = None, author: str | None = None,
 ) -> str:
-    from ..config import apply_cost_mode
+    from ..config import apply_cost_mode, resolve_random
     cfg, settings, _cost = apply_cost_mode(cfg, settings)   # budget mode pins lean knobs
+    settings = resolve_random(settings)   # a voice field set to "random" -> a concrete pick for THIS piece
     if getattr(settings, "cost_mode", "standard") == "budget":
         max_revisions = min(max_revisions, settings.max_revisions)  # the arg bakes into state
     brain.ensure_user(uid)

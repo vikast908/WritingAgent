@@ -134,3 +134,23 @@ def test_budget_scales_with_units_and_respects_explicit_cap():
 def test_cost_mode_clamped_to_known_values():
     assert _clamp_settings(Settings(cost_mode="bogus")).cost_mode == "standard"
     assert _clamp_settings(Settings(cost_mode="budget")).cost_mode == "budget"
+
+
+# ── "random" voice fields resolve to a concrete pick at creation ────────────────
+def test_random_survives_clamp_and_resolves_to_concrete():
+    from writingagent import registers
+    from writingagent.config import _clamp_settings, resolve_random
+    # "random" passes validation (not cleared to "")
+    s = _clamp_settings(Settings(persona="random", emotion="random", register="random",
+                                 field="random", citation_style="random"))
+    assert s.persona == "random" and s.emotion == "random" and s.register == "random"
+    assert s.field == "random" and s.citation_style == "random"
+    # resolve_random turns each into a real member of its set
+    r = resolve_random(s)
+    assert r.register in registers.names() and r.register != "random"
+    assert r.persona != "random" and r.emotion != "random"
+    assert r.field != "random" and r.citation_style in (
+        "influence", "numeric", "apa", "mla", "chicago", "ap")
+    # a non-random value is left untouched; the caller's object is not mutated
+    assert resolve_random(Settings(persona="wry-skeptic")).persona == "wry-skeptic"
+    assert s.persona == "random"
