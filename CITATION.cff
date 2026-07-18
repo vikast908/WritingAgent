@@ -12,7 +12,7 @@ authors:
 repository-code: "https://github.com/vikast908/WritingAgent"
 url: "https://github.com/vikast908/WritingAgent"
 license: MIT
-version: "0.2.1"
+version: "0.3.0"
 keywords:
   - llm
   - autonomous agents

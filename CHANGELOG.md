@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-18
+
 ### Changed
 - **Repository restructure: clean root, one home per thing.** Spec docs moved under `docs/`
   (`plan.md`, `design.md`, `prd.md`, `learning.md`, `roadmap.md`, `proposals/`); the Gradio
