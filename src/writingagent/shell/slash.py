@@ -172,7 +172,7 @@ def _handle_slash(line: str, console, cfg: ModelConfig, settings: Settings, stat
         else:
             tname, cands = ui.smart_match(rest[0], ui.THEMES)
             if tname:
-                _set_theme(tname, console, settings)
+                _set_theme(tname, console, settings, cfg)   # cfg → reprint banner as a live preview
             elif cands:
                 _out(console, f"[{ERR}]'{rest[0]}' matches several:[/] [dim]{' · '.join(cands)}[/]")
             else:

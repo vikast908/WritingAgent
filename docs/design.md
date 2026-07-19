@@ -644,8 +644,10 @@ combobox/listbox keyboard and ARIA contract. **Error state** below.
   framed top and bottom by a mirrored flame rule. It sits on the **left**; on a wide
   terminal a GET STARTED command column sits beside it (stacking beneath on a narrow
   one, collapsing to a one-line wordmark when the mark would wrap), and it prints
-  **every launch**. The gradient stops and figlet face are per-theme; a fallback face
-  chain preserves the mark if a theme's font is unavailable.
+  **every launch**. The gradient stops and figlet face are per-theme (each theme owns a *distinct*
+  face, but all at the same big block scale - the small personality faces were retired in 0.4.1); a
+  fallback face chain preserves the mark if a theme's font is unavailable. `/theme <name>` reprints
+  the masthead live (on a cleared screen) so a face/palette previews without relaunching.
 - **Loader - the Caret** - a blinking `▍` (accent) for view/content loading,
   optionally with a live word/token counter. “Loading…” is never shown visually,
   but an equivalent localized status is always available to assistive technology.

@@ -634,7 +634,10 @@ persisted to `config/models.yaml`), `/skills`, `/skill <name>`, `/seed-skills`, 
 `/books`, `/user <id>`, `/config`, `/update [msg]` (describe your changes → AI reviews and
 advises), `/retry` (re-send the last chat message), `/reset` (clear the chat context), `/compact`
 (fold the chat history into one summary), `/theme [<name>]` (themes change *everything* - palette,
-wordmark figlet face, fleuron, gradient; each a distinct hue family. `editorial` ink-&-brass
+wordmark figlet face, fleuron, gradient; each a distinct hue family. Switching **reprints the
+banner live** (on a cleared screen, so it previews without a relaunch); every theme's face is a
+big block face at the full-contrast scale (the small personality faces were retired in 0.4.1).
+`editorial` ink-&-brass
 default (manuscript red + gold on parchment) with semantic status colors; alternates
 `highcontrast` (Okabe-Ito colourblind-safe, §13.1) · `kazama` (flame, sheared) · `supabase`
 (emerald) · `violet-bloom` (purple) · `t3-chat` (pink) · `starry-night` (indigo+gold) · `vercel`

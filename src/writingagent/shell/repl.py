@@ -111,6 +111,9 @@ def run_shell(parser, commands, cfg: ModelConfig, settings: Settings) -> None:
             else:
                 line = (console.input(prompt_plain) if console else input(prompt_plain)).strip()
         except (EOFError, KeyboardInterrupt):
+            # Ctrl+C / Ctrl+D at the idle prompt QUIT the app (like every shell). A ^C
+            # DURING a run pauses the pipeline instead - that's caught deeper (dispatch/
+            # dashboard), not here.
             break
         if not line:
             continue

@@ -423,12 +423,25 @@ def _cmd_dashboard(console, uid: str, rest: list[str]) -> None:
                            style=DIM))
 
 
-def _set_theme(name: str, console, settings: Settings) -> None:
-    """Apply + persist a theme; shared by /theme and /set theme."""
+def _set_theme(name: str, console, settings: Settings, cfg: ModelConfig | None = None) -> None:
+    """Apply + persist a theme; shared by /theme and /set theme.
+
+    When ``cfg`` is given (the /theme path) the banner is reprinted so the new
+    wordmark face + palette preview live - the writer can compare themes without
+    quitting and relaunching (which is what they used to Ctrl+C out to do)."""
     settings.theme = name
     save_settings(settings)
     ui.apply_theme(name)
     _sync_palette()
+    if cfg is not None and console:
+        from .branding import _banner
+        # Clear FIRST: reprinting the tall banner between prompt_toolkit prompts
+        # otherwise desyncs its cursor tracking (Windows ConPTY especially) - the
+        # next prompt, and a Ctrl+C, then land mid-banner and expose stale shell
+        # scrollback. A clean screen re-anchors the prompt at the true bottom.
+        if getattr(console, "is_terminal", False):
+            console.clear()
+        _banner(console, cfg, settings)   # clean-screen live preview of the new theme's masthead
     _out(console, f"theme -> [{ui.GOLD}]{name}[/] [dim](saved - the prompt/completion "
                   f"styles refresh on next launch)[/]")
 

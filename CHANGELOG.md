@@ -6,6 +6,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-19
+
+### Changed
+- **Every theme's masthead wordmark is now big and bold.** The five personality themes
+  (`t3-chat`, `starry-night`, `vercel`, `fallout`, `mimi`) shipped tiny figlet faces that rendered
+  a fraction of the size of the default; all now use large block faces at the same scale as
+  `editorial`/`highcontrast` (`big`, `nancyj`, `banner3`, `3-d`, `puffy`), while staying visually
+  distinct per theme.
+- **`/theme <name>` previews the new look live.** Switching a theme now reprints the masthead
+  (palette + wordmark face) instead of waiting for the next launch, so themes can be compared in
+  one session.
+
+### Fixed
+- **Theme switching no longer corrupts the display.** The live banner reprint clears the screen
+  first, fixing a prompt_toolkit cursor desync (seen on Windows terminals) where the new banner —
+  and a following Ctrl+C — landed mid-screen and exposed stale shell scrollback.
+- **README banner refreshed** to the current editorial palette (manuscript-red → ember → hot-gold);
+  it had been left in the deprecated blue wordmark.
+
 ## [0.4.0] - 2026-07-19
 
 ### Added
